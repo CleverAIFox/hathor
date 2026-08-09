@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.import_linter_cache/
+htmlcov/
+artifacts/
+notebooks/.ipynb_checkpoints/
+hathor_step0_report.json
+node_modules/
+.DS_Store

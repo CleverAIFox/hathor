@@ -1,0 +1,112 @@
+[project]
+name = "hathor"
+version = "0.0.0"
+description = "취향 잠재 표현 기반 종단간 AI 음악 창작 시스템"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+music = [
+  "mutagen>=1.47",
+  "numpy>=2.0",
+]
+api = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.2",
+  "pydantic-settings>=2.6",
+]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "import-linter>=2.1",
+  "pip-audit>=2.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hathor"]
+
+# ------------------------------------------------------------------ ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "ANN", "RUF"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+# ------------------------------------------------------------------ mypy
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+disallow_any_generics = true
+
+# ------------------------------------------------------------------ pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["hathor"]
+
+# ------------------------------------------------------------------ import-linter
+# GR-2.3 의존성 방향 강제. 위반 시 CI 실패.
+[tool.importlinter]
+root_package = "hathor"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "도메인은 외부를 모른다"
+type = "forbidden"
+source_modules = ["hathor.domain"]
+forbidden_modules = [
+  "hathor.application", "hathor.engines", "hathor.infrastructure",
+  "hathor.interfaces", "hathor.shared",
+  "sqlalchemy", "fastapi", "torch", "numpy", "pydantic",
+]
+
+[[tool.importlinter.contracts]]
+name = "애플리케이션은 구현체를 모른다"
+type = "forbidden"
+source_modules = ["hathor.application"]
+forbidden_modules = ["hathor.infrastructure", "hathor.interfaces"]
+
+[[tool.importlinter.contracts]]
+name = "엔진 간 직접 호출 금지"
+type = "independence"
+modules = [
+  "hathor.engines.ingest",
+  "hathor.engines.corpus",
+  "hathor.engines.taste",
+  "hathor.engines.compose",
+  "hathor.engines.lyrics",
+  "hathor.engines.arrange",
+  "hathor.engines.vocal",
+  "hathor.engines.score",
+  "hathor.engines.artwork",
+  "hathor.engines.quality",
+]
+
+[[tool.importlinter.contracts]]
+name = "계층 순서"
+type = "layers"
+layers = [
+  "hathor.interfaces",
+  "hathor.application",
+  "hathor.engines",
+  "hathor.domain",
+]

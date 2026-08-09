@@ -1,0 +1,156 @@
+# HATHOR 개발 인프라
+#   기본(core)  : docker compose up -d
+#   ML 스택     : docker compose --profile ml up -d
+#   관측        : docker compose --profile obs up -d
+#   전체        : docker compose --profile ml --profile obs up -d
+#
+# 8GB RAM 노드에서는 core만 상시 기동한다. ml/obs는 필요할 때만 올린다.
+
+name: hathor
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: hathor-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hathor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hathor}
+      POSTGRES_DB: ${POSTGRES_DB:-hathor}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hathor} -d ${POSTGRES_DB:-hathor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: hathor-redis
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mongo:
+    image: mongo:8
+    container_name: hathor-mongo
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-hathor}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-hathor}
+    ports: ["27017:27017"]
+    volumes: [mongodata:/data/db]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: hathor-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-hathor}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-hathor}
+    ports: ["5672:5672", "15672:15672"]
+    volumes: [rabbitdata:/var/lib/rabbitmq]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    container_name: hathor-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hathor}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-hathor-dev-secret}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ---------------- profile: ml ----------------
+  mlflow:
+    profiles: [ml]
+    build: ./docker/mlflow
+    container_name: hathor-mlflow
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-hathor}:${POSTGRES_PASSWORD:-hathor}@postgres:5432/mlflow
+      MLFLOW_ARTIFACT_ROOT: s3://mlflow/
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-hathor}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-hathor-dev-secret}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    ports: ["5000:5000"]
+    mem_limit: 768m
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+
+  prefect:
+    profiles: [ml]
+    image: prefecthq/prefect:3-latest
+    container_name: hathor-prefect
+    command: ["prefect", "server", "start", "--host", "0.0.0.0"]
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://${POSTGRES_USER:-hathor}:${POSTGRES_PASSWORD:-hathor}@postgres:5432/prefect
+    ports: ["4200:4200"]
+    mem_limit: 768m
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  labelstudio:
+    profiles: [ml]
+    image: heartexlabs/label-studio:latest
+    container_name: hathor-labelstudio
+    ports: ["8080:8080"]
+    volumes: [labeldata:/label-studio/data]
+    mem_limit: 768m
+
+  # ---------------- profile: obs ----------------
+  prometheus:
+    profiles: [obs]
+    image: prom/prometheus
+    container_name: hathor-prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    mem_limit: 384m
+
+  grafana:
+    profiles: [obs]
+    image: grafana/grafana
+    container_name: hathor-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-hathor}
+    ports: ["3001:3000"]
+    volumes: [grafanadata:/var/lib/grafana]
+    mem_limit: 384m
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  mongodata: {}
+  rabbitdata: {}
+  miniodata: {}
+  labeldata: {}
+  promdata: {}
+  grafanadata: {}
