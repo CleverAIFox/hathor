@@ -3,7 +3,9 @@ name = "hathor"
 version = "0.0.0"
 description = "취향 잠재 표현 기반 종단간 AI 음악 창작 시스템"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "mutagen>=1.48.1",
+]
 
 [project.optional-dependencies]
 music = [

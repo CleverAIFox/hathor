@@ -500,6 +500,9 @@ wheels = [
 name = "hathor"
 version = "0.0.0"
 source = { editable = "." }
+dependencies = [
+    { name = "mutagen" },
+]
 
 [package.optional-dependencies]
 api = [
@@ -527,6 +530,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.115" },
+    { name = "mutagen", specifier = ">=1.48.1" },
     { name = "mutagen", marker = "extra == 'music'", specifier = ">=1.47" },
     { name = "numpy", marker = "extra == 'music'", specifier = ">=2.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'api'", specifier = ">=3.2" },
