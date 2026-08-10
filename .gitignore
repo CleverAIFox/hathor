@@ -13,3 +13,4 @@ notebooks/.ipynb_checkpoints/
 hathor_step0_report.json
 node_modules/
 .DS_Store
+var/
