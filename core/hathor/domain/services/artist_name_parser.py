@@ -19,7 +19,10 @@ from hathor.domain.entities.parsed_artist import (
 _OPEN_BRACKETS = "(（"
 _CLOSE_BRACKETS = ")）"
 _SEPARATORS = ",，"
-_AMPERSANDS = "&＆"
+# 결합어. 분리하지 않고 신뢰도만 낮춘다. 단일 밴드명일 수 있어
+# 문자열만으로 판정 불가하다 (Earth, Wind & Fire / GD&TOP).
+_JOINER_CHARS = "&＆+＋"
+_JOINER_WORDS = frozenset({"x", "X", "×", "vs", "VS"})
 _MIN_TOKEN_LENGTH = 2
 
 
@@ -57,6 +60,13 @@ def _shares_script(left: str, right: str) -> bool:
     if not lhs or not rhs:
         return True
     return bool(lhs & rhs)
+
+
+def _has_joiner(name: str) -> bool:
+    """결합어를 품고 있는지. 단어형은 공백으로 분리된 단독 토큰만 센다."""
+    if any(char in _JOINER_CHARS for char in name):
+        return True
+    return any(word in _JOINER_WORDS for word in name.split())
 
 
 def _split_top_level(raw: str) -> tuple[list[str], set[AmbiguityReason]]:
@@ -124,8 +134,8 @@ def _grade_token(name: str, aliases: list[str]) -> tuple[ParseConfidence, set[Am
     reasons: set[AmbiguityReason] = set()
     if len(name.replace(" ", "")) < _MIN_TOKEN_LENGTH:
         reasons.add(AmbiguityReason.SHORT_TOKEN)
-    if any(char in _AMPERSANDS for char in name):
-        reasons.add(AmbiguityReason.AMPERSAND_ONLY)
+    if _has_joiner(name):
+        reasons.add(AmbiguityReason.JOINER_TOKEN)
     if any(_shares_script(name, alias) for alias in aliases):
         reasons.add(AmbiguityReason.AFFILIATION_SUSPECTED)
     if reasons:

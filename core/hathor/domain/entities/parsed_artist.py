@@ -19,7 +19,7 @@ class AmbiguityReason(StrEnum):
     """신뢰도를 떨어뜨린 사유. 유닛 #3 조회 전략의 입력이다."""
 
     COMMA_SEPARATED = "comma_separated"
-    AMPERSAND_ONLY = "ampersand_only"
+    JOINER_TOKEN = "joiner_token"
     SHORT_TOKEN = "short_token"
     AFFILIATION_SUSPECTED = "affiliation_suspected"
     NESTED_BRACKET = "nested_bracket"

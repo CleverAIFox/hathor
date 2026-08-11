@@ -87,7 +87,20 @@ def test_앰퍼샌드는_쪼개지_않고_신뢰도만_낮춘다():
     result = parse_artist_field("Earth, Wind & Fire")
     assert [c.name for c in result.collaborators] == ["Wind & Fire"]
     assert result.confidence is ParseConfidence.LOW
-    assert AmbiguityReason.AMPERSAND_ONLY in result.ambiguity_reasons
+    assert AmbiguityReason.JOINER_TOKEN in result.ambiguity_reasons
+
+
+@pytest.mark.parametrize("raw", ["GD X TAEYANG", "Dan + Shay", "GD&TOP"])
+def test_결합어_토큰은_low(raw):
+    result = parse_artist_field(raw)
+    assert result.collaborators == ()
+    assert result.confidence is ParseConfidence.LOW
+    assert AmbiguityReason.JOINER_TOKEN in result.ambiguity_reasons
+
+
+@pytest.mark.parametrize("raw", ["MAX", "X-teen", "10CM"])
+def test_이름_속_x는_결합어가_아니다(raw):
+    assert parse_artist_field(raw).confidence is ParseConfidence.HIGH
 
 
 def test_빈_문자열():
