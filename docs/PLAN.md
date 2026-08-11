@@ -879,6 +879,12 @@ HATHOR
 | `parse_confidence` | ENUM | HIGH/MEDIUM/LOW |
 | `ambiguity_reasons` | TEXT[] | LOW인 경우 사유 |
 
+> **미해결(2026-08-11)**: `parse_confidence` · `ambiguity_reasons` · 원문 `raw`는
+> 아티스트가 아니라 **파싱 사건**의 속성이라 `track_artists`에 있어야 한다.
+> `아이유(IU)`는 HIGH, `울랄라세션, 아이유(IU)`는 MEDIUM인데 `normalized_key`가
+> 같아 `artists` 한 행으로 수렴하므로 나중 스캔이 앞의 값을 덮는다.
+> 유닛 #3의 MusicBrainz 조회 결과 저장 방식과 함께 결정한다.
+
 **`track_features`** — 4축 특징
 
 | 컬럼 | 타입 | 비고 |
@@ -953,10 +959,9 @@ HATHOR
 | 필드 | 내용 |
 |---|---|
 | `raw` | 원문 보존 |
-| `primary_name` | 주 표기 |
-| `aliases` | 괄호 별칭 후보 |
-| `collaborators` | 구분자 분리 후보 |
-| `normalized_key` | 괄호·공백 제거 + 소문자 |
+| `primary` | 주 후보 `ArtistCandidate(name, aliases)` |
+| `collaborators` | 쉼표 분리 후보. 각 원소가 `ArtistCandidate` |
+| `normalized_key` | 괄호·공백 제거 + 소문자. 후보 단위로도 산출 |
 | `confidence` | HIGH / MEDIUM / LOW |
 | `ambiguity_reasons` | 판정 불가 사유 |
 
