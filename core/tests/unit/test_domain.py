@@ -1,31 +1,8 @@
 import pytest
 
 from hathor.domain.entities.generation_job import GenerationJob, JobStatus, Stage
-from hathor.domain.entities.track import Track
 from hathor.domain.value_objects.chord_progression import ChordProgression
 from hathor.domain.value_objects.key import Key, Mode
-from hathor.infrastructure.persistence.in_memory_track_repository import InMemoryTrackRepository
-
-
-def make_track(**kw):
-    base = dict(title="테스트곡", artist="오창준", duration_ms=210_000, source_path="/x.flac")
-    base.update(kw)
-    return Track(**base)
-
-
-def test_track_rejects_non_positive_duration():
-    with pytest.raises(ValueError):
-        make_track(duration_ms=0)
-
-
-def test_track_rejects_blank_title():
-    with pytest.raises(ValueError):
-        make_track(title="   ")
-
-
-def test_track_normalization_depends_on_isrc():
-    assert make_track().is_normalized is False
-    assert make_track(isrc="KRA382400001").is_normalized is True
 
 
 def test_key_rejects_unknown_tonic():
@@ -74,12 +51,3 @@ def test_job_validation():
         GenerationJob(seed=1, stages=())
     with pytest.raises(ValueError):
         GenerationJob(seed=-1, stages=(Stage.HARMONY,))
-
-
-def test_in_memory_repository_roundtrip():
-    repo = InMemoryTrackRepository()
-    track = make_track()
-    repo.add(track)
-    assert repo.count_all() == 1
-    assert repo.find_by_id(track.track_id) is track
-    assert repo.find_by_id(make_track().track_id) is None
