@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
@@ -102,6 +103,41 @@ def cross_check_filenames(records: list[dict[str, object]]) -> None:
         print(f"    파일명={from_name!r}  태그={from_tag!r}")
 
 
+def scripts(value: str) -> set[str]:
+    """표기 체계 집합. 숫자는 이름의 일부라 신호에서 뺀다."""
+    kinds: set[str] = set()
+    for char in value:
+        if not char.isalnum() or char.isdigit():
+            continue
+        name = unicodedata.name(char, "")
+        if name.startswith("HANGUL"):
+            kinds.add("KO")
+        elif name.startswith("LATIN"):
+            kinds.add("LA")
+        else:
+            kinds.add("ETC")
+    return kinds
+
+
+def check_bracket_script(records: list[dict[str, object]]) -> None:
+    """괄호 안팎의 표기 체계 대조 (D-0016).
+
+    별칭 병기는 같은 이름의 다른 표기라 체계가 갈리고,
+    소속 병기는 다른 이름이라 같은 체계로 쓰인다.
+    """
+    print()
+    print("[괄호 표기 체계 대조]")
+    pattern = re.compile(r"^([^(（]+)[(（]([^)）]+)[)）]\s*$")
+    seen = {str(r["tags"]["artist"]).strip() for r in records}  # type: ignore[index]
+    for raw in sorted(seen):
+        matched = pattern.match(raw)
+        if matched is None:
+            continue
+        outer, inner = matched.group(1), matched.group(2)
+        verdict = "소속 의심" if scripts(outer) & scripts(inner) else "별칭"
+        print(f"  {verdict}\t{raw}")
+
+
 def main() -> int:
     root = Path("var/ingest")
     latest = latest_jsonl(root)
@@ -114,6 +150,7 @@ def main() -> int:
     records = load_records(latest)
     analyze(records)
     cross_check_filenames(records)
+    check_bracket_script(records)
     return 0
 
 
