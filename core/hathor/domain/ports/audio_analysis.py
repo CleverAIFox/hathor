@@ -17,23 +17,33 @@ from typing import Protocol
 import numpy as np
 
 type Waveform = np.ndarray[tuple[int], np.dtype[np.float32]]
-"""24kHz 모노 float32 파형. 정규화하지 않은 원본 샘플이다."""
+"""모노 float32 파형. 정규화하지 않은 원본 샘플이다."""
+
+type StereoWaveform = np.ndarray[tuple[int, int], np.dtype[np.float32]]
+"""(채널, 샘플) 44.1kHz 스테레오 float32. Demucs 입력 규격이다."""
 
 type Embedding = np.ndarray[tuple[int, int], np.dtype[np.float32]]
 """(청크 수, 특징 차원) 임베딩. MERT-v1-95M은 768차원이다."""
 
-TARGET_SAMPLE_RATE = 24000
+# Demucs는 44.1kHz 스테레오, MERT는 24kHz 모노를 기대한다.
+# 디코더는 원본에 가까운 전자를 내고 MERT용은 파생시킨다 (D-0021 정정).
+SOURCE_SAMPLE_RATE = 44100
+FEATURE_SAMPLE_RATE = 24000
 CHUNK_SECONDS = 10
 
 
 class AudioDecoder(Protocol):
     """음원 파일을 분석용 파형으로 디코딩한다.
 
-    반환은 24kHz 모노 float32 샘플이다. mp3 인터샘플 피크로 값이
-    ±1을 넘을 수 있으며 디코더는 이를 보정하지 않는다.
+    반환은 44.1kHz 스테레오 float32다. 원본에 가장 가까운 형태이며
+    MERT용 24kHz 모노는 여기서 파생시킨다.
+
+    mp3 인터샘플 피크로 값이 ±1을 넘을 수 있으며 디코더는 보정하지 않는다.
+    실측 최대 1.12. 스템을 파일로 저장하면 잘리지만 특징만 뽑고 버리므로
+    float32 그대로 다루면 문제가 없다.
     """
 
-    def decode(self, path: Path) -> Waveform: ...
+    def decode(self, path: Path) -> StereoWaveform: ...
 
 
 class StemSeparator(Protocol):
@@ -46,7 +56,7 @@ class StemSeparator(Protocol):
     클리핑 여부는 구현체가 확인한다.
     """
 
-    def separate(self, waveform: Waveform) -> dict[str, Waveform]: ...
+    def separate(self, waveform: StereoWaveform) -> dict[str, StereoWaveform]: ...
 
 
 class FeatureExtractor(Protocol):
