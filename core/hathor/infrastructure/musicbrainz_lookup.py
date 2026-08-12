@@ -1,0 +1,148 @@
+"""MusicBrainz 조회. ArtistLookup / RecordingLookup 포트의 구현이다.
+
+D-0019 실측: 아티스트 RESOLVED 84.3%, 곡 RESOLVED 78.5%.
+조회는 2단계다. 태그 표기로 곡을 직접 찾으면 39.0%까지 떨어진다.
+
+MB는 초당 1요청 제한이며 식별 가능한 User-Agent를 요구한다.
+위반 시 503으로 차단된다. 형식은 괄호 안 양쪽에 공백이 필요하다.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any
+
+from hathor.domain.entities.parsed_artist import ArtistCandidate
+from hathor.domain.entities.resolved_identity import (
+    ResolutionState,
+    ResolvedArtist,
+    ResolvedRecording,
+)
+
+MB_BASE = "https://musicbrainz.org/ws/2"
+MIN_INTERVAL_SECONDS = 1.1
+MAX_ATTEMPTS = 4
+MIN_ACCEPT_SCORE = 90
+MIN_SCORE_GAP = 10
+REQUEST_TIMEOUT_SECONDS = 30
+
+
+class MusicBrainzUnavailableError(Exception):
+    """재시도를 소진하고도 응답을 얻지 못했다."""
+
+
+class MusicBrainzClient:
+    """레이트 리밋과 재시도를 책임지는 얇은 HTTP 계층.
+
+    실측상 503이 산발적으로 발생한다. 첫 재시도에서 대부분 회복되므로
+    선형 백오프로 충분하다. 소진 시 예외를 던지며, 조회 결과가 없는
+    것과 통신 실패는 구분해야 한다.
+    """
+
+    def __init__(self, user_agent: str, interval: float = MIN_INTERVAL_SECONDS) -> None:
+        self._user_agent = user_agent
+        self._interval = interval
+        self._last_call = 0.0
+
+    def search(self, entity: str, query: str, limit: int = 2) -> list[dict[str, Any]]:
+        params = {"query": query, "fmt": "json", "limit": str(limit)}
+        url = f"{MB_BASE}/{entity}?{urllib.parse.urlencode(params)}"
+        payload = self._fetch(url)
+        hits = payload.get(f"{entity}s", [])
+        return list(hits) if isinstance(hits, list) else []
+
+    def _fetch(self, url: str) -> dict[str, Any]:
+        request = urllib.request.Request(url, headers={"User-Agent": self._user_agent})
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            self._wait_for_slot()
+            try:
+                with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+                    decoded: Any = json.loads(response.read().decode("utf-8"))
+                    return dict(decoded) if isinstance(decoded, dict) else {}
+            except (urllib.error.URLError, OSError, json.JSONDecodeError):
+                if attempt == MAX_ATTEMPTS:
+                    raise MusicBrainzUnavailableError(url) from None
+                time.sleep(self._interval * attempt * 2)
+        raise MusicBrainzUnavailableError(url)
+
+    def _wait_for_slot(self) -> None:
+        elapsed = time.monotonic() - self._last_call
+        if elapsed < self._interval:
+            time.sleep(self._interval - elapsed)
+        self._last_call = time.monotonic()
+
+
+def judge_hits(hits: list[dict[str, Any]]) -> tuple[ResolutionState, int, int]:
+    """1·2순위 점수 격차로 판정한다 (D-0019).
+
+    MB 검색은 부분 일치에도 100점을 주므로 점수 단독으로는 오답을
+    거를 수 없다. 실측에서 `미연((여자)아이들)`이 재즈 뮤지션 `미연`에
+    100점으로 매칭됐다. 2순위와의 격차가 실질적인 신뢰 지표다.
+    """
+    if not hits:
+        return ResolutionState.UNRESOLVED, 0, 0
+    top = _score_of(hits[0])
+    runner_up = _score_of(hits[1]) if len(hits) > 1 else 0
+    if top < MIN_ACCEPT_SCORE:
+        return ResolutionState.UNRESOLVED, top, runner_up
+    if top - runner_up < MIN_SCORE_GAP:
+        return ResolutionState.AMBIGUOUS, top, runner_up
+    return ResolutionState.RESOLVED, top, runner_up
+
+
+def _score_of(hit: dict[str, Any]) -> int:
+    raw = hit.get("score", 0)
+    return int(raw) if isinstance(raw, int | str) else 0
+
+
+def _text_of(hit: dict[str, Any], key: str) -> str | None:
+    value = hit.get(key)
+    return str(value) if isinstance(value, str) and value else None
+
+
+class MusicBrainzLookup:
+    """ArtistLookup·RecordingLookup 포트의 구현.
+
+    1단계 결과를 normalized_key로 캐시한다. 실측상 1004곡의 고유 후보는
+    249개이므로 캐시 없이는 요청이 4배가 된다.
+    """
+
+    def __init__(self, client: MusicBrainzClient) -> None:
+        self._client = client
+        self._artists: dict[str, ResolvedArtist] = {}
+
+    def resolve_artist(self, candidate: ArtistCandidate) -> ResolvedArtist:
+        key = candidate.normalized_key
+        cached = self._artists.get(key)
+        if cached is not None:
+            return cached
+        hits = self._client.search("artist", candidate.name)
+        state, top, runner_up = judge_hits(hits)
+        head = hits[0] if hits else {}
+        resolved = ResolvedArtist(
+            query_key=key,
+            state=state,
+            canonical_name=_text_of(head, "name"),
+            mbid=_text_of(head, "id"),
+            top_score=top,
+            runner_up_score=runner_up,
+        )
+        self._artists[key] = resolved
+        return resolved
+
+    def resolve_recording(self, source_key: str, title: str, artist_name: str) -> ResolvedRecording:
+        query = f'recording:"{title}" AND artist:"{artist_name}"'
+        hits = self._client.search("recording", query)
+        state, _, _ = judge_hits(hits)
+        head = hits[0] if hits else {}
+        return ResolvedRecording(
+            source_key=source_key,
+            state=state,
+            recording_mbid=_text_of(head, "id") if state is ResolutionState.RESOLVED else None,
+            canonical_title=_text_of(head, "title"),
+            isrc=None,
+        )
