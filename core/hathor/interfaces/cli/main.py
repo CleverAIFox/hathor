@@ -8,14 +8,21 @@ import sys
 from pathlib import Path
 
 from hathor.application.orchestrator.generation_pipeline import run_dry
+from hathor.application.resolve_identities import ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
 from hathor.domain.entities.generation_job import GenerationJob, Stage
+from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
+from hathor.infrastructure.musicbrainz_lookup import (
+    MusicBrainzClient,
+    MusicBrainzLookup,
+)
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
 
 DEFAULT_LIBRARY_ROOT_ENV = "HATHOR_LIBRARY_ROOT"
 DEFAULT_OUTPUT_ROOT = Path("var/ingest")
+DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
 
 
 def _parse_stages(raw: str) -> tuple[Stage, ...]:
@@ -62,12 +69,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.05,
         help="실패율이 이 값을 넘으면 비정상 종료",
     )
+
+    resolve = ingest_sub.add_parser("resolve", help="정규 신원 확정 (MusicBrainz)")
+    resolve.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리")
+    resolve.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
+    resolve.add_argument(
+        "--contact",
+        default=DEFAULT_CONTACT,
+        help="User-Agent에 넣을 연락처. MB가 식별 가능한 값을 요구한다",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "ingest":
+        if args.ingest_command == "resolve":
+            return _run_ingest_resolve(args)
         return _run_ingest_scan(args)
     return _run_generate(args)
 
@@ -102,6 +120,39 @@ def _resolve_root(raw: Path | None) -> Path:
     if not value:
         raise SystemExit(f"--root를 지정하거나 {DEFAULT_LIBRARY_ROOT_ENV} 환경변수를 설정해야 한다")
     return Path(value)
+
+
+def _run_ingest_resolve(args: argparse.Namespace) -> int:
+    """스캔 산출물을 읽어 MusicBrainz로 정규 신원을 확정한다 (D-0019).
+
+    초당 1요청 제한이라 1004곡에 20분 안팎이 걸린다. 진행 상황을
+    곡 단위로 출력한다.
+    """
+    store = JsonlScanStore(args.out)
+    tracks = list(store.read_tracks())
+    if not tracks:
+        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
+        return 2
+    if args.limit is not None:
+        tracks = tracks[: args.limit]
+
+    agent = f"Hathor/0.1 ( {args.contact} )"
+    lookup = MusicBrainzLookup(MusicBrainzClient(agent))
+    use_case = ResolveIdentities(lookup, lookup)
+
+    print(f"대상 {len(tracks)}곡, 예상 {len(tracks) * 1.1 / 60:.1f}분")
+    for index, record in enumerate(use_case.run(tracks), 1):
+        state = record.recording.state.value.upper()
+        label = f"{record.queried_artist} - {record.queried_title}"
+        print(f"  {index:>4}/{len(tracks)} {state:<10} {label}")
+
+    summary = use_case.summary
+    print()
+    for state in ResolutionState:
+        count = summary.count_of(state)
+        if count:
+            print(f"  {state.value.upper():<11} {count:>4} ({summary.ratio_of(state):6.1%})")
+    return 0
 
 
 def _run_ingest_scan(args: argparse.Namespace) -> int:
