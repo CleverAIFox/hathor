@@ -43,19 +43,36 @@ def load_rows() -> list[dict[str, object]]:
     return [json.loads(line) for line in latest.read_text(encoding="utf-8").splitlines()]
 
 
-_ANNOTATION = re.compile(
-    r"[(（]\s*(feat|ft|with|prod|inst|duet|vocal|remix|album version|original)\b[^)）]*[)）]",
+_ANNOTATION_HEAD = re.compile(
+    r"^\s*(feat|ft|with|prod|inst|duet|vocal|remix|album version|original|bonus track)\b",
     re.IGNORECASE,
 )
 
 
 def strip_annotations(title: str) -> str:
-    """제목의 부가 표기를 뗀다.
+    """제목의 부가 표기를 뗀다. 괄호 깊이를 세어 중첩을 견딘다.
 
     실측상 아티스트 필드에는 feat.가 0건이지만 제목 필드로 옮겨가 있다.
-    "(Feat. 이수현)" "(Prod. by 박근태)" "(With 오혁)"이 붙으면 MB 매칭이 실패한다.
+    "(Feat. 펀치(Punch))"처럼 중첩되므로 정규식만으로는 닫는 괄호가 남는다.
     """
-    return _ANNOTATION.sub("", title).strip()
+    out: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    for char in title:
+        if char in "(（":
+            depth += 1
+            if depth == 1:
+                buf = []
+                continue
+        if char in ")）" and depth > 0:
+            depth -= 1
+            if depth == 0:
+                inner = "".join(buf)
+                if not _ANNOTATION_HEAD.match(inner):
+                    out.append(f"({inner})")
+                continue
+        (buf if depth > 0 else out).append(char)
+    return "".join(out).strip()
 
 
 def judge(hits: list[dict[str, object]]) -> tuple[str, int, int]:
