@@ -59,7 +59,7 @@ def test_ambiguous면_recording_mbid를_채우지_않는다():
     client = FakeClient([{"score": 100, "title": "좋은 날", "id": "x"}, {"score": 99}])
     lookup = MusicBrainzLookup(client)  # type: ignore[arg-type]
 
-    result = lookup.resolve_recording("a.mp3", "좋은 날", "IU")
+    result = lookup.resolve_recording("a.mp3", "좋은 날", "IU", 0)
 
     assert result.state is ResolutionState.AMBIGUOUS
     assert result.recording_mbid is None
@@ -70,7 +70,7 @@ def test_resolved면_mbid가_정규_식별자가_된다():
     client = FakeClient([{"score": 100, "title": "좋은 날", "id": "mbid-1"}])
     lookup = MusicBrainzLookup(client)  # type: ignore[arg-type]
 
-    result = lookup.resolve_recording("a.mp3", "좋은 날", "IU")
+    result = lookup.resolve_recording("a.mp3", "좋은 날", "IU", 0)
 
     assert result.recording_mbid == "mbid-1"
     assert result.identity == "mbid-1"

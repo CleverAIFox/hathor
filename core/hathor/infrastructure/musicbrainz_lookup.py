@@ -22,10 +22,18 @@ from hathor.domain.entities.resolved_identity import (
     ResolvedArtist,
     ResolvedRecording,
 )
-from hathor.domain.services.lookup_verdict import LookupVerdict, judge_scores
+from hathor.domain.services.lookup_verdict import (
+    DurationCandidate,
+    LookupVerdict,
+    judge_scores,
+    narrow_by_duration,
+)
 
 MB_BASE = "https://musicbrainz.org/ws/2"
 MIN_INTERVAL_SECONDS = 1.1
+# 유명한 곡은 상위 5건이 전부 재발매판이라 원곡이 밀린다.
+# 실측: Adele - Hello의 정답이 limit 5에는 없고 25에는 있었다.
+RECORDING_SEARCH_LIMIT = 25
 MAX_ATTEMPTS = 4
 REQUEST_TIMEOUT_SECONDS = 30
 
@@ -92,6 +100,12 @@ def _score_of(hit: dict[str, Any]) -> int:
     return int(raw) if isinstance(raw, int | str) else 0
 
 
+def _length_of(hit: dict[str, Any]) -> int | None:
+    """MB 레코딩 길이. 비어 있는 경우가 실제로 있다."""
+    raw = hit.get("length")
+    return int(raw) if isinstance(raw, int | str) and str(raw).isdigit() else None
+
+
 def _text_of(hit: dict[str, Any], key: str) -> str | None:
     value = hit.get(key)
     return str(value) if isinstance(value, str) and value else None
@@ -127,11 +141,20 @@ class MusicBrainzLookup:
         self._artists[key] = resolved
         return resolved
 
-    def resolve_recording(self, source_key: str, title: str, artist_name: str) -> ResolvedRecording:
+    def resolve_recording(
+        self, source_key: str, title: str, artist_name: str, duration_ms: int
+    ) -> ResolvedRecording:
         query = f'recording:"{title}" AND artist:"{artist_name}"'
-        hits = self._client.search("recording", query)
+        hits = self._client.search("recording", query, limit=RECORDING_SEARCH_LIMIT)
         state = verdict_of(hits).state
         head = hits[0] if hits else {}
+        if state is ResolutionState.AMBIGUOUS and duration_ms > 0:
+            picked = narrow_by_duration(
+                [DurationCandidate(i, _length_of(h)) for i, h in enumerate(hits)], duration_ms
+            )
+            if picked is not None:
+                state = ResolutionState.RESOLVED
+                head = hits[picked.index]
         return ResolvedRecording(
             source_key=source_key,
             state=state,

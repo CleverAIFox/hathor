@@ -52,7 +52,9 @@ class FakeRecordings:
         self._state = state
         self.seen: list[tuple[str, str]] = []
 
-    def resolve_recording(self, source_key: str, title: str, artist_name: str) -> ResolvedRecording:
+    def resolve_recording(
+        self, source_key: str, title: str, artist_name: str, duration_ms: int
+    ) -> ResolvedRecording:
         self.seen.append((artist_name, title))
         return ResolvedRecording(
             source_key=source_key,

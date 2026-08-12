@@ -74,7 +74,9 @@ class ResolveIdentities:
                 queried_title=title,
             )
 
-        recording = self._recordings.resolve_recording(track.source_key, title, artist_name)
+        recording = self._recordings.resolve_recording(
+            track.source_key, title, artist_name, track.stream.duration_ms
+        )
         return ResolutionRecord(
             recording=self._with_fallback(recording, fallback),
             queried_artist=artist_name,

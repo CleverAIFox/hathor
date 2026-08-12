@@ -12,6 +12,9 @@ from hathor.domain.entities.resolved_identity import ResolutionState
 
 MIN_ACCEPT_SCORE = 90
 MIN_SCORE_GAP = 10
+# mp3 인코더가 앞뒤에 무음 프레임을 넣어 1~2초가 흔들린다.
+# 실측 최대 오차 1689ms. 5초까지 열면 다른 버전이 섞인다.
+MAX_DURATION_GAP_MS = 3000
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +24,37 @@ class LookupVerdict:
     state: ResolutionState
     top_score: int
     runner_up_score: int
+
+
+@dataclass(frozen=True, slots=True)
+class DurationCandidate:
+    """길이 선별에 쓰는 후보 하나. 조회처 형식에 의존하지 않는다."""
+
+    index: int
+    length_ms: int | None
+
+
+def narrow_by_duration(
+    candidates: list[DurationCandidate], duration_ms: int
+) -> DurationCandidate | None:
+    """재생시간이 가장 가까운 후보를 고른다.
+
+    유명한 곡일수록 MB에 스튜디오·라이브·리마스터가 모두 등재돼
+    전부 100점을 받는다. 점수로는 갈리지 않지만 길이는 다르다.
+
+    길이가 없는 후보는 비교에서 제외한다. MB 레코딩에 length가
+    비어 있는 경우가 실제로 있다.
+    """
+    best: tuple[int, DurationCandidate] | None = None
+    for candidate in candidates:
+        if candidate.length_ms is None:
+            continue
+        gap = abs(candidate.length_ms - duration_ms)
+        if gap > MAX_DURATION_GAP_MS:
+            continue
+        if best is None or gap < best[0]:
+            best = (gap, candidate)
+    return best[1] if best else None
 
 
 def judge_scores(top: int, runner_up: int) -> LookupVerdict:

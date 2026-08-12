@@ -34,8 +34,12 @@ class RecordingLookup(Protocol):
 
     title은 부가 표기를 제거한 값이어야 한다. 괄호 깊이를 세어 중첩을
     처리하되 버전 표기는 보존한다. 버전은 레코딩을 구분하는 단서다.
+
+    duration_ms는 후보 선별에 쓴다. 유명한 곡일수록 MB에 스튜디오·라이브·
+    리마스터가 모두 등재돼 점수만으로는 갈리지 않는다. 실측상 AMBIGUOUS가
+    38.4%였고 대부분이 이 유형이다.
     """
 
     def resolve_recording(
-        self, source_key: str, title: str, artist_name: str
+        self, source_key: str, title: str, artist_name: str, duration_ms: int
     ) -> ResolvedRecording: ...
