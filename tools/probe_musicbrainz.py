@@ -95,7 +95,9 @@ def probe_artists(rows: list[dict[str, object]]) -> dict[str, tuple[str, str]]:
     return out
 
 
-def probe_recordings(rows: list[dict[str, object]]) -> dict[str, int]:
+def probe_recordings(
+    rows: list[dict[str, object]], resolved: dict[str, tuple[str, str]]
+) -> dict[str, int]:
     """곡 제목 + 아티스트 원문으로 Recording MBID를 조회한다."""
     print(f"[곡 조회] {len(rows)}건, 예상 {len(rows) * INTERVAL / 60:.1f}분")
     tally = {"resolved": 0, "unresolved": 0, "skipped": 0}
@@ -107,6 +109,12 @@ def probe_recordings(rows: list[dict[str, object]]) -> dict[str, int]:
         raw_artist = str(tags["artist"] or "").strip()  # type: ignore[index]
         parsed = parse_artist_field(raw_artist) if raw_artist else None
         artist = parsed.primary.name if parsed else ""
+        # 2단계 조회: 1단계에서 확정한 MB 정규명을 쓴다.
+        # 태그 표기 '아이유'로는 실패하고 정규명 'IU'로는 성공한다 (O-1).
+        if parsed:
+            hit = resolved.get(parsed.primary.normalized_key)
+            if hit and hit[0] == "RESOLVED" and hit[1]:
+                artist = hit[1]
         title = strip_annotations(title)
         if not title or not artist:
             tally["skipped"] += 1
@@ -139,7 +147,7 @@ def main() -> int:
         print(f"  {verdict:<11} {count:>3} ({count / total * 100:5.1f}%)")
 
     if "--recordings" in sys.argv:
-        result = probe_recordings(rows)
+        result = probe_recordings(rows, found)
         print(f"\n[곡 결과] {result}")
     return 0
 
