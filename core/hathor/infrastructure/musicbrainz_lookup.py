@@ -22,12 +22,11 @@ from hathor.domain.entities.resolved_identity import (
     ResolvedArtist,
     ResolvedRecording,
 )
+from hathor.domain.services.lookup_verdict import LookupVerdict, judge_scores
 
 MB_BASE = "https://musicbrainz.org/ws/2"
 MIN_INTERVAL_SECONDS = 1.1
 MAX_ATTEMPTS = 4
-MIN_ACCEPT_SCORE = 90
-MIN_SCORE_GAP = 10
 REQUEST_TIMEOUT_SECONDS = 30
 
 
@@ -76,22 +75,16 @@ class MusicBrainzClient:
         self._last_call = time.monotonic()
 
 
-def judge_hits(hits: list[dict[str, Any]]) -> tuple[ResolutionState, int, int]:
-    """1·2순위 점수 격차로 판정한다 (D-0019).
+def verdict_of(hits: list[dict[str, Any]]) -> LookupVerdict:
+    """MB 응답에서 점수를 꺼내 도메인 판정에 넘긴다.
 
-    MB 검색은 부분 일치에도 100점을 주므로 점수 단독으로는 오답을
-    거를 수 없다. 실측에서 `미연((여자)아이들)`이 재즈 뮤지션 `미연`에
-    100점으로 매칭됐다. 2순위와의 격차가 실질적인 신뢰 지표다.
+    판정 규칙 자체는 도메인에 있다. 여기는 응답 형식을 벗기는 일만 한다.
     """
     if not hits:
-        return ResolutionState.UNRESOLVED, 0, 0
+        return LookupVerdict(ResolutionState.UNRESOLVED, 0, 0)
     top = _score_of(hits[0])
     runner_up = _score_of(hits[1]) if len(hits) > 1 else 0
-    if top < MIN_ACCEPT_SCORE:
-        return ResolutionState.UNRESOLVED, top, runner_up
-    if top - runner_up < MIN_SCORE_GAP:
-        return ResolutionState.AMBIGUOUS, top, runner_up
-    return ResolutionState.RESOLVED, top, runner_up
+    return judge_scores(top, runner_up)
 
 
 def _score_of(hit: dict[str, Any]) -> int:
@@ -121,15 +114,15 @@ class MusicBrainzLookup:
         if cached is not None:
             return cached
         hits = self._client.search("artist", candidate.name)
-        state, top, runner_up = judge_hits(hits)
+        verdict = verdict_of(hits)
         head = hits[0] if hits else {}
         resolved = ResolvedArtist(
             query_key=key,
-            state=state,
+            state=verdict.state,
             canonical_name=_text_of(head, "name"),
             mbid=_text_of(head, "id"),
-            top_score=top,
-            runner_up_score=runner_up,
+            top_score=verdict.top_score,
+            runner_up_score=verdict.runner_up_score,
         )
         self._artists[key] = resolved
         return resolved
@@ -137,7 +130,7 @@ class MusicBrainzLookup:
     def resolve_recording(self, source_key: str, title: str, artist_name: str) -> ResolvedRecording:
         query = f'recording:"{title}" AND artist:"{artist_name}"'
         hits = self._client.search("recording", query)
-        state, _, _ = judge_hits(hits)
+        state = verdict_of(hits).state
         head = hits[0] if hits else {}
         return ResolvedRecording(
             source_key=source_key,

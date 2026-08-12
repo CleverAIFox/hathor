@@ -7,10 +7,7 @@ from typing import Any
 
 from hathor.domain.entities.parsed_artist import ArtistCandidate
 from hathor.domain.entities.resolved_identity import ResolutionState
-from hathor.infrastructure.musicbrainz_lookup import (
-    MusicBrainzLookup,
-    judge_hits,
-)
+from hathor.infrastructure.musicbrainz_lookup import MusicBrainzLookup, verdict_of
 
 
 class FakeClient:
@@ -25,23 +22,13 @@ class FakeClient:
         return self._hits
 
 
-def test_결과가_없으면_unresolved():
-    assert judge_hits([])[0] is ResolutionState.UNRESOLVED
+def test_응답이_비면_unresolved():
+    assert verdict_of([]).state is ResolutionState.UNRESOLVED
 
 
-def test_격차가_크면_resolved():
-    hits = [{"score": 100}, {"score": 71}]
-    assert judge_hits(hits)[0] is ResolutionState.RESOLVED
-
-
-def test_격차가_좁으면_ambiguous():
-    # 실측: Dan + Shay 100 vs Justin Bieber 99
-    hits = [{"score": 100}, {"score": 99}]
-    assert judge_hits(hits)[0] is ResolutionState.AMBIGUOUS
-
-
-def test_점수가_낮으면_unresolved():
-    assert judge_hits([{"score": 62}])[0] is ResolutionState.UNRESOLVED
+def test_점수를_꺼내_도메인_판정에_넘긴다():
+    assert verdict_of([{"score": 100}, {"score": 71}]).state is ResolutionState.RESOLVED
+    assert verdict_of([{"score": "100"}]).state is ResolutionState.RESOLVED
 
 
 def test_아티스트_조회는_normalized_key로_캐시한다():
