@@ -5,14 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 from hathor.application.orchestrator.generation_pipeline import run_dry
-from hathor.application.resolve_identities import ResolveIdentities
+from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
+from hathor.infrastructure.jsonl_resolution_store import JsonlResolutionStore
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
 from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzClient,
@@ -140,11 +142,16 @@ def _run_ingest_resolve(args: argparse.Namespace) -> int:
     lookup = MusicBrainzLookup(MusicBrainzClient(agent))
     use_case = ResolveIdentities(lookup, lookup)
 
-    print(f"대상 {len(tracks)}곡, 예상 {len(tracks) * 1.1 / 60:.1f}분")
-    for index, record in enumerate(use_case.run(tracks), 1):
-        state = record.recording.state.value.upper()
-        label = f"{record.queried_artist} - {record.queried_title}"
-        print(f"  {index:>4}/{len(tracks)} {state:<10} {label}")
+    print(f"대상 {len(tracks)}곡, 예상 {len(tracks) * 1.1 / 60:.1f}분", flush=True)
+
+    def _progress() -> Iterator[ResolutionRecord]:
+        for index, record in enumerate(use_case.run(tracks), 1):
+            state = record.recording.state.value.upper()
+            label = f"{record.queried_artist} - {record.queried_title}"
+            print(f"  {index:>4}/{len(tracks)} {state:<10} {label}", flush=True)
+            yield record
+
+    summary_path = JsonlResolutionStore(args.out).write(_progress(), use_case.summary)
 
     summary = use_case.summary
     print()
@@ -152,6 +159,7 @@ def _run_ingest_resolve(args: argparse.Namespace) -> int:
         count = summary.count_of(state)
         if count:
             print(f"  {state.value.upper():<11} {count:>4} ({summary.ratio_of(state):6.1%})")
+    print(f"요약: {summary_path}")
     return 0
 
 
