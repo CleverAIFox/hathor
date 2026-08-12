@@ -5,14 +5,16 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from hathor.domain.entities.audio_stream import AudioStreamProperties
 from hathor.domain.entities.scan_event import ScanEventKind
 from hathor.domain.entities.scan_failure import ScanFailure
 from hathor.domain.entities.scanned_track import ScannedTrack
+from hathor.domain.entities.track_tags import TrackTags
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
     from hathor.application.scan_library import ScanRecord, Snapshot
     from hathor.application.scan_summary import ScanSummary
@@ -48,6 +50,39 @@ def track_as_record(track: ScannedTrack, kind: ScanEventKind) -> dict[str, objec
         },
         "raw_frame_names": list(track.raw_frame_names),
     }
+
+
+def record_as_track(record: dict[str, Any]) -> ScannedTrack:
+    """JSONL 한 줄을 ScannedTrack으로 되돌린다.
+
+    track_as_record의 역방향이다. 실패 기록은 stream 키가 없으므로
+    호출 전에 걸러야 한다.
+    """
+    stream = dict(record["stream"])
+    tags = dict(record["tags"])
+    return ScannedTrack(
+        source_key=str(record["source_key"]),
+        file_size_bytes=int(record["file_size_bytes"]),
+        modified_at=datetime.fromisoformat(str(record["modified_at"])),
+        stream=AudioStreamProperties(
+            sample_rate_hz=int(stream["sample_rate_hz"]),
+            channels=int(stream["channels"]),
+            duration_ms=int(stream["duration_ms"]),
+            bitrate_bps=int(stream["bitrate_bps"]),
+            codec=str(stream["codec"]),
+        ),
+        tags=TrackTags(
+            title=tags["title"],
+            artist=tags["artist"],
+            album=tags["album"],
+            lyrics_text=tags["lyrics_text"],
+            has_album_art=bool(tags["has_album_art"]),
+            has_synced_lyrics=bool(tags["has_synced_lyrics"]),
+            release_date_raw=tags["release_date_raw"],
+            isrc=tags["isrc"],
+        ),
+        raw_frame_names=tuple(record["raw_frame_names"]),
+    )
 
 
 def failure_as_record(failure: ScanFailure, kind: ScanEventKind) -> dict[str, object]:
@@ -99,6 +134,20 @@ class JsonlScanStore:
             if not path.name.endswith(FAILURES_SUFFIX)
         )
         return candidates[-1] if candidates else None
+
+    def read_tracks(self) -> Iterator[ScannedTrack]:
+        """최신 산출물에서 성공 건만 순차 방출한다.
+
+        전량을 메모리에 올리지 않는다. 실패 기록은 별도 파일이므로
+        여기서는 걸러낼 필요가 없다.
+        """
+        path = self._latest_tracks_path()
+        if path is None:
+            return
+        with path.open(encoding="utf-8") as stream:
+            for line in stream:
+                if line.strip():
+                    yield record_as_track(json.loads(line))
 
     def write(self, records: Iterable[ScanRecord], summary: ScanSummary) -> Path:
         """레코드를 스트리밍 기록하고 요약 파일 경로를 반환한다."""

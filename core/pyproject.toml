@@ -49,11 +49,12 @@ ignore = ["ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
 # N802: 한글 테스트 함수명은 ruff의 islower() 판정에 걸리지 않는다. 오탐이다.
-"tests/*" = ["ANN", "N802"]
+"tests/*" = ["ANN", "N802", "RUF001", "RUF002", "RUF003"]
 # 전각 괄호·쉼표·앰퍼샌드는 한국어 음원 태그 실측에서 나오는 실제 구분자다.
 # 반각으로 바꾸면 파싱이 깨지므로 RUF001을 끈다 (D-0014).
 "hathor/domain/entities/parsed_artist.py" = ["RUF001"]
 "hathor/domain/services/artist_name_parser.py" = ["RUF001"]
+"hathor/domain/services/title_annotation.py" = ["RUF001", "RUF002"]
 
 # ------------------------------------------------------------------ mypy
 [tool.mypy]
