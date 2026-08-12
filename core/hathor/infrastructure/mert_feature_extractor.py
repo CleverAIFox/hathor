@@ -73,10 +73,10 @@ class MertFeatureExtractor:
         )
         self._device = device
 
-    def extract(self, waveform: Waveform) -> Embedding:
+    def extract(self, waveform: StereoWaveform) -> Embedding:
         import torch
 
-        chunks = split_chunks(waveform)
+        chunks = split_chunks(to_feature_waveform(waveform))
         if not chunks:
             return np.zeros((0, self._model.config.hidden_size), dtype=np.float32)
 

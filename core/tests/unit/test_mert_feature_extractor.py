@@ -76,7 +76,7 @@ def test_임베딩_모양이_청크_수와_맞는다():
     from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
 
     rng = np.random.default_rng(42)
-    wave = rng.standard_normal(FEATURE_SAMPLE_RATE * 25, dtype=np.float32) * 0.1
+    wave = rng.standard_normal((2, SOURCE_SAMPLE_RATE * 25), dtype=np.float32) * 0.1
     embedding = MertFeatureExtractor().extract(wave)
 
     assert embedding.shape == (3, 768)
@@ -91,7 +91,7 @@ def test_짧은_청크도_유한한_벡터를_낸다():
     from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
 
     rng = np.random.default_rng(7)
-    wave = rng.standard_normal(FEATURE_SAMPLE_RATE * 12, dtype=np.float32) * 0.1
+    wave = rng.standard_normal((2, SOURCE_SAMPLE_RATE * 12), dtype=np.float32) * 0.1
     embedding = MertFeatureExtractor().extract(wave)
 
     assert embedding.shape == (2, 768)
@@ -104,5 +104,5 @@ def test_짧은_청크도_유한한_벡터를_낸다():
 def test_빈_입력은_빈_임베딩():
     from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
 
-    empty = np.zeros(0, dtype=np.float32)
+    empty = np.zeros((2, 0), dtype=np.float32)
     assert MertFeatureExtractor().extract(empty).shape == (0, 768)

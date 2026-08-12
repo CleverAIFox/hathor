@@ -67,10 +67,13 @@ class FeatureExtractor(Protocol):
     10초 청크 분할이 요구사항이며 선택 사항이 아니다.
     청크 10초에서 peak VRAM 557MB, 408초 곡 순수 추론 3.39초다.
 
+    입력은 44.1kHz 스테레오다. 24kHz 모노 파생은 구현체가 담당한다.
+    디코더 출력과 Demucs 스템이 같은 규격이므로 양쪽을 그대로 받는다.
+
     구현체는 모델의 특징 추출기를 반드시 거쳐야 한다 (D-0021).
     건너뛰면 마스터링 볼륨이 벡터에 섞인다.
     청크가 10초보다 짧으면 패딩이 들어가므로 어텐션 마스크를 적용해
     평균해야 한다. 그러지 않으면 패딩 구간이 벡터를 오염시킨다.
     """
 
-    def extract(self, waveform: Waveform) -> Embedding: ...
+    def extract(self, waveform: StereoWaveform) -> Embedding: ...
