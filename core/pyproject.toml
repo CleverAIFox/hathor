@@ -20,6 +20,7 @@ gpu = [
   "torch>=2.5",
   "demucs>=4.0",
   "transformers>=4.46",
+  "scipy>=1.14",
 ]
 api = [
   "fastapi>=0.115",
@@ -74,7 +75,7 @@ strict = true
 # 작성용이며 2GB 라이브러리를 요구하면 게이트가 무거워진다. 구현체가
 # 메서드 안에서 임포트하므로 모듈 임포트만으로는 필요하지 않다.
 [[tool.mypy.overrides]]
-module = ["torch.*", "demucs.*", "transformers.*"]
+module = ["torch.*", "demucs.*", "transformers.*", "scipy.*"]
 ignore_missing_imports = true
 warn_unreachable = true
 disallow_any_generics = true
