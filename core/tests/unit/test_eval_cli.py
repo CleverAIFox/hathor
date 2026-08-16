@@ -240,3 +240,126 @@ def test_eval_mfcc_skips_completed(tmp_path, capsys):
 def test_eval_requires_subcommand():
     with pytest.raises(SystemExit):
         main(["eval"])
+
+
+def test_eval_retrieval_merges_two_feature_stores(tmp_path):
+    """서로 다른 추출기 두 벌을 이름으로 네임스페이스해 하나의 뷰로 합친다."""
+    other = tmp_path / "baseline-mfcc"
+    build_corpus(tmp_path)
+    build_corpus(tmp_path, features_root=other)
+    code = main(
+        [
+            "eval",
+            "retrieval",
+            "--out",
+            str(tmp_path),
+            "--features",
+            f"mert={tmp_path}",
+            "--features",
+            f"mfcc={other}",
+            "--keys",
+            "mert:mixture,mfcc:mixture",
+            "--block-l2",
+            "--k",
+            "3",
+        ]
+    )
+    assert code == 0
+    report = latest_report(tmp_path)
+    assert report["corpus"]["tracks"] == 16
+    assert report["corpus"]["dimension"] == DIM * 2
+    assert report["config"]["view"]["block_l2"] is True
+
+
+def test_eval_retrieval_requires_names_for_multiple_stores(tmp_path):
+    other = tmp_path / "baseline-mfcc"
+    build_corpus(tmp_path)
+    build_corpus(tmp_path, features_root=other)
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "eval",
+                "retrieval",
+                "--out",
+                str(tmp_path),
+                "--features",
+                str(tmp_path),
+                "--features",
+                str(other),
+            ]
+        )
+
+
+def test_eval_retrieval_rejects_duplicate_store_names(tmp_path):
+    build_corpus(tmp_path)
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "eval",
+                "retrieval",
+                "--out",
+                str(tmp_path),
+                "--features",
+                f"a={tmp_path}",
+                "--features",
+                f"a={tmp_path}",
+            ]
+        )
+
+
+def test_eval_retrieval_drops_tracks_missing_from_one_store(tmp_path, capsys):
+    """한쪽 저장소에만 있는 곡은 뺀다. 저장소마다 다른 곡 집합을 비교하면 안 된다."""
+    other = tmp_path / "baseline-mfcc"
+    # 작은 쪽을 먼저 만든다. build_corpus가 스캔 산출물을 덮어쓰므로 마지막
+    # 호출이 곡 목록을 정한다. 전체 16곡 중 mfcc에는 12곡만 있는 상태가 된다.
+    build_corpus(tmp_path, albums=3, per_album=4, features_root=other)
+    build_corpus(tmp_path)
+    code = main(
+        [
+            "eval",
+            "retrieval",
+            "--out",
+            str(tmp_path),
+            "--features",
+            f"mert={tmp_path}",
+            "--features",
+            f"mfcc={other}",
+            "--keys",
+            "mert:mixture,mfcc:mixture",
+            "--block-l2",
+            "--k",
+            "3",
+        ]
+    )
+    assert code == 0
+    assert "일부 저장소에만 있는 곡" in capsys.readouterr().err
+    assert latest_report(tmp_path)["corpus"]["tracks"] == 12
+
+
+def test_eval_retrieval_single_store_keeps_bare_keys(tmp_path):
+    """저장소가 하나면 이름 없이 기존 사용법이 그대로 돈다."""
+    build_corpus(tmp_path)
+    assert main(["eval", "retrieval", "--out", str(tmp_path), "--features", str(tmp_path)]) == 0
+
+
+def test_eval_layers_without_scan_output(tmp_path):
+    assert main(["eval", "layers", "--out", str(tmp_path)]) == 2
+
+
+def test_eval_layers_rejects_non_integer(tmp_path, capsys):
+    write_scan(tmp_path, [("가.mp3", "가수", "앨범")])
+    assert main(["eval", "layers", "--out", str(tmp_path), "--layers", "여섯"]) == 2
+    assert "정수" in capsys.readouterr().err
+
+
+def test_eval_layers_rejects_empty(tmp_path, capsys):
+    write_scan(tmp_path, [("가.mp3", "가수", "앨범")])
+    assert main(["eval", "layers", "--out", str(tmp_path), "--layers", " , "]) == 2
+    assert "최소 하나" in capsys.readouterr().err
+
+
+def test_eval_layers_skips_completed(tmp_path, capsys):
+    """모델 적재 전에 재개 판정이 끝나야 GPU 없는 기기에서도 게이트가 돈다."""
+    build_corpus(tmp_path, albums=1, per_album=2, features_root=tmp_path / "mert-layers")
+    assert main(["eval", "layers", "--out", str(tmp_path), "--root", str(tmp_path)]) == 0
+    assert "처리할 곡이 없다" in capsys.readouterr().out

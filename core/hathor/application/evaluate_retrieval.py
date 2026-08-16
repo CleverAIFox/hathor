@@ -81,6 +81,8 @@ class ViewSpec:
     combine: CombineMode = CombineMode.CONCAT
     pool: PoolMode = PoolMode.MEAN
     chunk_l2: bool = False
+    block_l2: bool = False
+    """블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다."""
 
     def as_record(self) -> dict[str, object]:
         return {
@@ -88,6 +90,7 @@ class ViewSpec:
             "combine": self.combine.value,
             "pool": self.pool.value,
             "chunk_l2": self.chunk_l2,
+            "block_l2": self.block_l2,
         }
 
 
@@ -259,6 +262,7 @@ class EvaluateRetrieval:
             combine=view.combine,
             mode=view.pool,
             chunk_l2=view.chunk_l2,
+            block_l2=view.block_l2,
         )
 
     def _self_consistency(self, tracks: Sequence[TrackRecord]) -> float:

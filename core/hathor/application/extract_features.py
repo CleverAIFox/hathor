@@ -18,8 +18,11 @@ from hathor.domain.ports.audio_analysis import (
     AudioDecoder,
     Embedding,
     FeatureExtractor,
+    LayeredFeatureExtractor,
     StemSeparator,
 )
+
+MIXTURE_KEY = "mixture"
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,3 +81,45 @@ class ExtractFeatures:
             mixture=self._extractor.extract(waveform),
             stems={name: self._extractor.extract(stem) for name, stem in stems.items()},
         )
+
+
+class ExtractLayerFeatures:
+    """혼합 파형에서 레이어별 임베딩을 뽑는다 (O-8).
+
+    스템 분리를 하지 않는다. D-0024에서 스템이 검색에 기여하지 않음이
+    확정됐으므로 곡당 GPU 12초를 다시 낼 이유가 없다. 배치가 6~7시간에서
+    1시간 안팎으로 줄어든다.
+
+    산출물은 `ExtractFeatures`와 같은 `TrackFeatures`다. 마지막 레이어를
+    `mixture`에 두고 나머지를 `stems` 자리에 담는다. 저장소가 키를 그대로
+    npz에 쓰므로 평가 하네스가 `--keys layer06`으로 읽는다.
+    """
+
+    def __init__(
+        self,
+        decoder: AudioDecoder,
+        extractor: LayeredFeatureExtractor,
+        library_root: Path,
+    ) -> None:
+        self._decoder = decoder
+        self._extractor = extractor
+        self._root = library_root
+        self.processed = 0
+        self.failed: list[tuple[str, str]] = []
+
+    def run(self, tracks: Iterable[ScannedTrack]) -> Iterator[TrackFeatures]:
+        for track in tracks:
+            try:
+                yield self._extract_one(track)
+            except Exception as exc:
+                self.failed.append((track.source_key, f"{type(exc).__name__}: {exc}"))
+                continue
+            self.processed += 1
+
+    def _extract_one(self, track: ScannedTrack) -> TrackFeatures:
+        waveform = self._decoder.decode(self._root / track.source_key)
+        views = dict(self._extractor.extract_layers(waveform))
+        mixture = views.pop(MIXTURE_KEY, None)
+        if mixture is None:
+            raise KeyError(f"레이어 추출기가 {MIXTURE_KEY} 키를 내지 않았다")
+        return TrackFeatures(source_key=track.source_key, mixture=mixture, stems=views)

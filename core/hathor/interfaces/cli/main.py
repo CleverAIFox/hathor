@@ -20,7 +20,7 @@ from hathor.application.evaluate_retrieval import (
     TrackRecord,
     ViewSpec,
 )
-from hathor.application.extract_features import ExtractFeatures
+from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
 from hathor.application.orchestrator.generation_pipeline import run_dry
 from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
@@ -44,6 +44,8 @@ DEFAULT_LIBRARY_ROOT_ENV = "HATHOR_LIBRARY_ROOT"
 DEFAULT_OUTPUT_ROOT = Path("var/ingest")
 DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
 DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
+DEFAULT_LAYERS_DIRNAME = "mert-layers"
+DEFAULT_LAYERS = "0,3,6,9"
 
 
 def _parse_stages(raw: str) -> tuple[Stage, ...]:
@@ -130,9 +132,13 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치")
     retrieval.add_argument(
         "--features",
-        type=Path,
+        action="append",
         default=None,
-        help="특징 산출물 루트 (미지정 시 --out). 베이스라인 비교 시 다른 루트를 준다",
+        metavar="[이름=]경로",
+        help=(
+            "특징 산출물 루트 (미지정 시 --out). 여러 번 줄 수 있으며, 둘 이상이면 "
+            "각각에 이름이 필요하고 키를 `이름:mixture`로 지정한다"
+        ),
     )
     retrieval.add_argument(
         "--keys",
@@ -145,6 +151,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--chunk-l2",
         action="store_true",
         help="풀링 전에 청크별 L2 정규화 (곡 벡터 L2는 코사인에서 무의미하다)",
+    )
+    retrieval.add_argument(
+        "--block-l2",
+        action="store_true",
+        help="블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다",
     )
     retrieval.add_argument("--k", type=int, default=DEFAULT_K, help="상위 k개")
     retrieval.add_argument("--seed", type=int, default=DEFAULT_SEED, help="무작위 베이스라인 시드")
@@ -173,6 +184,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mfcc.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
     mfcc.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
+
+    layers = eval_sub.add_parser("layers", help="MERT 레이어별 특징 추출 (GPU, 스템 없음)")
+    layers.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
+    )
+    layers.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치")
+    layers.add_argument(
+        "--features",
+        type=Path,
+        default=None,
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+    )
+    layers.add_argument(
+        "--layers",
+        default=DEFAULT_LAYERS,
+        help=(
+            "뽑을 은닉 레이어 인덱스 (쉼표 구분). 0은 트랜스포머 블록 이전이며 "
+            "마지막 레이어는 mixture 키로 항상 저장된다"
+        ),
+    )
+    layers.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+    layers.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
     return parser
 
 
@@ -181,6 +217,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "eval":
         if args.eval_command == "mfcc":
             return _run_eval_mfcc(args)
+        if args.eval_command == "layers":
+            return _run_eval_layers(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "resolve":
@@ -353,7 +391,7 @@ def _extract_features_locked(args: argparse.Namespace) -> int:
 
 
 def _drive_extraction(
-    use_case: ExtractFeatures,
+    use_case: ExtractFeatures | ExtractLayerFeatures,
     store: NpzFeatureStore,
     tracks: list[ScannedTrack],
     *,
@@ -433,7 +471,37 @@ def _default_label(view: ViewSpec) -> str:
     parts = ["+".join(view.keys), view.combine.value, view.pool.value]
     if view.chunk_l2:
         parts.append("chunkl2")
+    if view.block_l2:
+        parts.append("blockl2")
     return "-".join(parts)
+
+
+def _parse_feature_stores(raw: list[str] | None, fallback: Path) -> list[tuple[str, Path]]:
+    """`--features` 값을 (이름, 경로) 목록으로 만든다.
+
+    하나뿐이면 이름을 비워 키를 그대로 쓴다. 기존 단일 저장소 사용법이 그대로
+    유지된다. 둘 이상이면 두 저장소가 모두 `mixture` 키를 갖고 있어 충돌하므로
+    이름을 강제하고 키를 `이름:mixture`로 네임스페이스한다.
+    """
+    if not raw:
+        return [("", fallback)]
+    parsed: list[tuple[str, Path]] = []
+    for entry in raw:
+        name, separator, path = entry.partition("=")
+        if separator:
+            parsed.append((name.strip(), Path(path)))
+        else:
+            parsed.append(("", Path(entry)))
+    if len(parsed) > 1 and any(not name for name, _ in parsed):
+        raise SystemExit("저장소를 둘 이상 줄 때는 전부 `이름=경로` 형식이어야 한다")
+    names = [name for name, _ in parsed]
+    if len(set(names)) != len(names):
+        raise SystemExit("저장소 이름이 중복됐다")
+    return parsed
+
+
+def _namespaced(name: str, key: str) -> str:
+    return f"{name}:{key}" if name else key
 
 
 def _run_eval_retrieval(args: argparse.Namespace) -> int:
@@ -455,6 +523,7 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
         combine=CombineMode(args.combine),
         pool=PoolMode(args.pool),
         chunk_l2=args.chunk_l2,
+        block_l2=args.block_l2,
     )
     label = args.label or _default_label(view)
     config = EvaluationConfig(
@@ -471,41 +540,61 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
         print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
         return 2
 
-    store = NpzFeatureStore(args.features or args.out)
-    if not store.index_path.exists():
-        print(f"특징 인덱스가 없다: {store.index_path}", file=sys.stderr)
-        return 2
+    stores = _parse_feature_stores(args.features, args.out)
+    merged: dict[str, dict[str, object]] = {}
+    coverage: dict[str, int] = {}
+    for name, root in stores:
+        store = NpzFeatureStore(root)
+        if not store.index_path.exists():
+            print(f"특징 인덱스가 없다: {store.index_path}", file=sys.stderr)
+            return 2
+        seen: set[str] = set()
+        for source_key, vectors in store.iter_vectors():
+            if source_key in seen:
+                # O-7의 재발이다. 중복을 조용히 흡수하면 유사도 행렬에 같은 곡이
+                # 여러 번 들어가 지표가 틀어진 채로 그럴듯한 숫자를 낸다.
+                print(f"인덱스에 중복 키가 있다: {source_key} ({root})", file=sys.stderr)
+                print("먼저 `hathor ingest compact`로 정리한다.", file=sys.stderr)
+                return 2
+            seen.add(source_key)
+            slot = merged.setdefault(source_key, {})
+            for key, vector in vectors.items():
+                slot[_namespaced(name, key)] = vector
+        coverage[name or str(root)] = len(seen)
+
+    if len(stores) > 1:
+        print(
+            "저장소별 곡 수: " + ", ".join(f"{label} {count}" for label, count in coverage.items()),
+            flush=True,
+        )
 
     records: list[TrackRecord] = []
-    seen: set[str] = set()
     orphans: list[str] = []
-    duplicates: list[str] = []
-    for source_key, vectors in store.iter_vectors():
-        if source_key in seen:
-            duplicates.append(source_key)
-            continue
-        seen.add(source_key)
+    partial: list[str] = []
+    for source_key in sorted(merged):
         tag = tags.get(source_key)
         if tag is None:
             orphans.append(source_key)
+            continue
+        # 저장소가 여럿일 때 한쪽에만 있는 곡은 뺀다. 남기면 뷰 조립에서
+        # 키가 없다고 터지거나, 유스케이스가 조용히 건너뛰어 저장소마다
+        # 다른 곡 집합을 비교하게 된다.
+        if any(key not in merged[source_key] for key in keys):
+            partial.append(source_key)
             continue
         records.append(
             TrackRecord(
                 source_key=source_key,
                 album=tag.album,
                 artist=tag.artist,
-                embeddings=vectors,
+                embeddings=merged[source_key],  # type: ignore[arg-type]
             )
         )
 
-    if duplicates:
-        # O-7의 재발이다. 중복을 조용히 흡수하면 유사도 행렬에 같은 곡이
-        # 여러 번 들어가 지표가 틀어진 채로 그럴듯한 숫자를 낸다.
-        print(f"인덱스에 중복 키가 {len(duplicates)}건 있다: {duplicates[0]} ...", file=sys.stderr)
-        print("먼저 `hathor ingest compact`로 정리한다.", file=sys.stderr)
-        return 2
     if orphans:
         print(f"경고: 스캔 산출물에 없는 곡 {len(orphans)}건을 제외했다", file=sys.stderr)
+    if partial:
+        print(f"경고: 일부 저장소에만 있는 곡 {len(partial)}건을 제외했다", file=sys.stderr)
     if args.limit is not None:
         records = records[: args.limit]
     if not records:
@@ -532,7 +621,8 @@ def _print_report(report: EvaluationReport) -> None:
     print(
         f"곡 {report.tracks}개 (제외 {len(report.skipped)}) / "
         f"뷰 {'+'.join(view.keys)} {view.combine.value}·{view.pool.value}"
-        f"{'·chunk-l2' if view.chunk_l2 else ''} / {report.dimension}차원"
+        f"{'·chunk-l2' if view.chunk_l2 else ''}"
+        f"{'·block-l2' if view.block_l2 else ''} / {report.dimension}차원"
     )
     verdict = "통과" if report.gate_passed else "미달"
     print(
@@ -588,6 +678,68 @@ def _run_eval_mfcc(args: argparse.Namespace) -> int:
                 _resolve_root(args.root),
             )
             return _drive_extraction(use_case, store, tracks, seconds_per_track=2.0)
+    except BatchAlreadyRunningError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+
+
+def _run_eval_layers(args: argparse.Namespace) -> int:
+    """MERT 은닉 레이어별 특징을 뽑는다 (O-8, D-0025).
+
+    스템 분리를 하지 않으므로 1004곡 배치가 6~7시간이 아니라 1시간 안팎이다.
+    레이어별로 추출을 반복하지 않는다. 한 번의 추론에서 전 레이어가 나온다.
+    """
+    from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
+    from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
+    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
+
+    try:
+        indices = tuple(int(token) for token in args.layers.split(",") if token.strip())
+    except ValueError:
+        print("--layers는 쉼표로 구분한 정수여야 한다", file=sys.stderr)
+        return 2
+    if not indices:
+        print("--layers에 레이어를 최소 하나 지정해야 한다", file=sys.stderr)
+        return 2
+
+    tracks = list(JsonlScanStore(args.out).read_tracks())
+    if not tracks:
+        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
+        return 2
+
+    store = NpzFeatureStore(args.features or args.out / DEFAULT_LAYERS_DIRNAME)
+    try:
+        with store.batch_lock():
+            if not args.force:
+                done = store.completed_keys()
+                skipped = sum(1 for track in tracks if track.source_key in done)
+                tracks = [track for track in tracks if track.source_key not in done]
+                if skipped:
+                    print(f"이미 추출된 {skipped}곡을 건너뛴다", flush=True)
+            if args.limit is not None:
+                tracks = tracks[: args.limit]
+            if not tracks:
+                print("처리할 곡이 없다")
+                return 0
+
+            extractor = MertFeatureExtractor(layers=indices)
+            invalid = [index for index in indices if not 0 <= index < extractor.layer_count]
+            if invalid:
+                print(
+                    f"레이어 인덱스가 범위를 벗어났다: {invalid} (0 ~ {extractor.layer_count - 1})",
+                    file=sys.stderr,
+                )
+                return 2
+            print(
+                f"레이어 {','.join(str(index) for index in indices)} + mixture(마지막) 저장",
+                flush=True,
+            )
+            use_case = ExtractLayerFeatures(
+                FfmpegAudioDecoder(),
+                extractor,
+                _resolve_root(args.root),
+            )
+            return _drive_extraction(use_case, store, tracks, seconds_per_track=4.0)
     except BatchAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return 3

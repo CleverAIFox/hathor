@@ -29,6 +29,13 @@ DEFAULT_MODEL = "m-a-p/MERT-v1-95M"
 DEFAULT_DEVICE = "cuda"
 CHUNK_SAMPLES = CHUNK_SECONDS * FEATURE_SAMPLE_RATE
 MIN_CHUNK_SAMPLES = FEATURE_SAMPLE_RATE
+LAYER_KEY_PREFIX = "layer"
+MIXTURE_OUTPUT_KEY = "mixture"
+
+
+def layer_key(index: int) -> str:
+    """레이어 임베딩의 npz 키. 0은 트랜스포머 블록 이전 특징이다."""
+    return f"{LAYER_KEY_PREFIX}{index:02d}"
 
 
 def to_feature_waveform(stereo: StereoWaveform) -> Waveform:
@@ -61,9 +68,21 @@ class MertFeatureExtractor:
 
     청크를 하나씩 처리한다. 배치로 묶으면 짧은 청크에 패딩이 늘어
     마스크 처리가 복잡해지고 VRAM 이득도 크지 않다.
+
+    `layers`를 주면 지정한 은닉 레이어들을 함께 낸다. 자기지도 음악·음성
+    모델은 **마지막 레이어가 다운스트림 과제에서 가장 나쁜 경우가 흔하다.**
+    사전학습 목표(마스킹 예측)에 특화되어 있기 때문이다 (D-0025, O-8).
+
+    레이어별로 추출을 반복하지 않는다. 한 번의 forward에서 전 레이어가
+    나오므로 필요한 것만 골라 담으면 되고, 반복하면 13배 시간이 든다.
     """
 
-    def __init__(self, model_name: str = DEFAULT_MODEL, device: str = DEFAULT_DEVICE) -> None:
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL,
+        device: str = DEFAULT_DEVICE,
+        layers: tuple[int, ...] = (),
+    ) -> None:
         from transformers import AutoFeatureExtractor, AutoModel
 
         self._model: Any = AutoModel.from_pretrained(model_name, trust_remote_code=True)
@@ -72,15 +91,36 @@ class MertFeatureExtractor:
             model_name, trust_remote_code=True
         )
         self._device = device
+        self._layers = tuple(sorted(set(layers)))
+
+    @property
+    def layers(self) -> tuple[int, ...]:
+        return self._layers
+
+    @property
+    def layer_count(self) -> int:
+        """임베딩 출력을 포함한 은닉 상태 개수. 95M은 13(=1+12)이다."""
+        return int(self._model.config.num_hidden_layers) + 1
 
     def extract(self, waveform: StereoWaveform) -> Embedding:
+        """기본 경로. `last_hidden_state` 하나만 낸다 (기존 산출물과 동일)."""
+        return self.extract_layers(waveform)[MIXTURE_OUTPUT_KEY]
+
+    def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]:
+        """혼합 임베딩과 선택한 레이어 임베딩을 함께 낸다.
+
+        반환 키는 `mixture`(마지막 레이어)와 `layerNN`이다. 저장소가 키를
+        그대로 npz에 담으므로 평가 하네스가 `--keys layer06`으로 읽는다.
+        """
         import torch
 
         chunks = split_chunks(to_feature_waveform(waveform))
+        wanted = (MIXTURE_OUTPUT_KEY, *(layer_key(index) for index in self._layers))
         if not chunks:
-            return np.zeros((0, self._model.config.hidden_size), dtype=np.float32)
+            empty = np.zeros((0, self._model.config.hidden_size), dtype=np.float32)
+            return dict.fromkeys(wanted, empty)
 
-        vectors: list[Any] = []
+        collected: dict[str, list[Any]] = {key: [] for key in wanted}
         with torch.no_grad():
             for chunk in chunks:
                 inputs = self._processor(
@@ -90,10 +130,18 @@ class MertFeatureExtractor:
                     return_attention_mask=True,
                 )
                 values = inputs["input_values"].to(self._device)
-                hidden = self._model(values).last_hidden_state[0]
-                vectors.append(self._masked_mean(hidden, inputs.get("attention_mask")))
-        stacked = torch.stack(vectors).cpu().numpy()
-        return np.asarray(stacked, dtype=np.float32)
+                mask = inputs.get("attention_mask")
+                output = self._model(values, output_hidden_states=bool(self._layers))
+                collected[MIXTURE_OUTPUT_KEY].append(
+                    self._masked_mean(output.last_hidden_state[0], mask)
+                )
+                for index in self._layers:
+                    hidden = output.hidden_states[index][0]
+                    collected[layer_key(index)].append(self._masked_mean(hidden, mask))
+        return {
+            key: np.asarray(torch.stack(values).cpu().numpy(), dtype=np.float32)
+            for key, values in collected.items()
+        }
 
     @staticmethod
     def _masked_mean(hidden: Any, attention_mask: Any) -> Any:

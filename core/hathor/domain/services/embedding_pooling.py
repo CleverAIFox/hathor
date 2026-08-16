@@ -91,6 +91,14 @@ def split_odd_even(embedding: Embedding) -> tuple[Embedding, Embedding]:
     return embedding[0::2], embedding[1::2]
 
 
+def unit(vector: Vector) -> Vector:
+    """벡터 하나를 단위 길이로. 영벡터는 그대로 둔다."""
+    norm = float(np.linalg.norm(vector))
+    if norm < EPSILON:
+        return vector
+    return np.asarray(vector / norm, dtype=np.float32)
+
+
 def build_view(
     embeddings: Mapping[str, Embedding],
     keys: Sequence[str],
@@ -98,12 +106,21 @@ def build_view(
     combine: CombineMode = CombineMode.CONCAT,
     mode: PoolMode = PoolMode.MEAN,
     chunk_l2: bool = False,
+    block_l2: bool = False,
 ) -> Vector:
     """선택한 키들을 각각 풀링한 뒤 하나의 뷰 벡터로 합친다.
 
     `AVERAGE`는 키별 차원이 같아야 한다. 혼합과 스템은 같은 모델을 거치므로
     현재는 항상 같지만, 다른 추출기를 섞으면 깨진다. 그때 조용히 브로드캐스트
     되지 않도록 명시적으로 막는다.
+
+    `block_l2`는 **블록별로 풀링 결과를 단위 벡터로 만든 뒤** 합친다.
+    서로 다른 추출기를 이어붙일 때 필요하다. MERT 768차원과 MFCC 40차원을
+    그냥 concat하면 코사인 유사도가 노름이 큰 쪽에 압도당해 작은 블록이
+    사실상 무시된다. 블록 정규화 후 concat하면 두 블록의 코사인 기여가
+    정확히 균등해진다(전체 코사인 = 블록 코사인의 평균).
+
+    같은 추출기 안에서 스템을 붙일 때는 노름 규모가 비슷하므로 효과가 작다.
     """
     if not keys:
         raise ValueError("뷰에 쓸 키를 최소 하나 지정해야 한다")
@@ -113,6 +130,8 @@ def build_view(
         raise KeyError(f"임베딩에 없는 키: {', '.join(sorted(missing))}")
 
     parts = [pool(embeddings[key], mode, chunk_l2=chunk_l2) for key in keys]
+    if block_l2:
+        parts = [unit(part) for part in parts]
     if combine is CombineMode.CONCAT:
         return np.asarray(np.concatenate(parts), dtype=np.float32)
 

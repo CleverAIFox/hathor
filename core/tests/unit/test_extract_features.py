@@ -103,3 +103,64 @@ def test_성공_건수를_센다():
 
     assert use_case.processed == 2
     assert use_case.failed == []
+
+
+class FakeLayeredExtractor:
+    """레이어 추출기 대역. GPU도 모델도 쓰지 않는다."""
+
+    def __init__(self, layers=(0, 3), chunks=2, dim=4):
+        self._layers = layers
+        self._chunks = chunks
+        self._dim = dim
+        self.calls = 0
+
+    def extract_layers(self, waveform):
+        import numpy as np
+
+        self.calls += 1
+        views = {"mixture": np.full((self._chunks, self._dim), 9.0, dtype=np.float32)}
+        for index in self._layers:
+            views[f"layer{index:02d}"] = np.full(
+                (self._chunks, self._dim), float(index), dtype=np.float32
+            )
+        return views
+
+
+class BrokenLayeredExtractor:
+    def extract_layers(self, waveform):
+        import numpy as np
+
+        return {"layer00": np.zeros((1, 4), dtype=np.float32)}
+
+
+def test_layer_features_put_layers_in_stem_slot(tmp_path):
+    """산출물 규격이 기존과 같아야 평가 하네스가 구분 없이 읽는다."""
+    from hathor.application.extract_features import ExtractLayerFeatures
+
+    extractor = FakeLayeredExtractor()
+    use_case = ExtractLayerFeatures(FakeDecoder(), extractor, tmp_path)
+    features = list(use_case.run([make_track("가/노래.mp3")]))
+
+    assert len(features) == 1
+    assert set(features[0].stems) == {"layer00", "layer03"}
+    assert features[0].chunk_count == 2
+    assert use_case.processed == 1
+
+
+def test_layer_features_decode_once_per_track(tmp_path):
+    """레이어 수만큼 추론을 반복하면 배치 시간이 그만큼 배가된다."""
+    from hathor.application.extract_features import ExtractLayerFeatures
+
+    extractor = FakeLayeredExtractor(layers=(0, 3, 6, 9))
+    use_case = ExtractLayerFeatures(FakeDecoder(), extractor, tmp_path)
+    list(use_case.run([make_track("가/노래.mp3")]))
+    assert extractor.calls == 1
+
+
+def test_layer_features_require_mixture_key(tmp_path):
+    from hathor.application.extract_features import ExtractLayerFeatures
+
+    use_case = ExtractLayerFeatures(FakeDecoder(), BrokenLayeredExtractor(), tmp_path)
+    assert list(use_case.run([make_track("가/노래.mp3")])) == []
+    assert len(use_case.failed) == 1
+    assert "KeyError" in use_case.failed[0][1]

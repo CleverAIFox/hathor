@@ -105,3 +105,39 @@ def test_build_view_requires_keys():
 def test_build_view_key_order_matters():
     embeddings = {"a": embedding(2), "b": embedding(2, start=9.0)}
     assert not np.allclose(build_view(embeddings, ("a", "b")), build_view(embeddings, ("b", "a")))
+
+
+def test_block_l2_makes_each_part_unit_length():
+    """서로 다른 추출기를 붙일 때 노름이 큰 블록이 코사인을 지배하는 것을 막는다."""
+    embeddings = {"big": embedding(2, dim=4) * 100.0, "small": embedding(2, dim=4) * 0.01}
+    plain = build_view(embeddings, ("big", "small"))
+    normalized = build_view(embeddings, ("big", "small"), block_l2=True)
+    assert np.linalg.norm(plain[:4]) / np.linalg.norm(plain[4:]) > 1000
+    assert np.linalg.norm(normalized[:4]) == pytest.approx(1.0)
+    assert np.linalg.norm(normalized[4:]) == pytest.approx(1.0)
+
+
+def test_block_l2_equalizes_cosine_contribution():
+    """블록 정규화 후 concat의 코사인은 블록 코사인의 평균이다."""
+    from hathor.domain.services.retrieval_metrics import cosine_similarity
+
+    left = {"a": embedding(2, dim=4), "b": embedding(2, dim=4, start=5.0) * 0.001}
+    right = {"a": embedding(2, dim=4, start=2.0), "b": embedding(2, dim=4) * 0.001}
+    views = [build_view(side, ("a", "b"), block_l2=True).reshape(1, -1) for side in (left, right)]
+    combined = float(cosine_similarity(views[0], views[1])[0, 0])
+
+    blocks = [
+        float(
+            cosine_similarity(
+                build_view(left, (key,), block_l2=True).reshape(1, -1),
+                build_view(right, (key,), block_l2=True).reshape(1, -1),
+            )[0, 0]
+        )
+        for key in ("a", "b")
+    ]
+    assert combined == pytest.approx(sum(blocks) / 2, abs=1e-5)
+
+
+def test_block_l2_keeps_zero_block_finite():
+    embeddings = {"a": embedding(2, dim=4), "b": np.zeros((2, 4), dtype=np.float32)}
+    assert np.isfinite(build_view(embeddings, ("a", "b"), block_l2=True)).all()

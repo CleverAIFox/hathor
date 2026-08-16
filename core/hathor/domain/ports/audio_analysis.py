@@ -77,3 +77,21 @@ class FeatureExtractor(Protocol):
     """
 
     def extract(self, waveform: StereoWaveform) -> Embedding: ...
+
+
+class LayeredFeatureExtractor(Protocol):
+    """파형 하나에서 이름 붙은 임베딩 여러 개를 낸다.
+
+    트랜스포머의 은닉 레이어를 여러 개 뽑을 때 쓴다. 자기지도 모델은
+    마지막 레이어가 다운스트림 과제에서 가장 나쁜 경우가 흔하며 (D-0025),
+    어느 레이어가 나은지는 실측으로만 정해진다.
+
+    레이어별로 추출을 반복하지 않기 위해 포트를 따로 둔다. 한 번의 추론에서
+    전 레이어가 나오므로 필요한 것만 골라 담으면 되고, `extract`를 레이어 수만큼
+    호출하는 설계였다면 배치 시간이 그만큼 배가된다.
+
+    반환 키에는 반드시 `mixture`가 포함된다. 기존 산출물과 규격을 맞춰
+    같은 저장소·같은 평가 하네스가 구분 없이 읽게 한다.
+    """
+
+    def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]: ...
