@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
+from hathor.application.extract_features import ExtractFeatures
 from hathor.application.orchestrator.generation_pipeline import run_dry
 from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
@@ -80,6 +82,20 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CONTACT,
         help="User-Agent에 넣을 연락처. MB가 식별 가능한 값을 요구한다",
     )
+    features = ingest_sub.add_parser("features", help="오디오 특징 추출 (GPU)")
+    features.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
+    )
+    features.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리")
+    features.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
+    features.add_argument(
+        "--force",
+        action="store_true",
+        help="이미 추출된 곡도 다시 처리",
+    )
     return parser
 
 
@@ -88,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ingest":
         if args.ingest_command == "resolve":
             return _run_ingest_resolve(args)
+        if args.ingest_command == "features":
+            return _run_ingest_features(args)
         return _run_ingest_scan(args)
     return _run_generate(args)
 
@@ -196,4 +214,69 @@ def _run_ingest_scan(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    return 0
+
+
+def _run_ingest_features(args: argparse.Namespace) -> int:
+    """스캔 산출물의 곡을 디코딩·분리·임베딩해 npz로 저장한다 (유닛 #4).
+
+    GPU가 있는 기기에서만 의미가 있다. 1004곡에 다섯 시간이 걸리므로
+    이미 끝난 곡은 인덱스를 보고 건너뛴다. 재개 판정은 실행 정책이라
+    유스케이스가 아니라 여기에 둔다.
+    """
+    from hathor.infrastructure.demucs_separator import DemucsStemSeparator
+    from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
+    from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
+    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
+
+    tracks = list(JsonlScanStore(args.out).read_tracks())
+    if not tracks:
+        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
+        return 2
+
+    store = NpzFeatureStore(args.out)
+    if not args.force:
+        done = store.completed_keys()
+        skipped = sum(1 for track in tracks if track.source_key in done)
+        tracks = [track for track in tracks if track.source_key not in done]
+        if skipped:
+            print(f"이미 추출된 {skipped}곡을 건너뛴다", flush=True)
+    if args.limit is not None:
+        tracks = tracks[: args.limit]
+    if not tracks:
+        print("처리할 곡이 없다")
+        return 0
+
+    use_case = ExtractFeatures(
+        FfmpegAudioDecoder(),
+        DemucsStemSeparator(),
+        MertFeatureExtractor(),
+        _resolve_root(args.root),
+    )
+    print(f"대상 {len(tracks)}곡, 예상 {len(tracks) * 18 / 60:.1f}분", flush=True)
+
+    started = time.monotonic()
+    for index, features in enumerate(use_case.run(tracks), 1):
+        store.write_track(features)
+        elapsed = time.monotonic() - started
+        print(
+            f"  {index:>4}/{len(tracks)} {features.chunk_count:>3}청크 "
+            f"{elapsed / index:5.1f}초/곡 {features.source_key}",
+            flush=True,
+        )
+
+    summary_path = store.write_summary(
+        {
+            "processed": use_case.processed,
+            "failed": len(use_case.failed),
+            "failures": [
+                {"source_key": key, "reason": reason} for key, reason in use_case.failed
+            ],
+        }
+    )
+    print()
+    print(f"성공 {use_case.processed}곡, 실패 {len(use_case.failed)}곡")
+    for key, reason in use_case.failed:
+        print(f"  실패 {key}: {reason}", file=sys.stderr)
+    print(f"요약: {summary_path}")
     return 0

@@ -5,12 +5,22 @@ description = "취향 잠재 표현 기반 종단간 AI 음악 창작 시스템"
 requires-python = ">=3.12"
 dependencies = [
     "mutagen>=1.48.1",
+    # 도메인 포트가 파형·임베딩 타입에 쓴다 (D-0021). 선택적일 수 없다.
+    "numpy>=2.0",
 ]
 
 [project.optional-dependencies]
 music = [
   "mutagen>=1.47",
   "numpy>=2.0",
+]
+# 리전(GPU)에서만 설치한다. 광인사는 코드 작성용이며 2GB를 받을 이유가 없다.
+# 구현체가 메서드 안에서 임포트하므로 없어도 모듈 임포트와 게이트가 돈다.
+gpu = [
+  "torch>=2.5",
+  "demucs>=4.0",
+  "transformers>=4.46",
+  "scipy>=1.14",
 ]
 api = [
   "fastapi>=0.115",
@@ -60,6 +70,13 @@ ignore = ["ANN401"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+# torch·demucs·transformers는 리전(GPU)에서만 필요하다. 광인사는 코드
+# 작성용이며 2GB 라이브러리를 요구하면 게이트가 무거워진다. 구현체가
+# 메서드 안에서 임포트하므로 모듈 임포트만으로는 필요하지 않다.
+[[tool.mypy.overrides]]
+module = ["torch.*", "demucs.*", "transformers.*", "scipy.*"]
+ignore_missing_imports = true
 warn_unreachable = true
 disallow_any_generics = true
 
@@ -84,7 +101,10 @@ source_modules = ["hathor.domain"]
 forbidden_modules = [
   "hathor.application", "hathor.engines", "hathor.infrastructure",
   "hathor.interfaces", "hathor.shared",
-  "sqlalchemy", "fastapi", "torch", "numpy", "pydantic",
+  # numpy 제외 (D-0021). 파형은 본질적으로 수치 배열이고 이를 표현할
+  # 파이썬 표준 타입이 달리 없다. list[float]은 533만 샘플에서 메모리가
+  # 20배로 늘어 성립하지 않는다. torch는 교체 가능한 선택이므로 계속 막는다.
+  "sqlalchemy", "fastapi", "torch", "pydantic",
 ]
 
 [[tool.importlinter.contracts]]
