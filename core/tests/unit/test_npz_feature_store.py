@@ -272,3 +272,35 @@ def test_compact_leaves_sorted_index_untouched(tmp_path: Path) -> None:
     assert report.changed is False
     assert store.index_path.read_bytes() == before
     assert not (store.index_path.with_suffix(store.index_path.suffix + ".bak")).exists()
+
+
+def test_read_vectors_roundtrip(tmp_path):
+    """평가 하네스가 읽는 경로다. 저장한 배열이 그대로 돌아와야 한다."""
+    store = NpzFeatureStore(tmp_path)
+    features = make_features("가수/노래.mp3", chunks=4)
+    store.write_track(features)
+
+    vectors = store.read_vectors(vector_filename(features.source_key))
+    assert set(vectors) == {MIXTURE_KEY, *STEM_NAMES}
+    assert vectors[MIXTURE_KEY].shape == (4, 768)
+    assert vectors[MIXTURE_KEY].dtype == np.float32
+    assert np.array_equal(vectors[MIXTURE_KEY], features.mixture)
+
+
+def test_iter_vectors_follows_index_order(tmp_path):
+    store = NpzFeatureStore(tmp_path)
+    for name in ("나.mp3", "가.mp3"):
+        store.write_track(make_features(name, chunks=2))
+    assert [key for key, _ in store.iter_vectors()] == ["나.mp3", "가.mp3"]
+
+
+def test_iter_vectors_exposes_duplicates(tmp_path):
+    """중복을 조용히 감추지 않는다. O-7이 지표 단계에서야 드러나면 늦는다."""
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("가.mp3", chunks=2))
+    store.write_track(make_features("가.mp3", chunks=2))
+    assert len(list(store.iter_vectors())) == 2
+
+
+def test_iter_vectors_on_empty_store(tmp_path):
+    assert list(NpzFeatureStore(tmp_path).iter_vectors()) == []

@@ -48,7 +48,7 @@ class ExtractFeatures:
     def __init__(
         self,
         decoder: AudioDecoder,
-        separator: StemSeparator,
+        separator: StemSeparator | None,
         extractor: FeatureExtractor,
         library_root: Path,
     ) -> None:
@@ -70,7 +70,9 @@ class ExtractFeatures:
 
     def _extract_one(self, track: ScannedTrack) -> TrackFeatures:
         waveform = self._decoder.decode(self._root / track.source_key)
-        stems = self._separator.separate(waveform)
+        # 분리기가 없으면 혼합만 뽑는다. MFCC 베이스라인은 스템이 필요 없고
+        # 곡당 GPU 12초를 쓸 이유도 없다. 산출물 규격은 그대로 유지된다.
+        stems = {} if self._separator is None else self._separator.separate(waveform)
         return TrackFeatures(
             source_key=track.source_key,
             mixture=self._extractor.extract(waveform),

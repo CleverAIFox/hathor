@@ -14,6 +14,8 @@
 | #2 아티스트 파서 (D-0014 · D-0016) | 완료 |
 | #3 MusicBrainz 조회 (D-0019 · D-0020) | 완료 (레코딩 정규화 78.5%) |
 | #4 오디오 특징 추출 (D-0018 · D-0021) | 완료 (실측 1004곡 / npz 347MB / 청크 23,444) |
+| #5 검색 평가 하네스 (D-0023) | 완료 |
+| #6 임베딩 9조건 실측 (D-0024) | 완료 — **MFCC 베이스라인이 MERT-95M을 이김. 원인 미확정(O-8)** |
 
 ## 빠른 실행
 
@@ -27,6 +29,27 @@ uv sync --all-extras --dev
 uv run python -m hathor.cli generate --seed 42 --dry-run
 make check                    # lint · type · arch · test (CI와 동일)
 ```
+
+### 검색 평가 (GPU 불필요, CPU 수 초)
+
+```bash
+cd core
+uv run python -m hathor.cli eval retrieval --out var/ingest            # 혼합 단독
+uv run python -m hathor.cli eval retrieval --out var/ingest \
+    --keys mixture,drums,bass,other,vocals --label stems-concat        # 스템 concat
+
+# MFCC 베이스라인: 먼저 특징을 뽑고(CPU 배치) 같은 하네스를 --features로 돌린다
+uv run python -m hathor.cli eval mfcc --out var/ingest
+uv run python -m hathor.cli eval retrieval --out var/ingest \
+    --features var/ingest/baseline-mfcc --label mfcc
+```
+
+M0(자기일관성)가 0.95 미만이면 M1/M2를 계산하지 않고 비정상 종료한다 (D-0023).
+리포트는 `var/ingest/eval/<시각>-<라벨>.eval.json`에 실행마다 새로 쌓인다.
+
+> `make check`의 mypy 단계는 GPU 엑스트라(`transformers`)가 없는 기기에서
+> `mert_feature_extractor.py`의 `type: ignore`를 미사용으로 보고한다.
+> CI는 `uv sync --all-extras`를 쓰므로 통과한다. 환경 차이이며 결함이 아니다.
 
 ## Compose 프로파일
 

@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from hathor.domain.ports.audio_analysis import Embedding
+
 if TYPE_CHECKING:
     from hathor.application.extract_features import TrackFeatures
 
@@ -222,6 +224,28 @@ class NpzFeatureStore:
             missing_vectors_dropped=missing,
             malformed_dropped=malformed,
         )
+
+    def read_vectors(self, vector_file: str) -> dict[str, Embedding]:
+        """npz 하나를 읽어 키별 임베딩으로 돌려준다.
+
+        `allow_pickle`은 기본값 False를 그대로 쓴다. 산출물은 순수 수치
+        배열이며 임의 객체 역직렬화를 허용할 이유가 없다.
+        """
+        path = self.vectors_dir / vector_file
+        with np.load(path) as data:
+            return {name: np.asarray(data[name], dtype=np.float32) for name in data.files}
+
+    def iter_vectors(self) -> Iterator[tuple[str, dict[str, Embedding]]]:
+        """인덱스 순서대로 (source_key, 임베딩)을 방출한다.
+
+        인덱스에 중복이 있으면 같은 곡을 여러 번 낸다. 정리는 `compact_index`의
+        일이며 여기서 조용히 감추면 O-7 같은 사건이 지표 단계에서야 드러난다.
+        1004곡 x 5키면 전량 적재해도 347MB이므로 스트리밍이 필수는 아니지만,
+        코퍼스가 커질 때 여기가 병목이 되지 않게 이터레이터로 둔다.
+        """
+        for record in self.read_records():
+            key = str(record["source_key"])
+            yield key, self.read_vectors(str(record["vector_file"]))
 
     def write_track(self, features: TrackFeatures) -> Path:
         """곡 하나를 저장하고 인덱스에 한 줄 덧붙인다.
