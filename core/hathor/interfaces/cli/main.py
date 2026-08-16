@@ -269,9 +269,7 @@ def _run_ingest_features(args: argparse.Namespace) -> int:
         {
             "processed": use_case.processed,
             "failed": len(use_case.failed),
-            "failures": [
-                {"source_key": key, "reason": reason} for key, reason in use_case.failed
-            ],
+            "failures": [{"source_key": key, "reason": reason} for key, reason in use_case.failed],
         }
     )
     print()

@@ -21,6 +21,7 @@ STEM_NAMES = ("drums", "bass", "other", "vocals")
 
 def make_features(source_key: str = "가수/노래.mp3", chunks: int = 3) -> TrackFeatures:
     """청크 수만 다른 결정적 임베딩을 만든다."""
+
     def embedding(seed: int) -> np.ndarray:
         return np.full((chunks, 768), float(seed), dtype=np.float32)
 

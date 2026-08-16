@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-
     from hathor.application.extract_features import TrackFeatures
 
 FEATURES_DIRNAME = "features"
@@ -101,9 +100,7 @@ class NpzFeatureStore:
             np.savez(stream, **arrays)  # type: ignore[arg-type]  # 스텁이 2번째 위치를 allow_pickle로 본다
         temporary.replace(target)
         with self.index_path.open("a", encoding="utf-8") as stream:
-            line = json.dumps(
-                features_as_record(features), ensure_ascii=False, sort_keys=False
-            )
+            line = json.dumps(features_as_record(features), ensure_ascii=False, sort_keys=False)
             stream.write(line + "\n")
         return target
 
@@ -112,7 +109,5 @@ class NpzFeatureStore:
         self._root.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         path = self._root / f"run-{stamp}{SUMMARY_SUFFIX}"
-        path.write_text(
-            json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return path
