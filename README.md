@@ -17,7 +17,7 @@
 | #5 검색 평가 하네스 (D-0023) | 완료 |
 | #6 임베딩 9조건 실측 (D-0024) | 완료 — **MFCC 베이스라인이 MERT-95M을 이김** |
 | #7 결합 뷰 실측 (D-0025) | 완료 — 두 표현은 상보적. O-8을 (a)·(b)로 좁힘 |
-| #8 MERT 레이어 선택 (O-8) | 코드 완료 · **추출 대기** |
+| #8 MERT 레이어 선택 (D-0026) | 완료 — **마지막 레이어가 최악. layer00으로 M2 2.8배 개선** |
 
 ## 빠른 실행
 
@@ -45,10 +45,12 @@ uv run python -m hathor.cli eval mfcc --out var/ingest
 uv run python -m hathor.cli eval retrieval --out var/ingest \
     --features var/ingest/baseline-mfcc --label mfcc
 
-# MERT 레이어별 추출 (O-8). 스템 분리 없음 — 1004곡 GPU 1시간 안팎
+# MERT 레이어별 추출. 스템 분리 없음 — 1004곡 GPU 약 67분
 uv run python -m hathor.cli eval layers --out var/ingest --layers 0,3,6,9
+
+# 현재 기본 뷰 (D-0026). 마지막 레이어(mixture)는 쓰지 않는다
 uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/mert-layers --keys layer06 --label mert-layer06
+    --features var/ingest/mert-layers --keys layer00 --label mert-layer00
 
 # 두 추출기 결합 (O-8). 서로 다른 추출기는 --block-l2가 필수다
 uv run python -m hathor.cli eval retrieval --out var/ingest \

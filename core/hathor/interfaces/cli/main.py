@@ -45,7 +45,8 @@ DEFAULT_OUTPUT_ROOT = Path("var/ingest")
 DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
 DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
 DEFAULT_LAYERS_DIRNAME = "mert-layers"
-DEFAULT_LAYERS = "0,3,6,9"
+DEFAULT_LAYERS = "0,1,2,6"
+"""D-0026 실측 후 기본값. layer00이 최선이었고 1·2는 미탐색이다 (O-9)."""
 
 
 def _parse_stages(raw: str) -> tuple[Stage, ...]:
