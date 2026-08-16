@@ -12,8 +12,8 @@
 | P0 기반 (골격 · 게이트 · compose) | 완료 |
 | #1 파일 스캐너 + 태그 추출 | 완료 (실측 1004곡 / 실패 0) |
 | #2 아티스트 파서 (D-0014 · D-0016) | 완료 |
-| #3 MusicBrainz 조회 | 미착수 |
-| #4 오디오 특징 추출 | 미착수 |
+| #3 MusicBrainz 조회 (D-0019 · D-0020) | 완료 (레코딩 정규화 78.5%) |
+| #4 오디오 특징 추출 (D-0018 · D-0021) | 완료 (실측 1004곡 / npz 347MB / 청크 23,444) |
 
 ## 빠른 실행
 
@@ -44,7 +44,7 @@ MongoDB는 `--wiredTigerCacheSizeGB 0.25`로 캐시를 제한해 core에 포함�
 ## 구조
 
 ```
-docs/MASTER.md      설계 단일 진실 공급원
+docs/PLAN.md        설계 단일 진실 공급원 (기획서 3부작)
 core/hathor/        Python 모노레포 (domain · application · engines · infrastructure · interfaces · shared)
 core/tests/         unit · integration
 infra/              postgres init · prometheus 설정

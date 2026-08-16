@@ -10,8 +10,13 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
+import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,6 +32,29 @@ SUMMARY_SUFFIX = ".features.summary.json"
 MIXTURE_KEY = "mixture"
 VECTORS_DIRNAME = "vectors"
 KEY_HASH_LENGTH = 16
+BACKUP_SUFFIX = ".bak"
+BATCH_LOCK_NAME = ".batch.lock"
+
+
+class BatchAlreadyRunningError(RuntimeError):
+    """같은 산출물 디렉터리에서 배치가 이미 돌고 있다 (O-7)."""
+
+
+@dataclass(frozen=True, slots=True)
+class CompactReport:
+    """인덱스 정리 결과. 무엇을 몇 줄 버렸는지 남긴다."""
+
+    total_lines: int
+    kept: int
+    duplicates_removed: int
+    missing_vectors_dropped: int
+    malformed_dropped: int
+
+    @property
+    def changed(self) -> bool:
+        return bool(
+            self.duplicates_removed or self.missing_vectors_dropped or self.malformed_dropped
+        )
 
 
 def vector_filename(source_key: str) -> str:
@@ -74,16 +102,126 @@ class NpzFeatureStore:
     def index_path(self) -> Path:
         return self._root / f"index{INDEX_SUFFIX}"
 
-    def completed_keys(self) -> set[str]:
-        """이미 기록된 source_key 집합. 재개 시 건너뛸 대상이다."""
+    @property
+    def batch_lock_path(self) -> Path:
+        return self._root / BATCH_LOCK_NAME
+
+    @contextmanager
+    def batch_lock(self) -> Iterator[None]:
+        """배치 중복 실행을 막는다 (O-7).
+
+        O-7의 원인은 인덱스 append가 아니라 배치 자체가 두 번 돈 것이다.
+        append는 O_APPEND + 200바이트라 리눅스에서 이미 원자적이었고,
+        실제로 데이터도 깨지지 않았다. 막아야 하는 것은 프로세스 수준이다.
+
+        PID 파일이 아니라 flock을 쓴다. 이 배치는 절전·발열·마운트 해제로
+        네 번 죽었고 그때마다 정리 코드가 돌지 않았다. PID 파일이었다면
+        죽은 잠금이 남아 다음 실행을 막는다. flock은 커널이 fd 수명에
+        묶어 관리하므로 프로세스가 어떻게 죽든 자동으로 풀린다.
+
+        내용은 사람이 읽기 위한 것이고 잠금 판정에는 쓰지 않는다.
+        """
+        self._root.mkdir(parents=True, exist_ok=True)
+        handle = self.batch_lock_path.open("a+", encoding="utf-8")
+        try:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                handle.seek(0)
+                holder = handle.read().strip() or "(미상)"
+                raise BatchAlreadyRunningError(
+                    f"배치가 이미 실행 중이다: {self.batch_lock_path} — {holder}"
+                ) from exc
+            handle.seek(0)
+            handle.truncate()
+            stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            handle.write(f"pid={os.getpid()} started={stamp}\n")
+            handle.flush()
+            yield
+        finally:
+            handle.close()  # 닫으면 잠금이 풀린다
+
+    def read_records(self) -> list[dict[str, object]]:
+        """인덱스를 기록 순서대로 읽는다. 중복은 그대로 둔다."""
         if not self.index_path.exists():
-            return set()
-        keys: set[str] = set()
+            return []
+        records: list[dict[str, object]] = []
         with self.index_path.open(encoding="utf-8") as stream:
             for line in stream:
                 if line.strip():
-                    keys.add(str(json.loads(line)["source_key"]))
-        return keys
+                    records.append(json.loads(line))
+        return records
+
+    def completed_keys(self) -> set[str]:
+        """이미 기록된 source_key 집합. 재개 시 건너뛸 대상이다."""
+        return {str(record["source_key"]) for record in self.read_records()}
+
+    def compact_index(self, *, drop_missing: bool = True) -> CompactReport:
+        """중복·고아 기록을 없애고 source_key 순으로 다시 쓴다 (O-7 정리).
+
+        같은 키가 여럿이면 **마지막 기록을 남긴다.** npz는 같은 이름으로
+        덮어써졌으므로 파일과 짝이 맞는 것은 나중 기록이다.
+
+        정렬해서 쓰는 이유는 D-0009다. 지금 인덱스 순서는 배치가 몇 번
+        중단됐고 어느 지점에서 재개됐는지에 따라 달라진다. 기기가 달라도
+        같은 파일이 나와야 한다는 요구를 순서가 이미 깨고 있다.
+        키 정렬은 이 순서 의존을 없앤다.
+
+        `drop_missing`은 npz가 사라진 기록을 버린다. 그런 기록이 남아
+        있으면 `completed_keys()`가 없는 파일을 완료로 보고해 재개가
+        곡을 영영 건너뛴다.
+
+        원본은 `.bak`으로 남긴다. 여러 번 돌려도 결과가 같다(멱등).
+        """
+        if not self.index_path.exists():
+            return CompactReport(0, 0, 0, 0, 0)
+
+        total = 0
+        malformed = 0
+        latest: dict[str, dict[str, object]] = {}
+        with self.index_path.open(encoding="utf-8") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                total += 1
+                try:
+                    record = json.loads(line)
+                    key = str(record["source_key"])
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    malformed += 1
+                    continue
+                latest[key] = record
+
+        duplicates = total - malformed - len(latest)
+        kept: list[dict[str, object]] = []
+        missing = 0
+        for key in sorted(latest):
+            record = latest[key]
+            if drop_missing and not (self.vectors_dir / str(record["vector_file"])).exists():
+                missing += 1
+                continue
+            kept.append(record)
+
+        content = "".join(
+            json.dumps(record, ensure_ascii=False, sort_keys=False) + "\n" for record in kept
+        ).encode("utf-8")
+
+        # 내용이 같으면 쓰지 않는다. 두 번째 실행이 백업을 정리본으로
+        # 덮어써 원본을 잃는 것을 막는다. 멱등성을 바이트 수준으로 만든다.
+        if content != self.index_path.read_bytes():
+            backup = self.index_path.with_suffix(self.index_path.suffix + BACKUP_SUFFIX)
+            backup.write_bytes(self.index_path.read_bytes())
+            temporary = self.index_path.with_suffix(self.index_path.suffix + ".tmp")
+            temporary.write_bytes(content)
+            temporary.replace(self.index_path)
+
+        return CompactReport(
+            total_lines=total,
+            kept=len(kept),
+            duplicates_removed=duplicates,
+            missing_vectors_dropped=missing,
+            malformed_dropped=malformed,
+        )
 
     def write_track(self, features: TrackFeatures) -> Path:
         """곡 하나를 저장하고 인덱스에 한 줄 덧붙인다.
@@ -100,6 +238,10 @@ class NpzFeatureStore:
             np.savez(stream, **arrays)  # type: ignore[arg-type]  # 스텁이 2번째 위치를 allow_pickle로 본다
         temporary.replace(target)
         with self.index_path.open("a", encoding="utf-8") as stream:
+            # O_APPEND 자체로 이미 원자적이다. 잠금은 그 보장을 코드에
+            # 드러내기 위한 것이며 O-7의 원인은 여기가 아니었다.
+            # 실행 수준 방어는 batch_lock()이 한다.
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
             line = json.dumps(features_as_record(features), ensure_ascii=False, sort_keys=False)
             stream.write(line + "\n")
         return target

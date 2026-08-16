@@ -3,14 +3,18 @@
 벡터는 npz, 메타는 JSONL이다. GPU도 실제 음원도 쓰지 않는다.
 """
 
+import contextlib
 import json
+import os
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from hathor.application.extract_features import TrackFeatures
 from hathor.infrastructure.npz_feature_store import (
     MIXTURE_KEY,
+    BatchAlreadyRunningError,
     NpzFeatureStore,
     features_as_record,
     vector_filename,
@@ -109,3 +113,162 @@ def test_summary_is_per_run(tmp_path: Path) -> None:
     store = NpzFeatureStore(tmp_path)
     path = store.write_summary({"processed": 3, "failed": 0})
     assert json.loads(path.read_text(encoding="utf-8"))["processed"] == 3
+
+
+# ---------------------------------------------------------------- O-7 정리·잠금
+
+
+def test_compact_keeps_last_record_per_key(tmp_path: Path) -> None:
+    """npz는 덮어써졌으므로 파일과 짝이 맞는 것은 나중 기록이다."""
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3", chunks=3))
+    store.write_track(make_features("a.mp3", chunks=9))
+
+    report = store.compact_index()
+
+    records = store.read_records()
+    assert [record["source_key"] for record in records] == ["a.mp3"]
+    assert records[0]["chunk_count"] == 9
+    assert report.total_lines == 2
+    assert report.duplicates_removed == 1
+    assert report.kept == 1
+
+
+def test_compact_sorts_by_source_key(tmp_path: Path) -> None:
+    """D-0009. 중단·재개 지점에 따라 순서가 달라지면 기기 간 비교가 불가능하다."""
+    store = NpzFeatureStore(tmp_path)
+    for key in ("c.mp3", "a.mp3", "b.mp3"):
+        store.write_track(make_features(key))
+
+    store.compact_index()
+
+    assert [record["source_key"] for record in store.read_records()] == [
+        "a.mp3",
+        "b.mp3",
+        "c.mp3",
+    ]
+
+
+def test_compact_drops_records_without_vector(tmp_path: Path) -> None:
+    """npz가 없는데 완료로 남으면 재개가 그 곡을 영영 건너뛴다."""
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3"))
+    target = store.write_track(make_features("b.mp3"))
+    target.unlink()
+
+    report = store.compact_index()
+
+    assert store.completed_keys() == {"a.mp3"}
+    assert report.missing_vectors_dropped == 1
+
+
+def test_compact_keeps_missing_when_asked(tmp_path: Path) -> None:
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3")).unlink()
+
+    report = store.compact_index(drop_missing=False)
+
+    assert store.completed_keys() == {"a.mp3"}
+    assert report.missing_vectors_dropped == 0
+
+
+def test_compact_drops_malformed_lines(tmp_path: Path) -> None:
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3"))
+    with store.index_path.open("a", encoding="utf-8") as stream:
+        stream.write("{잘린 줄\n")
+
+    report = store.compact_index()
+
+    assert report.malformed_dropped == 1
+    assert store.completed_keys() == {"a.mp3"}
+
+
+def test_compact_is_idempotent(tmp_path: Path) -> None:
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3"))
+    store.write_track(make_features("a.mp3"))
+
+    store.compact_index()
+    first = store.index_path.read_bytes()
+    second_report = store.compact_index()
+
+    assert store.index_path.read_bytes() == first
+    assert second_report.changed is False
+
+
+def test_compact_backs_up_original(tmp_path: Path) -> None:
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3"))
+    store.write_track(make_features("a.mp3"))
+    original = store.index_path.read_bytes()
+
+    store.compact_index()
+
+    backup = store.index_path.with_suffix(store.index_path.suffix + ".bak")
+    assert backup.read_bytes() == original
+
+
+def test_compact_on_missing_index_is_noop(tmp_path: Path) -> None:
+    report = NpzFeatureStore(tmp_path).compact_index()
+    assert report.total_lines == 0
+    assert report.changed is False
+
+
+def test_batch_lock_blocks_second_holder(tmp_path: Path) -> None:
+    """O-7. 두 배치가 겹쳐 돌면 인덱스에 중복이 쌓인다."""
+    store = NpzFeatureStore(tmp_path)
+    with store.batch_lock():
+        other = NpzFeatureStore(tmp_path)
+        with pytest.raises(BatchAlreadyRunningError), other.batch_lock():
+            pass
+
+
+def test_batch_lock_releases_on_exit(tmp_path: Path) -> None:
+    store = NpzFeatureStore(tmp_path)
+    with store.batch_lock():
+        pass
+    with store.batch_lock():
+        pass
+
+
+def test_batch_lock_releases_on_exception(tmp_path: Path) -> None:
+    """절전·발열로 죽어도 잠금이 남으면 안 된다. flock을 쓰는 이유다."""
+    store = NpzFeatureStore(tmp_path)
+    with contextlib.suppress(RuntimeError), store.batch_lock():
+        raise RuntimeError("배치 중단")
+    with store.batch_lock():
+        pass
+
+
+def test_batch_lock_records_holder(tmp_path: Path) -> None:
+    store = NpzFeatureStore(tmp_path)
+    with store.batch_lock():
+        assert f"pid={os.getpid()}" in store.batch_lock_path.read_text(encoding="utf-8")
+
+
+def test_compact_rerun_preserves_original_backup(tmp_path: Path) -> None:
+    """두 번째 실행이 백업을 정리본으로 덮어쓰면 원본을 잃는다."""
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3"))
+    store.write_track(make_features("a.mp3"))
+    original = store.index_path.read_bytes()
+
+    store.compact_index()
+    store.compact_index()
+
+    backup = store.index_path.with_suffix(store.index_path.suffix + ".bak")
+    assert backup.read_bytes() == original
+
+
+def test_compact_leaves_sorted_index_untouched(tmp_path: Path) -> None:
+    """이미 정리된 인덱스는 백업조차 만들지 않는다."""
+    store = NpzFeatureStore(tmp_path)
+    store.write_track(make_features("a.mp3"))
+    before = store.index_path.read_bytes()
+
+    report = store.compact_index()
+
+    assert report.changed is False
+    assert store.index_path.read_bytes() == before
+    assert not (store.index_path.with_suffix(store.index_path.suffix + ".bak")).exists()

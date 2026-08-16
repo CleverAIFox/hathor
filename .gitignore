@@ -14,3 +14,6 @@ hathor_step0_report.json
 node_modules/
 .DS_Store
 var/
+
+# 작업 중 백업 (커밋 대상 아님)
+.o7-*/

@@ -96,6 +96,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="이미 추출된 곡도 다시 처리",
     )
+
+    compact = ingest_sub.add_parser("compact", help="특징 인덱스의 중복·고아 기록 정리 (O-7)")
+    compact.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리")
+    compact.add_argument(
+        "--keep-missing",
+        action="store_true",
+        help="npz가 없는 기록도 남긴다 (기본은 버린다)",
+    )
+    compact.add_argument("--dry-run", action="store_true", help="쓰지 않고 결과만 보고한다")
     return parser
 
 
@@ -106,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_ingest_resolve(args)
         if args.ingest_command == "features":
             return _run_ingest_features(args)
+        if args.ingest_command == "compact":
+            return _run_ingest_compact(args)
         return _run_ingest_scan(args)
     return _run_generate(args)
 
@@ -224,6 +235,19 @@ def _run_ingest_features(args: argparse.Namespace) -> int:
     이미 끝난 곡은 인덱스를 보고 건너뛴다. 재개 판정은 실행 정책이라
     유스케이스가 아니라 여기에 둔다.
     """
+    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
+
+    try:
+        with NpzFeatureStore(args.out).batch_lock():
+            return _extract_features_locked(args)
+    except BatchAlreadyRunningError as exc:
+        print(str(exc), file=sys.stderr)
+        print("먼저 돌고 있는 배치를 끝내거나 죽인 뒤 다시 실행한다.", file=sys.stderr)
+        return 3
+
+
+def _extract_features_locked(args: argparse.Namespace) -> int:
+    """배치 잠금을 쥔 상태에서 실제 추출을 돈다."""
     from hathor.infrastructure.demucs_separator import DemucsStemSeparator
     from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
     from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
@@ -277,4 +301,41 @@ def _run_ingest_features(args: argparse.Namespace) -> int:
     for key, reason in use_case.failed:
         print(f"  실패 {key}: {reason}", file=sys.stderr)
     print(f"요약: {summary_path}")
+    return 0
+
+
+def _run_ingest_compact(args: argparse.Namespace) -> int:
+    """특징 인덱스의 중복·고아 기록을 정리한다 (O-7).
+
+    배치가 겹쳐 돌아 1004곡 인덱스에 1574줄이 쌓인 상태를 되돌린다.
+    정리하지 않으면 인덱스를 읽는 모든 후속 작업이 같은 곡을 여러 번
+    본다. 유사도 행렬과 검색 지표가 조용히 틀어진다.
+    """
+    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
+
+    store = NpzFeatureStore(args.out)
+    if not store.index_path.exists():
+        print(f"인덱스가 없다: {store.index_path}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        records = store.read_records()
+        keys = {str(record["source_key"]) for record in records}
+        print(f"전체 {len(records)}줄, 고유 키 {len(keys)}개, 중복 {len(records) - len(keys)}줄")
+        return 0
+
+    try:
+        with store.batch_lock():
+            report = store.compact_index(drop_missing=not args.keep_missing)
+    except BatchAlreadyRunningError as exc:
+        print(str(exc), file=sys.stderr)
+        print("배치가 도는 중에는 인덱스를 정리하지 않는다.", file=sys.stderr)
+        return 3
+
+    print(f"전체 {report.total_lines}줄 -> {report.kept}줄")
+    print(f"  중복 제거 {report.duplicates_removed}줄")
+    print(f"  npz 없는 기록 제거 {report.missing_vectors_dropped}줄")
+    print(f"  깨진 줄 제거 {report.malformed_dropped}줄")
+    if not report.changed:
+        print("바꿀 것이 없었다.")
     return 0
