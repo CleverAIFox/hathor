@@ -1,0 +1,2 @@
+core/hathor/infrastructure/bge_m3_lyrics_encoder.py
+core/tests/unit/test_bge_m3_lyrics_encoder.py

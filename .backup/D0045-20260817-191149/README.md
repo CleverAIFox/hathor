@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **BGE-M3 가사 추출 → 평가.** 혼재 곡 40%가 채택 근거이며 판정표는 D-0045에 고정돼 있다 |
+| **다음 작업** | **가사축 신경망 문장 인코더.** O-12 판정 완료 — 분할 정렬은 실재하나 작고 표현이 한계다 (D-0044). 언어 구성 실측이 선행한다 |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -92,9 +92,7 @@ uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 
 
 ```bash
 cd core
-uv run python -m hathor.cli lyrics extract --out var/ingest              # 해싱 (기본)
-uv run python -m hathor.cli lyrics extract --out var/ingest \
-    --encoder bge-m3 --features var/ingest/lyrics-bge-m3                # 신경망 (D-0045)
+uv run python -m hathor.cli lyrics extract --out var/ingest
 uv run python -m hathor.cli eval retrieval --out var/ingest \
     --features var/ingest/lyrics-hashed --keys mixture --label lyrics-hashed
 ```

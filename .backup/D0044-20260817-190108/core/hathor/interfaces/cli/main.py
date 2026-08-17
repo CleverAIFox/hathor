@@ -56,12 +56,6 @@ DEFAULT_LAYERS_DIRNAME = "mert-layers"
 DEFAULT_LAYERS = "0,1,2,6"
 DEFAULT_SEARCH_KEY = "layer00"
 DEFAULT_LYRICS_DIRNAME = "lyrics-hashed"
-_DETERMINISM_PROBE = (
-    # 한국어·영어·혼재 각 하나. 코퍼스 실측이 혼재 40%였으므로 세 경우를 다 밟는다.
-    "사랑한다는 말은 하지 못했어",
-    "i never said the words out loud",
-    "돌아서는 순간 you were already gone",
-)
 """D-0027 정본 뷰."""
 """D-0026 실측 후 기본값. layer00이 최선이었고 1·2는 미탐색이다 (O-9)."""
 
@@ -296,16 +290,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LYRICS_DIRNAME})",
     )
-    lyrics_extract.add_argument(
-        "--encoder",
-        choices=("hashed", "bge-m3"),
-        default="hashed",
-        help="가사 인코더. hashed는 베이스라인이자 기본값이다 (D-0036 · D-0045)",
-    )
-    lyrics_extract.add_argument(
-        "--device", default="cuda", help="bge-m3 추론 장치. GPU가 없으면 cpu"
-    )
-    lyrics_extract.add_argument("--batch-size", type=int, default=16, help="bge-m3 배치 크기")
     lyrics_extract.add_argument("--dim", type=int, default=1024, help="해싱 차원")
     lyrics_extract.add_argument("--ngrams", default="2,3,4", help="문자 n-gram 크기 (쉼표 구분)")
     lyrics_extract.add_argument(
@@ -780,36 +764,13 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
     print(f"리포트: {path}")
 
     if not report.gate_passed:
-        print(_gate_failure_message(report), file=sys.stderr)
+        print(
+            "M0 게이트 미달. 임베딩이 곡 정체성조차 담지 못한 것이므로 "
+            "M1/M2는 노이즈다. 추출 설정부터 다시 본다.",
+            file=sys.stderr,
+        )
         return 1
     return 0
-
-
-def _gate_failure_message(report: EvaluationReport) -> str:
-    """게이트 미달의 성격을 순위 진단으로 갈라 말한다 (D-0044).
-
-    옛 문구는 미달을 하나로 묶어 "임베딩이 곡 정체성조차 담지 못한 것"이라고
-    단정했다. **실측이 이를 반증했다.** 가사 8192 조건은 top-1 0.9174로 미달이나
-    R@10이 0.9715이고 실패 순위 중앙값이 3.8이다(무작위 502). 정답은 4등쯤에 있다.
-    같은 문구가 damp 조건(R@10 0.4688, 실패 순위 831)에도 붙어 있었으므로,
-    **처방이 정반대인 두 상황을 같은 말로 보고하고 있었다.**
-    """
-    consistency = report.consistency
-    gate = report.config.gate
-    if consistency.recall_at_10 >= gate:
-        return (
-            f"M0 게이트 미달 (top-1 {report.self_consistency:.4f}). "
-            f"다만 R@10 {consistency.recall_at_10:.4f}, 실패 순위 중앙값 "
-            f"{consistency.miss_median_rank:.1f}(무작위 {consistency.random_median_rank:.1f})다. "
-            "정답이 상위권에 있으므로 표현이 무너진 것이 아니라 top-1을 못 넘는 것이다. "
-            "추출 설정을 갈아엎기 전에 무엇이 부족한지부터 본다."
-        )
-    return (
-        f"M0 게이트 미달 (top-1 {report.self_consistency:.4f}, "
-        f"R@10 {consistency.recall_at_10:.4f}). 실패 순위 중앙값 "
-        f"{consistency.miss_median_rank:.1f}(무작위 {consistency.random_median_rank:.1f})로 "
-        "정답이 상위권에도 없다. 표현이 곡을 특정하지 못한다. 추출 설정부터 다시 본다."
-    )
 
 
 def _print_report(report: EvaluationReport) -> None:
@@ -1274,38 +1235,20 @@ def _run_lyrics_extract(args: argparse.Namespace) -> int:
                 print("--ngrams는 1 이상의 정수를 최소 하나 포함해야 한다", file=sys.stderr)
                 return 2
 
-            encoder: object
-            if args.encoder == "bge-m3":
-                from hathor.infrastructure.bge_m3_lyrics_encoder import (
-                    BgeM3LyricsEncoder,
-                    verify_deterministic,
-                )
-
-                print(f"BGE-M3 / {args.device} / 배치 {args.batch_size}", flush=True)
-                encoder = BgeM3LyricsEncoder(device=args.device, batch_size=args.batch_size)
-                # 재현성 계층 1을 추출 전에 확인한다 (D-0009). 어긋난 산출물을
-                # 1003곡 다 만든 뒤에 발견하면 전량이 버려진다.
-                drift = verify_deterministic(encoder, list(_DETERMINISM_PROBE))
-                print(f"결정론 검사 최대 편차 {drift:.3e}", flush=True)
-                if drift > 0:
-                    print(
-                        "  경고: 같은 입력이 다른 값을 냈다. 산출물이 기기마다 달라진다.",
-                        file=sys.stderr,
-                    )
-            else:
-                print(
-                    f"해싱 / 차원 {args.dim} / n-gram {','.join(str(size) for size in sizes)}"
-                    f"{' / 공백제거' if args.collapse_space else ''}"
-                    f"{f' / 반복감쇠 {args.repeat_damping}' if args.repeat_damping else ''}",
-                    flush=True,
-                )
-                encoder = HashedLyricsExtractor(
+            print(
+                f"차원 {args.dim} / n-gram {','.join(str(size) for size in sizes)}"
+                f"{' / 공백제거' if args.collapse_space else ''}"
+                f"{f' / 반복감쇠 {args.repeat_damping}' if args.repeat_damping else ''}",
+                flush=True,
+            )
+            use_case = ExtractLyrics(
+                HashedLyricsExtractor(
                     dim=args.dim,
                     sizes=sizes,
                     collapse_space=args.collapse_space,
                     repeat_damping=args.repeat_damping,
                 )
-            use_case = ExtractLyrics(encoder)
+            )
             segments = 0
             for features in use_case.run(tracks):
                 store.write_track(features)

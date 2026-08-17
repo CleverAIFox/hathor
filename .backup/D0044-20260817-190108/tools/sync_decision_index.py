@@ -62,8 +62,7 @@ def build_index(decisions_text: str) -> str:
     rows = "\n".join(f"| {identifier} | {title} |" for identifier, title in entries)
     return (
         f"{BEGIN}\n"
-        "<!-- 이 표는 tools/sync_decision_index.py가 생성한다."
-        " 손으로 고치지 않는다 (D-0042). -->\n"
+        f"<!-- 이 표는 tools/sync_decision_index.py가 생성한다. 손으로 고치지 않는다 (D-0042). -->\n"
         f"\n"
         f"| ID | 결정 |\n"
         f"|---|---|\n"
