@@ -16,12 +16,9 @@ from hathor.application.evaluate_retrieval import (
     DEFAULT_GATE,
     DEFAULT_K,
     DEFAULT_SEED,
-    DEFAULT_SPLIT_SEED,
     EvaluateRetrieval,
     EvaluationConfig,
     EvaluationReport,
-    SplitMode,
-    SplitSpec,
     TrackRecord,
     ViewSpec,
 )
@@ -174,25 +171,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다",
     )
-    retrieval.add_argument(
-        "--split",
-        choices=[m.value for m in SplitMode],
-        default=SplitMode.ODD_EVEN.value,
-        help="M0 분할 규칙. odd-even은 결정적이며 오디오축 정본이다 (D-0040)",
-    )
-    retrieval.add_argument(
-        "--split-ratio",
-        type=float,
-        default=0.5,
-        help="random 분할에서 쿼리 조각의 비율. 0.5가 홀짝과 직접 비교된다",
-    )
-    retrieval.add_argument(
-        "--split-repeats",
-        type=int,
-        default=1,
-        help="random 분할 반복 횟수. 1회 값은 표본 하나라 그대로 인용하면 안 된다",
-    )
-    retrieval.add_argument("--split-seed", type=int, default=DEFAULT_SPLIT_SEED, help="분할 시드")
     retrieval.add_argument("--k", type=int, default=DEFAULT_K, help="상위 k개")
     retrieval.add_argument("--seed", type=int, default=DEFAULT_SEED, help="무작위 베이스라인 시드")
     retrieval.add_argument("--gate", type=float, default=DEFAULT_GATE, help="M0 통과 기준")
@@ -602,12 +580,8 @@ def _run_ingest_compact(args: argparse.Namespace) -> int:
     return 0
 
 
-def _default_label(view: ViewSpec, split: SplitSpec | None = None) -> str:
-    """뷰·분할 설정에서 실험 이름을 만든다. 산출 파일명이 조건을 말하게 한다.
-
-    분할이 기본값(홀짝)이면 이름에 넣지 않는다. 넣으면 D-0038까지 쌓인 리포트
-    파일명과 어긋나 같은 조건의 수치를 나란히 놓을 수 없다.
-    """
+def _default_label(view: ViewSpec) -> str:
+    """뷰 설정에서 실험 이름을 만든다. 산출 파일명이 조건을 말하게 한다."""
     parts = ["+".join(view.keys), view.combine.value, view.pool.value]
     if view.chunk_l2:
         parts.append("chunkl2")
@@ -615,8 +589,6 @@ def _default_label(view: ViewSpec, split: SplitSpec | None = None) -> str:
         parts.append("blockl2")
     if not view.centered:
         parts.append("raw")
-    if split is not None and split.mode is not SplitMode.ODD_EVEN:
-        parts.append(f"{split.mode.value}{split.ratio:g}x{split.repeats}")
     return "-".join(parts)
 
 
@@ -670,21 +642,9 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
         block_l2=args.block_l2,
         centered=not args.raw,
     )
-    try:
-        split = SplitSpec(
-            mode=SplitMode(args.split),
-            ratio=args.split_ratio,
-            repeats=args.split_repeats,
-            seed=args.split_seed,
-        )
-    except ValueError as error:
-        print(f"분할 설정이 잘못됐다: {error}", file=sys.stderr)
-        return 2
-
-    label = args.label or _default_label(view, split)
+    label = args.label or _default_label(view)
     config = EvaluationConfig(
         view=view,
-        split=split,
         k=args.k,
         seed=args.seed,
         gate=args.gate,
@@ -784,26 +744,9 @@ def _print_report(report: EvaluationReport) -> None:
     )
     print(f"  전체 쌍 평균 코사인 {report.anisotropy:.4f} (1에 가까울수록 허브 곡이 생긴다)")
     verdict = "통과" if report.gate_passed else "미달"
-    consistency = report.consistency
-    split = consistency.split
-    spread = f" ±{consistency.top1_std:.4f}" if len(consistency.scores) > 1 else ""
-    detail = (
-        f"{split.mode.value}"
-        if split.mode is SplitMode.ODD_EVEN
-        else f"{split.mode.value} {split.ratio:g} x{split.repeats}회"
-    )
     print(
-        f"  M0 자기일관성  top-1 {report.self_consistency:.4f}{spread} "
-        f"(기준 {report.config.gate:.2f}) {verdict}  [분할 {detail}]"
-    )
-    # top-1만 보면 실패의 성격을 모른다. 실패가 순위 2~3에 몰려 있으면 표현이
-    # 아니라 관문이 문제이고, 수백 등에 흩어져 있으면 표현이 없는 것이다.
-    print(
-        f"     MRR {consistency.mrr:.4f}  "
-        f"R@5 {consistency.recall_at_5:.4f}  "
-        f"R@10 {consistency.recall_at_10:.4f}  "
-        f"실패 순위 중앙값 {consistency.miss_median_rank:.1f} "
-        f"(무작위 {consistency.random_median_rank:.1f})"
+        f"  M0 자기일관성  top-1 {report.self_consistency:.4f} "
+        f"(기준 {report.config.gate:.2f}) {verdict}"
     )
     for metric in report.metrics:
         print(

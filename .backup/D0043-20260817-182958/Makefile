@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs clean
+.PHONY: up down logs ps check lint type arch test cov clean
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -11,10 +11,8 @@ logs:
 ps:
 	docker compose ps
 
-check: docs lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
+check: lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
 
-docs:          ## 부록 A 색인이 결정 기록과 일치하는지 (D-0042)
-	python3 tools/sync_decision_index.py --check
 lint:
 	cd core && uv run ruff check . && uv run ruff format --check .
 type:

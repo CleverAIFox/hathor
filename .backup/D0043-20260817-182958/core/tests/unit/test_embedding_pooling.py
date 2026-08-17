@@ -10,7 +10,6 @@ from hathor.domain.services.embedding_pooling import (
     l2_normalize,
     pool,
     split_odd_even,
-    split_random,
 )
 
 
@@ -142,64 +141,3 @@ def test_block_l2_equalizes_cosine_contribution():
 def test_block_l2_keeps_zero_block_finite():
     embeddings = {"a": embedding(2, dim=4), "b": np.zeros((2, 4), dtype=np.float32)}
     assert np.isfinite(build_view(embeddings, ("a", "b"), block_l2=True)).all()
-
-
-def test_split_random_partitions_without_loss():
-    """두 조각의 합집합이 원본이고 교집합이 없다.
-
-    청크가 중복되면 M0가 쉬워지고, 빠지면 정보가 사라진다. 둘 다 조용히
-    일어나므로 명시적으로 고정한다.
-    """
-    embedding = np.arange(20, dtype=np.float32).reshape(10, 2)
-    left, right = split_random(embedding, ratio=0.5, seed=7)
-    recovered = np.concatenate([left, right])
-    assert recovered.shape == embedding.shape
-    assert {tuple(row) for row in recovered} == {tuple(row) for row in embedding}
-
-
-def test_split_random_is_reproducible():
-    embedding = np.arange(40, dtype=np.float32).reshape(20, 2)
-    first = split_random(embedding, ratio=0.5, seed=11)
-    second = split_random(embedding, ratio=0.5, seed=11)
-    assert np.array_equal(first[0], second[0])
-    assert np.array_equal(first[1], second[1])
-
-
-def test_split_random_differs_by_seed():
-    embedding = np.arange(40, dtype=np.float32).reshape(20, 2)
-    first = split_random(embedding, ratio=0.5, seed=11)
-    other = split_random(embedding, ratio=0.5, seed=12)
-    assert not np.array_equal(first[0], other[0])
-
-
-def test_split_random_keeps_both_sides_nonempty_at_extremes():
-    """비율이 극단이어도 양쪽에 최소 한 청크가 남는다.
-
-    빈 조각은 풀링에서 터진다. 그 실패는 분할 규칙의 문제이지 임베딩의
-    문제가 아니므로 여기서 막는다.
-    """
-    embedding = np.arange(6, dtype=np.float32).reshape(3, 2)
-    for ratio in (0.01, 0.99):
-        left, right = split_random(embedding, ratio=ratio, seed=3)
-        assert left.shape[0] >= 1
-        assert right.shape[0] >= 1
-
-
-def test_split_random_respects_ratio():
-    embedding = np.arange(200, dtype=np.float32).reshape(100, 2)
-    left, right = split_random(embedding, ratio=0.7, seed=5)
-    assert left.shape[0] == 70
-    assert right.shape[0] == 30
-
-
-def test_split_random_rejects_single_chunk():
-    with pytest.raises(ValueError):
-        split_random(np.zeros((1, 4), dtype=np.float32), seed=1)
-
-
-def test_split_random_rejects_out_of_range_ratio():
-    embedding = np.zeros((4, 2), dtype=np.float32)
-    with pytest.raises(ValueError):
-        split_random(embedding, ratio=0.0, seed=1)
-    with pytest.raises(ValueError):
-        split_random(embedding, ratio=1.0, seed=1)

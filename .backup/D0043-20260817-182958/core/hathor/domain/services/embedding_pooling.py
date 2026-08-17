@@ -91,41 +91,6 @@ def split_odd_even(embedding: Embedding) -> tuple[Embedding, Embedding]:
     return embedding[0::2], embedding[1::2]
 
 
-def split_random(
-    embedding: Embedding,
-    *,
-    ratio: float = 0.5,
-    seed: int,
-) -> tuple[Embedding, Embedding]:
-    """청크를 무작위 두 조각으로 나눈다. 같은 시드면 같은 분할이다.
-
-    **홀짝 분할은 결정적이며, 그 결정성이 가사에서 문제가 된다.**
-    오디오의 10초 청크는 곡 구조와 정렬될 이유가 없다. 그러나 가사 구간은
-    빈 줄 경계로 자른 것이라 **구조 그 자체**다. 절·후렴이 교대하는 곡에서는
-    홀수 인덱스가 절, 짝수 인덱스가 후렴에 몰릴 수 있고, 그러면 홀짝은
-    **곡을 특정하는 반복 문구와 나머지를 정확히 갈라놓는 최악의 분할**이 된다.
-    D-0038이 반복 감쇠로 관측한 붕괴(0.87 → 0.38)와 같은 성분을 분할 규칙이
-    구조적으로 일으키고 있는지는 **무작위 분할과 비교해야만 알 수 있다.**
-
-    `ratio`는 왼쪽(쿼리) 조각의 비율이다. 양쪽 모두 최소 한 청크를 갖도록
-    보정한다. 조각이 비면 풀링이 실패하는데, 그 실패는 분할 규칙의 문제이지
-    임베딩의 문제가 아니므로 여기서 막는다.
-    """
-    total = int(embedding.shape[0])
-    if total < 2:
-        raise ValueError("청크가 2개 미만이면 나눌 수 없다")
-    if not 0.0 < ratio < 1.0:
-        raise ValueError(f"ratio는 0과 1 사이여야 한다: {ratio}")
-
-    size = min(total - 1, max(1, round(total * ratio)))
-    order = np.random.default_rng(seed).permutation(total)
-    # 인덱스를 정렬해 되돌린다. 청크 순서 자체는 풀링에서 의미가 없지만,
-    # 뒤섞인 채로 두면 나중에 순서 의존 풀링(어텐션 등)을 넣을 때 조용히 깨진다.
-    left = np.sort(order[:size])
-    right = np.sort(order[size:])
-    return embedding[left], embedding[right]
-
-
 def unit(vector: Vector) -> Vector:
     """벡터 하나를 단위 길이로. 영벡터는 그대로 둔다."""
     norm = float(np.linalg.norm(vector))

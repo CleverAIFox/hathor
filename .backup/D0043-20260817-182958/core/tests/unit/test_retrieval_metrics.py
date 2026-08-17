@@ -8,9 +8,7 @@ import pytest
 
 from hathor.domain.services.retrieval_metrics import (
     cosine_similarity,
-    diagonal_ranks,
     expected_random_precision,
-    score_consistency,
     score_retrieval,
     top1_accuracy,
 )
@@ -123,61 +121,3 @@ def test_expected_random_precision_ignores_answerless_queries():
     relevant = bool_matrix([[0, 0], [1, 0]])
     excluded = bool_matrix([[1, 0], [0, 1]])
     assert expected_random_precision(relevant, excluded) == pytest.approx(1.0)
-
-
-def test_diagonal_ranks_agree_with_top1_accuracy():
-    """두 함수의 동점 규약이 같아야 한다.
-
-    어긋나면 `top1 = mean(rank == 1)`이 깨지고, 순위 진단이 top-1과 다른 것을
-    재게 된다. 진단이 조용히 어긋나는 것이 가장 나쁜 실패다.
-    """
-    generator = np.random.default_rng(4)
-    for _ in range(20):
-        similarity = np.asarray(generator.random((12, 12)), dtype=np.float32)
-        ranks = diagonal_ranks(similarity)
-        assert float(np.mean(ranks == 1)) == pytest.approx(top1_accuracy(similarity))
-
-
-def test_diagonal_ranks_handle_ties_like_argmax():
-    """전부 동점이면 인덱스가 작은 쪽이 이긴다 (argmax 규약)."""
-    similarity = np.ones((4, 4), dtype=np.float32)
-    assert list(diagonal_ranks(similarity)) == [1, 2, 3, 4]
-
-
-def test_score_consistency_reports_near_misses():
-    """대각선이 항상 2등인 행렬. top-1은 0이지만 표현은 멀쩡하다.
-
-    현재 하네스는 이것과 '대각선이 꼴찌'를 같은 0.0으로 보고했다.
-    처방이 정반대인 두 상황을 구분하는 것이 이 지표의 목적이다.
-    """
-    size = 6
-    similarity = np.zeros((size, size), dtype=np.float32)
-    for row in range(size):
-        similarity[row, row] = 0.9
-        similarity[row, (row + 1) % size] = 1.0
-    score = score_consistency(similarity)
-    assert score.top1 == pytest.approx(0.0)
-    assert score.recall_at_5 == pytest.approx(1.0)
-    assert score.miss_median_rank == pytest.approx(2.0)
-    assert score.mrr == pytest.approx(0.5)
-
-
-def test_score_consistency_perfect_matrix():
-    similarity = np.eye(5, dtype=np.float32)
-    score = score_consistency(similarity)
-    assert score.top1 == pytest.approx(1.0)
-    assert score.mrr == pytest.approx(1.0)
-    assert score.miss_median_rank == pytest.approx(0.0)
-    assert score.queries == 5
-
-
-def test_score_consistency_record_is_serializable():
-    import json
-
-    record = score_consistency(np.eye(3, dtype=np.float32)).as_record()
-    assert json.loads(json.dumps(record))["top1_accuracy"] == 1.0
-
-
-def test_diagonal_ranks_rejects_non_square():
-    with pytest.raises(ValueError):
-        diagonal_ranks(np.zeros((2, 3), dtype=np.float32))

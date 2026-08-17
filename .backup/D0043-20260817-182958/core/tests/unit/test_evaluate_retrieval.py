@@ -10,20 +10,11 @@ import pytest
 from hathor.application.evaluate_retrieval import (
     EvaluateRetrieval,
     EvaluationConfig,
-    SplitMode,
-    SplitSpec,
     TrackRecord,
     ViewSpec,
     label_key,
 )
-from hathor.domain.services.embedding_pooling import (
-    CombineMode,
-    PoolMode,
-    build_view,
-    split_odd_even,
-)
-from hathor.domain.services.isotropy import center, mean_direction
-from hathor.domain.services.retrieval_metrics import cosine_similarity, top1_accuracy
+from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
 
 DIM = 16
 CHUNKS = 6
@@ -291,105 +282,3 @@ def test_centering_is_on_by_default():
     """전 지표가 개선됐으므로 켠 쪽이 기본이다 (D-0031)."""
     assert ViewSpec().centered is True
     assert EvaluationConfig().as_record()["view"]["centered"] is True  # type: ignore[index]
-
-
-# --- O-12: 분할 규칙 (D-0040) ---
-
-
-def test_split_defaults_to_odd_even():
-    """기본값이 바뀌면 오디오축 정본 수치가 통째로 무효가 된다."""
-    config = EvaluationConfig()
-    assert config.split.mode is SplitMode.ODD_EVEN
-    assert config.split.repeats == 1
-
-
-def test_odd_even_reproduces_legacy_self_consistency():
-    """분할 축 도입 전 계산과 **정확히** 같은 값이 나와야 한다.
-
-    D-0031~D-0038의 M0 수치가 전부 이 경로에서 나왔다. 여기가 조금이라도
-    움직이면 과거 리포트와 새 리포트를 나란히 놓을 수 없고, 그 사실은
-    수치가 비슷해 보이는 한 눈에 띄지 않는다.
-    """
-    tracks = build_corpus()
-    keys = ("mixture", "vocals")
-    view = ViewSpec(keys=keys)
-
-    odd, even = [], []
-    for track in tracks:
-        halves = {key: split_odd_even(track.embeddings[key]) for key in keys}
-        odd.append(build_view({k: v[0] for k, v in halves.items()}, keys))
-        even.append(build_view({k: v[1] for k, v in halves.items()}, keys))
-    left = np.asarray(odd, dtype=np.float32)
-    right = np.asarray(even, dtype=np.float32)
-    direction = mean_direction(np.concatenate([left, right]))
-    expected = top1_accuracy(cosine_similarity(center(left, direction), center(right, direction)))
-
-    report = EvaluateRetrieval(EvaluationConfig(view=view)).run(tracks)
-    assert report.self_consistency == expected
-
-
-def test_odd_even_rejects_repeats():
-    """결정적 분할을 반복하면 표준편차 0이 나와 '안정적'으로 오독된다."""
-    with pytest.raises(ValueError):
-        SplitSpec(mode=SplitMode.ODD_EVEN, repeats=5)
-
-
-def test_random_split_is_reproducible():
-    tracks = build_corpus()
-    config = EvaluationConfig(split=SplitSpec(mode=SplitMode.RANDOM, repeats=3, seed=99))
-    first = EvaluateRetrieval(config).run(tracks)
-    second = EvaluateRetrieval(config).run(tracks)
-    assert first.consistency.as_record() == second.consistency.as_record()
-
-
-def test_random_split_is_stable_under_track_order():
-    """곡 순서가 바뀌어도 같은 곡은 같은 분할을 받는다.
-
-    생성기 하나를 순회하는 방식이면 `--limit`이나 정렬 변경만으로 M0가
-    움직인다. 그러면 조건 비교가 아니라 순서 비교가 된다.
-    """
-    tracks = build_corpus()
-    config = EvaluationConfig(split=SplitSpec(mode=SplitMode.RANDOM, repeats=2, seed=5))
-    baseline = EvaluateRetrieval(config).run(tracks)
-    shortened = EvaluateRetrieval(config).run(tracks[:12])
-    assert baseline.consistency.scores[0].queries == len(tracks)
-    assert shortened.consistency.scores[0].queries == 12
-
-
-def test_repeats_expose_spread():
-    tracks = build_corpus()
-    config = EvaluationConfig(split=SplitSpec(mode=SplitMode.RANDOM, repeats=4))
-    report = EvaluateRetrieval(config).run(tracks)
-    assert len(report.consistency.scores) == 4
-    assert report.consistency.top1_std >= 0.0
-    assert "repeats" in report.as_record()["m0_self_consistency"]
-
-
-def test_single_repeat_omits_repeat_list():
-    """반복이 하나면 분포가 없다. 빈 목록을 남기면 있는 것처럼 보인다."""
-    report = EvaluateRetrieval(EvaluationConfig()).run(build_corpus())
-    assert "repeats" not in report.as_record()["m0_self_consistency"]
-
-
-def test_report_includes_rank_diagnostics():
-    report = EvaluateRetrieval(EvaluationConfig()).run(build_corpus())
-    record = report.as_record()["m0_self_consistency"]
-    assert record["mrr"] >= record["top1_accuracy"]
-    assert record["recall_at_10"] >= record["top1_accuracy"]
-    assert record["split"]["mode"] == "odd-even"
-
-
-def test_gate_reads_mean_of_repeats():
-    tracks = build_corpus()
-    config = EvaluationConfig(split=SplitSpec(mode=SplitMode.RANDOM, repeats=3), gate=1.01)
-    report = EvaluateRetrieval(config).run(tracks)
-    assert not report.gate_passed
-    assert report.metrics == ()
-
-
-def test_m0_reports_analytic_baseline():
-    """M0에도 베이스라인이 있어야 한다. top-1 0.90은 후보 수 없이 의미가 없다."""
-    report = EvaluateRetrieval(EvaluationConfig()).run(build_corpus())
-    record = report.as_record()["m0_self_consistency"]
-    assert record["random_top1"] == pytest.approx(1.0 / report.tracks)
-    assert record["random_median_rank"] == pytest.approx((report.tracks + 1) / 2.0)

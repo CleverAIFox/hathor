@@ -4,33 +4,43 @@
 
 ## 문서 지도
 
-문서는 4종이다. 각자 다른 질문에 답하며 **같은 내용을 두 곳에 두지 않는다** (D-0039 · D-0043).
+문서는 3축이다. 각자 다른 질문에 답한다 (D-0039).
 
-| 종류 | 파일 | 답하는 질문 | 언제 보는가 |
+| 축 | 파일 | 답하는 질문 | 언제 보는가 |
 |---|---|---|---|
-| **규약** | [`CONTRIBUTING.md`](CONTRIBUTING.md) | 어떻게 일하는가 | 작업을 시작할 때, 커밋·PR 전에 |
-| **기획** | [`docs/DESIGN.md`](docs/DESIGN.md) | 무엇을 왜 만드는가 | 설계를 확인하거나 바꿀 때 |
+| **기획** | [`docs/PLAN.md`](docs/PLAN.md) | 무엇을 왜 만드는가 | 설계를 확인하거나 바꿀 때 |
 | **결정** | [`docs/DECISIONS.md`](docs/DECISIONS.md) | 왜 그렇게 골랐는가 | "이건 왜 이렇게 됐지"가 나올 때 |
 | **진입** | 이 문서 | 지금 무엇을 할 수 있는가 | 처음 열었을 때, 명령이 필요할 때 |
 
-- `DESIGN.md`가 **설계의 단일 진실 공급원**이다. 기획서 3부작(제안서 · 요구사항 · 상세설계).
+- `PLAN.md`가 **단일 진실 공급원**이다. 기획서 3부작(제안서 · 요구사항 · 상세설계).
 - `DECISIONS.md`는 **추가 전용**이다. 판단이 바뀌면 고쳐 쓰지 않고 새 번호로 정정한다.
 - **문서를 먼저 고치고 코드를 고친다 (GR-0.1).** 코드가 앞서면 그 즉시 문서를 맞춘다.
-- **도구가 강제하는 것은 문서에 다시 적지 않는다.** 계층 계약은 `core/pyproject.toml`,
-  결정 색인은 `tools/sync_decision_index.py`가 진실이다 (D-0042 · D-0043).
 - `docs/archive/`는 폐기된 초안이다. 참조용으로만 남긴다.
 
 ## 현재 단계
 
 **P1 — 인제스트.** 로컬 음원을 스캔해 정규화된 트랙으로 만든다.
 
-| 단계 | 상태 |
+| 유닛 | 상태 |
 |---|---|
-| P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **O-12 가사축 M0 재측정.** 하네스는 갖췄고 실측만 남았다 (D-0040 · D-0041) |
+| P0 기반 (골격 · 게이트 · compose) | 완료 |
+| #1 파일 스캐너 + 태그 추출 | 완료 (실측 1004곡 / 실패 0) |
+| #2 아티스트 파서 (D-0014 · D-0016) | 완료 |
+| #3 MusicBrainz 조회 (D-0019 · D-0020) | 완료 (레코딩 정규화 78.5%) |
+| #4 오디오 특징 추출 (D-0018 · D-0021) | 완료 (실측 1004곡 / npz 347MB / 청크 23,444) |
+| #5 검색 평가 하네스 (D-0023) | 완료 |
+| #6 임베딩 9조건 실측 (D-0024) | 완료 — **MFCC 베이스라인이 MERT-95M을 이김** |
+| #7 결합 뷰 실측 (D-0025) | 완료 — 두 표현은 상보적. O-8을 (a)·(b)로 좁힘 |
+| #8 MERT 레이어 선택 (D-0026 · D-0027) | 완료 — **마지막 레이어가 최악. layer00으로 M2 2.8배 개선** |
 
-정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
-실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
+| #9 취향 라벨 수집 (D-0028) | 도구 완료 · 30건 수집 후 **보조 기능으로 격하** (D-0029) |
+| #10 시드 퓨전 검색 (D-0029) | 완료 — **최초의 사용자 대면 산출물** |
+| #11 허브 곡 문제 · 중심화 (D-0030 · D-0031 · D-0032) | 완료 — **전 지표 개선. M2 MAP +13%** |
+| #12 퓨전 결합 규칙 · M4 (D-0033 ~ D-0035) | 완료 — **퓨전 작동 확인(무작위 7.6배). MEAN 유지** |
+| #13 가사축 착수 (D-0036 ~ D-0038) | 파이프라인 완결 · **표현 M0 0.8983 게이트 미달 (O-12)** |
+
+임베딩 축 탐색은 종료됐다. 정본 뷰는 `var/ingest/mert-layers`의 `layer00`이며,
+다음 병목은 임베딩 품질이 아니라 **취향 라벨 0건**이다 (O-10).
 
 ## 빠른 실행
 
@@ -42,7 +52,7 @@ docker compose ps
 cd core
 uv sync --all-extras --dev
 uv run python -m hathor.cli generate --seed 42 --dry-run
-make check                    # docs · lint · type · arch · test (CI와 동일)
+make check                    # lint · type · arch · test (CI와 동일)
 ```
 
 ### 검색 평가 (GPU 불필요, CPU 수 초)
@@ -99,27 +109,6 @@ uv run python -m hathor.cli eval retrieval --out var/ingest \
 
 산출물 규격이 오디오축과 같아 **같은 평가 하네스가 그대로 읽는다** (D-0036).
 
-### M0 분할 규칙 (D-0040)
-
-M0는 곡을 두 조각으로 잘라 한쪽으로 나머지를 찾는다. **자르는 방법이 설정이다.**
-
-```bash
-# 오디오축 정본. 기본값
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/mert-layers --keys layer00
-
-# 무작위 균등 분할 5회 (가사축 대조군)
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/lyrics-8192 --keys mixture \
-    --split random --split-repeats 5 --force
-```
-
-`--split random`은 1회 값이 표본 하나다. **`--split-repeats` 없이 인용하지 않는다.**
-`--force`로 나온 M1/M2는 게이트 미달 상태의 값이므로 인용하지 않는다.
-출력에 top-1과 함께 MRR · R@5 · R@10 · 실패 순위 중앙값이 나온다 (D-0041).
-
-왜 이 축이 필요한지는 D-0040을 본다.
-
 ### 취향 라벨 수집 (보조)
 
 ```bash
@@ -153,15 +142,13 @@ MongoDB는 `--wiredTigerCacheSizeGB 0.25`로 캐시를 제한해 core에 포함�
 ## 구조
 
 ```
-CONTRIBUTING.md     개발 규약 (GROUND RULES)
-docs/DESIGN.md      설계 단일 진실 공급원 (기획서 3부작)
+docs/PLAN.md        설계 단일 진실 공급원 (기획서 3부작)
 core/hathor/        Python 모노레포 (domain · application · engines · infrastructure · interfaces · shared)
 core/tests/         unit · integration
 infra/              postgres init · prometheus 설정
 docker/             mlflow 이미지
 docs/DECISIONS.md   결정 기록 (GR-0.2)
 tools/step0_check.py  환경·라이브러리 실측 스크립트
-tools/sync_decision_index.py  부록 A 색인 생성·검증 (D-0042)
 ```
 
 `hathor/cli.py`는 문서 §5.3.3의 `python -m hathor.cli` 명령을 유지하기 위한 진입 모듈이며,
