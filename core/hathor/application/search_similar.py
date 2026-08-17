@@ -20,7 +20,12 @@ from hathor.domain.ports.audio_analysis import Embedding
 from hathor.domain.services.embedding_pooling import PoolMode, Vector, build_view
 from hathor.domain.services.isotropy import center, mean_direction
 from hathor.domain.services.retrieval_metrics import cosine_similarity
-from hathor.domain.services.seed_search import chunk_timestamp, fuse, representative_chunk
+from hathor.domain.services.seed_search import (
+    FusionMode,
+    chunk_timestamp,
+    fuse_scores,
+    representative_chunk,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +51,9 @@ class SearchHit:
     highlight: str
     """반복도가 가장 높은 구간의 근사 위치. 후렴이라는 보장은 없다 (실측 필요)."""
 
+    per_seed: tuple[float, ...] = ()
+    """시드별 유사도. 결과가 한쪽으로 쏠렸는지 눈으로 확인하는 용도다."""
+
 
 class SearchSimilar:
     """시드 벡터를 접고 코사인으로 순위를 낸다.
@@ -60,10 +68,14 @@ class SearchSimilar:
         pool: PoolMode = PoolMode.MEAN,
         *,
         centered: bool = True,
+        fusion: FusionMode = FusionMode.MEAN,
+        penalty: float = 1.0,
     ) -> None:
         self._keys = tuple(keys)
         self._pool = pool
         self._centered = centered
+        self._fusion = fusion
+        self._penalty = penalty
         """코퍼스 공통 방향을 제거한다 (D-0031). 끄면 허브 곡이 모든 질의 상위에 온다."""
 
     def run(self, tracks: Sequence[SearchTrack], seeds: Sequence[str], k: int) -> list[SearchHit]:
@@ -82,8 +94,9 @@ class SearchSimilar:
             # 시드와 후보에 같은 중심을 쓴다. 질의 벡터를 따로 중심화하면
             # 서로 다른 좌표계에서 코사인을 재게 된다.
             vectors = center(vectors, mean_direction(vectors))
-        query = fuse([vectors[index[seed]] for seed in seeds]).reshape(1, -1)
-        scores = cosine_similarity(query, vectors)[0]
+        seed_rows = np.asarray([vectors[index[seed]] for seed in seeds], dtype=np.float32)
+        per_seed = cosine_similarity(seed_rows, vectors)
+        scores = fuse_scores(per_seed, self._fusion, penalty=self._penalty)
 
         seed_positions = {index[seed] for seed in seeds}
         order = np.argsort(-scores, kind="stable")
@@ -101,6 +114,7 @@ class SearchSimilar:
                     highlight=chunk_timestamp(
                         representative_chunk(track.embeddings[self._keys[0]])
                     ),
+                    per_seed=tuple(float(value) for value in per_seed[:, position]),
                 )
             )
             if len(hits) == k:

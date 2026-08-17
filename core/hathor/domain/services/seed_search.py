@@ -9,24 +9,38 @@ D-0011은 생성 입력을 **시드곡 선택**으로 정했다. 형용사 체�
 from __future__ import annotations
 
 from collections.abc import Sequence
+from enum import StrEnum
 
 import numpy as np
 
 from hathor.domain.ports.audio_analysis import CHUNK_SECONDS, Embedding
-from hathor.domain.services.embedding_pooling import Vector, unit
+from hathor.domain.services.embedding_pooling import Matrix, Vector, unit
 
 EPSILON = 1e-12
 
 
+class FusionMode(StrEnum):
+    """시드 여러 개의 유사도를 하나의 점수로 접는 방법."""
+
+    MEAN = "mean"
+    """평균. 중점 벡터에 대한 코사인과 순위가 동일하다."""
+
+    MIN = "min"
+    """최솟값. 모든 시드와 가까워야 점수가 나온다."""
+
+    PENALIZED = "penalized"
+    """평균에서 시드 간 편차를 뺀다. 둘의 절충이다."""
+
+
 def fuse(vectors: Sequence[Vector]) -> Vector:
-    """시드곡 여러 개를 조건 벡터 하나로 접는다.
+    """시드곡 여러 개를 조건 벡터 하나로 접는다 (MEAN 전용).
 
     **각 곡을 단위 벡터로 만든 뒤 평균낸다.** 그냥 평균내면 노름이 큰 곡이
     조합을 지배해서 "A와 B의 퓨전"이 사실상 A가 된다. 노름은 음량·마스터링에
     따라 달라지는 값이지 취향의 강도가 아니다.
 
-    가중치는 받지 않는다. "A를 70%, B를 30%"는 사용자가 의미를 부여할 수 없는
-    수치이고, 실측으로 검증할 방법도 아직 없다. 필요해지면 그때 추가한다.
+    MIN·PENALIZED는 **벡터로 표현할 수 없다.** 후보마다 시드별 유사도를 따로
+    보고 결합해야 하므로 `fuse_scores`를 쓴다.
     """
     if not vectors:
         raise ValueError("시드가 최소 하나 필요하다")
@@ -34,6 +48,37 @@ def fuse(vectors: Sequence[Vector]) -> Vector:
     if len(dims) > 1:
         raise ValueError(f"시드 차원이 다르다: {sorted(dims)}")
     return np.asarray(np.mean([unit(vector) for vector in vectors], axis=0), dtype=np.float32)
+
+
+def fuse_scores(
+    similarities: Matrix,
+    mode: FusionMode = FusionMode.MEAN,
+    *,
+    penalty: float = 1.0,
+) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
+    """(시드, 후보) 유사도 행렬을 후보별 점수로 접는다.
+
+    **MEAN은 한쪽에 극단적으로 가까운 곡을 선호한다.** 시드 A와 0.9, B와 0.0인
+    곡은 평균 0.45이고, 양쪽과 0.42인 곡은 0.42다. 전자가 이긴다. 실측에서
+    `밤편지 + 뱅뱅뱅` 상위 10곡 중 4곡이 아이유였던 원인이다.
+
+    **MIN은 모든 시드와 가까울 것을 요구한다.** 위 예에서 전자는 0.0이 되고
+    후자는 0.42가 된다. 다만 시드가 서로 아주 멀면 전 후보의 최솟값이 낮아져
+    순위가 잡음에 가까워질 수 있다.
+
+    **PENALIZED**는 평균에서 시드 간 편차(최대-최소)를 `penalty`배 빼서 둘을 절충한다.
+    `penalty=0`이면 MEAN, 아주 크면 MIN에 가까워진다.
+
+    어느 쪽이 나은지는 코퍼스에 달렸으므로 **실측으로 정한다.**
+    """
+    if similarities.ndim != 2 or similarities.shape[0] == 0:
+        raise ValueError("(시드, 후보) 행렬이 필요하다")
+    if mode is FusionMode.MEAN:
+        return np.asarray(similarities.mean(axis=0), dtype=np.float32)
+    if mode is FusionMode.MIN:
+        return np.asarray(similarities.min(axis=0), dtype=np.float32)
+    spread = similarities.max(axis=0) - similarities.min(axis=0)
+    return np.asarray(similarities.mean(axis=0) - penalty * spread, dtype=np.float32)
 
 
 def representative_chunk(embedding: Embedding) -> int:

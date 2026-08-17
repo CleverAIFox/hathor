@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from hathor.application.evaluate_fusion import EvaluateFusion
 from hathor.application.evaluate_retrieval import (
     DEFAULT_GATE,
     DEFAULT_K,
@@ -29,6 +30,7 @@ from hathor.application.search_similar import SearchSimilar, SearchTrack
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
+from hathor.domain.services.seed_search import FusionMode
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
 from hathor.infrastructure.jsonl_resolution_store import JsonlResolutionStore
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
@@ -179,6 +181,21 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval.add_argument("--label", default=None, help="실험 이름 (미지정 시 뷰에서 생성)")
     retrieval.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
 
+    fusion = eval_sub.add_parser("fusion", help="시드 결합 규칙 비교 (M4)")
+    fusion.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    fusion.add_argument(
+        "--features",
+        type=Path,
+        default=None,
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+    )
+    fusion.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
+    fusion.add_argument("-k", type=int, default=10, help="상위 k개")
+    fusion.add_argument("--pairs", type=int, default=200, help="시드 쌍 표본 수")
+    fusion.add_argument("--seed", type=int, default=20260817, help="쌍 추출 시드")
+    fusion.add_argument("--penalty", type=float, default=1.0, help="penalized 모드의 편차 계수")
+    fusion.add_argument("--raw", action="store_true", help="중심화를 끈다")
+
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
         "--root",
@@ -256,6 +273,13 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
     search.add_argument("-k", type=int, default=10, help="결과 개수")
     search.add_argument(
+        "--fusion",
+        choices=[m.value for m in FusionMode],
+        default=FusionMode.MEAN.value,
+        help="시드 결합 규칙. min은 모든 시드와 가까울 것을 요구한다 (D-0033)",
+    )
+    search.add_argument("--penalty", type=float, default=1.0, help="penalized 모드의 편차 계수")
+    search.add_argument(
         "--raw",
         action="store_true",
         help="중심화를 끈다. 허브 곡이 어떤 질의에도 상위에 온다 (비교용)",
@@ -276,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_mfcc(args)
         if args.eval_command == "layers":
             return _run_eval_layers(args)
+        if args.eval_command == "fusion":
+            return _run_eval_fusion(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "resolve":
@@ -1004,14 +1030,69 @@ def _run_search(args: argparse.Namespace) -> int:
 
     labels = {track.source_key: track.label for track in tracks}
     mode = "원본" if args.raw else "중심화"
-    print(f"코퍼스 {len(tracks)}곡 / 뷰 {'+'.join(keys)} / {mode}")
+    fusion = f" / 결합 {args.fusion}" if len(seeds) > 1 else ""
+    print(f"코퍼스 {len(tracks)}곡 / 뷰 {'+'.join(keys)} / {mode}{fusion}")
     for seed in seeds:
         print(f"  시드  {labels[seed]}")
     print()
 
-    hits = SearchSimilar(keys, centered=not args.raw).run(tracks, seeds, args.k)
+    hits = SearchSimilar(
+        keys,
+        centered=not args.raw,
+        fusion=FusionMode(args.fusion),
+        penalty=args.penalty,
+    ).run(tracks, seeds, args.k)
     for hit in hits:
-        print(f"  {hit.rank:>2}. {hit.similarity:.4f}  {hit.label}  [반복 {hit.highlight}]")
+        detail = ""
+        if len(seeds) > 1:
+            detail = "  (" + " / ".join(f"{value:.3f}" for value in hit.per_seed) + ")"
+        print(f"  {hit.rank:>2}. {hit.similarity:.4f}  {hit.label}  [반복 {hit.highlight}]{detail}")
     print()
     print("[반복 m:ss]는 곡 안에서 반복도가 가장 높은 구간이다. 후렴이라는 보장은 없다.")
+    return 0
+
+
+def _run_eval_fusion(args: argparse.Namespace) -> int:
+    """시드 결합 규칙을 같은 쌍으로 비교한다 (M4, D-0033).
+
+    한 사례를 눈으로 보고 규칙을 고르면 다른 조합에서 더 나빠져도 알 수 없다.
+    """
+    from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
+
+    keys = tuple(token.strip() for token in args.keys.split(",") if token.strip())
+    if not keys:
+        print("--keys에 임베딩 키를 최소 하나 지정해야 한다", file=sys.stderr)
+        return 2
+    try:
+        tracks = _load_search_tracks(args, keys)
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    use_case = EvaluateFusion(
+        keys,
+        centered=not args.raw,
+        k=args.k,
+        pairs=args.pairs,
+        seed=args.seed,
+        penalty=args.penalty,
+    )
+    try:
+        report = use_case.run(tracks, list(FusionMode))
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    print(f"곡 {report.tracks}개 / 시드 쌍 {report.scores[0].pairs}개 / 상위 {report.k}")
+    print("  규칙        시드아티스트비율  아티스트불균형  코사인불균형  평균유사도")
+    for score in report.scores:
+        print(
+            f"  {score.mode:<11} {score.coverage:>13.4f} {score.artist_imbalance:>15.4f}"
+            f" {score.cosine_imbalance:>13.4f} {score.mean_similarity:>12.4f}"
+        )
+    print()
+    print("불균형은 낮을수록, 시드아티스트비율은 높을수록 좋다.")
+    print("균형만 좋고 비율이 낮으면 두 시드 모두에서 먼 밋밋한 곡을 고른 것이다.")
+    path = JsonEvaluationStore(args.out).write(report.as_record(), f"fusion-k{args.k}")
+    print(f"리포트: {path}")
     return 0
