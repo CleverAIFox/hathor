@@ -85,8 +85,12 @@ class ViewSpec:
     block_l2: bool = False
     """블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다."""
 
-    centered: bool = False
-    """코퍼스 공통 방향 제거. 허브 곡 문제를 완화한다 (D-0030)."""
+    centered: bool = True
+    """코퍼스 공통 방향 제거. 전 지표가 개선되어 기본값이다 (D-0031).
+
+    끄면 전체 쌍 평균 코사인이 0.95 수준으로 올라가 허브 곡이 상위를 차지한다.
+    비교·조사 목적이 아니면 끄지 않는다.
+    """
 
     def as_record(self) -> dict[str, object]:
         return {

@@ -64,7 +64,7 @@ class SearchSimilar:
         self._keys = tuple(keys)
         self._pool = pool
         self._centered = centered
-        """코퍼스 공통 방향을 제거한다. 끄면 허브 곡이 어떤 질의에도 상위에 온다."""
+        """코퍼스 공통 방향을 제거한다 (D-0031). 끄면 허브 곡이 모든 질의 상위에 온다."""
 
     def run(self, tracks: Sequence[SearchTrack], seeds: Sequence[str], k: int) -> list[SearchHit]:
         if k <= 0:

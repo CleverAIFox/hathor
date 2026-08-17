@@ -159,9 +159,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="풀링 전에 청크별 L2 정규화 (곡 벡터 L2는 코사인에서 무의미하다)",
     )
     retrieval.add_argument(
-        "--centered",
+        "--raw",
         action="store_true",
-        help="코퍼스 공통 방향 제거. 허브 곡 완화 (D-0030)",
+        help="중심화를 끈다. 허브 곡이 상위를 차지한다 (비교용, D-0031)",
     )
     retrieval.add_argument(
         "--block-l2",
@@ -530,8 +530,8 @@ def _default_label(view: ViewSpec) -> str:
         parts.append("chunkl2")
     if view.block_l2:
         parts.append("blockl2")
-    if view.centered:
-        parts.append("centered")
+    if not view.centered:
+        parts.append("raw")
     return "-".join(parts)
 
 
@@ -583,7 +583,7 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
         pool=PoolMode(args.pool),
         chunk_l2=args.chunk_l2,
         block_l2=args.block_l2,
-        centered=args.centered,
+        centered=not args.raw,
     )
     label = args.label or _default_label(view)
     config = EvaluationConfig(
@@ -683,7 +683,7 @@ def _print_report(report: EvaluationReport) -> None:
         f"뷰 {'+'.join(view.keys)} {view.combine.value}·{view.pool.value}"
         f"{'·chunk-l2' if view.chunk_l2 else ''}"
         f"{'·block-l2' if view.block_l2 else ''}"
-        f"{'·centered' if view.centered else ''} / {report.dimension}차원"
+        f"{'·centered' if view.centered else '·raw'} / {report.dimension}차원"
     )
     print(f"  전체 쌍 평균 코사인 {report.anisotropy:.4f} (1에 가까울수록 허브 곡이 생긴다)")
     verdict = "통과" if report.gate_passed else "미달"

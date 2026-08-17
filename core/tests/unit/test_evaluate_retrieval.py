@@ -253,19 +253,19 @@ def test_same_config_gives_same_numbers():
 
 def test_report_includes_anisotropy():
     """공간이 얼마나 뭉쳐 있는지가 리포트에 남아야 나중에 비교된다."""
-    report = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(
-        build_corpus(albums=4, per_album=4)
-    )
+    report = EvaluateRetrieval(
+        EvaluationConfig(view=ViewSpec(keys=("mixture",), centered=False))
+    ).run(build_corpus(albums=4, per_album=4))
     assert 0.0 <= report.anisotropy <= 1.0
     assert report.as_record()["corpus"]["anisotropy"] == pytest.approx(report.anisotropy, abs=1e-5)
 
 
 def test_centering_lowers_anisotropy():
     corpus = build_corpus(albums=4, per_album=4)
-    plain = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(corpus)
-    centered = EvaluateRetrieval(
-        EvaluationConfig(view=ViewSpec(keys=("mixture",), centered=True))
+    plain = EvaluateRetrieval(
+        EvaluationConfig(view=ViewSpec(keys=("mixture",), centered=False))
     ).run(corpus)
+    centered = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(corpus)
     assert centered.anisotropy < plain.anisotropy
     assert centered.as_record()["config"]["view"]["centered"] is True
 
@@ -276,3 +276,9 @@ def test_centering_keeps_self_consistency_measurable():
         EvaluationConfig(view=ViewSpec(keys=("mixture",), centered=True))
     ).run(build_corpus(albums=4, per_album=4))
     assert report.self_consistency == 1.0
+
+
+def test_centering_is_on_by_default():
+    """전 지표가 개선됐으므로 켠 쪽이 기본이다 (D-0031)."""
+    assert ViewSpec().centered is True
+    assert EvaluationConfig().as_record()["view"]["centered"] is True  # type: ignore[index]
