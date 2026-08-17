@@ -1086,13 +1086,24 @@ def _run_eval_fusion(args: argparse.Namespace) -> int:
     print(f"곡 {report.tracks}개 / 시드 쌍 {report.scores[0].pairs}개 / 상위 {report.k}")
     print("  규칙        시드아티스트비율  아티스트불균형  코사인불균형  평균유사도")
     for score in report.scores:
+        cosine = (
+            "     —"
+            if score.cosine_imbalance != score.cosine_imbalance
+            else (f"{score.cosine_imbalance:>13.4f}")
+        )
+        similarity = (
+            "     —"
+            if score.mean_similarity != score.mean_similarity
+            else (f"{score.mean_similarity:>12.4f}")
+        )
         print(
             f"  {score.mode:<11} {score.coverage:>13.4f} {score.artist_imbalance:>15.4f}"
-            f" {score.cosine_imbalance:>13.4f} {score.mean_similarity:>12.4f}"
+            f" {cosine} {similarity}"
         )
     print()
     print("불균형은 낮을수록, 시드아티스트비율은 높을수록 좋다.")
     print("균형만 좋고 비율이 낮으면 두 시드 모두에서 먼 밋밋한 곡을 고른 것이다.")
+    print("random은 하한, oracle은 코퍼스 구성상 도달 가능한 상한이다.")
     path = JsonEvaluationStore(args.out).write(report.as_record(), f"fusion-k{args.k}")
     print(f"리포트: {path}")
     return 0

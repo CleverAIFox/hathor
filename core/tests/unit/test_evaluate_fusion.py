@@ -104,7 +104,11 @@ def test_single_seed_has_one_per_seed_value():
 
 def test_fusion_report_covers_all_modes():
     report = EvaluateFusion(centered=False, k=3, pairs=20).run(lopsided_corpus(), list(FusionMode))
-    assert [score.mode for score in report.scores] == [mode.value for mode in FusionMode]
+    assert [score.mode for score in report.scores] == [
+        *(mode.value for mode in FusionMode),
+        "random",
+        "oracle",
+    ]
     assert all(score.pairs > 0 for score in report.scores)
 
 
@@ -118,7 +122,8 @@ def test_min_lowers_cosine_imbalance():
     report = EvaluateFusion(centered=False, k=3, pairs=30).run(
         lopsided_corpus(), [FusionMode.MEAN, FusionMode.MIN]
     )
-    mean_score, min_score = report.scores
+    modes = {score.mode: score for score in report.scores}
+    mean_score, min_score = modes["mean"], modes["min"]
     assert min_score.cosine_imbalance <= mean_score.cosine_imbalance
 
 
@@ -170,3 +175,45 @@ def test_cli_search_accepts_fusion_mode(tmp_path, capsys):
     )
     assert code == 0
     assert "결합 min" in capsys.readouterr().out
+
+
+def test_baselines_are_always_present():
+    """베이스라인 없이 수치를 인용할 수 없게 구조로 막는다 (D-0034)."""
+    report = EvaluateFusion(centered=False, k=3, pairs=10).run(lopsided_corpus(), [FusionMode.MEAN])
+    labels = [score.mode for score in report.scores]
+    assert "random" in labels
+    assert "oracle" in labels
+
+
+def test_oracle_bounds_every_rule():
+    """어떤 규칙도 구성상 상한을 넘을 수 없다."""
+    report = EvaluateFusion(centered=False, k=3, pairs=30).run(lopsided_corpus(), list(FusionMode))
+    modes = {score.mode: score for score in report.scores}
+    oracle = modes["oracle"]
+    for name in ("mean", "min", "penalized"):
+        assert modes[name].coverage <= oracle.coverage + 1e-9
+
+
+def test_oracle_reveals_structural_floor():
+    """시드 아티스트 곡이 적으면 불균형은 규칙과 무관하게 바닥이 생긴다."""
+    report = EvaluateFusion(centered=False, k=10, pairs=20).run(
+        lopsided_corpus(), [FusionMode.MEAN]
+    )
+    oracle = next(score for score in report.scores if score.mode == "oracle")
+    assert oracle.coverage < 1.0
+
+
+def test_oracle_has_no_similarity_values():
+    """oracle은 순서가 아니라 구성의 상한이므로 유사도가 정의되지 않는다."""
+    report = EvaluateFusion(centered=False, k=3, pairs=10).run(lopsided_corpus(), [FusionMode.MEAN])
+    oracle = next(score for score in report.scores if score.mode == "oracle")
+    assert oracle.as_record()["cosine_imbalance"] is None
+    assert oracle.as_record()["mean_similarity"] is None
+
+
+def test_report_json_has_no_nan():
+    import json
+
+    report = EvaluateFusion(centered=False, k=3, pairs=10).run(lopsided_corpus(), list(FusionMode))
+    text = json.dumps(report.as_record(), ensure_ascii=False, allow_nan=False)
+    assert "NaN" not in text

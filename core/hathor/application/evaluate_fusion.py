@@ -36,6 +36,12 @@ from hathor.domain.services.isotropy import center, mean_direction
 from hathor.domain.services.retrieval_metrics import cosine_similarity
 from hathor.domain.services.seed_search import FusionMode, fuse_scores
 
+
+def _finite(value: float) -> float | None:
+    """NaN은 JSON에 담기지 않는다. oracle은 유사도를 계산하지 않으므로 None이다."""
+    return None if np.isnan(value) else round(value, 6)
+
+
 DEFAULT_PAIRS = 200
 DEFAULT_K = 10
 DEFAULT_SEED = 20260817
@@ -56,8 +62,8 @@ class FusionScore:
             "pairs": self.pairs,
             "coverage": round(self.coverage, 6),
             "artist_imbalance": round(self.artist_imbalance, 6),
-            "cosine_imbalance": round(self.cosine_imbalance, 6),
-            "mean_similarity": round(self.mean_similarity, 6),
+            "cosine_imbalance": _finite(self.cosine_imbalance),
+            "mean_similarity": _finite(self.mean_similarity),
         }
 
 
@@ -120,11 +126,61 @@ class EvaluateFusion:
         if not pairs:
             raise ValueError("아티스트가 다른 시드 쌍을 만들 수 없다")
 
-        return FusionReport(
-            tracks=len(tracks),
-            k=self._k,
-            seed=self._seed,
-            scores=tuple(self._score(mode, similarity, artists, pairs) for mode in modes),
+        scores = [self._score(mode.value, similarity, artists, pairs, mode=mode) for mode in modes]
+        scores.append(self._random_baseline(similarity, artists, pairs))
+        scores.append(self._oracle_baseline(artists, pairs))
+        return FusionReport(tracks=len(tracks), k=self._k, seed=self._seed, scores=tuple(scores))
+
+    def _random_baseline(
+        self,
+        similarity: np.ndarray[tuple[int, int], np.dtype[np.float32]],
+        artists: Sequence[str],
+        pairs: Sequence[tuple[int, int]],
+    ) -> FusionScore:
+        """무작위 순위를 같은 코드 경로에 태운다. 별도 계산식을 쓰지 않는다.
+
+        마스크나 제외 처리에 결함이 있으면 베이스라인에도 똑같이 반영되어
+        비교가 무의미해지는 것을 막는다 (D-0023과 같은 방식).
+        """
+        generator = np.random.default_rng(self._seed)
+        noise = np.asarray(generator.random(similarity.shape), dtype=np.float32)
+        return self._score("random", similarity, artists, pairs, mode=None, scoring=noise)
+
+    def _oracle_baseline(
+        self, artists: Sequence[str], pairs: Sequence[tuple[int, int]]
+    ) -> FusionScore:
+        """코퍼스 구성상 도달 가능한 최선. 어떤 규칙도 이 값을 넘을 수 없다.
+
+        시드를 뺀 뒤 두 아티스트의 곡을 최대한 균형 있게 담았을 때의 coverage와
+        불균형을 센다. 유사도는 계산하지 않는다 — 순서가 아니라 **구성의 상한**이다.
+
+        시드 아티스트의 곡이 코퍼스에 2곡뿐이면 상위 k에 1곡만 올 수 있다.
+        그 바닥을 드러내는 것이 이 베이스라인의 목적이다.
+        """
+        counts: dict[str, int] = {}
+        for artist in artists:
+            if artist:
+                counts[artist] = counts.get(artist, 0) + 1
+
+        coverages: list[float] = []
+        gaps: list[float] = []
+        for left, right in pairs:
+            available = sorted((counts[artists[left]] - 1, counts[artists[right]] - 1))
+            smaller, larger = available
+            taken_small = min(smaller, self._k // 2)
+            taken_large = min(larger, self._k - taken_small)
+            total = taken_small + taken_large
+            coverages.append(total / self._k)
+            if total:
+                gaps.append(abs(taken_large - taken_small) / total)
+
+        return FusionScore(
+            mode="oracle",
+            pairs=len(pairs),
+            coverage=float(np.mean(coverages)) if coverages else 0.0,
+            artist_imbalance=float(np.mean(gaps)) if gaps else 0.0,
+            cosine_imbalance=float("nan"),
+            mean_similarity=float("nan"),
         )
 
     def _sample_pairs(self, artists: Sequence[str]) -> list[tuple[int, int]]:
@@ -143,10 +199,13 @@ class EvaluateFusion:
 
     def _score(
         self,
-        mode: FusionMode,
+        label: str,
         similarity: np.ndarray[tuple[int, int], np.dtype[np.float32]],
         artists: Sequence[str],
         pairs: Sequence[tuple[int, int]],
+        *,
+        mode: FusionMode | None,
+        scoring: np.ndarray[tuple[int, int], np.dtype[np.float32]] | None = None,
     ) -> FusionScore:
         coverages: list[float] = []
         artist_gaps: list[float] = []
@@ -155,7 +214,13 @@ class EvaluateFusion:
 
         for left, right in pairs:
             rows = similarity[[left, right], :]
-            scores = fuse_scores(rows, mode, penalty=self._penalty)
+            if mode is None:
+                # 베이스라인도 시드별 쏠림을 재야 하므로 순위와 유사도를 분리한다.
+                # 순위는 무작위 점수로 매기되, 불균형은 실제 코사인으로 잰다.
+                assert scoring is not None
+                scores = np.asarray(scoring[left], dtype=np.float32).copy()
+            else:
+                scores = fuse_scores(rows, mode, penalty=self._penalty)
             scores[[left, right]] = -np.inf
             top = np.argsort(-scores, kind="stable")[: self._k]
 
@@ -166,10 +231,11 @@ class EvaluateFusion:
             if total:
                 artist_gaps.append(abs(left_hits - right_hits) / total)
             cosine_gaps.append(float(np.mean(np.abs(rows[0, top] - rows[1, top]))))
-            similarities.append(float(np.mean(scores[top])))
+            actual = fuse_scores(rows, mode or FusionMode.MEAN, penalty=self._penalty)
+            similarities.append(float(np.mean(actual[top])))
 
         return FusionScore(
-            mode=mode.value,
+            mode=label,
             pairs=len(pairs),
             coverage=float(np.mean(coverages)),
             artist_imbalance=float(np.mean(artist_gaps)) if artist_gaps else 0.0,
