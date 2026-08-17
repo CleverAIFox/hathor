@@ -52,6 +52,7 @@ DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
 DEFAULT_LAYERS_DIRNAME = "mert-layers"
 DEFAULT_LAYERS = "0,1,2,6"
 DEFAULT_SEARCH_KEY = "layer00"
+DEFAULT_LYRICS_DIRNAME = "lyrics-hashed"
 """D-0027 정본 뷰."""
 """D-0026 실측 후 기본값. layer00이 최선이었고 1·2는 미탐색이다 (O-9)."""
 
@@ -255,6 +256,22 @@ def build_parser() -> argparse.ArgumentParser:
     status = taste_sub.add_parser("status", help="수집 현황")
     status.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
 
+    lyrics = sub.add_parser("lyrics", help="가사축")
+    lyrics_sub = lyrics.add_subparsers(dest="lyrics_command", required=True)
+    lyrics_extract = lyrics_sub.add_parser("extract", help="가사 특징 추출 (CPU, 수 초)")
+    lyrics_extract.add_argument(
+        "--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+    )
+    lyrics_extract.add_argument(
+        "--features",
+        type=Path,
+        default=None,
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LYRICS_DIRNAME})",
+    )
+    lyrics_extract.add_argument("--dim", type=int, default=1024, help="해싱 차원")
+    lyrics_extract.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+    lyrics_extract.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
+
     search = sub.add_parser("search", help="시드곡 조합으로 유사곡을 찾는다")
     search.add_argument(
         "--like",
@@ -289,6 +306,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "lyrics":
+        return _run_lyrics_extract(args)
     if args.command == "search":
         return _run_search(args)
     if args.command == "taste":
@@ -1107,3 +1126,62 @@ def _run_eval_fusion(args: argparse.Namespace) -> int:
     path = JsonEvaluationStore(args.out).write(report.as_record(), f"fusion-k{args.k}")
     print(f"리포트: {path}")
     return 0
+
+
+def _run_lyrics_extract(args: argparse.Namespace) -> int:
+    """가사 특징을 뽑는다 (가사축 착수).
+
+    디코딩도 GPU도 없다. 스캔 산출물의 USLT 원문만 쓰므로 1004곡이 수 초다.
+    """
+    from hathor.application.extract_lyrics import ExtractLyrics
+    from hathor.infrastructure.hashed_lyrics_extractor import HashedLyricsExtractor
+    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
+
+    tracks = list(JsonlScanStore(args.out).read_tracks())
+    if not tracks:
+        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
+        return 2
+
+    store = NpzFeatureStore(args.features or args.out / DEFAULT_LYRICS_DIRNAME)
+    try:
+        with store.batch_lock():
+            if not args.force:
+                done = store.completed_keys()
+                skipped = sum(1 for track in tracks if track.source_key in done)
+                tracks = [track for track in tracks if track.source_key not in done]
+                if skipped:
+                    print(f"이미 추출된 {skipped}곡을 건너뛴다", flush=True)
+            if args.limit is not None:
+                tracks = tracks[: args.limit]
+            if not tracks:
+                print("처리할 곡이 없다")
+                return 0
+
+            use_case = ExtractLyrics(HashedLyricsExtractor(dim=args.dim))
+            segments = 0
+            for features in use_case.run(tracks):
+                store.write_track(features)
+                segments += features.chunk_count
+
+            summary_path = store.write_summary(
+                {
+                    "processed": use_case.processed,
+                    "skipped": len(use_case.skipped),
+                    "segments": segments,
+                    "skips": [
+                        {"source_key": key, "reason": reason} for key, reason in use_case.skipped
+                    ],
+                }
+            )
+            average = segments / use_case.processed if use_case.processed else 0.0
+            print(f"성공 {use_case.processed}곡, 제외 {len(use_case.skipped)}곡")
+            print(f"구간 합계 {segments} (곡당 평균 {average:.1f})")
+            for key, reason in use_case.skipped[:5]:
+                print(f"  제외 {key}: {reason}", file=sys.stderr)
+            if len(use_case.skipped) > 5:
+                print(f"  ... 외 {len(use_case.skipped) - 5}곡", file=sys.stderr)
+            print(f"요약: {summary_path}")
+            return 0
+    except BatchAlreadyRunningError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3

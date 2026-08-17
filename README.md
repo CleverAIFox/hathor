@@ -22,7 +22,8 @@
 | #9 취향 라벨 수집 (D-0028) | 도구 완료 · 30건 수집 후 **보조 기능으로 격하** (D-0029) |
 | #10 시드 퓨전 검색 (D-0029) | 완료 — **최초의 사용자 대면 산출물** |
 | #11 허브 곡 문제 · 중심화 (D-0030 · D-0031 · D-0032) | 완료 — **전 지표 개선. M2 MAP +13%** |
-| #12 퓨전 결합 규칙 · M4 (D-0033 · D-0034) | 완료 — **MEAN 유지. MIN은 균형 개선 없음** |
+| #12 퓨전 결합 규칙 · M4 (D-0033 ~ D-0035) | 완료 — **퓨전 작동 확인(무작위 7.6배). MEAN 유지** |
+| #13 가사축 착수 (D-0036) | 베이스라인 완료 · **실측 대기** |
 
 임베딩 축 탐색은 종료됐다. 정본 뷰는 `var/ingest/mert-layers`의 `layer00`이며,
 다음 병목은 임베딩 품질이 아니라 **취향 라벨 0건**이다 (O-10).
@@ -82,6 +83,17 @@ uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10  
 ```bash
 uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 (M4)
 ```
+
+### 가사축 (CPU, 수 초)
+
+```bash
+cd core
+uv run python -m hathor.cli lyrics extract --out var/ingest
+uv run python -m hathor.cli eval retrieval --out var/ingest \
+    --features var/ingest/lyrics-hashed --keys mixture --label lyrics-hashed
+```
+
+산출물 규격이 오디오축과 같아 **같은 평가 하네스가 그대로 읽는다** (D-0036).
 
 ### 취향 라벨 수집 (보조)
 
