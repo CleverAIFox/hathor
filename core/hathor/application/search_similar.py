@@ -18,6 +18,7 @@ import numpy as np
 
 from hathor.domain.ports.audio_analysis import Embedding
 from hathor.domain.services.embedding_pooling import PoolMode, Vector, build_view
+from hathor.domain.services.isotropy import center, mean_direction
 from hathor.domain.services.retrieval_metrics import cosine_similarity
 from hathor.domain.services.seed_search import chunk_timestamp, fuse, representative_chunk
 
@@ -53,9 +54,17 @@ class SearchSimilar:
     k개 자리 중 하나를 낭비한다.
     """
 
-    def __init__(self, keys: Sequence[str] = ("layer00",), pool: PoolMode = PoolMode.MEAN) -> None:
+    def __init__(
+        self,
+        keys: Sequence[str] = ("layer00",),
+        pool: PoolMode = PoolMode.MEAN,
+        *,
+        centered: bool = True,
+    ) -> None:
         self._keys = tuple(keys)
         self._pool = pool
+        self._centered = centered
+        """코퍼스 공통 방향을 제거한다. 끄면 허브 곡이 어떤 질의에도 상위에 온다."""
 
     def run(self, tracks: Sequence[SearchTrack], seeds: Sequence[str], k: int) -> list[SearchHit]:
         if k <= 0:
@@ -69,6 +78,10 @@ class SearchSimilar:
             raise KeyError(f"코퍼스에 없는 시드: {', '.join(missing)}")
 
         vectors = np.asarray([self._view(track.embeddings) for track in tracks], dtype=np.float32)
+        if self._centered:
+            # 시드와 후보에 같은 중심을 쓴다. 질의 벡터를 따로 중심화하면
+            # 서로 다른 좌표계에서 코사인을 재게 된다.
+            vectors = center(vectors, mean_direction(vectors))
         query = fuse([vectors[index[seed]] for seed in seeds]).reshape(1, -1)
         scores = cosine_similarity(query, vectors)[0]
 

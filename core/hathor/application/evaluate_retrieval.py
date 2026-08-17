@@ -31,6 +31,7 @@ from hathor.domain.services.embedding_pooling import (
     build_view,
     split_odd_even,
 )
+from hathor.domain.services.isotropy import anisotropy, center, mean_direction
 from hathor.domain.services.retrieval_metrics import (
     BoolMatrix,
     RetrievalScore,
@@ -84,6 +85,9 @@ class ViewSpec:
     block_l2: bool = False
     """블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다."""
 
+    centered: bool = False
+    """코퍼스 공통 방향 제거. 허브 곡 문제를 완화한다 (D-0030)."""
+
     def as_record(self) -> dict[str, object]:
         return {
             "keys": list(self.keys),
@@ -91,6 +95,7 @@ class ViewSpec:
             "pool": self.pool.value,
             "chunk_l2": self.chunk_l2,
             "block_l2": self.block_l2,
+            "centered": self.centered,
         }
 
 
@@ -165,6 +170,9 @@ class EvaluationReport:
     dimension: int
     self_consistency: float
     self_consistency_queries: int
+    anisotropy: float = 0.0
+    """전체 쌍 평균 코사인. 1에 가까울수록 공간이 뭉쳐 허브 곡이 생긴다."""
+
     metrics: tuple[LabeledMetric, ...] = ()
 
     @property
@@ -178,6 +186,7 @@ class EvaluationReport:
                 "tracks": self.tracks,
                 "skipped": len(self.skipped),
                 "dimension": self.dimension,
+                "anisotropy": round(self.anisotropy, 6),
             },
             "m0_self_consistency": {
                 "top1_accuracy": round(self.self_consistency, 6),
@@ -206,6 +215,8 @@ class EvaluateRetrieval:
 
         accuracy = self._self_consistency(usable)
         vectors = np.asarray([self._view(track.embeddings) for track in usable], dtype=np.float32)
+        if self._config.view.centered:
+            vectors = center(vectors, mean_direction(vectors))
         report = EvaluationReport(
             config=self._config,
             tracks=len(usable),
@@ -213,6 +224,7 @@ class EvaluateRetrieval:
             dimension=int(vectors.shape[1]),
             self_consistency=accuracy,
             self_consistency_queries=len(usable),
+            anisotropy=anisotropy(vectors),
         )
         if not report.gate_passed and not self._config.force:
             return report
@@ -277,9 +289,15 @@ class EvaluateRetrieval:
             halves = {key: split_odd_even(track.embeddings[key]) for key in self._config.view.keys}
             odd.append(self._view({key: pair[0] for key, pair in halves.items()}))
             even.append(self._view({key: pair[1] for key, pair in halves.items()}))
-        return top1_accuracy(
-            cosine_similarity(np.asarray(odd, dtype=np.float32), np.asarray(even, dtype=np.float32))
-        )
+        left = np.asarray(odd, dtype=np.float32)
+        right = np.asarray(even, dtype=np.float32)
+        if self._config.view.centered:
+            # 두 절반에 같은 중심을 쓴다. 각자 중심을 빼면 홀·짝이 서로 다른
+            # 좌표계로 옮겨져 M0가 임베딩이 아니라 좌표계 차이를 재게 된다.
+            direction = mean_direction(np.concatenate([left, right]))
+            left = center(left, direction)
+            right = center(right, direction)
+        return top1_accuracy(cosine_similarity(left, right))
 
     def _metric(
         self, name: str, similarity: Matrix, relevant: BoolMatrix, excluded: BoolMatrix

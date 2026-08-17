@@ -159,6 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="풀링 전에 청크별 L2 정규화 (곡 벡터 L2는 코사인에서 무의미하다)",
     )
     retrieval.add_argument(
+        "--centered",
+        action="store_true",
+        help="코퍼스 공통 방향 제거. 허브 곡 완화 (D-0030)",
+    )
+    retrieval.add_argument(
         "--block-l2",
         action="store_true",
         help="블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다",
@@ -250,6 +255,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
     search.add_argument("-k", type=int, default=10, help="결과 개수")
+    search.add_argument(
+        "--raw",
+        action="store_true",
+        help="중심화를 끈다. 허브 곡이 어떤 질의에도 상위에 온다 (비교용)",
+    )
     return parser
 
 
@@ -520,6 +530,8 @@ def _default_label(view: ViewSpec) -> str:
         parts.append("chunkl2")
     if view.block_l2:
         parts.append("blockl2")
+    if view.centered:
+        parts.append("centered")
     return "-".join(parts)
 
 
@@ -571,6 +583,7 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
         pool=PoolMode(args.pool),
         chunk_l2=args.chunk_l2,
         block_l2=args.block_l2,
+        centered=args.centered,
     )
     label = args.label or _default_label(view)
     config = EvaluationConfig(
@@ -669,8 +682,10 @@ def _print_report(report: EvaluationReport) -> None:
         f"곡 {report.tracks}개 (제외 {len(report.skipped)}) / "
         f"뷰 {'+'.join(view.keys)} {view.combine.value}·{view.pool.value}"
         f"{'·chunk-l2' if view.chunk_l2 else ''}"
-        f"{'·block-l2' if view.block_l2 else ''} / {report.dimension}차원"
+        f"{'·block-l2' if view.block_l2 else ''}"
+        f"{'·centered' if view.centered else ''} / {report.dimension}차원"
     )
+    print(f"  전체 쌍 평균 코사인 {report.anisotropy:.4f} (1에 가까울수록 허브 곡이 생긴다)")
     verdict = "통과" if report.gate_passed else "미달"
     print(
         f"  M0 자기일관성  top-1 {report.self_consistency:.4f} "
@@ -988,12 +1003,13 @@ def _run_search(args: argparse.Namespace) -> int:
         return 2
 
     labels = {track.source_key: track.label for track in tracks}
-    print(f"코퍼스 {len(tracks)}곡 / 뷰 {'+'.join(keys)}")
+    mode = "원본" if args.raw else "중심화"
+    print(f"코퍼스 {len(tracks)}곡 / 뷰 {'+'.join(keys)} / {mode}")
     for seed in seeds:
         print(f"  시드  {labels[seed]}")
     print()
 
-    hits = SearchSimilar(keys).run(tracks, seeds, args.k)
+    hits = SearchSimilar(keys, centered=not args.raw).run(tracks, seeds, args.k)
     for hit in hits:
         print(f"  {hit.rank:>2}. {hit.similarity:.4f}  {hit.label}  [반복 {hit.highlight}]")
     print()

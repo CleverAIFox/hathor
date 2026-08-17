@@ -173,3 +173,29 @@ def test_cli_search_without_scan_output(tmp_path):
 def test_cli_search_without_features(tmp_path):
     write_scan(tmp_path, [("가.mp3", "가수", "앨범")])
     assert main(["search", "--out", str(tmp_path), "--like", "가"]) == 2
+
+
+def test_search_centering_is_on_by_default():
+    """허브 곡이 어떤 질의에도 상위에 오는 것을 기본으로 막는다."""
+    assert SearchSimilar()._centered is True
+
+
+def test_raw_flag_disables_centering(tmp_path, capsys):
+    build_library(tmp_path)
+    assert main(["search", "--out", str(tmp_path), "--like", "곡A", "--raw", "-k", "2"]) == 0
+    assert "원본" in capsys.readouterr().out
+
+
+def test_centering_changes_ranking_when_a_hub_exists():
+    """중심 근처에 곡이 몰려 있으면 중심화 전후 순위가 달라져야 한다."""
+    generator = np.random.default_rng(5)
+    shared = np.zeros(DIM, dtype=np.float32)
+    shared[0] = 1.0
+    tracks = []
+    for index in range(30):
+        direction = shared + generator.normal(0.0, 0.15, size=DIM).astype(np.float32)
+        tracks.append(make_track(f"{index}.mp3", f"가수{index}", f"곡{index}", direction))
+
+    plain = SearchSimilar(centered=False).run(tracks, ["0.mp3"], k=5)
+    centered = SearchSimilar(centered=True).run(tracks, ["0.mp3"], k=5)
+    assert [hit.source_key for hit in plain] != [hit.source_key for hit in centered]
