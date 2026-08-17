@@ -19,7 +19,8 @@
 | #7 결합 뷰 실측 (D-0025) | 완료 — 두 표현은 상보적. O-8을 (a)·(b)로 좁힘 |
 | #8 MERT 레이어 선택 (D-0026 · D-0027) | 완료 — **마지막 레이어가 최악. layer00으로 M2 2.8배 개선** |
 
-| #9 취향 라벨 수집 (D-0028) | 도구 완료 · **응답 수집 대기** |
+| #9 취향 라벨 수집 (D-0028) | 도구 완료 · 30건 수집 후 **보조 기능으로 격하** (D-0029) |
+| #10 시드 퓨전 검색 (D-0029) | 완료 — **최초의 사용자 대면 산출물** |
 
 임베딩 축 탐색은 종료됐다. 정본 뷰는 `var/ingest/mert-layers`의 `layer00`이며,
 다음 병목은 임베딩 품질이 아니라 **취향 라벨 0건**이다 (O-10).
@@ -63,7 +64,18 @@ uv run python -m hathor.cli eval retrieval --out var/ingest \
     --keys mert:mixture,mfcc:mixture --block-l2 --label mert+mfcc
 ```
 
-### 취향 라벨 수집
+### 시드곡 퓨전 검색
+
+```bash
+cd core
+uv run python -m hathor.cli search --like "밤편지" -k 10
+uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10   # 퓨전
+```
+
+`--like`를 여러 번 주면 시드곡들의 조합에 가까운 곡을 찾는다 (D-0011 · D-0029).
+`[반복 m:ss]`는 곡 안에서 반복도가 가장 높은 구간이며 **후렴이라는 보장은 없다**.
+
+### 취향 라벨 수집 (보조)
 
 ```bash
 cd core

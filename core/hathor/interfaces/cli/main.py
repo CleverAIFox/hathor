@@ -25,6 +25,7 @@ from hathor.application.extract_features import ExtractFeatures, ExtractLayerFea
 from hathor.application.orchestrator.generation_pipeline import run_dry
 from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
+from hathor.application.search_similar import SearchSimilar, SearchTrack
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
@@ -48,6 +49,8 @@ DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
 DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
 DEFAULT_LAYERS_DIRNAME = "mert-layers"
 DEFAULT_LAYERS = "0,1,2,6"
+DEFAULT_SEARCH_KEY = "layer00"
+"""D-0027 정본 뷰."""
 """D-0026 실측 후 기본값. layer00이 최선이었고 1·2는 미탐색이다 (O-9)."""
 
 
@@ -229,11 +232,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = taste_sub.add_parser("status", help="수집 현황")
     status.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+
+    search = sub.add_parser("search", help="시드곡 조합으로 유사곡을 찾는다")
+    search.add_argument(
+        "--like",
+        action="append",
+        default=None,
+        metavar="검색어",
+        help="시드곡. 아티스트·제목·경로 일부로 찾는다. 여러 번 주면 퓨전한다",
+    )
+    search.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    search.add_argument(
+        "--features",
+        type=Path,
+        default=None,
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+    )
+    search.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
+    search.add_argument("-k", type=int, default=10, help="결과 개수")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "search":
+        return _run_search(args)
     if args.command == "taste":
         if args.taste_command == "status":
             return _run_taste_status(args)
@@ -874,4 +897,105 @@ def _run_taste_status(args: argparse.Namespace) -> int:
         if key.startswith("mode:"):
             print(f"  {key[5:]}: {value}건")
     print(f"저장: {store.path}")
+    return 0
+
+
+def _load_search_tracks(args: argparse.Namespace, keys: tuple[str, ...]) -> list[SearchTrack]:
+    """스캔 태그와 임베딩을 합쳐 검색 대상을 만든다."""
+    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
+
+    tags = {track.source_key: track.tags for track in JsonlScanStore(args.out).read_tracks()}
+    if not tags:
+        raise FileNotFoundError(f"스캔 산출물이 없다: {args.out}")
+
+    store = NpzFeatureStore(args.features or args.out / DEFAULT_LAYERS_DIRNAME)
+    if not store.index_path.exists():
+        raise FileNotFoundError(f"특징 인덱스가 없다: {store.index_path}")
+
+    tracks: list[SearchTrack] = []
+    for source_key, vectors in store.iter_vectors():
+        tag = tags.get(source_key)
+        if tag is None or any(key not in vectors for key in keys):
+            continue
+        tracks.append(
+            SearchTrack(
+                source_key=source_key,
+                artist=tag.artist,
+                title=tag.title,
+                embeddings=vectors,
+            )
+        )
+    return tracks
+
+
+def _resolve_seed(query: str, tracks: list[SearchTrack]) -> str:
+    """검색어로 시드곡 하나를 특정한다.
+
+    여러 곡이 걸리면 고르지 않고 후보를 보여준 뒤 멈춘다. 임의로 하나를
+    집으면 사용자가 의도하지 않은 곡으로 퓨전이 되고, 결과를 봐도
+    무엇이 잘못됐는지 알 수 없다.
+    """
+    needle = query.strip().casefold()
+    if not needle:
+        raise ValueError("빈 검색어는 쓸 수 없다")
+    matches = [
+        track
+        for track in tracks
+        if needle in track.label.casefold() or needle in track.source_key.casefold()
+    ]
+    if not matches:
+        raise LookupError(f"'{query}'에 맞는 곡이 없다")
+    if len(matches) > 1:
+        exact = [track for track in matches if (track.title or "").casefold() == needle]
+        if len(exact) != 1:
+            preview = "\n".join(f"    {track.label}" for track in matches[:8])
+            more = f"\n    ... 외 {len(matches) - 8}곡" if len(matches) > 8 else ""
+            raise LookupError(f"'{query}'에 {len(matches)}곡이 걸린다:\n{preview}{more}")
+        matches = exact
+    return matches[0].source_key
+
+
+def _run_search(args: argparse.Namespace) -> int:
+    """시드곡 조합으로 유사곡을 찾는다 (D-0011).
+
+    생성 없이 퓨전 개념을 검증한다. 조합 중점이 그럴듯한 곡을 가리키지
+    않으면 생성 단계의 시드 조건도 성립하지 않는다.
+    """
+    if not args.like:
+        print("--like로 시드곡을 최소 하나 지정해야 한다", file=sys.stderr)
+        return 2
+    keys = tuple(token.strip() for token in args.keys.split(",") if token.strip())
+    if not keys:
+        print("--keys에 임베딩 키를 최소 하나 지정해야 한다", file=sys.stderr)
+        return 2
+
+    try:
+        tracks = _load_search_tracks(args, keys)
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if not tracks:
+        print("검색할 수 있는 곡이 없다", file=sys.stderr)
+        return 2
+
+    try:
+        seeds = [_resolve_seed(query, tracks) for query in args.like]
+    except (LookupError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if len(set(seeds)) != len(seeds):
+        print("같은 곡을 시드로 두 번 지정했다", file=sys.stderr)
+        return 2
+
+    labels = {track.source_key: track.label for track in tracks}
+    print(f"코퍼스 {len(tracks)}곡 / 뷰 {'+'.join(keys)}")
+    for seed in seeds:
+        print(f"  시드  {labels[seed]}")
+    print()
+
+    hits = SearchSimilar(keys).run(tracks, seeds, args.k)
+    for hit in hits:
+        print(f"  {hit.rank:>2}. {hit.similarity:.4f}  {hit.label}  [반복 {hit.highlight}]")
+    print()
+    print("[반복 m:ss]는 곡 안에서 반복도가 가장 높은 구간이다. 후렴이라는 보장은 없다.")
     return 0
