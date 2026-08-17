@@ -19,6 +19,8 @@
 | #7 결합 뷰 실측 (D-0025) | 완료 — 두 표현은 상보적. O-8을 (a)·(b)로 좁힘 |
 | #8 MERT 레이어 선택 (D-0026 · D-0027) | 완료 — **마지막 레이어가 최악. layer00으로 M2 2.8배 개선** |
 
+| #9 취향 라벨 수집 (D-0028) | 도구 완료 · **응답 수집 대기** |
+
 임베딩 축 탐색은 종료됐다. 정본 뷰는 `var/ingest/mert-layers`의 `layer00`이며,
 다음 병목은 임베딩 품질이 아니라 **취향 라벨 0건**이다 (O-10).
 
@@ -60,6 +62,16 @@ uv run python -m hathor.cli eval retrieval --out var/ingest \
     --features mert=var/ingest --features mfcc=var/ingest/baseline-mfcc \
     --keys mert:mixture,mfcc:mixture --block-l2 --label mert+mfcc
 ```
+
+### 취향 라벨 수집
+
+```bash
+cd core
+uv run python -m hathor.cli taste compare --out var/ingest --count 30
+uv run python -m hathor.cli taste status --out var/ingest
+```
+
+무작위 쌍을 고정 평가 집합으로 먼저 모은다 (D-0028). 적응적 선택은 모델이 선 뒤다.
 
 M0(자기일관성)가 0.95 미만이면 M1/M2를 계산하지 않고 비정상 종료한다 (D-0023).
 리포트는 `var/ingest/eval/<시각>-<라벨>.eval.json`에 실행마다 새로 쌓인다.
