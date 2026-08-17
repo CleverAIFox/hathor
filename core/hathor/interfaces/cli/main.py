@@ -269,6 +269,18 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LYRICS_DIRNAME})",
     )
     lyrics_extract.add_argument("--dim", type=int, default=1024, help="해싱 차원")
+    lyrics_extract.add_argument("--ngrams", default="2,3,4", help="문자 n-gram 크기 (쉼표 구분)")
+    lyrics_extract.add_argument(
+        "--collapse-space",
+        action="store_true",
+        help="공백을 제거한다. `보고싶어`와 `보고 싶어`를 같게 본다",
+    )
+    lyrics_extract.add_argument(
+        "--repeat-damping",
+        type=float,
+        default=0.0,
+        help="곡 안에서 반복되는 n-gram 감쇠 (0=없음, 1=곡내 문서빈도 역수)",
+    )
     lyrics_extract.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
     lyrics_extract.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
 
@@ -1157,7 +1169,29 @@ def _run_lyrics_extract(args: argparse.Namespace) -> int:
                 print("처리할 곡이 없다")
                 return 0
 
-            use_case = ExtractLyrics(HashedLyricsExtractor(dim=args.dim))
+            try:
+                sizes = tuple(int(token) for token in args.ngrams.split(",") if token.strip())
+            except ValueError:
+                print("--ngrams는 쉼표로 구분한 정수여야 한다", file=sys.stderr)
+                return 2
+            if not sizes or any(size < 1 for size in sizes):
+                print("--ngrams는 1 이상의 정수를 최소 하나 포함해야 한다", file=sys.stderr)
+                return 2
+
+            print(
+                f"차원 {args.dim} / n-gram {','.join(str(size) for size in sizes)}"
+                f"{' / 공백제거' if args.collapse_space else ''}"
+                f"{f' / 반복감쇠 {args.repeat_damping}' if args.repeat_damping else ''}",
+                flush=True,
+            )
+            use_case = ExtractLyrics(
+                HashedLyricsExtractor(
+                    dim=args.dim,
+                    sizes=sizes,
+                    collapse_space=args.collapse_space,
+                    repeat_damping=args.repeat_damping,
+                )
+            )
             segments = 0
             for features in use_case.run(tracks):
                 store.write_track(features)

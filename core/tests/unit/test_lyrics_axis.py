@@ -191,3 +191,62 @@ def test_cli_lyrics_without_scan_output(tmp_path):
 def test_lyrics_requires_subcommand():
     with pytest.raises(SystemExit):
         main(["lyrics"])
+
+
+def test_collapse_space_absorbs_spacing_variants():
+    """`보고싶어`와 `보고 싶어`는 태그마다 제각각이다."""
+    plain = HashedLyricsExtractor()
+    collapsed = HashedLyricsExtractor(collapse_space=True)
+    spaced, tight = "보고 싶어 너를", "보고싶어 너를"
+    assert float(plain.extract([spaced])[0] @ plain.extract([tight])[0]) < float(
+        collapsed.extract([spaced])[0] @ collapsed.extract([tight])[0]
+    )
+
+
+def test_repeat_damping_suppresses_chorus_phrases():
+    """모든 구간에 나오는 문구는 곡의 절반으로 나머지를 찾는 데 기여하지 않는다."""
+    chorus = "사랑해 사랑해 너를 사랑해"
+    segments = [f"{chorus} {unique}" for unique in ("첫번째 절 내용", "두번째 절 내용")]
+    plain = HashedLyricsExtractor().extract(segments)
+    damped = HashedLyricsExtractor(repeat_damping=1.0).extract(segments)
+    # 감쇠하면 공통 후렴이 줄어드므로 두 구간이 서로 덜 비슷해진다.
+    assert float(damped[0] @ damped[1]) < float(plain[0] @ plain[1])
+
+
+def test_repeat_damping_keeps_rows_finite():
+    segments = ["같은 문구 반복", "같은 문구 반복"]
+    result = HashedLyricsExtractor(repeat_damping=1.0).extract(segments)
+    assert np.isfinite(result).all()
+
+
+def test_custom_ngram_sizes():
+    matrix = HashedLyricsExtractor(sizes=(3, 4, 5)).extract([VERSE, CHORUS])
+    assert matrix.shape == (2, FEATURE_DIM)
+
+
+def test_cli_lyrics_rejects_bad_ngrams(tmp_path, capsys):
+    write_library(tmp_path, {"가.mp3": f"{VERSE}\n\n{CHORUS}"})
+    assert main(["lyrics", "extract", "--out", str(tmp_path), "--ngrams", "둘"]) == 2
+    assert "정수" in capsys.readouterr().err
+
+
+def test_cli_lyrics_reports_settings(tmp_path, capsys):
+    write_library(tmp_path, {"가.mp3": f"{VERSE}\n\n{CHORUS}"})
+    code = main(
+        [
+            "lyrics",
+            "extract",
+            "--out",
+            str(tmp_path),
+            "--ngrams",
+            "3,4",
+            "--collapse-space",
+            "--repeat-damping",
+            "1.0",
+        ]
+    )
+    assert code == 0
+    output = capsys.readouterr().out
+    assert "n-gram 3,4" in output
+    assert "공백제거" in output
+    assert "반복감쇠" in output

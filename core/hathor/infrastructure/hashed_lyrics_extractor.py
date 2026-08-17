@@ -50,12 +50,21 @@ def hash_index(token: str, dim: int = FEATURE_DIM) -> int:
     return int.from_bytes(digest, "big") % dim
 
 
-def char_ngrams(text: str, sizes: tuple[int, ...] = NGRAM_SIZES) -> list[str]:
-    """공백을 하나로 줄인 뒤 문자 n-gram을 뽑는다.
+def char_ngrams(
+    text: str,
+    sizes: tuple[int, ...] = NGRAM_SIZES,
+    *,
+    collapse_space: bool = False,
+) -> list[str]:
+    """공백을 정리한 뒤 문자 n-gram을 뽑는다.
 
     줄바꿈·연속 공백이 n-gram에 섞이면 같은 가사가 서식 차이로 달라진다.
+
+    `collapse_space`는 공백을 **아예 제거**한다. 한국어 가사에서 띄어쓰기는
+    태그마다 제각각이라(`보고싶어` 대 `보고 싶어`) 같은 문구가 다른 n-gram을
+    만드는 일이 잦다. 다만 어절 경계 정보가 사라지므로 **실측으로 판정한다.**
     """
-    normalized = " ".join(text.split())
+    normalized = "".join(text.split()) if collapse_space else " ".join(text.split())
     grams: list[str] = []
     for size in sizes:
         if len(normalized) < size:
@@ -73,9 +82,29 @@ class HashedLyricsExtractor:
     구분 없이 읽는다.** 가사축 전용 지표를 새로 만들 필요가 없다.
     """
 
-    def __init__(self, dim: int = FEATURE_DIM, sizes: tuple[int, ...] = NGRAM_SIZES) -> None:
+    def __init__(
+        self,
+        dim: int = FEATURE_DIM,
+        sizes: tuple[int, ...] = NGRAM_SIZES,
+        *,
+        collapse_space: bool = False,
+        repeat_damping: float = 0.0,
+    ) -> None:
         self._dim = dim
         self._sizes = sizes
+        self._collapse_space = collapse_space
+        self._repeat_damping = repeat_damping
+        """곡 안에서 여러 구간에 반복 등장하는 n-gram의 가중치를 낮춘다.
+
+        후렴 문구는 홀·짝 양쪽에 모두 들어가므로 **곡의 절반으로 나머지 절반을
+        찾는 데 전혀 기여하지 않는다.** 그런데 반복되는 만큼 벡터에서 큰 자리를
+        차지해, 흔한 후렴 문구를 쓰는 다른 곡과 구분이 흐려진다.
+
+        구간 중복률(실측 8.2%)은 이것을 잡지 못한다. **구간이 통째로 같지 않아도
+        문구는 반복되기 때문이다.**
+
+        0이면 감쇠 없음, 1이면 곡 내 문서빈도의 역수로 나눈다.
+        """
 
     @property
     def dim(self) -> int:
@@ -84,15 +113,28 @@ class HashedLyricsExtractor:
     def extract(self, segments: list[str]) -> Embedding:
         if not segments:
             return np.zeros((0, self._dim), dtype=np.float32)
-        rows = [self._vector(segment) for segment in segments]
-        return np.asarray(np.stack(rows), dtype=np.float32)
-
-    def _vector(self, segment: str) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
-        counts = np.zeros(self._dim, dtype=np.float32)
-        for gram in char_ngrams(segment, self._sizes):
-            counts[hash_index(gram, self._dim)] += 1.0
-        if not counts.any():
-            return counts
-        # 하위선형 스케일. 한 단어가 반복되는 후렴이 구간을 지배하는 것을 막는다.
+        counts = np.asarray([self._counts(segment) for segment in segments], dtype=np.float32)
+        if self._repeat_damping > 0.0:
+            counts = self._damp_repeats(counts)
         scaled = np.log1p(counts)
-        return np.asarray(scaled / np.linalg.norm(scaled), dtype=np.float32)
+        norms = np.linalg.norm(scaled, axis=1, keepdims=True)
+        return np.asarray(scaled / np.where(norms < EPSILON, 1.0, norms), dtype=np.float32)
+
+    def _counts(self, segment: str) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
+        counts = np.zeros(self._dim, dtype=np.float32)
+        for gram in char_ngrams(segment, self._sizes, collapse_space=self._collapse_space):
+            counts[hash_index(gram, self._dim)] += 1.0
+        return counts
+
+    def _damp_repeats(
+        self, counts: np.ndarray[tuple[int, int], np.dtype[np.float32]]
+    ) -> np.ndarray[tuple[int, int], np.dtype[np.float32]]:
+        """곡 내 문서빈도로 나눈다. 곡 **안에서만** 계산하므로 코퍼스에 의존하지 않는다.
+
+        IDF와 형태는 같지만 대상이 다르다. IDF는 코퍼스 전체에서 흔한 항목을
+        누르고(그 역할은 중심화가 한다, D-0036), 이것은 **이 곡의 모든 구간에
+        나오는 항목**을 누른다. 후렴이 정확히 그것이다.
+        """
+        present = (counts > 0).sum(axis=0, dtype=np.float32)
+        weight = np.where(present > 0, 1.0 / np.maximum(present, 1.0) ** self._repeat_damping, 0.0)
+        return np.asarray(counts * weight.reshape(1, -1), dtype=np.float32)
