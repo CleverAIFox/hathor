@@ -242,6 +242,40 @@ LOG_GAMMA = 0.0
 때문이다. 반증 기록과 함께 둔다.
 """
 
+HARMONIC_INTERVALS: tuple[tuple[int, float], ...] = (
+    (7, 1 / 3),
+    (4, 1 / 5),
+    (10, 1 / 7),
+)
+"""배음이 만드는 (반음 간격, 상대 크기). 근음 위로 몇 반음에 얼마나 실리는가.
+
+배음렬은 근음의 정수배 주파수다. 피치클래스로 접으면 이렇게 된다.
+
+| 배음 | 주파수비 | 반음 | 결과 음 |
+|---|---|---|---|
+| 2 · 4 · 8 | 2·4·8배 | 0 | 근음 자신 (옥타브) |
+| **3** | 3배 | **+7** | 완전5도 |
+| **5** | 5배 | **+4** | 장3도 |
+| **7** | 7배 | **+10** | 단7도 — **스케일 밖 음** |
+
+크기는 대략 1/n로 줄어든다. 옥타브 배음(2·4·8)은 같은 피치클래스로 접히므로
+빼지 않는다 — 근음을 깎게 된다.
+
+**7배음이 문제다.** 장조의 단7도는 스케일에 없다. C를 울리면 A#이 따라 들어와
+C장조 크로마에 A#이 실리고, 그것이 F장조나 A#장조와의 상관을 올린다.
+이것은 균등하지 않아 **피어슨 상관에 실제로 영향을 준다** — 로그 압축이
+반증된 이유(균등 성분은 상관에 불변)와 정확히 대비되는 지점이다 (D-0058).
+"""
+
+HARMONIC_STRENGTH = 0.0
+"""배음 감산 강도. 0이 끔이며 기본이다.
+
+**켜는 것이 기본이 아닌 이유는 아직 실측되지 않았기 때문이다.** D-0058에서
+로그 압축을 "흔히 쓰는 기법"이라는 이유로 기본으로 넣을 뻔했고 실측이 반증했다.
+같은 실수를 되풀이하지 않는다.
+"""
+
+
 TUNING_STEPS = 5
 """반음을 몇 조각으로 나눠 조율 편차를 훑을지. 홀수여야 0센트가 격자에 놓인다."""
 
@@ -288,6 +322,7 @@ def cq_chroma(
     sample_rate: int = SOURCE_SAMPLE_RATE,
     tuning_cents: float = 0.0,
     gamma: float = LOG_GAMMA,
+    harmonic: float = HARMONIC_STRENGTH,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
     """반음 격자 크로마. 옥타브 대역마다 다른 창으로 STFT를 돌린다 (D-0056).
 
@@ -318,7 +353,32 @@ def cq_chroma(
         # 긴 창은 프레임이 적고 FFT 크기가 커 값이 커지므로 그 둘만 보정한다.
         totals += band_total / (frames * window_size)
 
-    return _compress(totals, gamma)
+    return _compress(subtract_harmonics(totals, harmonic), gamma)
+
+
+def subtract_harmonics(
+    vector: np.ndarray[tuple[int], np.dtype[np.float64]], strength: float
+) -> np.ndarray[tuple[int], np.dtype[np.float64]]:
+    """각 피치클래스에서 다른 음의 배음으로 설명되는 몫을 뺀다 (D-0059).
+
+    피치클래스 `p`의 에너지 중, `p - 7`·`p - 4`·`p - 10`에 있는 음의 배음이
+    기여했을 양을 추정해 감산한다. 음수는 0으로 자른다.
+
+    **한 번만 감산한다.** 배음의 배음까지 재귀로 빼면 무엇이 남았는지 설명할 수
+    없게 되고, 감산 횟수가 또 하나의 근거 없는 파라미터가 된다.
+
+    `strength`가 0이면 원본을 그대로 돌려준다.
+    """
+    if strength < 0:
+        raise ValueError(f"strength는 0 이상이어야 한다: {strength}")
+    if strength == 0:
+        return vector
+
+    reduced = vector.copy()
+    for interval, ratio in HARMONIC_INTERVALS:
+        # 근음 위 `interval` 반음에 실린 배음을 그 자리에서 뺀다.
+        reduced -= strength * ratio * np.roll(vector, interval)
+    return np.maximum(reduced, 0.0)
 
 
 def _compress(
@@ -418,7 +478,10 @@ def relative_key(key: Key) -> Key:
 
 
 def random_baseline(
-    count: int = 2000, seed: int = 20260818
+    count: int = 2000,
+    seed: int = 20260818,
+    *,
+    profile: str = PROFILE_KRUMHANSL,
 ) -> tuple[np.ndarray[tuple[int], np.dtype[np.float64]], ...]:
     """무작위 크로마의 (상관, 격차) 분포. **베이스라인이다** (D-0034).
 
@@ -430,12 +493,18 @@ def random_baseline(
     프로파일이 서로 닮아 아무 벡터나 넣어도 그중 하나와는 꽤 맞기 때문이다.
     **절대값만 보면 늘 좋아 보인다.**
 
+    **`profile`을 반드시 함께 넘긴다** (D-0059). 하한은 프로파일마다 다르다 —
+    Krumhansl 0.6192, Temperley 0.5488이다. 조건이 바뀌었는데 베이스라인이
+    따라가지 않으면 비교가 성립하지 않고, **실제로 판정이 뒤집혔다.**
+
     디리클레 분포를 쓴다 — 합이 1인 12차원 벡터를 고르게 뽑는다. 균등난수를
     정규화하면 중앙으로 몰려 실제 크로마보다 평평해진다.
     """
     generator = np.random.default_rng(seed)
     samples = generator.dirichlet(np.ones(12), size=count)
-    estimates = [estimate_key(np.asarray(row, dtype=np.float32)) for row in samples]
+    estimates = [
+        estimate_key(np.asarray(row, dtype=np.float32), profile=profile) for row in samples
+    ]
     return (
         np.asarray([item.correlation for item in estimates], dtype=np.float64),
         np.asarray([item.margin for item in estimates], dtype=np.float64),
@@ -492,6 +561,7 @@ def chroma(
     sample_rate: int = SOURCE_SAMPLE_RATE,
     tuning_cents: float = 0.0,
     gamma: float = LOG_GAMMA,
+    harmonic: float = HARMONIC_STRENGTH,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
     """피치클래스 12차원 에너지. 합이 1이 되도록 정규화한다.
 
@@ -511,9 +581,16 @@ def estimate_key_from_waveform(
     mode: str = CHROMA_CQ,
     sample_rate: int = SOURCE_SAMPLE_RATE,
     gamma: float = LOG_GAMMA,
+    harmonic: float = HARMONIC_STRENGTH,
     profile: str = PROFILE_KRUMHANSL,
 ) -> KeyEstimate:
     return estimate_key(
-        chroma(to_mono(waveform), mode=mode, sample_rate=sample_rate, gamma=gamma),
+        chroma(
+            to_mono(waveform),
+            mode=mode,
+            sample_rate=sample_rate,
+            gamma=gamma,
+            harmonic=harmonic,
+        ),
         profile=profile,
     )

@@ -147,6 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
     keys.add_argument(
         "--gamma", type=float, default=0.0, help="로그 압축. 0이 끔이며 기본이다 (D-0058)"
     )
+    keys.add_argument(
+        "--harmonic",
+        type=float,
+        default=0.0,
+        help="배음 감산 강도. 0이 끔이며 기본이다 (D-0059)",
+    )
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -551,10 +557,14 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     import numpy as np
 
     from hathor.domain.services.key_estimation import (
-        estimate_key_from_waveform,
+        chroma as chroma_of,
+    )
+    from hathor.domain.services.key_estimation import (
+        estimate_key,
         estimate_tuning_cents,
         random_baseline,
         relative_key,
+        subtract_harmonics,
         to_mono,
     )
     from hathor.domain.value_objects.key import Key, Mode
@@ -565,7 +575,30 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     if args.replay is not None:
         with args.replay.open(encoding="utf-8") as stream:
             rows = [json.loads(line) for line in stream if line.strip()]
-        print(f"재분석: {args.replay} ({len(rows)}곡). 디코딩하지 않는다.\n")
+        recomputed = 0
+        for row in rows:
+            saved = row.get("chroma")
+            if saved is None:
+                continue
+            # **저장된 크로마로 다시 판정한다** (D-0059). 프로파일과 배음 감산을
+            # 바꿔 가며 실험할 수 있고 음원도 GPU도 필요 없다. 크로마를 뽑는
+            # 것만 리전이고 알고리즘 실험은 어느 기기에서든 돈다.
+            vector = subtract_harmonics(np.asarray(saved, dtype=np.float64), args.harmonic)
+            total = float(vector.sum())
+            if total <= 0:
+                continue
+            estimate = estimate_key(
+                np.asarray(vector / total, dtype=np.float32), profile=args.profile
+            )
+            row.update(estimate.as_record())
+            row["profile"] = args.profile
+            recomputed += 1
+        note = (
+            f" · {recomputed}곡을 프로파일 {args.profile} · 배음 {args.harmonic:g}로 재판정"
+            if recomputed
+            else " · 저장된 크로마가 없어 기록된 판정을 그대로 쓴다"
+        )
+        print(f"재분석: {args.replay} ({len(rows)}곡){note}. 디코딩하지 않는다.\n")
     else:
         root = _resolve_root(args.root)
         tracks = list(JsonlScanStore(out_root).read_tracks())
@@ -584,9 +617,16 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 continue
             try:
                 waveform = decoder.decode(path)
-                estimate = estimate_key_from_waveform(
-                    waveform, mode=args.chroma, gamma=args.gamma, profile=args.profile
+                # **크로마를 함께 저장한다** (D-0059). 디코딩이 곡당 수 초라
+                # 프로파일·배음 실험마다 다시 돌리면 실험 회전이 느려진다.
+                # 크로마만 있으면 음원 없는 기기에서도 알고리즘을 바꿔 볼 수 있다.
+                extracted = chroma_of(
+                    to_mono(waveform),
+                    mode=args.chroma,
+                    gamma=args.gamma,
+                    harmonic=args.harmonic,
                 )
+                estimate = estimate_key(extracted, profile=args.profile)
                 cents = (
                     estimate_tuning_cents(to_mono(waveform))
                     if args.tuning and args.chroma == "cq"
@@ -596,7 +636,13 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 failed += 1
                 continue
             rows.append(
-                {"source_key": track.source_key, **estimate.as_record(), "tuning_cents": cents}
+                {
+                    "source_key": track.source_key,
+                    **estimate.as_record(),
+                    "tuning_cents": cents,
+                    "profile": args.profile,
+                    "chroma": [round(float(value), 6) for value in extracted],
+                }
             )
             if index % 50 == 0:
                 print(f"  {index}/{len(tracks)}", file=sys.stderr, flush=True)
@@ -650,7 +696,10 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         minor = sum(1 for key in keys if key.tonic == tonic and key.mode is Mode.MINOR)
         print(f"  {tonic:<4}{major:>7}{minor:>7}{major + minor:>7}")
 
-    base_correlation, base_margin = random_baseline()
+    # **베이스라인도 같은 프로파일로 잰다** (D-0059). 하한이 프로파일마다 달라
+    # (Krumhansl 0.6192 · Temperley 0.5488) 고정값을 쓰면 비교가 성립하지 않는다.
+    base_profile = str(rows[0].get("profile", "krumhansl"))
+    base_correlation, base_margin = random_baseline(profile=base_profile)
     print("\n지표 대 무작위 베이스라인")
     print(f"  {'':<10}{'코퍼스':>10}{'무작위':>10}{'차이':>10}")
     for name, actual, base in (

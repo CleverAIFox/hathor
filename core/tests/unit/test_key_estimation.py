@@ -495,3 +495,86 @@ def test_default_profile_is_the_baseline():
     assert estimate_key(vector).correlation == pytest.approx(
         estimate_key(vector, profile=PROFILE_KRUMHANSL).correlation
     )
+
+
+# --- 배음 감산과 베이스라인 (D-0059) ---
+
+
+def test_random_baseline_follows_the_profile():
+    """**베이스라인이 조건을 따라가야 한다** (D-0059).
+
+    하한이 프로파일마다 다르다(Krumhansl 0.62 · Temperley 0.55). 고정값을 쓰면
+    비교가 성립하지 않고, **실제로 판정이 뒤집혔다** — 리포트만 보면 Temperley가
+    상관에서 진 것처럼 보였으나 제대로 재면 이겼다.
+    """
+    from hathor.domain.services.key_estimation import (
+        PROFILE_KRUMHANSL,
+        PROFILE_TEMPERLEY,
+        random_baseline,
+    )
+
+    krumhansl, _ = random_baseline(300, seed=11, profile=PROFILE_KRUMHANSL)
+    temperley, _ = random_baseline(300, seed=11, profile=PROFILE_TEMPERLEY)
+    assert float(np.median(krumhansl)) != pytest.approx(float(np.median(temperley)), abs=0.02)
+
+
+def test_harmonic_subtraction_removes_overtones_of_a_single_note():
+    """C 하나를 울린 배음렬에서 근음만 남아야 한다.
+
+    3배음은 +7반음(G), 5배음은 +4반음(E), 7배음은 +10반음(A#)이다.
+    **7배음이 문제다** — 장조의 단7도는 스케일에 없는데 따라 들어온다.
+    """
+    from hathor.domain.services.key_estimation import subtract_harmonics
+
+    vector = np.zeros(12)
+    vector[0] = 1.0
+    vector[7] = 1 / 3
+    vector[4] = 1 / 5
+    vector[10] = 1 / 7
+
+    reduced = subtract_harmonics(vector, 1.0)
+    assert reduced[0] == pytest.approx(1.0)
+    for pitch in (4, 7, 10):
+        assert reduced[pitch] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_harmonic_subtraction_is_partial_at_half_strength():
+    from hathor.domain.services.key_estimation import subtract_harmonics
+
+    vector = np.zeros(12)
+    vector[0] = 1.0
+    vector[7] = 1 / 3
+    half = subtract_harmonics(vector, 0.5)
+    assert half[7] == pytest.approx(1 / 6)
+
+
+def test_harmonic_subtraction_never_goes_negative():
+    """감산이 과하면 음수가 된다. 0으로 자른다."""
+    from hathor.domain.services.key_estimation import subtract_harmonics
+
+    vector = np.zeros(12)
+    vector[0] = 1.0
+    assert float(subtract_harmonics(vector, 3.0).min()) >= 0.0
+
+
+def test_harmonic_zero_is_identity():
+    """기본이 끔이므로 기존 산출물이 재현되어야 한다."""
+    from hathor.domain.services.key_estimation import HARMONIC_STRENGTH, subtract_harmonics
+
+    assert HARMONIC_STRENGTH == 0.0
+    vector = np.asarray([0.1, 0.2, 0.05, 0.3, 0.05, 0.1, 0.02, 0.08, 0.03, 0.04, 0.02, 0.01])
+    assert np.array_equal(subtract_harmonics(vector, 0.0), vector)
+
+
+def test_harmonic_rejects_negative_strength():
+    from hathor.domain.services.key_estimation import subtract_harmonics
+
+    with pytest.raises(ValueError):
+        subtract_harmonics(np.zeros(12), -0.1)
+
+
+def test_octave_harmonics_are_not_subtracted():
+    """2·4·8배음은 같은 피치클래스로 접힌다. 빼면 근음을 깎는다."""
+    from hathor.domain.services.key_estimation import HARMONIC_INTERVALS
+
+    assert 0 not in {interval for interval, _ in HARMONIC_INTERVALS}
