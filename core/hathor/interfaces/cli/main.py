@@ -306,6 +306,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--device", default="cuda", help="bge-m3 추론 장치. GPU가 없으면 cpu"
     )
     lyrics_extract.add_argument("--batch-size", type=int, default=16, help="bge-m3 배치 크기")
+    lyrics_extract.add_argument(
+        "--pooling",
+        choices=("cls", "mean"),
+        default="cls",
+        help="bge-m3 풀링. cls는 모델의 dense 정의와 일치한다 (D-0046)",
+    )
     lyrics_extract.add_argument("--dim", type=int, default=1024, help="해싱 차원")
     lyrics_extract.add_argument("--ngrams", default="2,3,4", help="문자 n-gram 크기 (쉼표 구분)")
     lyrics_extract.add_argument(
@@ -1287,8 +1293,13 @@ def _run_lyrics_extract(args: argparse.Namespace) -> int:
                     verify_deterministic,
                 )
 
-                print(f"BGE-M3 / {args.device} / 배치 {args.batch_size}", flush=True)
-                encoder = BgeM3LyricsEncoder(device=args.device, batch_size=args.batch_size)
+                print(
+                    f"BGE-M3 / {args.device} / 배치 {args.batch_size} / 풀링 {args.pooling}",
+                    flush=True,
+                )
+                encoder = BgeM3LyricsEncoder(
+                    device=args.device, batch_size=args.batch_size, pooling=args.pooling
+                )
                 # 재현성 계층 1을 추출 전에 확인한다 (D-0009). 어긋난 산출물을
                 # 1003곡 다 만든 뒤에 발견하면 전량이 버려진다.
                 drift = verify_deterministic(encoder, list(_DETERMINISM_PROBE))

@@ -426,3 +426,57 @@ def _report_with(*, top1: float, recall10: float, miss: float):
         self_consistency=top1,
         config=EvaluationConfig(),
     )
+
+
+# --- CLI 배선 (D-0046) ---
+
+
+def test_lyrics_extract_accepts_every_documented_flag():
+    """문서와 러너가 쓰는 플래그가 실제로 파서에 있는지 본다.
+
+    **`--pooling`이 파서에 없는 채로 배포된 적이 있다.** 인코더에는 구현돼
+    있었고 인코더 테스트도 통과했으나 CLI 배선만 빠져서, 리전에서 실행하고
+    나서야 `unrecognized arguments`로 드러났다.
+
+    인코더 단위 테스트는 배선을 보지 않는다. **여기가 그 구멍이다.**
+    """
+    from hathor.interfaces.cli.main import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "lyrics",
+            "extract",
+            "--out",
+            "var/ingest",
+            "--features",
+            "var/ingest/lyrics-bge-m3-mean",
+            "--encoder",
+            "bge-m3",
+            "--pooling",
+            "mean",
+            "--device",
+            "cpu",
+            "--batch-size",
+            "8",
+        ]
+    )
+    assert args.encoder == "bge-m3"
+    assert args.pooling == "mean"
+    assert args.device == "cpu"
+    assert args.batch_size == 8
+
+
+def test_lyrics_extract_defaults_reproduce_previous_outputs():
+    """기본값이 바뀌면 기존 산출물을 다시 만들 수 없다."""
+    from hathor.interfaces.cli.main import build_parser
+
+    args = build_parser().parse_args(["lyrics", "extract"])
+    assert args.encoder == "hashed"
+    assert args.pooling == "cls"
+
+
+def test_lyrics_extract_rejects_unknown_pooling():
+    from hathor.interfaces.cli.main import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["lyrics", "extract", "--pooling", "nonsense"])
