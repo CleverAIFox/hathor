@@ -91,6 +91,16 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--stages", type=str, default="structure,harmony")
     gen.add_argument("--dry-run", action="store_true", help="모델 없이 결정적 산출물만")
     gen.add_argument("--out", type=Path, default=None, help="JSON 출력 경로")
+    gen.add_argument("--midi", type=Path, default=None, help="MIDI 출력 경로 (D-0052)")
+    gen.add_argument(
+        "--reference",
+        action="append",
+        default=None,
+        help="참조곡 제목 일부. 여러 번 줄 수 있다. 그 곡의 구조를 조건으로 쓴다",
+    )
+    gen.add_argument("--scan-out", default="var/ingest", help="스캔 산출물 루트")
+    gen.add_argument("--tempo", type=int, default=96, help="템포 (BPM)")
+    gen.add_argument("--sections", type=int, default=None, help="구간 수. 기본은 참조곡 평균")
 
     ingest = sub.add_parser("ingest", help="음원 라이브러리 인제스트")
     ingest_sub = ingest.add_subparsers(dest="ingest_command", required=True)
@@ -408,6 +418,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_generate(args: argparse.Namespace) -> int:
+    if args.midi is not None:
+        return _run_generate_midi(args)
     if not args.dry_run:
         print("아직 dry-run 경로만 구현되어 있다 (P0). --dry-run을 사용한다.", file=sys.stderr)
         return 2
@@ -420,6 +432,62 @@ def _run_generate(args: argparse.Namespace) -> int:
         args.out.write_text(payload + "\n", encoding="utf-8")
     else:
         print(payload)
+    return 0
+
+
+def _run_generate_midi(args: argparse.Namespace) -> int:
+    """참조곡 구조를 조건으로 MIDI를 만든다 (D-0052).
+
+    참조를 주지 않으면 코퍼스에서 시드로 골라 쓴다. **형용사가 아니라 실제 곡이
+    조건이라는 것**이 주기능의 핵심이며(D-0011), 여기서 처음으로 그 경로가 선다.
+    """
+    import random
+
+    from hathor.application.orchestrator.generation_pipeline import render
+    from hathor.domain.services.lyrics_segmentation import split_segments
+    from hathor.domain.services.song_structure import extract_pattern
+
+    songs: list[tuple[str, list[str]]] = []
+    for track in JsonlScanStore(Path(args.scan_out)).read_tracks():
+        segments = split_segments(track.tags.lyrics_text)
+        if len(segments) >= 2:
+            songs.append((track.source_key, segments))
+    if not songs:
+        print("가사 구간이 있는 곡이 없다. --scan-out 경로를 확인한다.", file=sys.stderr)
+        return 1
+
+    if args.reference:
+        chosen = [
+            song
+            for song in songs
+            if any(needle.lower() in song[0].lower() for needle in args.reference)
+        ]
+        if not chosen:
+            print(f"참조곡을 찾지 못했다: {args.reference}", file=sys.stderr)
+            return 1
+    else:
+        # 참조가 없으면 시드로 고른다. 무작위가 아니라 시드 함수여야 재현된다.
+        chosen = [random.Random(args.seed).choice(songs)]
+
+    references = [extract_pattern(segments) for _, segments in chosen]
+    job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
+    data, summary = render(job, references, tempo_bpm=args.tempo)
+
+    args.midi.parent.mkdir(parents=True, exist_ok=True)
+    args.midi.write_bytes(data)
+
+    print("참조곡")
+    for (key, _), pattern in zip(chosen, references, strict=True):
+        print(f"  {pattern.as_text():<20} {key[:60]}")
+    print(
+        f"\n구조 {summary['structure']} / 화성 {' '.join(summary['harmony'])} / "
+        f"{summary['key']} {summary['tempo_bpm']}BPM"
+    )
+    print(
+        f"{summary['bars']}마디 · {summary['notes']}음 · "
+        f"{summary['duration_seconds']}초 · {summary['bytes']}바이트"
+    )
+    print(f"MIDI: {args.midi}")
     return 0
 
 
