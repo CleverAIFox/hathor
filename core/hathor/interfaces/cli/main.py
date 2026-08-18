@@ -33,7 +33,10 @@ from hathor.application.search_similar import SearchSimilar, SearchTrack
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
+from hathor.domain.services.key_estimation import KeyEstimate
 from hathor.domain.services.seed_search import FusionMode
+from hathor.domain.value_objects.key import Key
+from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
 from hathor.infrastructure.jsonl_resolution_store import JsonlResolutionStore
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
@@ -101,9 +104,23 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--scan-out", default="var/ingest", help="스캔 산출물 루트")
     gen.add_argument("--tempo", type=int, default=96, help="템포 (BPM)")
     gen.add_argument("--sections", type=int, default=None, help="구간 수. 기본은 참조곡 평균")
+    gen.add_argument(
+        "--root", type=Path, default=None, help="라이브러리 루트. 조성 추정에 음원이 필요하다"
+    )
+    gen.add_argument(
+        "--no-key-estimation",
+        action="store_true",
+        help="조성 추정을 끄고 C장조를 쓴다. 음원 없이 돌릴 때",
+    )
+    gen.add_argument("--max-references", type=int, default=5, help="참조곡 상한 (D-0011)")
 
     ingest = sub.add_parser("ingest", help="음원 라이브러리 인제스트")
     ingest_sub = ingest.add_subparsers(dest="ingest_command", required=True)
+
+    keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22)")
+    keys.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
+    keys.add_argument("--root", type=Path, default=None, help="라이브러리 루트")
+    keys.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -407,6 +424,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_fusion(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
+        if args.ingest_command == "keys":
+            return _run_ingest_keys(args)
         if args.ingest_command == "resolve":
             return _run_ingest_resolve(args)
         if args.ingest_command == "features":
@@ -432,6 +451,129 @@ def _run_generate(args: argparse.Namespace) -> int:
         args.out.write_text(payload + "\n", encoding="utf-8")
     else:
         print(payload)
+    return 0
+
+
+KEY_MARGIN_FLOOR = 0.05
+"""이보다 격차가 작으면 조성 추정을 신뢰하지 않고 표시한다 (D-0054).
+
+Krumhansl-Schmuckler는 나란한 장·단조를 구분하기 어렵다(C장조 ↔ A단조).
+구성음이 같기 때문이며 원리적 한계다. **1등만 남기면 그 사실이 사라진다.**
+"""
+
+
+def _estimate_key(
+    args: argparse.Namespace, source_keys: list[str]
+) -> tuple[Key, dict[str, KeyEstimate]]:
+    """참조곡 음원에서 조성을 추정한다. 실패하면 C장조로 간다.
+
+    **배치가 필요 없다.** 참조곡은 1~5개뿐이라 그 자리에서 디코딩한다.
+    1004곡 전량 추출은 조성이 실제로 값을 한다고 확인된 뒤에 판단한다.
+
+    여럿이면 **격차가 가장 큰 곡의 조성**을 쓴다. 평균을 낼 수 없는 값이고
+    (C장조와 F#장조의 평균은 없다), 다수결은 2곡일 때 무의미하다.
+    가장 확신도 높은 추정을 따르는 것이 그중 낫다.
+    """
+    from hathor.domain.services.key_estimation import estimate_key_from_waveform
+    from hathor.domain.value_objects.key import Key, Mode
+
+    fallback = Key(tonic="C", mode=Mode.MAJOR)
+    if args.no_key_estimation:
+        return fallback, {}
+
+    try:
+        root = _resolve_root(args.root)
+    except (SystemExit, ValueError, KeyError):
+        print("라이브러리 루트를 찾지 못해 C장조를 쓴다.", file=sys.stderr)
+        return fallback, {}
+
+    decoder = FfmpegAudioDecoder()
+    estimates: dict[str, KeyEstimate] = {}
+    for source_key in source_keys:
+        path = root / source_key
+        if not path.exists():
+            print(f"음원이 없어 건너뛴다: {source_key[:60]}", file=sys.stderr)
+            continue
+        try:
+            estimates[source_key] = estimate_key_from_waveform(decoder.decode(path))
+        except Exception as error:
+            print(f"조성 추정 실패({source_key[:40]}): {error}", file=sys.stderr)
+
+    if not estimates:
+        print("조성을 추정하지 못해 C장조를 쓴다.", file=sys.stderr)
+        return fallback, {}
+
+    best = max(estimates.values(), key=lambda estimate: estimate.margin)
+    return best.key, estimates
+
+
+def _run_ingest_keys(args: argparse.Namespace) -> int:
+    """코퍼스 전체의 조성 분포를 낸다 (O-22).
+
+    **정답 라벨이 없으므로 분포로 검사한다.** 대중가요는 장조가 우세하고
+    C·G·D·A 같은 흔한 조에 몰린다고 알려져 있다. 분포가 그것과 크게 어긋나면
+    추정이 망가진 것이다. **맞다는 증명이 아니라 틀렸다는 신호를 잡는 장치다.**
+
+    디코딩이 필요해 곡당 수 초다. `--limit`으로 표본만 볼 수 있다.
+    """
+    from collections import Counter
+
+    from hathor.domain.services.key_estimation import estimate_key_from_waveform
+
+    root = _resolve_root(args.root)
+    tracks = list(JsonlScanStore(Path(args.out)).read_tracks())
+    if args.limit is not None:
+        tracks = tracks[: args.limit]
+    if not tracks:
+        print("스캔 산출물이 없다. --out 경로를 확인한다.", file=sys.stderr)
+        return 1
+
+    decoder = FfmpegAudioDecoder()
+    tonics: Counter[str] = Counter()
+    modes: Counter[str] = Counter()
+    ambiguous = 0
+    failed = 0
+    margins: list[float] = []
+
+    for index, track in enumerate(tracks, start=1):
+        path = root / track.source_key
+        if not path.exists():
+            failed += 1
+            continue
+        try:
+            estimate = estimate_key_from_waveform(decoder.decode(path))
+        except Exception:
+            failed += 1
+            continue
+        tonics[estimate.key.tonic] += 1
+        modes[estimate.key.mode.value] += 1
+        margins.append(estimate.margin)
+        if estimate.margin < KEY_MARGIN_FLOOR:
+            ambiguous += 1
+        if index % 50 == 0:
+            print(f"  {index}/{len(tracks)}", file=sys.stderr, flush=True)
+
+    total = sum(modes.values())
+    if not total:
+        print("추정된 곡이 없다. --root 경로를 확인한다.", file=sys.stderr)
+        return 1
+
+    print(f"곡 {total}개 (실패·부재 {failed})\n")
+    print("선법")
+    for mode, count in modes.most_common():
+        print(f"  {mode:<6} {count:5d}  {count / total:6.1%}")
+    print("\n으뜸음")
+    for tonic, count in sorted(tonics.items(), key=lambda item: -item[1]):
+        bar = "#" * max(1, round(count / total * 80))
+        print(f"  {tonic:<3} {count:5d}  {count / total:6.1%}  {bar}")
+    print(
+        f"\n격차 중앙값 {sorted(margins)[len(margins) // 2]:.4f} · "
+        f"애매({KEY_MARGIN_FLOOR} 미만) {ambiguous}곡 {ambiguous / total:.1%}"
+    )
+    print("\n--- 읽는 법 ---")
+    print("대중가요는 장조 우세, C·G·D·A 편중이 알려져 있다.")
+    print("선법이 반반이거나 으뜸음이 12개에 고르게 퍼지면 추정이 망가진 것이다.")
+    print("**맞다는 증명은 아니다. 틀렸다는 신호를 잡는 장치다 (O-22).**")
     return 0
 
 
@@ -469,16 +611,36 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
         # 참조가 없으면 시드로 고른다. 무작위가 아니라 시드 함수여야 재현된다.
         chosen = [random.Random(args.seed).choice(songs)]
 
+    if len(chosen) > args.max_references:
+        # D-0011이 참조곡을 1~5개로 정했다. 33곡 평균은 퓨전이 아니라 코퍼스
+        # 평균에 가까워진다 — D-0029의 "coverage 1.0은 필터다"와 같은 함정이다.
+        print(
+            f"참조곡이 {len(chosen)}개다. 상한은 {args.max_references}개다 (D-0011).",
+            file=sys.stderr,
+        )
+        for listed, _ in chosen[:10]:
+            print(f"  {listed[:70]}", file=sys.stderr)
+        if len(chosen) > 10:
+            print(f"  ... 외 {len(chosen) - 10}곡", file=sys.stderr)
+        print("--reference를 더 좁히거나 --max-references를 올린다.", file=sys.stderr)
+        return 1
+
     references = [extract_pattern(segments) for _, segments in chosen]
+    estimated_key, estimates = _estimate_key(args, [song[0] for song in chosen])
     job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
-    data, summary = render(job, references, tempo_bpm=args.tempo)
+    data, summary = render(job, references, key=estimated_key, tempo_bpm=args.tempo)
 
     args.midi.parent.mkdir(parents=True, exist_ok=True)
     args.midi.write_bytes(data)
 
     print("참조곡")
-    for (key, _), pattern in zip(chosen, references, strict=True):
-        print(f"  {pattern.as_text():<20} {key[:60]}")
+    for (source_key, _), pattern in zip(chosen, references, strict=True):
+        estimate = estimates.get(source_key)
+        tag = ""
+        if estimate is not None:
+            flag = " (애매)" if estimate.margin < KEY_MARGIN_FLOOR else ""
+            tag = f"  [{estimate.key}{flag}]"
+        print(f"  {pattern.as_text():<20} {source_key[:52]}{tag}")
     print(
         f"\n구조 {summary['structure']} / 화성 {' '.join(summary['harmony'])} / "
         f"{summary['key']} {summary['tempo_bpm']}BPM"

@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **가락 생성.** 생성 경로가 관통했고 MIDI가 나온다 (D-0052). 지금은 3화음만 울린다 |
+| **다음 작업** | **코퍼스 조성 분포 실측 → 화성 진행 조건화.** 조성은 참조곡에서 추정한다 (D-0054). **진행은 아직 참조곡과 무관하다** (O-21) |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -38,8 +38,14 @@
 cd core
 uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid
 uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
-    --reference "10CM" --tempo 108
+    --reference "10CM-폰서트" --reference "10CM-스토커" --tempo 108
+uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
+    --no-key-estimation          # 음원 없이. C장조 고정
 ```
+
+참조곡 음원에서 **조성을 추정한다** (D-0054). 배치가 필요 없고 그 자리에서
+1~5곡만 디코딩한다. 나란한 장·단조 혼동은 원리적 한계라 격차가 작으면 `(애매)`로
+표시한다. 참조곡 상한은 5개다 (D-0011) — 그 이상은 퓨전이 아니라 코퍼스 평균이 된다.
 
 참조곡 가사에서 반복 패턴을 뽑아 구조를 만들고, 화성을 붙여 마디에 배치한 뒤
 SMF 바이트로 쓴다. **참조를 주지 않으면 코퍼스에서 시드로 고른다.**

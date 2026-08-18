@@ -480,3 +480,50 @@ def test_lyrics_extract_rejects_unknown_pooling():
 
     with pytest.raises(SystemExit):
         build_parser().parse_args(["lyrics", "extract", "--pooling", "nonsense"])
+
+
+def test_generate_accepts_every_documented_flag():
+    """생성 CLI 배선 (D-0054). D-0047에서 겪은 누락을 되풀이하지 않는다."""
+    from hathor.interfaces.cli.main import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "generate",
+            "--seed",
+            "7",
+            "--midi",
+            "var/out/demo.mid",
+            "--reference",
+            "10CM",
+            "--reference",
+            "아이유",
+            "--tempo",
+            "108",
+            "--max-references",
+            "3",
+            "--no-key-estimation",
+        ]
+    )
+    assert args.reference == ["10CM", "아이유"]
+    assert args.tempo == 108
+    assert args.max_references == 3
+    assert args.no_key_estimation is True
+
+
+def test_generate_defaults_follow_the_decision_record():
+    """참조곡 상한 5개는 D-0011이 정한 값이다."""
+    from hathor.interfaces.cli.main import build_parser
+
+    args = build_parser().parse_args(["generate", "--seed", "1"])
+    assert args.max_references == 5
+    assert args.no_key_estimation is False
+    assert args.reference is None
+
+
+def test_ingest_keys_is_wired():
+    """조성 분포 실측 배선 (O-22)."""
+    from hathor.interfaces.cli.main import build_parser
+
+    args = build_parser().parse_args(["ingest", "keys", "--limit", "50"])
+    assert args.ingest_command == "keys"
+    assert args.limit == 50
