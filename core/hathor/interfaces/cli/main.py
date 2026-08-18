@@ -113,6 +113,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="조성 추정을 끄고 C장조를 쓴다. 음원 없이 돌릴 때",
     )
     gen.add_argument("--max-references", type=int, default=5, help="참조곡 상한 (D-0011)")
+    gen.add_argument(
+        "--chroma", choices=("cq", "linear"), default="cq", help="조성 추정 크로마 방식"
+    )
 
     ingest = sub.add_parser("ingest", help="음원 라이브러리 인제스트")
     ingest_sub = ingest.add_subparsers(dest="ingest_command", required=True)
@@ -120,6 +123,12 @@ def build_parser() -> argparse.ArgumentParser:
     keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22)")
     keys.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
     keys.add_argument("--root", type=Path, default=None, help="라이브러리 루트")
+    keys.add_argument(
+        "--chroma",
+        choices=("cq", "linear"),
+        default="cq",
+        help="크로마 방식. linear는 D-0056 이전 베이스라인이다",
+    )
     keys.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
     keys.add_argument(
         "--replay", type=Path, default=None, help="저장된 keys.jsonl을 재분석. 디코딩하지 않는다"
@@ -498,7 +507,9 @@ def _estimate_key(
             print(f"음원이 없어 건너뛴다: {source_key[:60]}", file=sys.stderr)
             continue
         try:
-            estimates[source_key] = estimate_key_from_waveform(decoder.decode(path))
+            estimates[source_key] = estimate_key_from_waveform(
+                decoder.decode(path), mode=args.chroma
+            )
         except Exception as error:
             print(f"조성 추정 실패({source_key[:40]}): {error}", file=sys.stderr)
 
@@ -556,7 +567,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 failed += 1
                 continue
             try:
-                estimate = estimate_key_from_waveform(decoder.decode(path))
+                estimate = estimate_key_from_waveform(decoder.decode(path), mode=args.chroma)
             except Exception:
                 failed += 1
                 continue
@@ -570,7 +581,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         with saved.open("w", encoding="utf-8") as stream:
             for row in rows:
                 stream.write(json.dumps(row, ensure_ascii=False) + "\n")
-        print(f"저장: {saved} (실패·부재 {failed})\n")
+        print(f"저장: {saved} · 크로마 {args.chroma} (실패·부재 {failed})\n")
 
     if not rows:
         print("추정된 곡이 없다.", file=sys.stderr)

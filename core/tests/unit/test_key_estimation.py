@@ -5,12 +5,17 @@ import pytest
 
 from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE
 from hathor.domain.services.key_estimation import (
+    CHROMA_CQ,
+    CHROMA_LINEAR,
     KRUMHANSL_MAJOR,
     KRUMHANSL_MINOR,
+    SEMITONE_BINS,
     chroma,
+    cq_filterbank,
     estimate_key,
     estimate_key_from_waveform,
     pitch_class_map,
+    semitone_hz,
     to_mono,
 )
 from hathor.domain.value_objects.key import Key, Mode
@@ -54,33 +59,35 @@ def test_pitch_class_map_excludes_out_of_range_bins():
 
 def test_chroma_peaks_on_the_played_pitch_class():
     """C를 울리면 C(0)가 가장 커야 한다."""
-    result = chroma(tone(midi_hz(60), 2.0))
+    result = chroma(tone(midi_hz(60), 2.0), mode=CHROMA_CQ)
     assert int(np.argmax(result)) == 0
 
 
 def test_chroma_is_octave_invariant():
     """한 옥타브 위 C도 같은 피치클래스다. 이것이 크로마의 정의다."""
-    low = chroma(tone(midi_hz(48), 2.0))
-    high = chroma(tone(midi_hz(72), 2.0))
+    low = chroma(tone(midi_hz(48), 2.0), mode=CHROMA_CQ)
+    high = chroma(tone(midi_hz(72), 2.0), mode=CHROMA_CQ)
     assert int(np.argmax(low)) == int(np.argmax(high)) == 0
 
 
 def test_chroma_sums_to_one():
-    result = chroma(chord([60, 64, 67], 2.0))
+    result = chroma(chord([60, 64, 67], 2.0), mode=CHROMA_CQ)
     assert float(result.sum()) == pytest.approx(1.0, abs=1e-5)
 
 
 def test_chroma_of_silence_is_zero():
-    assert float(chroma(np.zeros(8192, dtype=np.float32)).sum()) == 0.0
+    assert float(chroma(np.zeros(65536, dtype=np.float32), mode=CHROMA_CQ).sum()) == 0.0
 
 
 def test_chroma_of_too_short_signal_is_zero():
-    assert chroma(np.ones(100, dtype=np.float32)).shape == (12,)
+    assert chroma(np.ones(100, dtype=np.float32), mode=CHROMA_CQ).shape == (12,)
 
 
-def test_chroma_rejects_invalid_sizes():
+def test_linear_chroma_rejects_invalid_sizes():
+    from hathor.domain.services.key_estimation import linear_chroma
+
     with pytest.raises(ValueError):
-        chroma(np.zeros(8192, dtype=np.float32), fft_size=1)
+        linear_chroma(np.zeros(8192, dtype=np.float32), fft_size=1)
 
 
 # --- 조성 추정 ---
@@ -207,3 +214,111 @@ def test_random_margin_often_exceeds_the_ambiguity_floor():
 
     _, margins = random_baseline(300, seed=7)
     assert float((margins >= 0.05).mean()) > 0.5
+
+
+# --- 반음 격자 크로마 (D-0056) ---
+
+
+def scale_tone(note: int) -> np.ndarray:
+    return tone(midi_hz(note), 1.5)
+
+
+def test_semitone_grid_starts_at_c2():
+    assert semitone_hz(0) == pytest.approx(65.41, abs=0.01)
+    assert semitone_hz(12) == pytest.approx(130.82, abs=0.02)
+    assert semitone_hz(SEMITONE_BINS - 1) == pytest.approx(1975.5, abs=1.0)
+
+
+def test_filterbank_peaks_at_semitone_centres():
+    """반음 중심에서 1이고 인접 중심에서 0이어야 한다."""
+    bank = cq_filterbank(8192, 2)
+    frequencies = np.fft.rfftfreq(8192, d=1.0 / SOURCE_SAMPLE_RATE)
+    for pitch in range(12):
+        center = semitone_hz(2 * 12 + pitch)
+        # 빈 격자가 반음 중심에 정확히 놓이지 않으므로 최댓값 빈이 중심에서
+        # 한 칸 어긋날 수 있다. **중심 근처인지**를 보고 값이 1에 가까운지 본다.
+        peak = int(np.argmax(bank[pitch]))
+        assert abs(frequencies[peak] - center) < (frequencies[1] - frequencies[0])
+        assert bank[pitch, peak] > 0.8, f"{pitch}번 반음 봉우리가 낮다"
+
+
+def test_filterbank_rows_do_not_overlap_beyond_neighbours():
+    """한 반음 필터는 인접 반음 밖으로 새면 안 된다."""
+    bank = cq_filterbank(8192, 2)
+    frequencies = np.fft.rfftfreq(8192, d=1.0 / SOURCE_SAMPLE_RATE)
+    for pitch in range(12):
+        index = 2 * 12 + pitch
+        active = frequencies[bank[pitch] > 0]
+        if active.size:
+            assert active.min() >= semitone_hz(index - 1) - 1.0
+            assert active.max() <= semitone_hz(index + 1) + 1.0
+
+
+@pytest.mark.parametrize("octave_start", [36, 48, 60, 72, 84])
+def test_cq_identifies_every_semitone_in_five_octaves(octave_start):
+    """**핵심 회귀 테스트.** 60음 전부 맞아야 한다 (D-0056).
+
+    선형 방식은 저역(C2~B2)에서 7/12를 틀렸다. 빈 간격 10.77Hz가 65Hz에서
+    2.65반음을 덮어 C2·C#2·D#2가 전부 D로 뭉쳤기 때문이다. 코퍼스에서 D가
+    29%로 1위였던 것이 이 결함이다.
+    """
+    for note in range(octave_start, octave_start + 12):
+        result = chroma(scale_tone(note), mode=CHROMA_CQ)
+        assert int(np.argmax(result)) == note % 12, (
+            f"{note}번 음이 {int(np.argmax(result))}로 잡혔다"
+        )
+
+
+def test_linear_still_fails_in_the_low_register():
+    """베이스라인이 여전히 틀리는 것을 고정한다.
+
+    베이스라인이 조용히 좋아지면 개선폭을 잘못 읽는다. `linear`는 D-0056 이전
+    상태를 그대로 보존해야 비교선 구실을 한다.
+    """
+    wrong = sum(
+        1
+        for note in range(36, 48)
+        if int(np.argmax(chroma(scale_tone(note), mode=CHROMA_LINEAR))) != note % 12
+    )
+    assert wrong >= 5, "베이스라인이 바뀌었다면 비교가 성립하지 않는다"
+
+
+def test_cq_fixes_a_key_the_linear_method_got_wrong():
+    """G장조 I-IV-V-I을 선형은 D장조로 틀렸다. 코퍼스 D 편중의 실물이다."""
+    signal = np.concatenate(
+        [chord([55, 59, 62]), chord([60, 64, 67]), chord([62, 66, 69]), chord([55, 59, 62])]
+    )
+    assert estimate_key(chroma(signal, mode=CHROMA_LINEAR)).key != Key(tonic="G", mode=Mode.MAJOR)
+    assert estimate_key(chroma(signal, mode=CHROMA_CQ)).key == Key(tonic="G", mode=Mode.MAJOR)
+
+
+def test_cq_raises_margin_on_ambiguous_progressions():
+    """나란한조 혼동은 남되 격차가 커진다.
+
+    선형에서 A단조 진행의 격차가 0.004로 사실상 동전 던지기였다.
+    """
+    signal = np.concatenate(
+        [chord([57, 60, 64]), chord([53, 57, 60]), chord([48, 52, 55]), chord([55, 59, 62])]
+    )
+    linear = estimate_key(chroma(signal, mode=CHROMA_LINEAR))
+    cq = estimate_key(chroma(signal, mode=CHROMA_CQ))
+    assert cq.margin > linear.margin
+
+
+def test_chroma_rejects_unknown_mode():
+    with pytest.raises(ValueError, match="mode"):
+        chroma(np.zeros(65536, dtype=np.float32), mode="nonsense")
+
+
+def test_cq_is_deterministic():
+    signal = chord([60, 64, 67], 1.5)
+    assert np.array_equal(chroma(signal, mode=CHROMA_CQ), chroma(signal, mode=CHROMA_CQ))
+
+
+def test_waveform_entry_point_passes_mode_through():
+    mono = chord([55, 59, 62], 1.5)
+    stereo = np.stack([mono, mono])
+    assert (
+        estimate_key_from_waveform(stereo, mode=CHROMA_CQ).key
+        == estimate_key(chroma(mono, mode=CHROMA_CQ)).key
+    )

@@ -28,6 +28,7 @@ MFCC 베이스라인을 만든 것과 같은 판단이다 (D-0025). **값싼 기
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 
@@ -35,11 +36,10 @@ from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE, StereoWavefor
 from hathor.domain.value_objects.key import PITCH_CLASSES, Key, Mode
 
 FFT_SIZE = 4096
-"""MFCC(2048)보다 크다. 낮은 음의 피치클래스를 가르려면 주파수 해상도가 필요하다.
-44.1kHz에서 2048이면 빈 간격이 21.5Hz라 저역 반음(C2~C#2는 8Hz 차이)이 뭉갠다."""
+"""선형 STFT 창 크기. `linear` 방식에만 쓴다."""
 
 HOP_SIZE = 2048
-MIN_HZ = 65.0
+MIN_HZ = 65.41
 """C2. 이보다 낮은 대역은 베이스 배음이 흐려 피치클래스 판정이 불안정하다."""
 
 MAX_HZ = 2093.0
@@ -47,6 +47,32 @@ MAX_HZ = 2093.0
 
 REFERENCE_A4 = 440.0
 EPSILON = 1e-12
+
+CHROMA_LINEAR = "linear"
+CHROMA_CQ = "cq"
+CHROMA_MODES = (CHROMA_CQ, CHROMA_LINEAR)
+"""크로마 추출 방식. **기본은 `cq`이며 `linear`는 베이스라인으로 남긴다** (D-0056).
+
+`linear`는 선형 FFT 빈을 피치클래스로 반올림한다. **저역에서 반음을 가르지 못한다** —
+44.1kHz · FFT 4096이면 빈 간격이 10.77Hz인데 65Hz에서 한 반음은 3.9Hz다.
+한 빈이 2.65반음을 덮으므로 C2·C#2·D#2가 전부 D로 뭉친다. 실측으로 확인했다.
+
+그리고 빈 수가 주파수에 비례해 **1~2kHz 한 옥타브가 크로마의 52%를 차지한다.**
+그 대역은 배음과 심벌즈이지 근음이 아니다.
+
+`cq`는 반음마다 필터를 하나씩 두어 두 결함을 동시에 없앤다.
+"""
+
+SEMITONE_BINS = 60
+"""C2~B6, 5옥타브 60반음. 반음마다 필터 하나다."""
+
+CQ_WINDOWS: tuple[int, ...] = (32768, 16384, 8192, 4096)
+"""옥타브 대역별 창 크기. **저역은 길게, 고역은 짧게.**
+
+이것이 constant-Q의 핵심이다. 65Hz에서 반음 간격 3.9Hz를 가르려면 창이 최소
+44100/3.9 ≈ 11300 샘플이어야 하고, 여유를 두어 32768을 쓴다(0.74초).
+고역은 반음 간격이 넓어 짧은 창으로 충분하며, 짧게 잡아야 시간 해상도를 지킨다.
+"""
 
 KRUMHANSL_MAJOR: tuple[float, ...] = (
     6.35,
@@ -101,14 +127,90 @@ def pitch_class_map(
     return mapping
 
 
-def chroma(
+def semitone_hz(index: int) -> float:
+    """반음 번호를 주파수로. 0이 C2(65.41Hz)다."""
+    return MIN_HZ * 2 ** (index / 12)
+
+
+def _octave_band(index: int) -> int:
+    """반음 번호가 속한 옥타브. 창 크기 선택에 쓴다."""
+    return min(index // 12, len(CQ_WINDOWS) - 1)
+
+
+@lru_cache(maxsize=16)
+def cq_filterbank(
+    window_size: int, band: int, sample_rate: int = SOURCE_SAMPLE_RATE
+) -> np.ndarray[tuple[int, int], np.dtype[np.float32]]:
+    """한 옥타브 대역의 (반음, 주파수빈) 삼각 필터뱅크.
+
+    반음 중심에서 1이고 인접 반음 중심에서 0인 삼각형이다. 멜 필터뱅크와 같은
+    모양이며 격자만 로그다. **호출마다 같은 값이 나온다** — 미리 계산해 캐시한다.
+
+    삼각형을 쓰는 이유는 사각형이면 경계에 걸린 성분이 통째로 한쪽에 실려
+    미세한 조율 차이(A=442Hz 등)에 결과가 흔들리기 때문이다.
+    """
+    frequencies = np.fft.rfftfreq(window_size, d=1.0 / sample_rate)
+    bank = np.zeros((12, frequencies.shape[0]), dtype=np.float32)
+    for pitch in range(12):
+        index = band * 12 + pitch
+        if index >= SEMITONE_BINS:
+            continue
+        center = semitone_hz(index)
+        low = semitone_hz(index - 1)
+        high = semitone_hz(index + 1)
+        rising = (frequencies > low) & (frequencies <= center)
+        falling = (frequencies > center) & (frequencies < high)
+        bank[pitch, rising] = (frequencies[rising] - low) / (center - low)
+        bank[pitch, falling] = (high - frequencies[falling]) / (high - center)
+    return bank
+
+
+def cq_chroma(
+    waveform: Waveform, *, sample_rate: int = SOURCE_SAMPLE_RATE
+) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
+    """반음 격자 크로마. 옥타브 대역마다 다른 창으로 STFT를 돌린다 (D-0056).
+
+    **대역마다 기여를 정규화한다.** 정규화하지 않으면 긴 창을 쓴 저역이 프레임
+    수가 적어 과소 반영되고, 그러면 선형 방식의 고역 편중을 방향만 바꿔 되풀이한다.
+    """
+    totals = np.zeros(12, dtype=np.float64)
+    bands = (SEMITONE_BINS + 11) // 12
+
+    for band in range(bands):
+        window_size = CQ_WINDOWS[min(band, len(CQ_WINDOWS) - 1)]
+        if waveform.size < window_size:
+            continue
+        hop = window_size // 2
+        window = np.hanning(window_size).astype(np.float32)
+        bank = cq_filterbank(window_size, band, sample_rate)
+        band_total = np.zeros(12, dtype=np.float64)
+        frames = 0
+        for start in range(0, waveform.size - window_size + 1, hop):
+            magnitude = np.abs(np.fft.rfft(waveform[start : start + window_size] * window))
+            band_total += bank @ magnitude
+            frames += 1
+        if not frames:
+            continue
+        # **프레임 수와 창 길이로만 나눈다.** 대역 합을 1로 맞추면 에너지가 거의
+        # 없는 대역까지 온전한 무게를 받아, 새어 든 성분이 실제 음처럼 커진다.
+        # 실측으로 확인했다 — C6 단일음이 B로 판정됐다.
+        # 긴 창은 프레임이 적고 FFT 크기가 커 값이 커지므로 그 둘만 보정한다.
+        totals += band_total / (frames * window_size)
+
+    total = totals.sum()
+    if total <= EPSILON:
+        return np.zeros(12, dtype=np.float32)
+    return np.asarray(totals / total, dtype=np.float32)
+
+
+def linear_chroma(
     waveform: Waveform,
     *,
     sample_rate: int = SOURCE_SAMPLE_RATE,
     fft_size: int = FFT_SIZE,
     hop_size: int = HOP_SIZE,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
-    """피치클래스 12차원 에너지. 합이 1이 되도록 정규화한다.
+    """선형 FFT 빈을 피치클래스로 반올림한다. **베이스라인으로만 남긴다** (D-0056).
 
     **크기 스펙트럼을 쓰고 파워를 쓰지 않는다.** 파워는 큰 소리에 과도한 가중을
     주어 드럼 타격이 크로마를 지배한다. 마스터링 볼륨이 결과에 섞이면 안 된다는
@@ -237,7 +339,28 @@ def estimate_key(chroma_vector: np.ndarray) -> KeyEstimate:
     )
 
 
+def chroma(
+    waveform: Waveform,
+    *,
+    mode: str = CHROMA_CQ,
+    sample_rate: int = SOURCE_SAMPLE_RATE,
+) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
+    """피치클래스 12차원 에너지. 합이 1이 되도록 정규화한다.
+
+    기본은 `cq`(반음 격자)다. `linear`는 D-0056 이전 방식이며 **베이스라인
+    비교용으로만 남긴다** — 저역에서 반음을 가르지 못한다.
+    """
+    if mode == CHROMA_CQ:
+        return cq_chroma(waveform, sample_rate=sample_rate)
+    if mode == CHROMA_LINEAR:
+        return linear_chroma(waveform, sample_rate=sample_rate)
+    raise ValueError(f"mode는 {CHROMA_MODES} 중 하나여야 한다: {mode}")
+
+
 def estimate_key_from_waveform(
-    waveform: StereoWaveform, *, sample_rate: int = SOURCE_SAMPLE_RATE
+    waveform: StereoWaveform,
+    *,
+    mode: str = CHROMA_CQ,
+    sample_rate: int = SOURCE_SAMPLE_RATE,
 ) -> KeyEstimate:
-    return estimate_key(chroma(to_mono(waveform), sample_rate=sample_rate))
+    return estimate_key(chroma(to_mono(waveform), mode=mode, sample_rate=sample_rate))
