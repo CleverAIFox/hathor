@@ -133,6 +133,11 @@ def build_parser() -> argparse.ArgumentParser:
     keys.add_argument(
         "--replay", type=Path, default=None, help="저장된 keys.jsonl을 재분석. 디코딩하지 않는다"
     )
+    keys.add_argument(
+        "--tuning",
+        action="store_true",
+        help="조율 편차도 잰다 (D-0057). 11배 느려지므로 표본에만 쓴다",
+    )
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -538,8 +543,10 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
 
     from hathor.domain.services.key_estimation import (
         estimate_key_from_waveform,
+        estimate_tuning_cents,
         random_baseline,
         relative_key,
+        to_mono,
     )
     from hathor.domain.value_objects.key import Key, Mode
 
@@ -567,11 +574,19 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 failed += 1
                 continue
             try:
-                estimate = estimate_key_from_waveform(decoder.decode(path), mode=args.chroma)
+                waveform = decoder.decode(path)
+                estimate = estimate_key_from_waveform(waveform, mode=args.chroma)
+                cents = (
+                    estimate_tuning_cents(to_mono(waveform))
+                    if args.tuning and args.chroma == "cq"
+                    else 0.0
+                )
             except Exception:
                 failed += 1
                 continue
-            rows.append({"source_key": track.source_key, **estimate.as_record()})
+            rows.append(
+                {"source_key": track.source_key, **estimate.as_record(), "tuning_cents": cents}
+            )
             if index % 50 == 0:
                 print(f"  {index}/{len(tracks)}", file=sys.stderr, flush=True)
 
@@ -600,8 +615,13 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
 
     modes: Counter[str] = Counter(key.mode.value for key in keys)
     tonics: Counter[str] = Counter(key.tonic for key in keys)
-    relative_confusions = sum(
-        1 for key, other in zip(keys, runner_ups, strict=True) if relative_key(key) == other
+    is_relative = [relative_key(key) == other for key, other in zip(keys, runner_ups, strict=True)]
+    ambiguous_flags = margins < KEY_MARGIN_FLOOR
+    relative_confusions = sum(is_relative)
+    # **애매함의 원인은 애매한 곡 안에서 재야 한다** (D-0057). 전체 대비로 재면
+    # 확신도 높은 곡의 2등까지 섞여 희석된다 — 분모가 틀린 지표였다.
+    ambiguous_relative = sum(
+        1 for flag, rel in zip(ambiguous_flags, is_relative, strict=True) if flag and rel
     )
 
     print(f"곡 {total}개\n")
@@ -629,13 +649,27 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             f"{float(np.median(base)):>10.4f}{gap:>+10.4f}"
         )
 
-    ambiguous = int((margins < KEY_MARGIN_FLOOR).sum())
+    ambiguous = int(ambiguous_flags.sum())
     base_ambiguous = float((base_margin < KEY_MARGIN_FLOOR).mean())
     print(
         f"\n애매({KEY_MARGIN_FLOOR} 미만)  코퍼스 {ambiguous / total:.1%}"
         f"  무작위 {base_ambiguous:.1%}"
     )
-    print(f"2등이 나란한조인 비율  {relative_confusions / total:.1%}")
+    print(f"2등이 나란한조 — 전체 대비          {relative_confusions / total:.1%}")
+    if ambiguous:
+        print(
+            f"2등이 나란한조 — 애매한 곡 안에서   {ambiguous_relative / ambiguous:.1%}"
+            f"  ({ambiguous_relative}/{ambiguous})"
+        )
+
+    tunings = [float(str(row["tuning_cents"])) for row in rows if row.get("tuning_cents")]
+    if tunings:
+        array = np.asarray(tunings)
+        off = int((np.abs(array) > 10).sum())
+        print(
+            f"\n조율 편차  중앙값 {float(np.median(array)):+.1f}센트 · "
+            f"|편차|>10센트 {off}곡 ({off / len(tunings):.1%})"
+        )
 
     print("\n--- 읽는 법 ---")
     print("상관·격차가 무작위와 비슷하면 그 지표는 판별력이 없다. 절대값에 속지 않는다.")

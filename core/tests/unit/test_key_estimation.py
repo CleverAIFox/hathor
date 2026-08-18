@@ -322,3 +322,70 @@ def test_waveform_entry_point_passes_mode_through():
         estimate_key_from_waveform(stereo, mode=CHROMA_CQ).key
         == estimate_key(chroma(mono, mode=CHROMA_CQ)).key
     )
+
+
+# --- 조율 편차 (D-0057) ---
+
+
+def detuned(note: int, cents: float, seconds: float = 1.0) -> np.ndarray:
+    return tone(midi_hz(note) * 2 ** (cents / 1200), seconds)
+
+
+def progression(cents: float) -> np.ndarray:
+    return np.concatenate([detuned(note, cents) for note in (60, 64, 67, 72, 55, 59, 62)])
+
+
+@pytest.mark.parametrize("cents", [-32.0, -16.0, 0.0, 16.0, 32.0])
+def test_tuning_deviation_is_recovered(cents):
+    """일부러 틀어 넣은 조율을 되찾아야 한다 (D-0057).
+
+    **반음 격자로 바꾸고 나서야 보이게 된 문제다.** 선형 방식은 저역이 뭉개져
+    조율 편차를 감췄다. 이제 반음을 정확히 가르므로 음원이 반음의 절반 이상
+    벗어나면 이웃 반음으로 통째로 넘어간다.
+    """
+    from hathor.domain.services.key_estimation import estimate_tuning_cents
+
+    assert estimate_tuning_cents(progression(cents)) == pytest.approx(cents, abs=6.0)
+
+
+def test_tuning_search_stays_inside_the_semitone():
+    """±50센트는 이웃 반음까지의 거리라 어느 쪽으로 붙여도 같다.
+
+    끝값이 나오면 순환이 일어나 -40이 +50으로 보고된다. 탐색 범위를 좁혀
+    그 모호함을 없앤다 — 실측으로 겪은 결함이다.
+    """
+    from hathor.domain.services.key_estimation import TUNING_RANGE_CENTS, estimate_tuning_cents
+
+    for cents in (-40.0, 40.0):
+        assert abs(estimate_tuning_cents(progression(cents))) < TUNING_RANGE_CENTS
+
+
+def test_sharpness_uses_square_sum_not_peak():
+    """제곱합은 12개 전체가 얼마나 몰렸는지 재고, 최댓값은 한 음만 본다.
+
+    화음에서는 최댓값이 흔들려 조율 추정이 어긋난다. 격자가 맞을 때 제곱합이
+    최대가 되는지를 직접 고정한다.
+    """
+    from hathor.domain.services.key_estimation import cq_chroma
+
+    signal = progression(0.0)
+    aligned = float(np.square(cq_chroma(signal, tuning_cents=0.0)).sum())
+    for offset in (-30.0, -15.0, 15.0, 30.0):
+        assert aligned > float(np.square(cq_chroma(signal, tuning_cents=offset)).sum())
+
+
+def test_tuning_shift_moves_the_filterbank():
+    """양의 센트는 필터 중심을 위로 민다."""
+    from hathor.domain.services.key_estimation import cq_filterbank
+
+    base = cq_filterbank(8192, 2, SOURCE_SAMPLE_RATE, 0.0)
+    shifted = cq_filterbank(8192, 2, SOURCE_SAMPLE_RATE, 50.0)
+    frequencies = np.fft.rfftfreq(8192, d=1.0 / SOURCE_SAMPLE_RATE)
+    assert frequencies[int(np.argmax(shifted[0]))] > frequencies[int(np.argmax(base[0]))]
+
+
+def test_tuning_does_not_change_a_correctly_tuned_signal():
+    from hathor.domain.services.key_estimation import cq_chroma
+
+    signal = progression(0.0)
+    assert np.array_equal(cq_chroma(signal), cq_chroma(signal, tuning_cents=0.0))

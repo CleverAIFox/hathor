@@ -139,7 +139,10 @@ def _octave_band(index: int) -> int:
 
 @lru_cache(maxsize=16)
 def cq_filterbank(
-    window_size: int, band: int, sample_rate: int = SOURCE_SAMPLE_RATE
+    window_size: int,
+    band: int,
+    sample_rate: int = SOURCE_SAMPLE_RATE,
+    tuning_cents: float = 0.0,
 ) -> np.ndarray[tuple[int, int], np.dtype[np.float32]]:
     """한 옥타브 대역의 (반음, 주파수빈) 삼각 필터뱅크.
 
@@ -150,14 +153,15 @@ def cq_filterbank(
     미세한 조율 차이(A=442Hz 등)에 결과가 흔들리기 때문이다.
     """
     frequencies = np.fft.rfftfreq(window_size, d=1.0 / sample_rate)
+    shift = 2 ** (tuning_cents / 1200)
     bank = np.zeros((12, frequencies.shape[0]), dtype=np.float32)
     for pitch in range(12):
         index = band * 12 + pitch
         if index >= SEMITONE_BINS:
             continue
-        center = semitone_hz(index)
-        low = semitone_hz(index - 1)
-        high = semitone_hz(index + 1)
+        center = semitone_hz(index) * shift
+        low = semitone_hz(index - 1) * shift
+        high = semitone_hz(index + 1) * shift
         rising = (frequencies > low) & (frequencies <= center)
         falling = (frequencies > center) & (frequencies < high)
         bank[pitch, rising] = (frequencies[rising] - low) / (center - low)
@@ -165,8 +169,51 @@ def cq_filterbank(
     return bank
 
 
+TUNING_STEPS = 5
+"""반음을 몇 조각으로 나눠 조율 편차를 훑을지. 홀수여야 0센트가 격자에 놓인다."""
+
+TUNING_RANGE_CENTS = 50.0
+"""탐색 폭. 반음의 절반이다. 그 이상 벗어나면 이웃 반음이 더 가까워 구분이 무의미하다."""
+
+
+def estimate_tuning_cents(waveform: Waveform, *, sample_rate: int = SOURCE_SAMPLE_RATE) -> float:
+    """음원이 A=440에서 얼마나 벗어났는지 센트로 잰다 (D-0057).
+
+    **반음 격자로 바꾸고 나서야 보이게 된 문제다.** 선형 방식은 저역이 뭉개져
+    조율 편차를 감췄다. 이제 반음을 정확히 가르므로, 음원이 반음의 절반 이상
+    벗어나 있으면 **이웃 반음으로 통째로 넘어간다.**
+
+    격자를 옮겨 가며 크로마를 뽑고 **가장 뾰족한** 지점을 찾는다. 격자가 실제
+    음정에 맞을수록 에너지가 반음마다 모이고, 어긋날수록 이웃 반음에 갈린다.
+
+    뾰족함은 **최댓값이 아니라 제곱합**으로 잰다. 최댓값은 한 음만 보므로
+    화음에서 흔들린다. 제곱합은 12개 전체가 얼마나 몰려 있는지를 재며, 합이
+    1로 고정돼 있어 비교가 성립한다.
+
+    **경계를 -50~+50센트 안쪽으로 제한한다.** ±50은 이웃 반음까지의 거리라
+    그 지점에서는 어느 쪽으로 붙여도 같다. 끝값이 나오면 순환이 일어나
+    -40이 +50으로 보고되므로, 탐색 범위를 좁혀 그 모호함을 없앤다.
+
+    되돌리는 보정은 하지 않는다. **먼저 얼마나 벗어나 있는지 알아야 한다** —
+    편차가 작으면 검은건반 조 편중은 다른 원인이고, 크면 보정이 답이다.
+    """
+    limit = TUNING_RANGE_CENTS * (TUNING_STEPS - 1) / TUNING_STEPS
+    offsets = np.linspace(-limit, limit, TUNING_STEPS * 2 + 1)
+    best_offset = 0.0
+    best_sharpness = -1.0
+    for offset in offsets:
+        vector = cq_chroma(waveform, sample_rate=sample_rate, tuning_cents=float(offset))
+        sharpness = float(np.square(vector).sum())
+        if sharpness > best_sharpness:
+            best_sharpness, best_offset = sharpness, float(offset)
+    return best_offset
+
+
 def cq_chroma(
-    waveform: Waveform, *, sample_rate: int = SOURCE_SAMPLE_RATE
+    waveform: Waveform,
+    *,
+    sample_rate: int = SOURCE_SAMPLE_RATE,
+    tuning_cents: float = 0.0,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
     """반음 격자 크로마. 옥타브 대역마다 다른 창으로 STFT를 돌린다 (D-0056).
 
@@ -182,7 +229,7 @@ def cq_chroma(
             continue
         hop = window_size // 2
         window = np.hanning(window_size).astype(np.float32)
-        bank = cq_filterbank(window_size, band, sample_rate)
+        bank = cq_filterbank(window_size, band, sample_rate, tuning_cents)
         band_total = np.zeros(12, dtype=np.float64)
         frames = 0
         for start in range(0, waveform.size - window_size + 1, hop):
@@ -344,6 +391,7 @@ def chroma(
     *,
     mode: str = CHROMA_CQ,
     sample_rate: int = SOURCE_SAMPLE_RATE,
+    tuning_cents: float = 0.0,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
     """피치클래스 12차원 에너지. 합이 1이 되도록 정규화한다.
 
@@ -351,7 +399,7 @@ def chroma(
     비교용으로만 남긴다** — 저역에서 반음을 가르지 못한다.
     """
     if mode == CHROMA_CQ:
-        return cq_chroma(waveform, sample_rate=sample_rate)
+        return cq_chroma(waveform, sample_rate=sample_rate, tuning_cents=tuning_cents)
     if mode == CHROMA_LINEAR:
         return linear_chroma(waveform, sample_rate=sample_rate)
     raise ValueError(f"mode는 {CHROMA_MODES} 중 하나여야 한다: {mode}")
