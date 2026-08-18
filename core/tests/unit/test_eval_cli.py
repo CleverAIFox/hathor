@@ -527,3 +527,14 @@ def test_ingest_keys_is_wired():
     args = build_parser().parse_args(["ingest", "keys", "--limit", "50"])
     assert args.ingest_command == "keys"
     assert args.limit == 50
+
+
+def test_ingest_keys_sweep_is_wired():
+    """배음 스윕 배선 (D-0060)."""
+    from hathor.interfaces.cli.main import build_parser
+
+    args = build_parser().parse_args(
+        ["ingest", "keys", "--replay", "keys.jsonl", "--harmonic-sweep"]
+    )
+    assert args.harmonic_sweep is True
+    assert build_parser().parse_args(["ingest", "keys"]).harmonic_sweep is False

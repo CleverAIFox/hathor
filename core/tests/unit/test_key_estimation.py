@@ -578,3 +578,37 @@ def test_octave_harmonics_are_not_subtracted():
     from hathor.domain.services.key_estimation import HARMONIC_INTERVALS
 
     assert 0 not in {interval for interval, _ in HARMONIC_INTERVALS}
+
+
+# --- 베이스라인 조건 추종과 검은건반 (D-0060) ---
+
+
+def test_random_baseline_follows_the_harmonic_strength():
+    """**베이스라인이 배음 감산도 따라가야 한다** (D-0060).
+
+    코퍼스만 감산하고 하한을 원본으로 두면 하한이 실제보다 높아 판별력이
+    낮게 보고된다. D-0059에서 프로파일로 고친 것과 **같은 결함을 같은 함수에서
+    다시 냈다.** 조건이 늘 때마다 베이스라인이 따라가는지 확인해야 한다.
+    """
+    from hathor.domain.services.key_estimation import random_baseline
+
+    plain, _ = random_baseline(300, seed=13, harmonic=0.0)
+    reduced, _ = random_baseline(300, seed=13, harmonic=1.0)
+    assert float(np.median(plain)) != pytest.approx(float(np.median(reduced)), abs=0.005)
+
+
+def test_black_keys_are_the_five_accidentals():
+    """O-23의 핵심 지표. 정의가 흔들리면 비교가 성립하지 않는다."""
+    from hathor.domain.services.key_estimation import BLACK_KEYS
+
+    assert frozenset({"C#", "D#", "F#", "G#", "A#"}) == BLACK_KEYS
+    assert len(BLACK_KEYS) == 5
+
+
+def test_black_keys_are_disjoint_from_naturals():
+    from hathor.domain.services.key_estimation import BLACK_KEYS
+    from hathor.domain.value_objects.key import PITCH_CLASSES
+
+    naturals = {"C", "D", "E", "F", "G", "A", "B"}
+    assert BLACK_KEYS.isdisjoint(naturals)
+    assert BLACK_KEYS | naturals == set(PITCH_CLASSES)

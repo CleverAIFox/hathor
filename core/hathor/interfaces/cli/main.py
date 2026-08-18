@@ -153,6 +153,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="배음 감산 강도. 0이 끔이며 기본이다 (D-0059)",
     )
+    keys.add_argument(
+        "--harmonic-sweep",
+        action="store_true",
+        help="배음 강도 0~1을 한 번에 훑어 표로 낸다 (D-0060). --replay와 함께 쓴다",
+    )
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -541,6 +546,91 @@ def _estimate_key(
     return best.key, estimates
 
 
+def _report_harmonic_sweep(rows: list[dict[str, object]], profile: str) -> int:
+    """배음 감산 강도를 훑어 한 표로 낸다 (D-0060).
+
+    셸 반복문으로 다섯 번 돌리고 눈으로 비교하던 것을 도구로 옮긴다.
+    **베이스라인도 강도마다 다시 잰다** — 코퍼스만 감산하고 하한을 고정하면
+    판별력이 낮게 보고된다.
+    """
+    import numpy as np
+
+    from hathor.domain.services.key_estimation import (
+        BLACK_KEYS,
+        estimate_key,
+        random_baseline,
+        relative_key,
+        subtract_harmonics,
+    )
+    from hathor.domain.value_objects.key import Key, Mode
+
+    saved = [row.get("chroma") for row in rows]
+    if any(item is None for item in saved):
+        print("저장된 크로마가 없다. 먼저 크로마를 포함해 추출한다.", file=sys.stderr)
+        return 1
+
+    def parse(text: str) -> Key:
+        tonic, mode = str(text).rsplit(" ", 1)
+        return Key(tonic=tonic, mode=Mode(mode))
+
+    print(f"곡 {len(rows)}개 · 프로파일 {profile}\n")
+    header = (
+        f"{'강도':>5}{'상관차':>10}{'격차차':>10}{'애매차':>10}"
+        f"{'검은건반':>10}{'장조':>8}{'애매내 나란한조':>17}"
+    )
+    print(header)
+    print("-" * len(header))
+
+    for strength in (0.0, 0.3, 0.5, 0.7, 1.0):
+        estimates = []
+        for item in saved:
+            vector = subtract_harmonics(np.asarray(item, dtype=np.float64), strength)
+            total = float(vector.sum())
+            if total <= 0:
+                continue
+            estimates.append(
+                estimate_key(np.asarray(vector / total, dtype=np.float32), profile=profile)
+            )
+        if not estimates:
+            continue
+
+        correlations = np.asarray([item.correlation for item in estimates])
+        margins = np.asarray([item.margin for item in estimates])
+        base_correlation, base_margin = random_baseline(profile=profile, harmonic=strength)
+
+        total_songs = len(estimates)
+        black = sum(1 for item in estimates if item.key.tonic in BLACK_KEYS)
+        major = sum(1 for item in estimates if item.key.mode is Mode.MAJOR)
+        ambiguous = [item for item in estimates if item.margin < KEY_MARGIN_FLOOR]
+        relative_in_ambiguous = sum(
+            1 for item in ambiguous if relative_key(item.key) == item.runner_up
+        )
+        ambiguous_gap = (
+            len(ambiguous) / total_songs - float((base_margin < KEY_MARGIN_FLOOR).mean())
+        ) * 100
+        if ambiguous:
+            share = relative_in_ambiguous / len(ambiguous)
+            relative_ratio = f"{share:.1%} ({relative_in_ambiguous}/{len(ambiguous)})"
+        else:
+            relative_ratio = "-"
+        print(
+            f"{strength:>5.1f}"
+            f"{float(np.median(correlations)) - float(np.median(base_correlation)):>+10.4f}"
+            f"{float(np.median(margins)) - float(np.median(base_margin)):>+10.4f}"
+            f"{ambiguous_gap:>+9.1f}p"
+            f"{black / total_songs:>10.1%}"
+            f"{major / total_songs:>8.1%}"
+            f"{relative_ratio:>17}"
+        )
+
+    print("\n--- 읽는 법 ---")
+    print("**검은건반이 핵심이다** (O-23). 33.5%가 실제 대중가요보다 명백히 높다.")
+    print("줄지 않으면 배음도 원인이 아니며 O-23의 후보가 전부 소진된다.")
+    print("애매차는 무작위 대비다. 음수가 클수록 판정이 결정적이다.")
+    print("애매내 나란한조가 오르면 남은 애매함이 원리적 한계 쪽으로 이동한 것이다.")
+    return 0
+
+
 def _run_ingest_keys(args: argparse.Namespace) -> int:
     """코퍼스 조성 분포를 실측한다 (O-22).
 
@@ -557,15 +647,16 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     import numpy as np
 
     from hathor.domain.services.key_estimation import (
-        chroma as chroma_of,
-    )
-    from hathor.domain.services.key_estimation import (
+        BLACK_KEYS,
         estimate_key,
         estimate_tuning_cents,
         random_baseline,
         relative_key,
         subtract_harmonics,
         to_mono,
+    )
+    from hathor.domain.services.key_estimation import (
+        chroma as chroma_of,
     )
     from hathor.domain.value_objects.key import Key, Mode
 
@@ -662,6 +753,9 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         print("추정된 곡이 없다.", file=sys.stderr)
         return 1
 
+    if args.harmonic_sweep:
+        return _report_harmonic_sweep(rows, args.profile)
+
     total = len(rows)
     correlations = np.asarray([float(str(row["correlation"])) for row in rows])
     margins = np.asarray([float(str(row["margin"])) for row in rows])
@@ -689,6 +783,9 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     for mode, count in modes.most_common():
         print(f"  {mode:<6} {count:5d}  {count / total:6.1%}")
 
+    black = sum(1 for key in keys if key.tonic in BLACK_KEYS)
+    print(f"  검은건반 으뜸음  {black:5d}  {black / total:6.1%}   ← O-23 핵심 지표")
+
     print("\n조성 교차표 (으뜸음 / 선법)")
     print(f"  {'':<4}{'major':>7}{'minor':>7}{'합계':>7}")
     for tonic, _ in tonics.most_common():
@@ -699,7 +796,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     # **베이스라인도 같은 프로파일로 잰다** (D-0059). 하한이 프로파일마다 달라
     # (Krumhansl 0.6192 · Temperley 0.5488) 고정값을 쓰면 비교가 성립하지 않는다.
     base_profile = str(rows[0].get("profile", "krumhansl"))
-    base_correlation, base_margin = random_baseline(profile=base_profile)
+    base_correlation, base_margin = random_baseline(profile=base_profile, harmonic=args.harmonic)
     print("\n지표 대 무작위 베이스라인")
     print(f"  {'':<10}{'코퍼스':>10}{'무작위':>10}{'차이':>10}")
     for name, actual, base in (

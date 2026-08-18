@@ -465,6 +465,17 @@ RELATIVE_OFFSET = {Mode.MAJOR: 9, Mode.MINOR: 3}
 """나란한조까지의 반음 거리. C장조의 나란한단조는 A단조(+9)다."""
 
 
+BLACK_KEYS: frozenset[str] = frozenset({"C#", "D#", "F#", "G#", "A#"})
+"""검은건반 으뜸음. O-23의 핵심 지표이며 **리포트에 반드시 찍는다** (D-0060).
+
+실제 대중가요는 기타·피아노 친화적인 조에 몰려 검은건반 조가 드물다.
+33.5%는 명백히 높으며, 그 값이 줄어드는지가 배음 감산의 성패를 가른다.
+
+**지표를 만들어두고 보지 않은 것이 아니라 아예 만들지 않았다** — 교차표만
+내고 합계를 안 찍어 손으로 더하고 있었다 (D-0030의 변형).
+"""
+
+
 def relative_key(key: Key) -> Key:
     """나란한조. 조표가 같아 구성음이 동일하다.
 
@@ -482,6 +493,7 @@ def random_baseline(
     seed: int = 20260818,
     *,
     profile: str = PROFILE_KRUMHANSL,
+    harmonic: float = HARMONIC_STRENGTH,
 ) -> tuple[np.ndarray[tuple[int], np.dtype[np.float64]], ...]:
     """무작위 크로마의 (상관, 격차) 분포. **베이스라인이다** (D-0034).
 
@@ -502,9 +514,18 @@ def random_baseline(
     """
     generator = np.random.default_rng(seed)
     samples = generator.dirichlet(np.ones(12), size=count)
-    estimates = [
-        estimate_key(np.asarray(row, dtype=np.float32), profile=profile) for row in samples
-    ]
+    estimates = []
+    for row in samples:
+        # **감산도 무작위에 똑같이 적용한다** (D-0060). 코퍼스만 감산하고 하한을
+        # 원본으로 두면 하한이 실제보다 높아 판별력이 낮게 보고된다. D-0059에서
+        # 프로파일로 고친 것과 같은 결함을 같은 함수에서 다시 냈다.
+        vector = subtract_harmonics(np.asarray(row, dtype=np.float64), harmonic)
+        total = vector.sum()
+        if total <= EPSILON:
+            continue
+        estimates.append(
+            estimate_key(np.asarray(vector / total, dtype=np.float32), profile=profile)
+        )
     return (
         np.asarray([item.correlation for item in estimates], dtype=np.float64),
         np.asarray([item.margin for item in estimates], dtype=np.float64),
