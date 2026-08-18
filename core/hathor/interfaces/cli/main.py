@@ -121,6 +121,9 @@ def build_parser() -> argparse.ArgumentParser:
     keys.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
     keys.add_argument("--root", type=Path, default=None, help="라이브러리 루트")
     keys.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
+    keys.add_argument(
+        "--replay", type=Path, default=None, help="저장된 keys.jsonl을 재분석. 디코딩하지 않는다"
+    )
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -508,71 +511,125 @@ def _estimate_key(
 
 
 def _run_ingest_keys(args: argparse.Namespace) -> int:
-    """코퍼스 전체의 조성 분포를 낸다 (O-22).
+    """코퍼스 조성 분포를 실측한다 (O-22).
 
-    **정답 라벨이 없으므로 분포로 검사한다.** 대중가요는 장조가 우세하고
-    C·G·D·A 같은 흔한 조에 몰린다고 알려져 있다. 분포가 그것과 크게 어긋나면
-    추정이 망가진 것이다. **맞다는 증명이 아니라 틀렸다는 신호를 잡는 장치다.**
+    **정답 라벨이 없으므로 분포와 베이스라인으로 검사한다.** 맞다는 증명은
+    할 수 없고 틀렸다는 신호만 잡을 수 있다.
 
-    디코딩이 필요해 곡당 수 초다. `--limit`으로 표본만 볼 수 있다.
+    결과를 JSONL로 남긴다. 디코딩이 곡당 수 초라 재분석 때마다 다시 돌리면
+    실험 회전이 느려진다 — 지표를 만들어두고 보지 않게 되는 원인이다 (D-0030).
     """
+    import json
     from collections import Counter
+    from datetime import UTC, datetime
 
-    from hathor.domain.services.key_estimation import estimate_key_from_waveform
+    import numpy as np
 
-    root = _resolve_root(args.root)
-    tracks = list(JsonlScanStore(Path(args.out)).read_tracks())
-    if args.limit is not None:
-        tracks = tracks[: args.limit]
-    if not tracks:
-        print("스캔 산출물이 없다. --out 경로를 확인한다.", file=sys.stderr)
+    from hathor.domain.services.key_estimation import (
+        estimate_key_from_waveform,
+        random_baseline,
+        relative_key,
+    )
+    from hathor.domain.value_objects.key import Key, Mode
+
+    out_root = Path(args.out)
+    rows: list[dict[str, object]] = []
+
+    if args.replay is not None:
+        with args.replay.open(encoding="utf-8") as stream:
+            rows = [json.loads(line) for line in stream if line.strip()]
+        print(f"재분석: {args.replay} ({len(rows)}곡). 디코딩하지 않는다.\n")
+    else:
+        root = _resolve_root(args.root)
+        tracks = list(JsonlScanStore(out_root).read_tracks())
+        if args.limit is not None:
+            tracks = tracks[: args.limit]
+        if not tracks:
+            print("스캔 산출물이 없다. --out 경로를 확인한다.", file=sys.stderr)
+            return 1
+
+        decoder = FfmpegAudioDecoder()
+        failed = 0
+        for index, track in enumerate(tracks, start=1):
+            path = root / track.source_key
+            if not path.exists():
+                failed += 1
+                continue
+            try:
+                estimate = estimate_key_from_waveform(decoder.decode(path))
+            except Exception:
+                failed += 1
+                continue
+            rows.append({"source_key": track.source_key, **estimate.as_record()})
+            if index % 50 == 0:
+                print(f"  {index}/{len(tracks)}", file=sys.stderr, flush=True)
+
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        saved = out_root / f"keys-{stamp}.keys.jsonl"
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        with saved.open("w", encoding="utf-8") as stream:
+            for row in rows:
+                stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+        print(f"저장: {saved} (실패·부재 {failed})\n")
+
+    if not rows:
+        print("추정된 곡이 없다.", file=sys.stderr)
         return 1
 
-    decoder = FfmpegAudioDecoder()
-    tonics: Counter[str] = Counter()
-    modes: Counter[str] = Counter()
-    ambiguous = 0
-    failed = 0
-    margins: list[float] = []
+    total = len(rows)
+    correlations = np.asarray([float(str(row["correlation"])) for row in rows])
+    margins = np.asarray([float(str(row["margin"])) for row in rows])
 
-    for index, track in enumerate(tracks, start=1):
-        path = root / track.source_key
-        if not path.exists():
-            failed += 1
-            continue
-        try:
-            estimate = estimate_key_from_waveform(decoder.decode(path))
-        except Exception:
-            failed += 1
-            continue
-        tonics[estimate.key.tonic] += 1
-        modes[estimate.key.mode.value] += 1
-        margins.append(estimate.margin)
-        if estimate.margin < KEY_MARGIN_FLOOR:
-            ambiguous += 1
-        if index % 50 == 0:
-            print(f"  {index}/{len(tracks)}", file=sys.stderr, flush=True)
+    def parse(text: str) -> Key:
+        tonic, mode = str(text).rsplit(" ", 1)
+        return Key(tonic=tonic, mode=Mode(mode))
 
-    total = sum(modes.values())
-    if not total:
-        print("추정된 곡이 없다. --root 경로를 확인한다.", file=sys.stderr)
-        return 1
+    keys = [parse(str(row["key"])) for row in rows]
+    runner_ups = [parse(str(row["runner_up"])) for row in rows]
 
-    print(f"곡 {total}개 (실패·부재 {failed})\n")
+    modes: Counter[str] = Counter(key.mode.value for key in keys)
+    tonics: Counter[str] = Counter(key.tonic for key in keys)
+    relative_confusions = sum(
+        1 for key, other in zip(keys, runner_ups, strict=True) if relative_key(key) == other
+    )
+
+    print(f"곡 {total}개\n")
     print("선법")
     for mode, count in modes.most_common():
         print(f"  {mode:<6} {count:5d}  {count / total:6.1%}")
-    print("\n으뜸음")
-    for tonic, count in sorted(tonics.items(), key=lambda item: -item[1]):
-        bar = "#" * max(1, round(count / total * 80))
-        print(f"  {tonic:<3} {count:5d}  {count / total:6.1%}  {bar}")
+
+    print("\n조성 교차표 (으뜸음 / 선법)")
+    print(f"  {'':<4}{'major':>7}{'minor':>7}{'합계':>7}")
+    for tonic, _ in tonics.most_common():
+        major = sum(1 for key in keys if key.tonic == tonic and key.mode is Mode.MAJOR)
+        minor = sum(1 for key in keys if key.tonic == tonic and key.mode is Mode.MINOR)
+        print(f"  {tonic:<4}{major:>7}{minor:>7}{major + minor:>7}")
+
+    base_correlation, base_margin = random_baseline()
+    print("\n지표 대 무작위 베이스라인")
+    print(f"  {'':<10}{'코퍼스':>10}{'무작위':>10}{'차이':>10}")
+    for name, actual, base in (
+        ("상관", correlations, base_correlation),
+        ("격차", margins, base_margin),
+    ):
+        gap = float(np.median(actual) - np.median(base))
+        print(
+            f"  {name:<10}{float(np.median(actual)):>10.4f}"
+            f"{float(np.median(base)):>10.4f}{gap:>+10.4f}"
+        )
+
+    ambiguous = int((margins < KEY_MARGIN_FLOOR).sum())
+    base_ambiguous = float((base_margin < KEY_MARGIN_FLOOR).mean())
     print(
-        f"\n격차 중앙값 {sorted(margins)[len(margins) // 2]:.4f} · "
-        f"애매({KEY_MARGIN_FLOOR} 미만) {ambiguous}곡 {ambiguous / total:.1%}"
+        f"\n애매({KEY_MARGIN_FLOOR} 미만)  코퍼스 {ambiguous / total:.1%}"
+        f"  무작위 {base_ambiguous:.1%}"
     )
+    print(f"2등이 나란한조인 비율  {relative_confusions / total:.1%}")
+
     print("\n--- 읽는 법 ---")
-    print("대중가요는 장조 우세, C·G·D·A 편중이 알려져 있다.")
-    print("선법이 반반이거나 으뜸음이 12개에 고르게 퍼지면 추정이 망가진 것이다.")
+    print("상관·격차가 무작위와 비슷하면 그 지표는 판별력이 없다. 절대값에 속지 않는다.")
+    print("2등이 나란한조인 비율이 높으면 애매함은 K-S의 원리적 한계다 (고칠 수 없다).")
+    print("낮으면 크로마 추출이나 프로파일 쪽 문제이므로 고칠 여지가 있다.")
     print("**맞다는 증명은 아니다. 틀렸다는 신호를 잡는 장치다 (O-22).**")
     return 0
 

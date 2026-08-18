@@ -158,6 +158,47 @@ class KeyEstimate:
         }
 
 
+RELATIVE_OFFSET = {Mode.MAJOR: 9, Mode.MINOR: 3}
+"""나란한조까지의 반음 거리. C장조의 나란한단조는 A단조(+9)다."""
+
+
+def relative_key(key: Key) -> Key:
+    """나란한조. 조표가 같아 구성음이 동일하다.
+
+    **K-S가 원리적으로 구분하지 못하는 짝이다.** 2등이 나란한조인지 확인하면
+    "애매함"이 원리적 한계인지 다른 문제인지 갈린다 — 나란한조 혼동이면 고칠
+    수 없고, 엉뚱한 조가 2등이면 크로마 추출이나 프로파일 쪽 문제다.
+    """
+    other = Mode.MINOR if key.mode is Mode.MAJOR else Mode.MAJOR
+    tonic = (key.tonic_pitch_class + RELATIVE_OFFSET[key.mode]) % 12
+    return Key(tonic=PITCH_CLASSES[tonic], mode=other)
+
+
+def random_baseline(
+    count: int = 2000, seed: int = 20260818
+) -> tuple[np.ndarray[tuple[int], np.dtype[np.float64]], ...]:
+    """무작위 크로마의 (상관, 격차) 분포. **베이스라인이다** (D-0034).
+
+    상관 0.87이나 격차 0.097이 큰 값인지는 하한을 알아야 판정된다.
+    **지표를 추가할 때 베이스라인을 같이 넣지 않으면, 나중에 붙일 때는 이미
+    그 지표로 판단을 내린 뒤다.**
+
+    실측으로 확인된 것: 무작위 크로마도 상관 중앙값이 0.62에 이른다. 24개
+    프로파일이 서로 닮아 아무 벡터나 넣어도 그중 하나와는 꽤 맞기 때문이다.
+    **절대값만 보면 늘 좋아 보인다.**
+
+    디리클레 분포를 쓴다 — 합이 1인 12차원 벡터를 고르게 뽑는다. 균등난수를
+    정규화하면 중앙으로 몰려 실제 크로마보다 평평해진다.
+    """
+    generator = np.random.default_rng(seed)
+    samples = generator.dirichlet(np.ones(12), size=count)
+    estimates = [estimate_key(np.asarray(row, dtype=np.float32)) for row in samples]
+    return (
+        np.asarray([item.correlation for item in estimates], dtype=np.float64),
+        np.asarray([item.margin for item in estimates], dtype=np.float64),
+    )
+
+
 def _correlate(vector: np.ndarray, profile: np.ndarray) -> float:
     """피어슨 상관. 분모가 0이면 0을 낸다."""
     left = vector - vector.mean()

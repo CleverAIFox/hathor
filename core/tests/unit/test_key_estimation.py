@@ -158,3 +158,52 @@ def test_waveform_entry_point_matches_chroma_path():
     mono = chord([60, 64, 67], 2.0)
     stereo = np.stack([mono, mono])
     assert estimate_key_from_waveform(stereo).key == estimate_key(chroma(mono)).key
+
+
+# --- 나란한조와 베이스라인 (D-0055) ---
+
+
+def test_relative_key_round_trips():
+    from hathor.domain.services.key_estimation import relative_key
+
+    for tonic in ("C", "G", "F#", "A#"):
+        for mode in (Mode.MAJOR, Mode.MINOR):
+            key = Key(tonic=tonic, mode=mode)
+            assert relative_key(relative_key(key)) == key
+
+
+def test_relative_key_pairs_are_the_known_ones():
+    from hathor.domain.services.key_estimation import relative_key
+
+    assert relative_key(Key(tonic="C", mode=Mode.MAJOR)) == Key(tonic="A", mode=Mode.MINOR)
+    assert relative_key(Key(tonic="G", mode=Mode.MAJOR)) == Key(tonic="E", mode=Mode.MINOR)
+    assert relative_key(Key(tonic="A", mode=Mode.MINOR)) == Key(tonic="C", mode=Mode.MAJOR)
+
+
+def test_random_baseline_is_reproducible():
+    from hathor.domain.services.key_estimation import random_baseline
+
+    first = random_baseline(50, seed=1)
+    second = random_baseline(50, seed=1)
+    assert np.array_equal(first[0], second[0])
+    assert np.array_equal(first[1], second[1])
+
+
+def test_random_correlation_is_high_enough_to_be_misleading():
+    """**무작위 크로마도 상관이 높다.** 절대값만 보면 늘 좋아 보인다 (D-0055).
+
+    24개 프로파일이 서로 닮아 아무 벡터나 넣어도 그중 하나와는 꽤 맞는다.
+    이 사실을 고정해 두지 않으면 "상관 0.87"을 좋은 수치로 오독하게 된다.
+    """
+    from hathor.domain.services.key_estimation import random_baseline
+
+    correlations, _ = random_baseline(300, seed=7)
+    assert float(np.median(correlations)) > 0.5
+
+
+def test_random_margin_often_exceeds_the_ambiguity_floor():
+    """격차 임계 0.05는 무작위도 대부분 넘는다. 기준이 헐겁다는 증거다."""
+    from hathor.domain.services.key_estimation import random_baseline
+
+    _, margins = random_baseline(300, seed=7)
+    assert float((margins >= 0.05).mean()) > 0.5
