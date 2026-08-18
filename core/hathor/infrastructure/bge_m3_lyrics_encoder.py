@@ -41,6 +41,17 @@ MAX_TOKENS = 512
 FEATURE_DIM = 1024
 """해시 조건과 같은 차원. 차원을 고정해야 인코더 효과만 남는다."""
 
+POOL_CLS = "cls"
+POOL_MEAN = "mean"
+POOLINGS = (POOL_CLS, POOL_MEAN)
+"""풀링 선택. **한 번에 하나만 바꾼다** — 모델·차원을 고정한 채 이것만 돌린다.
+
+`cls`는 BGE-M3의 dense 정의와 일치한다(학습 목표가 CLS에 문장 표현을 모은다).
+`mean`은 구간 전체 토큰을 쓴다. **가사 구간은 검색 질의가 아니라 문단에 가까워
+CLS가 최선이라는 보장이 없다** — D-0045가 비교하지 않은 채 CLS를 골랐고 그것을
+한계로 남겼다.
+"""
+
 
 class BgeM3LyricsEncoder:
     """모델을 한 번 적재하고 구간 목록을 배치로 인코딩한다.
@@ -55,18 +66,27 @@ class BgeM3LyricsEncoder:
         device: str = DEFAULT_DEVICE,
         batch_size: int = DEFAULT_BATCH,
         use_fp16: bool = True,
+        pooling: str = POOL_CLS,
     ) -> None:
+        # **인자 검증이 임포트보다 먼저다.** 뒤에 두면 오타 하나에 2.3GB를 받고
+        # GPU에 올린 뒤에야 터진다. 값싼 검사를 앞에 둔다 (GR-5 Fail Fast).
+        if pooling not in POOLINGS:
+            raise ValueError(f"pooling은 {POOLINGS} 중 하나여야 한다: {pooling}")
+
         import torch
         from transformers import AutoModel, AutoTokenizer
 
         self._tokenizer: Any = AutoTokenizer.from_pretrained(model_name)
-        model: Any = AutoModel.from_pretrained(model_name)
+        # safetensors를 명시한다. 지정하지 않으면 pytorch_model.bin(2.27GB)을 받아
+        # 적재한 뒤 model.safetensors(2.27GB)를 또 받는다. 실측으로 확인했다.
+        model: Any = AutoModel.from_pretrained(model_name, use_safetensors=True)
         if use_fp16 and device.startswith("cuda"):
             # 4.8GB 실가용에서 fp32 568M은 여유가 없다. 추론 전용이라 손실이 없다.
             model = model.half()
         self._model = model.to(device).eval()
         self._device = device
         self._batch_size = max(1, batch_size)
+        self._pooling = pooling
         self._torch = torch
         self.truncated = 0
         """512토큰을 넘어 잘린 구간 수. 0이 아니면 기록에 남긴다."""
@@ -75,12 +95,16 @@ class BgeM3LyricsEncoder:
     def dimension(self) -> int:
         return int(self._model.config.hidden_size)
 
+    @property
+    def pooling(self) -> str:
+        return self._pooling
+
     def extract(self, segments: list[str]) -> Embedding:
         """구간 목록을 (구간 수, 1024) 행렬로 만든다.
 
-        BGE-M3의 dense 표현은 **CLS 토큰**이다. 평균 풀링이 아니다 —
-        학습 목표가 CLS에 문장 표현을 모으도록 되어 있어, 평균을 쓰면
-        모델이 최적화된 지점과 다른 곳을 읽게 된다.
+        `cls`는 BGE-M3의 dense 정의와 일치한다. `mean`은 **어텐션 마스크로 패딩을
+        배제한** 가중 평균이다. 마스크를 빼먹으면 패딩 토큰이 평균에 섞여 배치
+        구성마다 값이 달라지고, 그러면 `--batch-size`만 바꿔도 산출물이 변한다.
         """
         if not segments:
             return np.zeros((0, self.dimension), dtype=np.float32)
@@ -105,8 +129,13 @@ class BgeM3LyricsEncoder:
                 )
                 inputs = {key: value.to(self._device) for key, value in encoded.items()}
                 output = self._model(**inputs)
-                cls = output.last_hidden_state[:, 0]
-                rows.append(cls.float().cpu().numpy())
+                hidden = output.last_hidden_state
+                if self._pooling == POOL_CLS:
+                    pooled = hidden[:, 0]
+                else:
+                    mask = inputs["attention_mask"].unsqueeze(-1).to(hidden.dtype)
+                    pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+                rows.append(pooled.float().cpu().numpy())
 
         matrix = np.concatenate(rows, axis=0)
         return np.asarray(matrix, dtype=np.float32)

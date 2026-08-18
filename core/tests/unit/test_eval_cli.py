@@ -383,6 +383,26 @@ def test_gate_failure_distinguishes_near_miss_from_collapse():
     assert "추출 설정부터 다시 본다" in collapsed
 
 
+def test_gate_failure_uses_rank_when_recall_is_just_short():
+    """R@10 하나로 가르면 경계에서 틀린다 (D-0046).
+
+    BGE-M3 홀짝 조건이 실측에서 **실패 순위 중앙값 5.5인데 R@10 0.9442**로
+    0.95에 못 미쳐 "정답이 상위권에도 없다"로 보고됐다. 5.5는 상위권이다.
+    """
+    from hathor.interfaces.cli.main import _gate_failure_message
+
+    message = _gate_failure_message(_report_with(top1=0.8504, recall10=0.9442, miss=5.5))
+    assert "표현이 무너진 것이 아니라" in message
+
+
+def test_gate_failure_still_flags_real_collapse_with_low_recall():
+    """순위 중앙값이 k를 넘으면 여전히 붕괴로 본다. 완화가 아니다."""
+    from hathor.interfaces.cli.main import _gate_failure_message
+
+    message = _gate_failure_message(_report_with(top1=0.3850, recall10=0.4688, miss=831.1))
+    assert "상위권에도 없다" in message
+
+
 def _report_with(*, top1: float, recall10: float, miss: float):
     """지정한 순위 진단을 갖는 최소 리포트. 코퍼스를 만들지 않는다."""
     from dataclasses import dataclass

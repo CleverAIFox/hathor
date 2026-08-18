@@ -15,6 +15,8 @@ import pytest
 
 from hathor.infrastructure.bge_m3_lyrics_encoder import (
     MAX_TOKENS,
+    POOL_CLS,
+    POOL_MEAN,
     BgeM3LyricsEncoder,
     verify_deterministic,
 )
@@ -23,22 +25,46 @@ DIM = 8
 
 
 class _Tensor:
-    """`.to` · `.float` · `.cpu` · `.numpy` · `[:, 0]`만 흉내낸다."""
+    """평균 풀링 경로가 쓰는 텐서 연산까지 흉내낸다.
+
+    `unsqueeze` · `sum(dim=)` · `clamp` · 원소곱 · 나눗셈을 지원해야
+    **평균 풀링 본체가 실제로 돌아간다.** 지원하지 않으면 그 경로는
+    테스트를 통과해도 검증된 것이 아니다.
+    """
 
     def __init__(self, array: np.ndarray) -> None:
         self.array = array
 
-    def to(self, _device: str) -> "_Tensor":
+    @property
+    def dtype(self) -> object:
+        return self.array.dtype
+
+    def to(self, _device_or_dtype: object) -> "_Tensor":
         return self
 
     def float(self) -> "_Tensor":
-        return self
+        return _Tensor(self.array.astype(np.float32))
 
     def cpu(self) -> "_Tensor":
         return self
 
     def numpy(self) -> np.ndarray:
         return self.array
+
+    def unsqueeze(self, axis: int) -> "_Tensor":
+        return _Tensor(np.expand_dims(self.array, axis))
+
+    def sum(self, dim: int | None = None) -> "_Tensor":
+        return _Tensor(self.array.sum(axis=dim) if dim is not None else self.array.sum())
+
+    def clamp(self, *, min: float) -> "_Tensor":
+        return _Tensor(np.clip(self.array, min, None))
+
+    def __mul__(self, other: "_Tensor") -> "_Tensor":
+        return _Tensor(self.array * other.array)
+
+    def __truediv__(self, other: "_Tensor") -> "_Tensor":
+        return _Tensor(self.array / other.array)
 
     def __getitem__(self, key: object) -> "_Tensor":
         return _Tensor(self.array[key])
@@ -61,16 +87,27 @@ def _fake_tokenizer(batch, *, padding, truncation, max_length, return_tensors):
 
 
 def _make_model(*, jitter: float = 0.0):
-    """CLS 자리에 결정적인 값을 놓는다. 패딩 열은 마스크가 0이므로 무시돼야 한다."""
+    """토큰마다 다른 은닉값을 낸다. **패딩 칸에 큰 값을 넣는다.**
+
+    패딩에 0을 넣으면 마스크를 빼먹어도 평균이 대충 맞아 버그가 숨는다.
+    큰 값을 넣어야 마스크 누락이 즉시 드러난다.
+    """
     state = {"calls": 0}
+    padding_value = 1000.0
 
     def forward(*, input_ids, attention_mask):
-        rows = []
-        for ids, mask in zip(input_ids, attention_mask, strict=True):
-            content = ids[mask == 1]
-            rows.append(np.full(DIM, float(content.sum() % 97), dtype=np.float32))
+        ids = input_ids.array
+        mask = attention_mask.array
+        rows, cols = ids.shape
+        hidden = np.full((rows, cols, DIM), padding_value, dtype=np.float32)
+        for row in range(rows):
+            content = ids[row][mask[row] == 1]
+            # CLS 자리(0번)에는 구간 전체를 대표하는 값, 나머지는 토큰별 값
+            hidden[row, 0] = float(content.sum() % 97)
+            for col in range(1, cols):
+                if mask[row, col]:
+                    hidden[row, col] = float(ids[row, col] % 13)
         state["calls"] += 1
-        hidden = np.stack(rows)[:, None, :].repeat(2, axis=1)
         hidden[:, 0] += jitter * state["calls"]
         return SimpleNamespace(last_hidden_state=_Tensor(hidden))
 
@@ -79,7 +116,9 @@ def _make_model(*, jitter: float = 0.0):
     )
 
 
-def _encoder(*, batch_size: int = 2, jitter: float = 0.0) -> BgeM3LyricsEncoder:
+def _encoder(
+    *, batch_size: int = 2, jitter: float = 0.0, pooling: str = POOL_CLS
+) -> BgeM3LyricsEncoder:
     """`__init__`을 건너뛰고 의존만 채운다. 모델 적재 없이 실제 extract를 돌린다."""
     encoder = object.__new__(BgeM3LyricsEncoder)
     model = _make_model(jitter=jitter)
@@ -87,6 +126,7 @@ def _encoder(*, batch_size: int = 2, jitter: float = 0.0) -> BgeM3LyricsEncoder:
     encoder._model = _Callable(model._forward, model.config)
     encoder._device = "cpu"
     encoder._batch_size = batch_size
+    encoder._pooling = pooling
     encoder._torch = SimpleNamespace(no_grad=_no_grad)
     encoder.truncated = 0
     return encoder
@@ -176,3 +216,42 @@ def test_verify_deterministic_rejects_shape_change():
 
     with pytest.raises(ValueError):
         verify_deterministic(_Unstable(), ["가"])
+
+
+# --- 평균 풀링 (D-0046) ---
+
+
+def test_mean_pooling_excludes_padding():
+    """패딩이 평균에 섞이면 배치 구성마다 값이 달라진다.
+
+    가짜 모델은 패딩 칸에 1000을 넣는다. 마스크를 빼먹으면 그 값이 평균을
+    끌어올려 배치 크기에 따라 결과가 갈린다. **`--batch-size`만 바꿔도 산출물이
+    변하는 상태이며, 재현성이 조용히 깨진다.**
+    """
+    segments = ["짧다", "훨씬 훨씬 더 긴 구간을 넣는다 아주 길게", "a"]
+    one = _encoder(batch_size=1, pooling=POOL_MEAN).extract(segments)
+    three = _encoder(batch_size=3, pooling=POOL_MEAN).extract(segments)
+    assert np.array_equal(one, three)
+    assert float(one.max()) < 1000.0
+
+
+def test_mean_and_cls_differ():
+    """두 풀링이 같은 값을 내면 선택이 무의미하다. 실제로 다른 것을 읽는지 본다."""
+    segments = ["가사 구간 하나", "another segment here"]
+    cls = _encoder(pooling=POOL_CLS).extract(segments)
+    mean = _encoder(pooling=POOL_MEAN).extract(segments)
+    assert not np.array_equal(cls, mean)
+
+
+def test_mean_pooling_is_deterministic():
+    assert verify_deterministic(_encoder(pooling=POOL_MEAN), ["가", "na", "혼재 mix"]) == 0.0
+
+
+def test_unknown_pooling_is_rejected_before_model_load():
+    """오타를 모델 적재 **전에** 잡는다.
+
+    검증이 뒤에 있으면 2.3GB를 받고 GPU에 올린 뒤에야 터진다. CLI가 choices로
+    막지만 라이브러리로 직접 쓸 때는 여기가 유일한 방어선이다.
+    """
+    with pytest.raises(ValueError, match="pooling"):
+        BgeM3LyricsEncoder(pooling="nonsense", device="cpu")

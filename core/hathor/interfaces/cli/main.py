@@ -796,7 +796,13 @@ def _gate_failure_message(report: EvaluationReport) -> str:
     """
     consistency = report.consistency
     gate = report.config.gate
-    if consistency.recall_at_10 >= gate:
+    # **R@10 하나로 가르면 경계에서 틀린다.** BGE-M3 홀짝 조건이 실패 순위 중앙값
+    # 5.5인데 R@10 0.9442로 0.95에 못 미쳐 "상위권에도 없다"로 보고됐다 (D-0046).
+    # 순위 중앙값이 k 안에 있으면 그것만으로 근접 실패다.
+    near_miss = consistency.recall_at_10 >= gate or 0 < consistency.miss_median_rank <= (
+        report.config.k
+    )
+    if near_miss:
         return (
             f"M0 게이트 미달 (top-1 {report.self_consistency:.4f}). "
             f"다만 R@10 {consistency.recall_at_10:.4f}, 실패 순위 중앙값 "
