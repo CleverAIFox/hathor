@@ -389,3 +389,109 @@ def test_tuning_does_not_change_a_correctly_tuned_signal():
 
     signal = progression(0.0)
     assert np.array_equal(cq_chroma(signal), cq_chroma(signal, tuning_cents=0.0))
+
+
+# --- 로그 압축과 프로파일 (D-0058) ---
+
+
+def test_uniform_component_does_not_change_the_estimate():
+    """**핵심 반증.** 피어슨 상관은 평균을 빼므로 균등 성분에 불변이다 (D-0058).
+
+    "드럼이 크로마를 평평하게 만들어 조가 흩어진다"는 가설을 세웠고, 로그 압축을
+    처방으로 골랐다. **가설이 틀렸다.** 균등 성분을 90% 섞어 엔트로피를 균등에
+    가깝게 올려도 상관과 판정이 그대로다. 평평함은 증상이지 원인이 아니다.
+    """
+    base = np.asarray([0.20, 0.02, 0.10, 0.02, 0.15, 0.08, 0.02, 0.18, 0.02, 0.10, 0.03, 0.08])
+    reference = estimate_key(np.asarray(base / base.sum(), dtype=np.float32))
+    for weight in (0.3, 0.6, 0.9):
+        mixed = (1 - weight) * base + weight / 12
+        estimate = estimate_key(np.asarray(mixed / mixed.sum(), dtype=np.float32))
+        assert estimate.key == reference.key
+        assert estimate.correlation == pytest.approx(reference.correlation, abs=1e-6)
+
+
+def test_log_compression_defaults_to_off():
+    """실측이 도움 없음을 보였으므로 기본은 0이다. 구현은 반증 기록과 함께 남긴다."""
+    from hathor.domain.services.key_estimation import LOG_GAMMA
+
+    assert LOG_GAMMA == 0.0
+
+
+def test_log_compression_lowers_contrast():
+    """로그는 큰 값을 눌러 대비를 줄인다. 상관이 오히려 내려간다."""
+    from hathor.domain.services.key_estimation import cq_chroma
+
+    signal = np.concatenate(
+        [chord([60, 64, 67]), chord([67, 71, 74]), chord([69, 72, 76]), chord([65, 69, 72])]
+    )
+    plain = estimate_key(cq_chroma(signal, gamma=0.0))
+    compressed = estimate_key(cq_chroma(signal, gamma=100.0))
+    assert plain.key == compressed.key
+    assert compressed.correlation < plain.correlation
+
+
+def test_compression_normalizes_before_and_after():
+    """압축 전에 정규화한다. 곡의 절대 음량이 압축 강도를 바꾸면 안 된다."""
+    from hathor.domain.services.key_estimation import cq_chroma
+
+    quiet = chord([60, 64, 67], 1.5) * 0.01
+    loud = chord([60, 64, 67], 1.5) * 4.0
+    assert np.allclose(cq_chroma(quiet, gamma=100.0), cq_chroma(loud, gamma=100.0), atol=1e-5)
+
+
+def test_negative_gamma_is_rejected():
+    from hathor.domain.services.key_estimation import cq_chroma
+
+    with pytest.raises(ValueError):
+        cq_chroma(chord([60, 64, 67], 1.5), gamma=-1.0)
+
+
+def test_profiles_are_selectable_and_differ():
+    """프로파일 교체가 실제로 다른 판정을 낼 수 있어야 선택의 의미가 있다."""
+    from hathor.domain.services.key_estimation import (
+        PROFILE_KRUMHANSL,
+        PROFILE_TEMPERLEY,
+        cq_chroma,
+    )
+
+    signal = np.concatenate(
+        [chord([52, 55, 59]), chord([57, 60, 64]), chord([59, 62, 66]), chord([52, 55, 59])]
+    )
+    vector = cq_chroma(signal)
+    krumhansl = estimate_key(vector, profile=PROFILE_KRUMHANSL)
+    temperley = estimate_key(vector, profile=PROFILE_TEMPERLEY)
+    assert krumhansl.correlation != temperley.correlation
+
+
+def test_temperley_recovers_its_own_profile():
+    from hathor.domain.services.key_estimation import (
+        PROFILE_TEMPERLEY,
+        TEMPERLEY_MAJOR,
+        TEMPERLEY_MINOR,
+    )
+
+    major = np.asarray(TEMPERLEY_MAJOR, dtype=np.float32)
+    estimate = estimate_key(major / major.sum(), profile=PROFILE_TEMPERLEY)
+    assert estimate.key == Key(tonic="C", mode=Mode.MAJOR)
+    assert estimate.correlation == pytest.approx(1.0, abs=1e-6)
+
+    minor = np.asarray(TEMPERLEY_MINOR, dtype=np.float32)
+    assert estimate_key(minor / minor.sum(), profile=PROFILE_TEMPERLEY).key == Key(
+        tonic="C", mode=Mode.MINOR
+    )
+
+
+def test_unknown_profile_is_rejected():
+    with pytest.raises(ValueError, match="profile"):
+        estimate_key(np.full(12, 1 / 12, dtype=np.float32), profile="nonsense")
+
+
+def test_default_profile_is_the_baseline():
+    """기본이 바뀌면 D-0054~D-0057의 수치와 비교할 수 없다."""
+    from hathor.domain.services.key_estimation import PROFILE_KRUMHANSL
+
+    vector = np.asarray(KRUMHANSL_MAJOR, dtype=np.float32)
+    vector = vector / vector.sum()
+    assert estimate_key(vector).correlation == pytest.approx(
+        estimate_key(vector, profile=PROFILE_KRUMHANSL).correlation
+    )

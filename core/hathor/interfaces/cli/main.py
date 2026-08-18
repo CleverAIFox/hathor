@@ -138,6 +138,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="조율 편차도 잰다 (D-0057). 11배 느려지므로 표본에만 쓴다",
     )
+    keys.add_argument(
+        "--profile",
+        choices=("krumhansl", "temperley"),
+        default="krumhansl",
+        help="조성 프로파일. krumhansl이 베이스라인이다 (D-0058)",
+    )
+    keys.add_argument(
+        "--gamma", type=float, default=0.0, help="로그 압축. 0이 끔이며 기본이다 (D-0058)"
+    )
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -575,7 +584,9 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 continue
             try:
                 waveform = decoder.decode(path)
-                estimate = estimate_key_from_waveform(waveform, mode=args.chroma)
+                estimate = estimate_key_from_waveform(
+                    waveform, mode=args.chroma, gamma=args.gamma, profile=args.profile
+                )
                 cents = (
                     estimate_tuning_cents(to_mono(waveform))
                     if args.tuning and args.chroma == "cq"
@@ -596,7 +607,10 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         with saved.open("w", encoding="utf-8") as stream:
             for row in rows:
                 stream.write(json.dumps(row, ensure_ascii=False) + "\n")
-        print(f"저장: {saved} · 크로마 {args.chroma} (실패·부재 {failed})\n")
+        print(
+            f"저장: {saved} · 크로마 {args.chroma} · 프로파일 {args.profile}"
+            f" · gamma {args.gamma:g} (실패·부재 {failed})\n"
+        )
 
     if not rows:
         print("추정된 곡이 없다.", file=sys.stderr)
@@ -662,7 +676,9 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             f"  ({ambiguous_relative}/{ambiguous})"
         )
 
-    tunings = [float(str(row["tuning_cents"])) for row in rows if row.get("tuning_cents")]
+    # **`if row.get(...)`를 쓰지 않는다.** 0.0이 거짓이라 정확히 0센트인 곡이
+    # 통째로 빠진다 — D-0057에서 분모 오류를 적어놓고 같은 세션에 또 냈다.
+    tunings = [float(str(row["tuning_cents"])) for row in rows if "tuning_cents" in row]
     if tunings:
         array = np.asarray(tunings)
         off = int((np.abs(array) > 10).sum())

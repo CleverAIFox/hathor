@@ -74,6 +74,19 @@ CQ_WINDOWS: tuple[int, ...] = (32768, 16384, 8192, 4096)
 고역은 반음 간격이 넓어 짧은 창으로 충분하며, 짧게 잡아야 시간 해상도를 지킨다.
 """
 
+PROFILE_KRUMHANSL = "krumhansl"
+PROFILE_TEMPERLEY = "temperley"
+PROFILE_NAMES = (PROFILE_KRUMHANSL, PROFILE_TEMPERLEY)
+"""조성 프로파일. **기본은 `krumhansl`이며 베이스라인이다** (D-0058).
+
+Krumhansl-Kessler는 1980년대 **서양 고전음악** 청취 실험에서 얻은 값이다.
+Temperley는 그것을 조성 판정 과제에 맞게 개정했으며 으뜸음과 5음의 무게를
+낮추고 나머지 음계음을 올렸다 — 대중음악처럼 화성이 단순하고 반복이 많은
+자료에서 낫다고 알려져 있다.
+
+**어느 쪽이 이 코퍼스에 맞는지는 실측해야 안다.** 둘 다 두고 비교한다.
+"""
+
 KRUMHANSL_MAJOR: tuple[float, ...] = (
     6.35,
     2.23,
@@ -103,6 +116,46 @@ KRUMHANSL_MINOR: tuple[float, ...] = (
     3.17,
 )
 """Krumhansl-Kessler 조성 프로파일. 으뜸음을 0으로 놓은 상대 가중치다."""
+
+TEMPERLEY_MAJOR: tuple[float, ...] = (
+    5.0,
+    2.0,
+    3.5,
+    2.0,
+    4.5,
+    4.0,
+    2.0,
+    4.5,
+    2.0,
+    3.5,
+    1.5,
+    4.0,
+)
+TEMPERLEY_MINOR: tuple[float, ...] = (
+    5.0,
+    2.0,
+    3.5,
+    4.5,
+    2.0,
+    4.0,
+    2.0,
+    4.5,
+    3.5,
+    2.0,
+    1.5,
+    4.0,
+)
+"""Temperley 개정 프로파일. 으뜸음 무게가 낮고 이끔음(7음)이 높다.
+
+K-K는 으뜸음이 6.35로 압도적이라 **베이스가 강한 곡에서 근음 하나에 끌려간다.**
+Temperley는 5.0으로 낮추고 이끔음을 2.88에서 4.0으로 올려 조성 전체의 모양을
+본다. 대중음악처럼 반복이 많은 자료에서 낫다고 알려져 있다.
+"""
+
+PROFILES: dict[str, tuple[tuple[float, ...], tuple[float, ...]]] = {
+    PROFILE_KRUMHANSL: (KRUMHANSL_MAJOR, KRUMHANSL_MINOR),
+    PROFILE_TEMPERLEY: (TEMPERLEY_MAJOR, TEMPERLEY_MINOR),
+}
 
 
 def to_mono(stereo: StereoWaveform) -> Waveform:
@@ -169,6 +222,26 @@ def cq_filterbank(
     return bank
 
 
+LOG_GAMMA = 0.0
+"""로그 압축 계수. `log(1 + gamma * x)`의 gamma다. **기본은 0(끔)이다** (D-0058).
+
+음향 처리에서 흔히 쓰는 기법이나 **실측이 도움 없음을 보였다.**
+
+가설은 "드럼과 배음이 크로마를 평평하게 만들어 24개 프로파일 어느 것과도
+비슷하게 맞는다"였다. 분포 엔트로피 3.52(균등 3.58)가 그 증상으로 보였다.
+
+**가설이 틀렸다. 피어슨 상관은 평균을 빼므로 균등 성분에 완전히 불변이다.**
+균등 성분을 90% 섞어 엔트로피를 3.17에서 3.58로 올려도 상관이 0.9590으로
+소수점 넷째 자리까지 같고 판정도 바뀌지 않았다. 드럼처럼 12개에 고르게
+실리는 성분은 K-S 판정에 영향을 주지 않는다.
+
+그리고 로그는 큰 값을 눌러 대비를 줄이므로 **상관을 오히려 낮춘다**
+(합성 실측 0.871 → 0.837). **얻을 것이 없고 잃을 것이 있다.**
+
+구현을 지우지 않고 남기는 이유는, 지우면 나중에 근거 없이 되살리게 되기
+때문이다. 반증 기록과 함께 둔다.
+"""
+
 TUNING_STEPS = 5
 """반음을 몇 조각으로 나눠 조율 편차를 훑을지. 홀수여야 0센트가 격자에 놓인다."""
 
@@ -214,6 +287,7 @@ def cq_chroma(
     *,
     sample_rate: int = SOURCE_SAMPLE_RATE,
     tuning_cents: float = 0.0,
+    gamma: float = LOG_GAMMA,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
     """반음 격자 크로마. 옥타브 대역마다 다른 창으로 STFT를 돌린다 (D-0056).
 
@@ -244,10 +318,30 @@ def cq_chroma(
         # 긴 창은 프레임이 적고 FFT 크기가 커 값이 커지므로 그 둘만 보정한다.
         totals += band_total / (frames * window_size)
 
+    return _compress(totals, gamma)
+
+
+def _compress(
+    totals: np.ndarray[tuple[int], np.dtype[np.float64]], gamma: float
+) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
+    """합을 1로 맞춘 뒤 로그 압축하고 다시 정규화한다.
+
+    **압축 전에 정규화한다.** 그러지 않으면 곡의 절대 음량이 압축 강도를 바꿔,
+    마스터링 볼륨이 조성 판정에 섞인다 — D-0021이 막으려던 것과 같은 종류다.
+    """
+    if gamma < 0:
+        raise ValueError(f"gamma는 0 이상이어야 한다: {gamma}")
     total = totals.sum()
     if total <= EPSILON:
         return np.zeros(12, dtype=np.float32)
-    return np.asarray(totals / total, dtype=np.float32)
+    normalized = totals / total
+    if gamma > 0:
+        normalized = np.log1p(gamma * normalized)
+        scale = normalized.sum()
+        if scale <= EPSILON:
+            return np.zeros(12, dtype=np.float32)
+        normalized = normalized / scale
+    return np.asarray(normalized, dtype=np.float32)
 
 
 def linear_chroma(
@@ -356,25 +450,30 @@ def _correlate(vector: np.ndarray, profile: np.ndarray) -> float:
     return float((left * right).sum() / denominator) if denominator > EPSILON else 0.0
 
 
-def estimate_key(chroma_vector: np.ndarray) -> KeyEstimate:
+def estimate_key(chroma_vector: np.ndarray, *, profile: str = PROFILE_KRUMHANSL) -> KeyEstimate:
     """크로마에서 조성을 추정한다 (Krumhansl-Schmuckler).
 
     24개 후보(12 으뜸음, 장단 각각) 전부와 상관을 재고 1·2등을 남긴다.
     동점이면 인덱스가 앞선 쪽이 이긴다 — 검색 지표의 argmax 규약과 같다.
+
+    `profile`은 가중치 표를 고른다. 기본 `krumhansl`이 베이스라인이다.
     """
     if chroma_vector.shape != (12,):
         raise ValueError(f"크로마는 12차원이어야 한다: {chroma_vector.shape}")
+    if profile not in PROFILES:
+        raise ValueError(f"profile은 {PROFILE_NAMES} 중 하나여야 한다: {profile}")
 
-    major = np.asarray(KRUMHANSL_MAJOR, dtype=np.float64)
-    minor = np.asarray(KRUMHANSL_MINOR, dtype=np.float64)
+    major_table, minor_table = PROFILES[profile]
+    major = np.asarray(major_table, dtype=np.float64)
+    minor = np.asarray(minor_table, dtype=np.float64)
     vector = np.asarray(chroma_vector, dtype=np.float64)
 
     scored: list[tuple[float, int, Key]] = []
     for tonic in range(12):
         rotated = np.roll(vector, -tonic)
-        for order, (mode, profile) in enumerate(((Mode.MAJOR, major), (Mode.MINOR, minor))):
+        for order, (mode, weights) in enumerate(((Mode.MAJOR, major), (Mode.MINOR, minor))):
             key = Key(tonic=PITCH_CLASSES[tonic], mode=mode)
-            scored.append((_correlate(rotated, profile), tonic * 2 + order, key))
+            scored.append((_correlate(rotated, weights), tonic * 2 + order, key))
 
     scored.sort(key=lambda item: (-item[0], item[1]))
     best, second = scored[0], scored[1]
@@ -392,6 +491,7 @@ def chroma(
     mode: str = CHROMA_CQ,
     sample_rate: int = SOURCE_SAMPLE_RATE,
     tuning_cents: float = 0.0,
+    gamma: float = LOG_GAMMA,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
     """피치클래스 12차원 에너지. 합이 1이 되도록 정규화한다.
 
@@ -399,7 +499,7 @@ def chroma(
     비교용으로만 남긴다** — 저역에서 반음을 가르지 못한다.
     """
     if mode == CHROMA_CQ:
-        return cq_chroma(waveform, sample_rate=sample_rate, tuning_cents=tuning_cents)
+        return cq_chroma(waveform, sample_rate=sample_rate, tuning_cents=tuning_cents, gamma=gamma)
     if mode == CHROMA_LINEAR:
         return linear_chroma(waveform, sample_rate=sample_rate)
     raise ValueError(f"mode는 {CHROMA_MODES} 중 하나여야 한다: {mode}")
@@ -410,5 +510,10 @@ def estimate_key_from_waveform(
     *,
     mode: str = CHROMA_CQ,
     sample_rate: int = SOURCE_SAMPLE_RATE,
+    gamma: float = LOG_GAMMA,
+    profile: str = PROFILE_KRUMHANSL,
 ) -> KeyEstimate:
-    return estimate_key(chroma(to_mono(waveform), mode=mode, sample_rate=sample_rate))
+    return estimate_key(
+        chroma(to_mono(waveform), mode=mode, sample_rate=sample_rate, gamma=gamma),
+        profile=profile,
+    )
