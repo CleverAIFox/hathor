@@ -42,12 +42,19 @@ def split_segments(raw: str | None) -> list[str]:
         return []
 
     text = normalize_lyrics(raw)
-    blocks = [block for block in BLANK_LINE.split(text) if block.strip()]
-    if len(blocks) < MIN_SEGMENTS:
-        blocks = _group_lines(text)
-
-    segments = [cleaned for block in blocks if (cleaned := _clean(block))]
+    segments = _clean_all(BLANK_LINE.split(text))
+    if len(segments) < MIN_SEGMENTS:
+        # **폴백 판정은 정리 뒤에 한다** (D-0050). 앞에서 하면 블록 수만 보고
+        # 넘어가는데, 정리가 짧은 블록을 버려 그 뒤에 최소 개수를 밑돌아도
+        # 되돌아올 길이 없다. `BIGBANG - 멍청한 사랑`이 그 경우였다 —
+        # 64줄짜리 가사인데 빈 줄이 하나뿐이라 블록이 2개였고, 뒤 블록이
+        # 8자 미만이라 버려져 1개가 됐고, 곡 전체가 폐기됐다.
+        segments = _clean_all(_group_lines(text))
     return segments if len(segments) >= MIN_SEGMENTS else []
+
+
+def _clean_all(blocks: list[str]) -> list[str]:
+    return [cleaned for block in blocks if (cleaned := _clean(block))]
 
 
 def _group_lines(text: str) -> list[str]:

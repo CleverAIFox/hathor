@@ -250,3 +250,35 @@ def test_cli_lyrics_reports_settings(tmp_path, capsys):
     assert "n-gram 3,4" in output
     assert "공백제거" in output
     assert "반복감쇠" in output
+
+
+def test_fallback_runs_after_cleaning_not_before():
+    """폴백 판정은 정리 뒤에 한다 (D-0050).
+
+    실측으로 잡은 결함이다. `BIGBANG - 멍청한 사랑`은 64줄짜리 가사인데 빈 줄이
+    하나뿐이라 블록이 2개였다. 블록 수만 보고 폴백을 건너뛴 뒤, 정리가 8자 미만
+    블록을 버려 1개가 됐고, **곡 전체가 폐기됐다.** 오디오축 1004곡 대 가사축
+    1003곡의 차이가 이것이었다.
+
+    블록 수는 충족하는데 정리 후 미달인 경우가 이 결함의 조건이다.
+    """
+    from hathor.domain.services.lyrics_segmentation import split_segments
+
+    body = "\n".join(f"가사 줄 번호 {index} 입니다" for index in range(63))
+    segments = split_segments(body + "\n\n짧다")
+    assert len(segments) >= 2
+
+
+def test_ordinary_songs_are_unchanged_by_the_fix():
+    """정상 곡의 분할이 바뀌면 D-0031~D-0048의 가사축 수치가 전부 무효가 된다.
+
+    빈 줄 블록이 이미 충분하면 폴백을 타지 않으므로 결과가 같아야 한다.
+    """
+    from hathor.domain.services.lyrics_segmentation import split_segments
+
+    text = "첫 번째 절 가사입니다\n\n후렴 부분입니다 여기가\n\n두 번째 절 가사입니다"
+    assert split_segments(text) == [
+        "첫 번째 절 가사입니다",
+        "후렴 부분입니다 여기가",
+        "두 번째 절 가사입니다",
+    ]
