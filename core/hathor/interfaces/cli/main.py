@@ -286,6 +286,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     lyrics = sub.add_parser("lyrics", help="가사축")
     lyrics_sub = lyrics.add_subparsers(dest="lyrics_command", required=True)
+    lyrics_structure = lyrics_sub.add_parser(
+        "structure", help="가사 반복 패턴에서 곡 구조 분포 실측 (D-0049)"
+    )
+    lyrics_structure.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
+    lyrics_structure.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="반복 판정 자카드 하한. 근거로 정한 값이 아니다 (실측 필요)",
+    )
+    lyrics_structure.add_argument(
+        "--sweep",
+        action="store_true",
+        help="임계값을 0.3~0.7로 훑어 민감도를 본다. 하나의 값으로 결론내지 않기 위해서다",
+    )
+    lyrics_structure.add_argument("--samples", type=int, default=5, help="예시로 보일 곡 수")
     lyrics_extract = lyrics_sub.add_parser("extract", help="가사 특징 추출 (CPU, 수 초)")
     lyrics_extract.add_argument(
         "--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
@@ -363,6 +379,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "lyrics":
+        if args.lyrics_command == "structure":
+            return _run_lyrics_structure(args)
         return _run_lyrics_extract(args)
     if args.command == "search":
         return _run_search(args)
@@ -1245,6 +1263,64 @@ def _run_eval_fusion(args: argparse.Namespace) -> int:
     print("random은 하한, oracle은 코퍼스 구성상 도달 가능한 상한이다.")
     path = JsonEvaluationStore(args.out).write(report.as_record(), f"fusion-k{args.k}")
     print(f"리포트: {path}")
+    return 0
+
+
+def _run_lyrics_structure(args: argparse.Namespace) -> int:
+    """코퍼스의 곡 구조 분포를 실측한다 (D-0049).
+
+    **지표를 먼저 만든다.** 생성한 구조가 그럴듯한지는 절대 기준이 없으나,
+    코퍼스 분포 안에 드는지는 잴 수 있다. 그 분포가 여기서 나온다.
+
+    임계값 0.5는 근거로 정한 값이 아니므로 `--sweep`으로 민감도를 함께 본다.
+    하나의 값에서 나온 분포로 결론내면 그 값이 결론에 섞인다.
+    """
+    from hathor.domain.services.lyrics_segmentation import split_segments
+    from hathor.domain.services.song_structure import extract_pattern, summarize
+
+    store = JsonlScanStore(Path(args.out))
+    songs: list[tuple[str, list[str]]] = []
+    for track in store.read_tracks():
+        segments = split_segments(track.tags.lyrics_text)
+        if len(segments) >= 2:
+            songs.append((track.source_key, segments))
+
+    if not songs:
+        print("가사 구간이 있는 곡이 없다. --out 경로를 확인한다.", file=sys.stderr)
+        return 1
+
+    thresholds = [0.3, 0.4, 0.5, 0.6, 0.7] if args.sweep else [args.threshold]
+    print(f"곡 {len(songs)}개\n")
+
+    for threshold in thresholds:
+        patterns = [extract_pattern(segments, threshold=threshold) for _, segments in songs]
+        stats = summarize(patterns)
+        all_unique = sum(1 for pattern in patterns if pattern.repeat_ratio == 0.0)
+        all_repeat = sum(1 for pattern in patterns if pattern.repeat_ratio == 1.0)
+        print(
+            f"임계 {threshold:.1f}  평균 구간 {stats.mean_length:5.2f}  "
+            f"평균 반복비율 {stats.mean_repeat_ratio:.4f}  "
+            f"반복 없음 {all_unique:4d}곡 ({all_unique / len(songs):5.1%})  "
+            f"전부 반복 {all_repeat:3d}곡"
+        )
+
+    threshold = thresholds[-1] if not args.sweep else args.threshold
+    patterns = [extract_pattern(segments, threshold=threshold) for _, segments in songs]
+    stats = summarize(patterns)
+
+    print(f"\n--- 임계 {threshold:.1f} 분포 ---")
+    print("반복 비율 구간별 곡 수")
+    for edge, count in stats.ratio_histogram:
+        bar = "#" * max(1, round(count / len(songs) * 60))
+        print(f"  {edge:.1f}~  {count:4d}  {bar}")
+
+    print("\n예시")
+    for key, segments in songs[: args.samples]:
+        pattern = extract_pattern(segments, threshold=threshold)
+        print(f"  {pattern.as_text():<24} {key[:56]}")
+
+    print("\n반복이 없는 곡은 후렴이 없거나 임계가 너무 높은 것이다. 둘을 구분하려면")
+    print("--sweep 결과에서 임계를 낮출 때 그 수가 줄어드는지 본다 (실측 필요).")
     return 0
 
 

@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **BGE-M3 평균 풀링 1조건.** CLS는 M1 4.0배·M2 3.4배로 5배 기준 미달이라 판정 보류다 (D-0046). **가사축은 이 조건까지이며 그 뒤 생성 경로로 넘어간다** |
+| **다음 작업** | **생성 경로.** 가사축은 종료했다 — 풀링이 병목이 아니었고 M1 4.2배로 기준 미달, 해시 8192가 정본이다 (D-0048). 구조 생성을 가사 반복 패턴에서 뽑는다 (D-0049) |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -168,6 +168,7 @@ docs/DECISIONS.md   결정 기록 (GR-0.2)
 tools/step0_check.py  환경·라이브러리 실측 스크립트
 tools/sync_decision_index.py  부록 A 색인 생성·검증 (D-0042)
 tools/lyrics_language_profile.py  가사 언어 구성 실측 (D-0044)
+tools/lyrics_exclusion_probe.py   가사 제외 곡 원인 진단 (D-0048)
 ```
 
 `hathor/cli.py`는 문서 §5.3.3의 `python -m hathor.cli` 명령을 유지하기 위한 진입 모듈이며,
