@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **화성 어휘 조건화 (O-21).** 조성 추정은 종료했다 (D-0061). 참조곡을 바꿔도 진행이 그대로인 것이 시드 퓨전의 마지막 미완성 조각이다. **생성기보다 판정 장치가 먼저다** (D-0062) — 아래 `eval harmony-prior`의 λ\*가 0이면 크로마 접근을 기각한다 |
+| **다음 작업** | **O-21 닫힘 (D-0063).** 참조곡이 화성 어휘에 반영된다 — 효과 크기는 K-K 프로파일 대비 14%로 작지만 실재한다. 시드 퓨전의 조각이 전부 붙었다. 남은 것은 O-26(화음 가중 근거) · O-27(크로마 대비 부족)이며 **둘 다 무엇과 비교할지 정하기 전에는 착수하지 않는다** |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -111,6 +111,25 @@ uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10  
 ```bash
 uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 (M4)
 ```
+
+### 참조곡 화성 조건화 듣기 (O-21 · D-0063)
+
+```bash
+cd core
+export HATHOR_LIBRARY_ROOT=/mnt/d/노래/노래   # 기기마다 다르다 (D-0009)
+
+# 조성까지 참조곡을 따른다
+uv run python -m hathor.cli generate --seed 7 --midi var/out/a.mid --reference "10CM-폰서트"
+
+# **조성을 고정해 화성만 갈리게 한다.** 통제된 비교는 이쪽이다
+uv run python -m hathor.cli generate --seed 7 --midi var/out/fixed-a.mid \
+    --reference "10CM-폰서트" --key "C major"
+```
+
+CLI가 화성 줄에 `(참조곡 반영)` 또는 `(시드만)`을 찍는다.
+
+**효과는 작다.** 사전이 거의 평평하므로 같은 시드에서 두 참조곡의 진행이 몇 마디만
+다르거나 같을 수도 있다. 결함이 아니라 D-0063이 측정한 크기다.
 
 ### 화성 어휘 조건화 판정 (O-21 · D-0062)
 
