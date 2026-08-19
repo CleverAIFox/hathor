@@ -1,4 +1,0 @@
-CONTRIBUTING.md
-docs/DESIGN.md
-docs/archive/README.md
-tools/sync_decision_index.py
