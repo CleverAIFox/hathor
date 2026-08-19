@@ -1966,13 +1966,19 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
         print(f"  {weight:>4.2f}  {score:.4f}{marker}")
 
     verdict = "정보 있음" if result.is_conditioning_informative else "정보 없음"
-    print(f"\nλ* = {result.best_lambda:.2f} · 귀무 λ* = {result.null_lambda:.2f}")
+    ratio = result.null_gain / result.self_gain if result.self_gain > 0 else float("inf")
+    print(f"\nλ*      = {result.best_lambda:.2f}  낙폭 {result.self_gain:.4f}")
+    print(
+        f"귀무 λ* = {result.null_lambda:.2f}  낙폭 {result.null_gain:.4f}  (자기선의 {ratio:.1%})"
+    )
     print(f"판정: **{verdict}**")
 
     print("\n--- 읽는 법 ---")
     print("λ*가 판정이다. 0이면 참조곡이 코퍼스 평균에 보탤 것이 없고 O-21의 크로마")
     print("접근을 기각한다. 0보다 크면 그 값이 곧 생성기의 혼합 계수다.")
-    print("**귀무 λ*가 0이 아니면 지표를 의심한다** — 틀린 곡을 섞어 좋아질 이유가 없다.")
+    print("**귀무 λ*가 0이 아닌 것 자체는 이상이 아니다** (D-0065). 곡끼리 독립인 합성")
+    print("자료에서도 0.1이 나온다. 볼 것은 위치가 아니라 낙폭이며, 자기선의 낙폭에 비해")
+    print("작아야 한다. 비율이 크면 자기선의 이득도 곡 고유성이 아닐 수 있다.")
     print("`uniform`은 천장이 아니다. 구조가 없으면 균등이 최적이라 코퍼스가 진다.")
     print("**포착 비율이 크기다** (D-0063). 격차의 절대값은 크로마가 평평하면 어차피 작다.")
     print("`oracle`은 뒷반쪽으로 뒷반쪽을 맞힌 값이며 어떤 선도 이보다 낮을 수 없다.")
