@@ -116,10 +116,43 @@ def test_코퍼스_평균은_한_곡으로는_계산되지_않는다():
 
 
 def test_짝짓기에_고정점이_없다():
+    generator = np.random.default_rng(0)
     for count in (2, 3, 17, 100):
-        pairing = _derangement(count, PriorCondition())
+        pairing = _derangement(count, generator)
         assert not np.any(pairing == np.arange(count))
         assert sorted(pairing.tolist()) == list(range(count))
+
+
+def test_짝짓기가_고정_오프셋_회전이_아니다():
+    """**D-0065의 본문이다.**
+
+    고정 오프셋 회전은 관측 순서에 이웃한 곡끼리 짝짓는다. JSONL 순서는 파일명
+    정렬 순서이고 파일명이 `아티스트-제목` 꼴이라 **같은 가수 곡이 연속으로 붙는다.**
+    그러면 `other`가 남남이 아니라 같은 가수의 옆 곡이 되어 귀무선이 아니게 된다.
+
+    차이가 전부 같으면 회전이다.
+    """
+    pairing = _derangement(200, np.random.default_rng(20260819))
+    gaps = (pairing - np.arange(200)) % 200
+    assert len(set(gaps.tolist())) > 1
+
+
+def test_귀무선을_여러_번_짝지어_평균한다():
+    """짝짓기 한 번의 우연을 없앤다. 반복 수를 바꾸면 결과가 달라져야 한다."""
+    rng = np.random.default_rng(71)
+    observations = _observations(_dirichlet(rng, 60, 0.5), _dirichlet(rng, 60, 0.5))
+    once = compare_priors(observations, PriorCondition(null_repeats=1))
+    many = compare_priors(observations, PriorCondition(null_repeats=16))
+    assert once.other_score != pytest.approx(many.other_score)
+    # 자기선과 코퍼스선은 짝짓기와 무관하므로 그대로여야 한다.
+    assert once.self_score == pytest.approx(many.self_score)
+    assert once.corpus_score == pytest.approx(many.corpus_score)
+    assert once.oracle_score == pytest.approx(many.oracle_score)
+
+
+def test_반복_수가_1_미만이면_거부한다():
+    with pytest.raises(ValueError, match="null_repeats"):
+        PriorCondition(null_repeats=0)
 
 
 # ------------------------------------------------------------------- 조건 객체
@@ -227,17 +260,24 @@ def test_곡_고유_신호가_없으면_정보가_없다고_판정한다():
 
     result = compare_priors(_observations(heads, tails))
     assert not result.is_conditioning_informative
-    assert result.best_lambda == pytest.approx(0.0)
+    # 곡선이 평평하므로 λ*의 위치가 아니라 낙폭이 무시할 만한지를 본다 (D-0065).
+    assert result.self_gain < 0.001
 
 
-def test_귀무선의_최적_람다는_0이다():
-    """틀린 곡을 섞는 것이 도움이 되면 지표가 고장 난 것이다."""
+def test_귀무선의_낙폭은_자기선보다_훨씬_작다():
+    """**λ*의 위치가 아니라 낙폭을 본다** (D-0065).
+
+    "틀린 곡을 섞어 좋아질 이유가 없으니 귀무 λ*는 0이어야 한다"고 적었다가
+    **곡끼리 완전히 독립인 이 합성 자료에서 0.1이 나오는 것을 확인했다.**
+    매끄러운 코퍼스 평균에 뾰족한 벡터를 조금 섞으면 중앙값 교차 엔트로피가
+    아주 조금 내려갈 수 있다. 위치는 기제의 신호가 아니고 크기가 신호다.
+    """
     rng = np.random.default_rng(20260821)
     latent = _dirichlet(rng, 120, 0.4)
     heads = 0.75 * latent + 0.25 * _dirichlet(rng, 120, 5.0)
     tails = 0.75 * latent + 0.25 * _dirichlet(rng, 120, 5.0)
     result = compare_priors(_observations(heads, tails))
-    assert result.null_lambda == pytest.approx(0.0)
+    assert result.null_gain < 0.05 * result.self_gain
 
 
 # ------------------------------------------------------------------ 애매한 곡

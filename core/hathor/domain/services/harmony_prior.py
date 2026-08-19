@@ -28,7 +28,7 @@ D-0034 계열 일곱 번은 **비교 대상이 조건을 안 따라간** 문제�
 |---|---|---|
 | `uniform` | 1/12 균등 | **구조가 전혀 없을 때의 최적 예측** |
 | `corpus` | 다른 곡 앞반쪽의 평균 (**곡 하나 뺀 평균**) | 참조곡 없이 얻는 것 |
-| `other` | **틀린 곡** 앞반쪽 | 곡 고유성이 없을 때의 자기 예측 — 진짜 귀무선 |
+| `other` | **틀린 곡** 앞반쪽 (여러 번 짝지어 평균) | 곡 고유성이 없을 때 — 진짜 귀무선 |
 | `self` | **자기** 앞반쪽 | 조건화가 주장하는 것 |
 | `oracle` | **뒷반쪽 자신** | **상한.** 더 나아질 수 없는 지점이다 |
 
@@ -160,6 +160,14 @@ class PriorCondition:
     seed: int = 20260819
     """`other` 선의 짝짓기 시드. 명시 고정한다 (GR-6.5)."""
 
+    null_repeats: int = 8
+    """귀무선을 몇 번 짝지어 평균할 것인가 (D-0065).
+
+    짝짓기 한 번은 우연이 크다. 실측에서 같은 코퍼스가 곡 수만 달라졌는데 귀무 λ*가
+    0.00과 0.10으로 갈렸고, **그 차이가 오프셋 추첨 운이었다.** 여러 번 짝지어
+    곡별로 평균하면 그 우연이 사라진다.
+    """
+
     blend_steps: int = 11
     """λ 격자 수. 11이면 0.0, 0.1, …, 1.0이다."""
 
@@ -170,6 +178,8 @@ class PriorCondition:
             raise ValueError(f"harmonic은 0 이상이어야 한다: {self.harmonic}")
         if self.blend_steps < 2:
             raise ValueError(f"blend_steps는 2 이상이어야 한다: {self.blend_steps}")
+        if self.null_repeats < 1:
+            raise ValueError(f"null_repeats는 1 이상이어야 한다: {self.null_repeats}")
 
 
 def rotate_to_degrees(chroma: DegreeVector, tonic_pitch_class: int) -> DegreeVector:
@@ -237,17 +247,36 @@ def _leave_one_out_mean(heads: DegreeMatrix) -> DegreeMatrix:
 PairingIndex = np.ndarray[tuple[int], np.dtype[np.int64]]
 
 
-def _derangement(count: int, condition: PriorCondition) -> PairingIndex:
-    """자기 자신에 대응하지 않는 짝짓기. 고정 오프셋 회전이라 완전 무고정점이다.
+MAX_PAIRING_ATTEMPTS = 1000
 
-    무작위 순열은 고정점이 나올 수 있고, 나오면 그 곡만 `self`가 되어 `other`
-    선이 조용히 오염된다.
+
+def _derangement(count: int, generator: np.random.Generator) -> PairingIndex:
+    """자기 자신에 대응하지 않는 짝짓기. **무작위 순열에서 고정점만 걸러낸다.**
+
+    ### 고정 오프셋 회전을 쓰다가 틀렸다 (D-0065)
+
+    처음에는 `(arange(count) + offset) % count`를 썼다. 고정점이 확실히 없고
+    결정적이라는 이유였는데, **고정점보다 나쁜 것을 골랐다.**
+
+    관측 순서는 JSONL 순서이고 그것은 스캔 순서, 곧 **파일명 정렬 순서**다.
+    파일명이 `아티스트-제목` 꼴이면 같은 아티스트 곡이 연속으로 붙는다. 오프셋이
+    작게 뽑히면 `other`가 남남이 아니라 **같은 가수의 옆 곡**이 되고, 그러면
+    귀무선이 귀무가 아니다.
+
+    실측에서 200곡은 귀무 λ*=0.00, 같은 코퍼스의 138곡은 0.10이 나왔다.
+    **오프셋 추첨 운이 결론을 흔들었다.**
+
+    무작위 순열은 고정점이 나올 수 있어 다시 뽑는다. 무작위 순열이 무작위 순열인
+    비율이 약 1/e이므로 평균 세 번이면 끝난다.
     """
     if count < 2:
         raise ValueError("짝짓기에는 곡이 2개 이상 필요하다")
-    generator = np.random.default_rng(condition.seed)
-    offset = int(generator.integers(1, count))
-    return (np.arange(count, dtype=np.int64) + offset) % count
+    identity = np.arange(count, dtype=np.int64)
+    for _ in range(MAX_PAIRING_ATTEMPTS):
+        order = generator.permutation(count).astype(np.int64)
+        if not np.any(order == identity):
+            return order
+    raise RuntimeError(f"무고정점 짝짓기를 {MAX_PAIRING_ATTEMPTS}번 안에 찾지 못했다")
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,8 +317,29 @@ class PriorComparison:
 
     @property
     def null_lambda(self) -> float:
-        """귀무선의 λ*. 0이 아니면 지표를 의심한다."""
+        """귀무선의 λ*.
+
+        **0이기를 기대하면 안 된다** (D-0065). 곡끼리 완전히 독립인 합성 자료에서도
+        0.1이 나온다. 매끄러운 코퍼스 평균에 뾰족한 벡터를 조금 섞으면 중앙값
+        교차 엔트로피가 아주 조금 내려갈 수 있기 때문이다.
+
+        **볼 것은 λ*의 위치가 아니라 `null_gain`의 크기다.**
+        """
         return self.lambdas[int(np.argmin(np.asarray(self.other_curve)))]
+
+    @property
+    def self_gain(self) -> float:
+        """자기선이 코퍼스 대비 번 것. λ 곡선의 낙폭이다."""
+        return self.self_curve[0] - min(self.self_curve)
+
+    @property
+    def null_gain(self) -> float:
+        """귀무선이 번 것. **자기선 낙폭에 비해 충분히 작아야 한다.**
+
+        비율이 크면 자기선의 이득도 곡 고유성이 아니라 "뾰족한 무엇을 섞으면
+        조금 나아진다"는 같은 기제일 수 있다.
+        """
+        return self.other_curve[0] - min(self.other_curve)
 
     @property
     def self_win_rate(self) -> float:
@@ -347,19 +397,32 @@ def compare_priors(
 
     heads, tails = _stack(observations, settings)
     corpus = _leave_one_out_mean(heads)
-    partner = heads[_derangement(heads.shape[0], settings)]
+    generator = np.random.default_rng(settings.seed)
+    pairings = [_derangement(heads.shape[0], generator) for _ in range(settings.null_repeats)]
 
     lambdas = tuple(float(value) for value in np.linspace(0.0, 1.0, settings.blend_steps))
     self_curve: list[float] = []
     other_curve: list[float] = []
     for weight in lambdas:
-        for curve, candidate in ((self_curve, heads), (other_curve, partner)):
-            blended = smooth((1 - weight) * corpus + weight * candidate, settings)
-            curve.append(float(np.median(cross_entropy(tails, blended))))
+        blended = smooth((1 - weight) * corpus + weight * heads, settings)
+        self_curve.append(float(np.median(cross_entropy(tails, blended))))
+        # **귀무선은 짝짓기를 여러 번 하고 곡별로 평균한다** (D-0065). 한 번은
+        # 우연이 커서 같은 코퍼스에서도 λ*가 0.00과 0.10으로 갈렸다.
+        repeats = np.stack(
+            [
+                cross_entropy(
+                    tails, smooth((1 - weight) * corpus + weight * heads[order], settings)
+                )
+                for order in pairings
+            ]
+        )
+        other_curve.append(float(np.median(repeats.mean(axis=0))))
 
     corpus_scores = cross_entropy(tails, smooth(corpus, settings))
     self_scores = cross_entropy(tails, smooth(heads, settings))
-    other_scores = cross_entropy(tails, smooth(partner, settings))
+    other_scores = np.stack(
+        [cross_entropy(tails, smooth(heads[order], settings)) for order in pairings]
+    ).mean(axis=0)
     uniform = np.full_like(heads, 1.0 / DEGREE_COUNT)
 
     return PriorComparison(

@@ -55,15 +55,18 @@ def test_신호가_있으면_정보_있음을_낸다(tmp_path, capsys):
     assert main(["eval", "harmony-prior", "--replay", str(path)]) == 0
     out = capsys.readouterr().out
     assert "정보 있음" in out
-    assert "귀무 λ* = 0.00" in out
+    # **귀무 λ*의 위치는 검사하지 않는다** (D-0065). 독립 자료에서도 0이 아니다.
+    # 낙폭이 자기선에 비해 작은지가 검사할 것이다.
+    assert "귀무 λ*" in out
 
 
 def test_신호가_없으면_정보_없음을_낸다(tmp_path, capsys):
     path = write_keys(tmp_path / "keys.jsonl", synth_rows(120, informative=False))
     assert main(["eval", "harmony-prior", "--replay", str(path)]) == 0
     out = capsys.readouterr().out
+    # **λ*의 위치는 검사하지 않는다** (D-0065). 신호가 없으면 곡선이 평평해
+    # argmin이 부동소수점 잡음에 흔들린다. 판정 자체가 검사할 것이다.
     assert "정보 없음" in out
-    assert "λ* = 0.00" in out
 
 
 def test_반쪽_크로마가_없으면_안내하고_실패한다(tmp_path, capsys):
