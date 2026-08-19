@@ -168,6 +168,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="앞뒤 반쪽 크로마도 뽑는다 (D-0062). `eval harmony-prior`가 이것을 요구한다",
     )
+    keys.add_argument(
+        "--aggregate",
+        choices=("mean", "median"),
+        default="mean",
+        help="전곡을 한 번에 변환할지(mean) 창별 중앙값을 낼지(median). O-27 후보 (b)",
+    )
+    keys.add_argument(
+        "--window-seconds",
+        type=float,
+        default=10.0,
+        help="--aggregate median의 창 길이(초)",
+    )
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -794,6 +806,8 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                     mode=args.chroma,
                     gamma=args.gamma,
                     harmonic=args.harmonic,
+                    aggregate=args.aggregate,
+                    window_seconds=args.window_seconds,
                 )
                 estimate = estimate_key(extracted, profile=args.profile)
                 cents = (
@@ -819,7 +833,12 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 halves = {}
                 for name, segment in (("head", mono[:middle]), ("tail", mono[middle:])):
                     halves[name] = chroma_of(
-                        segment, mode=args.chroma, gamma=args.gamma, harmonic=args.harmonic
+                        segment,
+                        mode=args.chroma,
+                        gamma=args.gamma,
+                        harmonic=args.harmonic,
+                        aggregate=args.aggregate,
+                        window_seconds=args.window_seconds,
                     )
                 head_estimate = estimate_key(halves["head"], profile=args.profile)
                 record["chroma_head"] = [round(float(value), 6) for value in halves["head"]]
@@ -838,7 +857,9 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 stream.write(json.dumps(row, ensure_ascii=False) + "\n")
         print(
             f"저장: {saved} · 크로마 {args.chroma} · 프로파일 {args.profile}"
-            f" · gamma {args.gamma:g} (실패·부재 {failed})\n"
+            f" · gamma {args.gamma:g} · 배음 {args.harmonic:g} · 집계 {args.aggregate}"
+            f"{f'({args.window_seconds:g}초 창)' if args.aggregate == 'median' else ''}"
+            f" (실패·부재 {failed})\n"
         )
 
     if not rows:
