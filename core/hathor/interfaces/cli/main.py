@@ -108,9 +108,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--root", type=Path, default=None, help="라이브러리 루트. 조성 추정에 음원이 필요하다"
     )
     gen.add_argument(
+        "--key",
+        help='출력 조성을 고정한다 (예: "C major"). 참조곡 화성 조건화는 그대로 걸린다. '
+        "조성 차이를 뺀 채 화성만 비교해 들을 때 쓴다",
+    )
+    gen.add_argument(
         "--no-key-estimation",
         action="store_true",
-        help="조성 추정을 끄고 C장조를 쓴다. 음원 없이 돌릴 때",
+        help="조성 추정을 끄고 C장조를 쓴다. 음원 없이 돌릴 때. 화성 조건화도 함께 꺼진다",
     )
     gen.add_argument("--max-references", type=int, default=5, help="참조곡 상한 (D-0011)")
     gen.add_argument(
@@ -557,7 +562,15 @@ def _estimate_key(
     estimates: dict[str, KeyEstimate] = {}
     for source_key in source_keys:
         path = root / source_key
-        if not path.exists():
+        try:
+            present = path.exists()
+        except OSError as error:
+            # WSL에서 드라이브 마운트가 끊기면 `exists()`가 False가 아니라
+            # OSError(Errno 19)를 던진다. 복구 가능한 상황이 트레이스백이 되면
+            # 안 된다 — 바로 아래 디코딩은 이미 감싸 두었다.
+            print(f"음원 경로를 열 수 없다({error}): {source_key[:40]}", file=sys.stderr)
+            continue
+        if not present:
             print(f"음원이 없어 건너뛴다: {source_key[:60]}", file=sys.stderr)
             continue
         try:
@@ -573,6 +586,42 @@ def _estimate_key(
 
     best = max(estimates.values(), key=lambda estimate: estimate.margin)
     return best.key, estimates
+
+
+def _parse_key(text: str) -> Key:
+    """`"C major"` 같은 문자열을 조성으로 바꾼다."""
+    from hathor.domain.value_objects.key import PITCH_CLASSES, Key, Mode
+
+    parts = text.strip().rsplit(" ", 1)
+    if len(parts) != 2 or parts[0] not in PITCH_CLASSES:
+        raise SystemExit(f'--key는 "C major" 형식이어야 한다: {text}')
+    try:
+        mode = Mode(parts[1].lower())
+    except ValueError:
+        raise SystemExit(f"--key의 선법은 major 또는 minor여야 한다: {parts[1]}") from None
+    return Key(tonic=parts[0], mode=mode)
+
+
+def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | None:
+    """참조곡들의 크로마를 도수 사전 하나로 합친다 (O-21 · D-0063).
+
+    **각 곡을 자기 으뜸음으로 회전시킨 뒤 평균한다.** 피치클래스 공간에서 더하면
+    서로 다른 조성이 겹쳐 뭉개진다.
+
+    조성을 추정하지 못했으면 `None`이고, 그러면 화성은 이전처럼 시드만 따른다 —
+    조건화가 조용히 반쯤 걸리는 것보다 아예 안 걸리는 편이 낫다.
+    """
+    from hathor.domain.services.harmony_prior import merge_degree_priors
+    from hathor.domain.value_objects.key import PITCH_CLASSES
+
+    usable = [
+        (estimate.chroma, PITCH_CLASSES.index(estimate.key.tonic))
+        for estimate in estimates.values()
+        if len(estimate.chroma) == 12
+    ]
+    if not usable:
+        return None
+    return tuple(float(value) for value in merge_degree_priors(usable))
 
 
 def _report_harmonic_sweep(rows: list[dict[str, object]], profile: str) -> int:
@@ -934,8 +983,16 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
 
     references = [extract_pattern(segments) for _, segments in chosen]
     estimated_key, estimates = _estimate_key(args, [song[0] for song in chosen])
+    output_key = _parse_key(args.key) if args.key else estimated_key
+    harmony_prior = _harmony_prior(estimates)
     job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
-    data, summary = render(job, references, key=estimated_key, tempo_bpm=args.tempo)
+    data, summary = render(
+        job,
+        references,
+        key=output_key,
+        tempo_bpm=args.tempo,
+        harmony_prior=harmony_prior,
+    )
 
     args.midi.parent.mkdir(parents=True, exist_ok=True)
     args.midi.write_bytes(data)
@@ -948,8 +1005,9 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
             flag = " (애매)" if estimate.margin < KEY_MARGIN_FLOOR else ""
             tag = f"  [{estimate.key}{flag}]"
         print(f"  {pattern.as_text():<20} {source_key[:52]}{tag}")
+    conditioned = "참조곡 반영" if summary["harmony_conditioned"] else "시드만"
     print(
-        f"\n구조 {summary['structure']} / 화성 {' '.join(summary['harmony'])} / "
+        f"\n구조 {summary['structure']} / 화성 {' '.join(summary['harmony'])} ({conditioned}) / "
         f"{summary['key']} {summary['tempo_bpm']}BPM"
     )
     print(
@@ -1864,19 +1922,22 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
         f"{' · 애매 제외' if condition.confident_only else ''}\n"
     )
 
-    header = f"{'선':<10}{'중앙값 CE':>12}{'코퍼스 대비':>14}{'곡 단위 승률':>14}"
+    header = f"{'선':<10}{'중앙값 CE':>12}{'코퍼스 대비':>14}{'포착 비율':>12}{'곡 단위 승률':>14}"
     print(header)
-    print("-" * 52)
+    print("-" * 64)
     lines = (
         ("uniform", result.uniform_score, None),
         ("corpus", result.corpus_score, None),
         ("other", result.other_score, result.other_win_rate),
         ("self", result.self_score, result.self_win_rate),
+        ("oracle", result.oracle_score, None),
     )
     for name, score, win_rate in lines:
         gap = score - result.corpus_score
         share = "-" if win_rate is None else f"{win_rate:.1%}"
-        print(f"{name:<10}{score:>12.4f}{gap:>+14.4f}{share:>14}")
+        captured = result.captured_share(score)
+        print(f"{name:<10}{score:>12.4f}{gap:>+14.4f}{captured:>12.1%}{share:>14}")
+    print(f"\n달성 가능 폭 (uniform → oracle): {result.uniform_score - result.oracle_score:.4f}")
 
     print("\nλ 곡선 (자기 반쪽 혼합 비율 → 중앙값 CE)")
     for weight, score in zip(result.lambdas, result.self_curve, strict=True):
@@ -1892,6 +1953,8 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
     print("접근을 기각한다. 0보다 크면 그 값이 곧 생성기의 혼합 계수다.")
     print("**귀무 λ*가 0이 아니면 지표를 의심한다** — 틀린 곡을 섞어 좋아질 이유가 없다.")
     print("`uniform`은 천장이 아니다. 구조가 없으면 균등이 최적이라 코퍼스가 진다.")
+    print("**포착 비율이 크기다** (D-0063). 격차의 절대값은 크로마가 평평하면 어차피 작다.")
+    print("`oracle`은 뒷반쪽으로 뒷반쪽을 맞힌 값이며 어떤 선도 이보다 낮을 수 없다.")
     print("중앙값이라 절대값의 부호는 뜻이 없다. 같은 곡 집합 안의 선끼리만 비교한다.")
     return 0
 
