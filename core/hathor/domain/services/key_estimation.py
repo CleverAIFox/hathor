@@ -452,6 +452,16 @@ class KeyEstimate:
     margin: float
     """1등과 2등 상관의 차. 작으면 추정을 신뢰하지 않는다."""
 
+    chroma: tuple[float, ...] = ()
+    """판정에 쓴 크로마. **버리지 않고 들고 나온다** (D-0063).
+
+    화성 어휘 조건화가 같은 크로마를 필요로 하는데, 없으면 생성 경로에서 음원을
+    한 번 더 디코딩해야 한다. 이미 계산한 것을 버릴 이유가 없다.
+
+    `as_record()`에는 넣지 않는다 — JSONL은 `chroma` 필드를 따로 쓰고 있고,
+    형식을 바꾸면 기존 산출물과 갈린다.
+    """
+
     def as_record(self) -> dict[str, object]:
         return {
             "key": str(self.key),
@@ -572,6 +582,7 @@ def estimate_key(chroma_vector: np.ndarray, *, profile: str = PROFILE_KRUMHANSL)
         correlation=best[0],
         runner_up=second[2],
         margin=best[0] - second[0],
+        chroma=tuple(float(value) for value in vector),
     )
 
 

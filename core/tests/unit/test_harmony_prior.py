@@ -300,3 +300,36 @@ def test_관측은_차원과_으뜸음을_검사한다():
         HalfChroma(
             source_key="a", tonic_pitch_class=99, margin=0.1, head=(1.0,) * 12, tail=(1.0,) * 12
         )
+
+
+# --------------------------------------------------------------------- 상한
+
+
+def test_상한은_어떤_선보다도_낮다():
+    """`oracle`은 뒷반쪽으로 뒷반쪽을 맞힌 값이다. 넘을 수 없다 (D-0063)."""
+    rng = np.random.default_rng(61)
+    latent = _dirichlet(rng, 80, 0.4)
+    heads = 0.7 * latent + 0.3 * _dirichlet(rng, 80, 5.0)
+    tails = 0.7 * latent + 0.3 * _dirichlet(rng, 80, 5.0)
+    result = compare_priors(_observations(heads, tails))
+    assert result.oracle_score <= result.self_score
+    assert result.oracle_score <= result.corpus_score
+    assert result.oracle_score <= result.uniform_score
+
+
+def test_포착_비율은_상한에서_1이고_균등에서_0이다():
+    rng = np.random.default_rng(62)
+    latent = _dirichlet(rng, 80, 0.4)
+    heads = 0.7 * latent + 0.3 * _dirichlet(rng, 80, 5.0)
+    tails = 0.7 * latent + 0.3 * _dirichlet(rng, 80, 5.0)
+    result = compare_priors(_observations(heads, tails))
+    assert result.captured_share(result.oracle_score) == pytest.approx(1.0)
+    assert result.captured_share(result.uniform_score) == pytest.approx(0.0)
+    assert 0.0 < result.captured_share(result.self_score) < 1.0
+
+
+def test_달성_가능_폭이_0이면_포착_비율은_0이다():
+    """크로마가 완전히 균등하면 나아질 여지가 없다. 0으로 나누지 않는다."""
+    flat = np.full((30, DEGREE_COUNT), 1.0 / DEGREE_COUNT)
+    result = compare_priors(_observations(flat, flat))
+    assert result.captured_share(result.self_score) == pytest.approx(0.0)

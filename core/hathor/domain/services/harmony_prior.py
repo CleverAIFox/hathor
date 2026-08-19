@@ -30,6 +30,13 @@ D-0034 계열 일곱 번은 **비교 대상이 조건을 안 따라간** 문제�
 | `corpus` | 다른 곡 앞반쪽의 평균 (**곡 하나 뺀 평균**) | 참조곡 없이 얻는 것 |
 | `other` | **틀린 곡** 앞반쪽 | 곡 고유성이 없을 때의 자기 예측 — 진짜 귀무선 |
 | `self` | **자기** 앞반쪽 | 조건화가 주장하는 것 |
+| `oracle` | **뒷반쪽 자신** | **상한.** 더 나아질 수 없는 지점이다 |
+
+**`oracle`이 없으면 격차의 크기를 판정할 수 없다** (D-0063). `corpus → self`가
+0.0086 나아졌다는 것만으로는 큰지 작은지 모른다. 달성 가능한 폭이 얼마인지를 알아야
+비율이 나오고, 그 상한은 예측이 목표와 같을 때의 교차 엔트로피 곧 `H(b)`다.
+**이것을 안 재고 "정보 있음"으로 넘어가면 D-0034 계열 여덟 번째가 된다** — 여섯 번은
+조건 미추종, 일곱 번째는 비교 없음, 이번은 상한 없음이다.
 
 **`uniform`은 천장이 아니다.** 코퍼스에 공통 구조가 없으면 균등이 최적이고, 그때
 `corpus`는 균등의 잡음 섞인 추정치라 오히려 나쁘다. 단위 검사에서 실제로 그렇게
@@ -255,6 +262,8 @@ class PriorComparison:
     other_curve: tuple[float, ...]
     """같은 곡선을 **틀린 곡**으로. 귀무선이며 λ*가 0이어야 한다."""
     uniform_score: float
+    oracle_score: float
+    """뒷반쪽으로 뒷반쪽을 예측한 값. **상한이며 어떤 선도 이보다 낮을 수 없다.**"""
     self_wins: int
     """곡 단위로 `self`(λ=1)가 `corpus`(λ=0)보다 나았던 수."""
     other_wins: int
@@ -289,6 +298,17 @@ class PriorComparison:
     @property
     def other_win_rate(self) -> float:
         return self.other_wins / self.song_count if self.song_count else 0.0
+
+    def captured_share(self, score: float) -> float:
+        """`uniform`에서 `oracle`까지의 폭 중 이 선이 메운 비율.
+
+        **격차의 절대값은 뜻이 없다** — 크로마가 평평하면 어떤 선도 조금씩만 움직인다.
+        달성 가능한 폭으로 나눠야 "이 정도면 큰가"에 답할 수 있다.
+        """
+        span = self.uniform_score - self.oracle_score
+        if span <= EPSILON:
+            return 0.0
+        return (self.uniform_score - score) / span
 
     @property
     def is_conditioning_informative(self) -> bool:
@@ -349,7 +369,32 @@ def compare_priors(
         self_curve=tuple(self_curve),
         other_curve=tuple(other_curve),
         uniform_score=float(np.median(cross_entropy(tails, uniform))),
+        oracle_score=float(np.median(cross_entropy(tails, smooth(tails, settings)))),
         self_wins=int(np.sum(self_scores < corpus_scores)),
         other_wins=int(np.sum(other_scores < corpus_scores)),
         ambiguous_count=ambiguous,
     )
+
+
+def merge_degree_priors(
+    observations: Sequence[tuple[Sequence[float], int]], condition: PriorCondition | None = None
+) -> DegreeVector:
+    """참조곡 여러 개의 크로마를 **도수 공간에서** 평균 낸다 (D-0063).
+
+    피치클래스 공간에서 그냥 더하면 안 된다. C장조 곡과 F#장조 곡의 크로마를
+    더하면 두 조성이 겹쳐 뭉개지고, 남는 것은 코퍼스 평균에 가까운 무엇이다 —
+    D-0011이 참조곡을 1~5개로 제한한 이유와 같은 함정이다.
+
+    **각 곡을 자기 으뜸음으로 회전시킨 뒤 평균한다.** 그러면 결과는 조성과 무관한
+    도수 분포이고, 출력 조성이 무엇이든 그대로 얹을 수 있다.
+
+    입력은 `(크로마 12차원, 그 곡의 으뜸음 피치클래스)` 쌍이다.
+    """
+    settings = condition if condition is not None else PriorCondition()
+    if not observations:
+        raise ValueError("참조곡이 하나 이상 필요하다")
+    stacked = np.zeros((len(observations), DEGREE_COUNT), dtype=np.float64)
+    for index, (raw, tonic) in enumerate(observations):
+        reduced = subtract_harmonics(np.asarray(raw, dtype=np.float64), settings.harmonic)
+        stacked[index] = _to_distribution(rotate_to_degrees(reduced, tonic))
+    return _to_distribution(stacked.mean(axis=0))
