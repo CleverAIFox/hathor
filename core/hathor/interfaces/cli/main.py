@@ -158,6 +158,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="배음 강도 0~1을 한 번에 훑어 표로 낸다 (D-0060). --replay와 함께 쓴다",
     )
+    keys.add_argument(
+        "--halves",
+        action="store_true",
+        help="앞뒤 반쪽 크로마도 뽑는다 (D-0062). `eval harmony-prior`가 이것을 요구한다",
+    )
 
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
@@ -288,6 +293,28 @@ def build_parser() -> argparse.ArgumentParser:
     fusion.add_argument("--seed", type=int, default=20260817, help="쌍 추출 시드")
     fusion.add_argument("--penalty", type=float, default=1.0, help="penalized 모드의 편차 계수")
     fusion.add_argument("--raw", action="store_true", help="중심화를 끈다")
+
+    harmony = eval_sub.add_parser(
+        "harmony-prior", help="화성 도수 사전의 정보량 판정 (O-21 · D-0062)"
+    )
+    harmony.add_argument(
+        "--replay",
+        type=Path,
+        required=True,
+        help="`ingest keys --halves`가 만든 keys.jsonl. 음원도 GPU도 필요 없다",
+    )
+    harmony.add_argument(
+        "--harmonic", type=float, default=0.0, help="배음 감산 강도. 네 선 전부에 적용된다"
+    )
+    harmony.add_argument("--smoothing", type=float, default=0.01, help="예측 분포 평활 비율")
+    harmony.add_argument(
+        "--margin-floor", type=float, default=KEY_MARGIN_FLOOR, help="조성 추정 애매 기준"
+    )
+    harmony.add_argument(
+        "--confident-only", action="store_true", help="격차가 하한 미만인 곡을 뺀다"
+    )
+    harmony.add_argument("--seed", type=int, default=20260819, help="귀무선 짝짓기 시드")
+    harmony.add_argument("--blend-steps", type=int, default=11, help="λ 격자 수")
 
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
@@ -459,6 +486,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_layers(args)
         if args.eval_command == "fusion":
             return _run_eval_fusion(args)
+        if args.eval_command == "harmony-prior":
+            return _run_eval_harmony_prior(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "keys":
@@ -726,15 +755,29 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             except Exception:
                 failed += 1
                 continue
-            rows.append(
-                {
-                    "source_key": track.source_key,
-                    **estimate.as_record(),
-                    "tuning_cents": cents,
-                    "profile": args.profile,
-                    "chroma": [round(float(value), 6) for value in extracted],
-                }
-            )
+            record: dict[str, object] = {
+                "source_key": track.source_key,
+                **estimate.as_record(),
+                "tuning_cents": cents,
+                "profile": args.profile,
+                "chroma": [round(float(value), 6) for value in extracted],
+            }
+            if args.halves:
+                # **조성을 앞반쪽에서만 추정한다** (D-0062). 곡 전체에서 추정하면
+                # 뒷반쪽이 회전 정렬에 관여해 홀드아웃이 성립하지 않는다.
+                mono = to_mono(waveform)
+                middle = mono.size // 2
+                halves = {}
+                for name, segment in (("head", mono[:middle]), ("tail", mono[middle:])):
+                    halves[name] = chroma_of(
+                        segment, mode=args.chroma, gamma=args.gamma, harmonic=args.harmonic
+                    )
+                head_estimate = estimate_key(halves["head"], profile=args.profile)
+                record["chroma_head"] = [round(float(value), 6) for value in halves["head"]]
+                record["chroma_tail"] = [round(float(value), 6) for value in halves["tail"]]
+                record["key_head"] = str(head_estimate.key)
+                record["margin_head"] = round(head_estimate.margin, 4)
+            rows.append(record)
             if index % 50 == 0:
                 print(f"  {index}/{len(tracks)}", file=sys.stderr, flush=True)
 
@@ -1757,6 +1800,99 @@ def _run_eval_fusion(args: argparse.Namespace) -> int:
     print("random은 하한, oracle은 코퍼스 구성상 도달 가능한 상한이다.")
     path = JsonEvaluationStore(args.out).write(report.as_record(), f"fusion-k{args.k}")
     print(f"리포트: {path}")
+    return 0
+
+
+def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
+    """화성 도수 사전이 참조곡 고유 정보를 담는지 판정한다 (O-21 · D-0062).
+
+    **생성물을 채점하지 않는다.** "생성된 진행이 참조곡 크로마와 맞는가"는 조건화가
+    질 수 없는 지표이며, 코퍼스 전역 베이스라인이 정의상 진다. 곡을 앞뒤로 갈라
+    뒷반쪽을 홀드아웃으로 두면 네 선이 전부 질 수 있다.
+
+    저장된 반쪽 크로마만 읽으므로 **음원도 GPU도 필요 없다** — 광인사에서 돈다.
+    """
+    import json
+
+    from hathor.domain.services.harmony_prior import (
+        HalfChroma,
+        PriorCondition,
+        compare_priors,
+    )
+    from hathor.domain.value_objects.key import PITCH_CLASSES
+
+    with args.replay.open(encoding="utf-8") as stream:
+        rows = [json.loads(line) for line in stream if line.strip()]
+
+    observations: list[HalfChroma] = []
+    for row in rows:
+        head, tail, key_text = row.get("chroma_head"), row.get("chroma_tail"), row.get("key_head")
+        if head is None or tail is None or key_text is None:
+            continue
+        tonic = str(key_text).rsplit(" ", 1)[0]
+        observations.append(
+            HalfChroma(
+                source_key=str(row.get("source_key", "")),
+                tonic_pitch_class=PITCH_CLASSES.index(tonic),
+                margin=float(row.get("margin_head", 0.0)),
+                head=tuple(float(value) for value in head),
+                tail=tuple(float(value) for value in tail),
+            )
+        )
+
+    if len(observations) < 2:
+        print(
+            f"반쪽 크로마가 있는 곡이 {len(observations)}개다. "
+            "`ingest keys --halves`로 먼저 추출한다.",
+            file=sys.stderr,
+        )
+        return 1
+
+    condition = PriorCondition(
+        harmonic=args.harmonic,
+        smoothing=args.smoothing,
+        margin_floor=args.margin_floor,
+        confident_only=args.confident_only,
+        seed=args.seed,
+        blend_steps=args.blend_steps,
+    )
+    result = compare_priors(observations, condition)
+
+    print(
+        f"곡 {result.song_count}개 · 배음 {condition.harmonic:g} · 평활 {condition.smoothing:g}"
+        f" · 애매 {result.ambiguous_count}곡(격차<{condition.margin_floor:g})"
+        f"{' · 애매 제외' if condition.confident_only else ''}\n"
+    )
+
+    header = f"{'선':<10}{'중앙값 CE':>12}{'코퍼스 대비':>14}{'곡 단위 승률':>14}"
+    print(header)
+    print("-" * 52)
+    lines = (
+        ("uniform", result.uniform_score, None),
+        ("corpus", result.corpus_score, None),
+        ("other", result.other_score, result.other_win_rate),
+        ("self", result.self_score, result.self_win_rate),
+    )
+    for name, score, win_rate in lines:
+        gap = score - result.corpus_score
+        share = "-" if win_rate is None else f"{win_rate:.1%}"
+        print(f"{name:<10}{score:>12.4f}{gap:>+14.4f}{share:>14}")
+
+    print("\nλ 곡선 (자기 반쪽 혼합 비율 → 중앙값 CE)")
+    for weight, score in zip(result.lambdas, result.self_curve, strict=True):
+        marker = "  ←" if weight == result.best_lambda else ""
+        print(f"  {weight:>4.2f}  {score:.4f}{marker}")
+
+    verdict = "정보 있음" if result.is_conditioning_informative else "정보 없음"
+    print(f"\nλ* = {result.best_lambda:.2f} · 귀무 λ* = {result.null_lambda:.2f}")
+    print(f"판정: **{verdict}**")
+
+    print("\n--- 읽는 법 ---")
+    print("λ*가 판정이다. 0이면 참조곡이 코퍼스 평균에 보탤 것이 없고 O-21의 크로마")
+    print("접근을 기각한다. 0보다 크면 그 값이 곧 생성기의 혼합 계수다.")
+    print("**귀무 λ*가 0이 아니면 지표를 의심한다** — 틀린 곡을 섞어 좋아질 이유가 없다.")
+    print("`uniform`은 천장이 아니다. 구조가 없으면 균등이 최적이라 코퍼스가 진다.")
+    print("중앙값이라 절대값의 부호는 뜻이 없다. 같은 곡 집합 안의 선끼리만 비교한다.")
     return 0
 
 
