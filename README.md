@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **O-21 닫힘 (D-0063).** 참조곡이 화성 어휘에 반영된다 — 효과 크기는 K-K 프로파일 대비 14%로 작지만 실재한다. 시드 퓨전의 조각이 전부 붙었다. 남은 것은 O-26(화음 가중 근거) · O-27(크로마 대비 부족)이며 **둘 다 무엇과 비교할지 정하기 전에는 착수하지 않는다** |
+| **다음 작업** | **O-27 실측 (D-0064).** 크로마 대비가 K-K의 30%뿐이고 이것이 참조곡 조건화 효과를 누르는 근인이다. (b) 창별 중앙값은 구현했고 실측 대기, (a) 타악 분리는 리전·GPU가 필요하다. **둘 다 잰다** |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -111,6 +111,22 @@ uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10  
 ```bash
 uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 (M4)
 ```
+
+### 크로마 대비 개선 실측 (O-27 · D-0064)
+
+```bash
+cd core
+export HATHOR_LIBRARY_ROOT=/mnt/d/노래/노래
+
+# (b) 창별 중앙값. 같은 200곡을 같은 조건으로 다시 뽑는다
+uv run python -m hathor.cli ingest keys --out var/ingest --halves --limit 200 \
+    --aggregate median --window-seconds 10
+
+uv run python -m hathor.cli eval harmony-prior --replay var/ingest/keys-<새 스탬프>.keys.jsonl
+```
+
+**볼 것은 `달성 가능 폭` 한 줄이다.** 현행 `mean`이 0.0187이고 K-K 장조 폭이 0.0616이다.
+**0.031(K-K의 절반) 미만이면 (b)를 기각한다** — D-0064에 사전 등록했다.
 
 ### 참조곡 화성 조건화 듣기 (O-21 · D-0063)
 
