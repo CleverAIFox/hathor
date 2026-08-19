@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **화성 진행 조건화 (O-21).** 조성 추정은 종료했다 (D-0061). 참조곡을 바꿔도 진행이 그대로인 것이 시드 퓨전의 마지막 미완성 조각이다 |
+| **다음 작업** | **화성 어휘 조건화 (O-21).** 조성 추정은 종료했다 (D-0061). 참조곡을 바꿔도 진행이 그대로인 것이 시드 퓨전의 마지막 미완성 조각이다. **생성기보다 판정 장치가 먼저다** (D-0062) — 아래 `eval harmony-prior`의 λ\*가 0이면 크로마 접근을 기각한다 |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -111,6 +111,29 @@ uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10  
 ```bash
 uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 (M4)
 ```
+
+### 화성 어휘 조건화 판정 (O-21 · D-0062)
+
+```bash
+cd core
+# 1. 리전 — 앞뒤 반쪽 크로마를 뽑는다. CPU이며 200곡이면 판정에 충분하다
+uv run python -m hathor.cli ingest keys --out var/ingest --halves --limit 200
+
+# 2. 광인사 — 음원도 GPU도 필요 없다
+uv run python -m hathor.cli eval harmony-prior --replay var/ingest/keys-<스탬프>.keys.jsonl
+uv run python -m hathor.cli eval harmony-prior --replay <같은 파일> --confident-only
+```
+
+곡을 앞뒤로 갈라 **앞반쪽으로 뒷반쪽을 예측한다.** 뒷반쪽은 어느 비교선도 보지 못한
+자료이므로 네 선(`uniform` · `corpus` · `other` · `self`)이 전부 질 수 있다.
+
+**산출물은 λ\* 하나다.** `(1-λ)·corpus + λ·self`의 중앙값 교차 엔트로피 최소점이며,
+0이면 참조곡이 보탤 것이 없어 O-21의 크로마 접근을 기각한다. 0보다 크면 **그 값이
+그대로 생성기의 혼합 계수다.**
+
+**생성물을 채점하지 않는 이유는 조건화가 질 수 없기 때문이다** — "생성된 진행이
+참조곡 크로마와 맞는가"의 argmax가 곧 조건화 생성기라 코퍼스 베이스라인이 정의상
+진다. 자세한 것은 D-0062에 있다.
 
 ### 가사축 (CPU, 수 초)
 
