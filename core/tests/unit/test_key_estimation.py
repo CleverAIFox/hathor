@@ -612,3 +612,75 @@ def test_black_keys_are_disjoint_from_naturals():
     naturals = {"C", "D", "E", "F", "G", "A", "B"}
     assert BLACK_KEYS.isdisjoint(naturals)
     assert BLACK_KEYS | naturals == set(PITCH_CLASSES)
+
+
+# ---------------------------------------------- 창별 집계 (O-27 · D-0064)
+
+
+def _tone(frequency: float, seconds: float, sample_rate: int = 44100) -> np.ndarray:
+    time = np.arange(int(sample_rate * seconds), dtype=np.float32) / sample_rate
+    return np.sin(2 * np.pi * frequency * time).astype(np.float32)
+
+
+def test_창을_나눠도_순음이면_같은_피치클래스를_찍는다():
+    from hathor.domain.services.key_estimation import chroma
+
+    signal = _tone(261.63, 30.0)  # C4
+    mean = chroma(signal, aggregate="mean")
+    median = chroma(signal, aggregate="median", window_seconds=5.0)
+    assert int(np.argmax(mean)) == 0
+    assert int(np.argmax(median)) == 0
+
+
+def test_중앙값은_소수_구간의_잡음을_버린다():
+    """**O-27의 가설을 고정한다.**
+
+    곡의 대부분이 한 음이고 일부만 잡음이면, 평균은 잡음에 끌리고 중앙값은 안 끌린다.
+    이것이 성립하지 않으면 창별 중앙값을 쓸 이유가 없다.
+    """
+    from hathor.domain.services.key_estimation import chroma
+
+    rng = np.random.default_rng(0)
+    tone = _tone(261.63, 24.0)
+    noise = rng.normal(0.0, 3.0, int(44100 * 8.0)).astype(np.float32)
+    signal = np.concatenate([tone, noise])
+
+    mean = chroma(signal, aggregate="mean")
+    median = chroma(signal, aggregate="median", window_seconds=4.0)
+    # C 성분의 몫이 중앙값 쪽에서 더 커야 한다.
+    assert float(median[0]) > float(mean[0])
+
+
+def test_집계는_합이_1이다():
+    from hathor.domain.services.key_estimation import chroma
+
+    result = chroma(_tone(440.0, 25.0), aggregate="median", window_seconds=6.0)
+    assert float(result.sum()) == pytest.approx(1.0, abs=1e-5)
+
+
+def test_알_수_없는_집계는_거부한다():
+    from hathor.domain.services.key_estimation import chroma
+
+    with pytest.raises(ValueError, match="aggregate"):
+        chroma(_tone(440.0, 2.0), aggregate="mode")
+
+
+def test_창_길이가_0이하면_거부한다():
+    from hathor.domain.services.key_estimation import chroma
+
+    with pytest.raises(ValueError, match="창 길이"):
+        chroma(_tone(440.0, 2.0), aggregate="median", window_seconds=0.0)
+
+
+def test_배음_감산이_실제로_걸린다():
+    """**이전에는 인자를 받고도 무시했다** (D-0064).
+
+    `chroma(harmonic=...)`가 `cq_chroma`로 넘어가지 않아 조용히 아무 일도 안 했다.
+    강도를 바꿨을 때 결과가 달라지는지로 고정한다.
+    """
+    from hathor.domain.services.key_estimation import chroma
+
+    signal = _tone(130.81, 12.0) + 0.5 * _tone(261.63, 12.0)  # C3 + C4 배음
+    plain = chroma(signal, harmonic=0.0)
+    reduced = chroma(signal, harmonic=0.8)
+    assert not np.allclose(plain, reduced)

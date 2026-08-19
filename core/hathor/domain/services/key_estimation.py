@@ -586,6 +586,28 @@ def estimate_key(chroma_vector: np.ndarray, *, profile: str = PROFILE_KRUMHANSL)
     )
 
 
+AGGREGATE_MEAN = "mean"
+AGGREGATE_MEDIAN = "median"
+AGGREGATES = (AGGREGATE_MEAN, AGGREGATE_MEDIAN)
+
+WINDOW_SECONDS = 10.0
+"""창별 집계에서 창 하나의 길이. 대중가요 한 악절 정도다."""
+
+
+def _split_windows(waveform: Waveform, sample_rate: int, window_seconds: float) -> list[Waveform]:
+    """파형을 대략 같은 길이의 창으로 자른다.
+
+    나머지를 따로 두지 않고 전체를 균등 분할한다. 끝에 짧은 조각이 남으면 그 창의
+    크로마만 통계가 다르고, 중앙값이 그것에 끌린다.
+    """
+    if window_seconds <= 0.0:
+        raise ValueError(f"창 길이는 0보다 커야 한다: {window_seconds}")
+    size = int(waveform.shape[0])
+    span = max(1, int(sample_rate * window_seconds))
+    count = max(1, round(size / span))
+    return [np.asarray(part) for part in np.array_split(waveform, count) if part.size > 0]
+
+
 def chroma(
     waveform: Waveform,
     *,
@@ -594,17 +616,64 @@ def chroma(
     tuning_cents: float = 0.0,
     gamma: float = LOG_GAMMA,
     harmonic: float = HARMONIC_STRENGTH,
+    aggregate: str = AGGREGATE_MEAN,
+    window_seconds: float = WINDOW_SECONDS,
 ) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
     """피치클래스 12차원 에너지. 합이 1이 되도록 정규화한다.
 
     기본은 `cq`(반음 격자)다. `linear`는 D-0056 이전 방식이며 **베이스라인
     비교용으로만 남긴다** — 저역에서 반음을 가르지 못한다.
+
+    ### 집계 방식 (O-27)
+
+    `mean`은 전곡을 한 번에 변환한다. 무음·간주·박수·페이드까지 전부 같은 무게로
+    섞이고, **그런 구간은 음정이 없어 12칸에 고르게 퍼진 에너지를 낸다.** 곡의
+    화성 정보가 균등 성분에 희석되는 경로다.
+
+    `median`은 창마다 크로마를 뽑아 **성분별 중앙값**을 낸다. 창의 절반 넘게가
+    음정이 없어야 중앙값이 평평해지므로, 소수의 잡음 구간이 전체를 끌어내리지
+    못한다.
+
+    **가설이지 사실이 아니다.** D-0063이 잰 달성 가능 폭 0.0187이 올라가는지로
+    판정한다. 안 오르면 전곡 평균이 원인이 아니라는 뜻이고 `mean`으로 되돌린다.
     """
-    if mode == CHROMA_CQ:
-        return cq_chroma(waveform, sample_rate=sample_rate, tuning_cents=tuning_cents, gamma=gamma)
-    if mode == CHROMA_LINEAR:
-        return linear_chroma(waveform, sample_rate=sample_rate)
-    raise ValueError(f"mode는 {CHROMA_MODES} 중 하나여야 한다: {mode}")
+    if aggregate not in AGGREGATES:
+        raise ValueError(f"aggregate는 {AGGREGATES} 중 하나여야 한다: {aggregate}")
+
+    def once(segment: Waveform) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
+        if mode == CHROMA_CQ:
+            # **`harmonic`을 넘긴다.** 이전에는 인자를 받고도 `cq_chroma`에 넘기지
+            # 않아 조용히 무시됐다 (D-0064). 기본값이 0.0이라 기록된 결과는 전부
+            # 무효가 아니지만, `ingest keys --harmonic`은 아무 일도 하지 않았다.
+            return cq_chroma(
+                segment,
+                sample_rate=sample_rate,
+                tuning_cents=tuning_cents,
+                gamma=gamma,
+                harmonic=harmonic,
+            )
+        if mode == CHROMA_LINEAR:
+            # 선형 경로는 배음 감산을 내장하지 않아 뒤에서 걸고 다시 정규화한다.
+            reduced = subtract_harmonics(
+                np.asarray(linear_chroma(segment, sample_rate=sample_rate), dtype=np.float64),
+                harmonic,
+            )
+            total = float(reduced.sum())
+            if total <= 0.0:
+                return np.full(12, 1.0 / 12, dtype=np.float32)
+            return np.asarray(reduced / total, dtype=np.float32)
+        raise ValueError(f"mode는 {CHROMA_MODES} 중 하나여야 한다: {mode}")
+
+    if aggregate == AGGREGATE_MEAN:
+        return once(waveform)
+
+    windows = _split_windows(waveform, sample_rate, window_seconds)
+    stacked = np.stack([once(window) for window in windows])
+    combined = np.median(stacked, axis=0)
+    total = float(combined.sum())
+    if total <= 0.0:
+        return np.full(12, 1.0 / 12, dtype=np.float32)
+    return np.asarray(combined / total, dtype=np.float32)
 
 
 def estimate_key_from_waveform(
