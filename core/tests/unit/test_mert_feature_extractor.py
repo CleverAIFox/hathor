@@ -18,7 +18,22 @@ from hathor.infrastructure.mert_feature_extractor import (
     to_feature_waveform,
 )
 
+requires_scipy = pytest.mark.skipif(
+    importlib.util.find_spec("scipy") is None,
+    reason="리샘플러가 scipy에 의존한다. GPU 엑스트라 없는 기기에서는 건너뛴다",
+)
+"""**리샘플링 테스트가 scipy를 요구한다** (D-0061).
 
+같은 파일의 모델 추론 테스트는 `requires_gpu`로 건너뛰는데 이 둘만 빠져 있었다.
+광인사 기기에서 `make check`가 늘 실패했고, **매번 사람이 무시해야 하는 검사는
+검사가 아니다** — 진짜 결함이 섞여도 "또 그거겠지"로 넘어간다.
+
+`test_mfcc_feature_extractor`가 이미 `importorskip`으로 같은 처리를 한다.
+관례가 있었는데 여기만 따르지 않았다.
+"""
+
+
+@requires_scipy
 def test_스테레오를_24khz_모노로_만든다():
     stereo = np.zeros((2, SOURCE_SAMPLE_RATE * 4), dtype=np.float32)
     mono = to_feature_waveform(stereo)
@@ -27,6 +42,7 @@ def test_스테레오를_24khz_모노로_만든다():
     assert abs(len(mono) / FEATURE_SAMPLE_RATE - 4.0) < 0.01
 
 
+@requires_scipy
 def test_다운믹스는_산술평균이다():
     stereo = np.stack(
         [

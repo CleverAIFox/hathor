@@ -80,6 +80,13 @@ ignore_missing_imports = true
 warn_unreachable = true
 disallow_any_generics = true
 
+# GPU 엑스트라가 없는 기기에서는 torch 스텁이 없어 이 파일의 `type: ignore`가
+# 불필요해 보인다. **환경 차이이며 결함이 아니다** (D-0061). 전역으로 끄지 않고
+# 이 모듈에서만 끈다 — 다른 곳의 죽은 ignore는 계속 잡아야 한다.
+[[tool.mypy.overrides]]
+module = ["hathor.infrastructure.mert_feature_extractor"]
+warn_unused_ignores = false
+
 # ------------------------------------------------------------------ pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
