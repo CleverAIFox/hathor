@@ -144,6 +144,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="라이브러리 루트. 조성 추정에 음원이 필요하다",
     )
     gen.add_argument(
+        "--stem-set",
+        default=DEFAULT_STEM_SET,
+        help="화성 사전에 쓸 스템 조합. mix면 전체 믹스를 쓴다 (D-0074)",
+    )
+    gen.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="스템 크로마 산출물 경로. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    gen.add_argument(
         "--key",
         help='출력 조성을 고정한다 (예: "C major"). 참조곡 화성 조건화는 그대로 걸린다. '
         "조성 차이를 뺀 채 화성만 비교해 들을 때 쓴다",
@@ -952,6 +963,12 @@ def _run_doctor(args: argparse.Namespace) -> int:
     print(f"    스캔 {len(scans)}건 · 조성 {len(keys)}건")
     for path in keys[-6:]:
         print(f"      {path.name}  {_describe_keys(path)}")
+    store = find_stem_prior_store(root, DEFAULT_STEM_SET)
+    if store is None:
+        print(f"    !! {DEFAULT_STEM_SET} 스템 사전이 없다. 생성이 전체 믹스로 물러난다 (D-0074)")
+        print("       리전에서: ingest keys --separate  (GPU 필요)")
+    else:
+        print(f"    {DEFAULT_STEM_SET} 스템 사전  {store.name}")
     stale = root / "core" / "var"
     if stale.exists():
         check(False, "산출물 위치", str(stale), "루트로 옮긴다: mv core/var var (D-0066)")
@@ -1014,6 +1031,113 @@ def _parse_key(text: str) -> Key:
     except ValueError:
         raise SystemExit(f"--key의 선법은 major 또는 minor여야 한다: {parts[1]}") from None
     return Key(tonic=parts[0], mode=mode)
+
+
+DEFAULT_STEM_SET = "other"
+"""생성에 쓰는 스템 조합. **실측이 고른 값이다** (D-0074).
+
+달성 가능 폭이 `other` 0.0534 · `other+bass` 0.0497 · `other+bass+vocals` 0.0373이었다.
+넣을수록 나빠진다 — 저역은 CQ 격자에서 반음이 뭉개지고(D-0056) 보컬은 비브라토로
+칸 사이를 번져, 둘 다 균등 성분을 도로 넣는다.
+"""
+
+
+def find_stem_prior_store(root: Path, stem_set: str) -> Path | None:
+    """스템 크로마가 있는 가장 최근 산출물을 찾는다 (D-0074).
+
+    **생성할 때 Demucs를 돌리지 않기 위한 것이다.** 돌리면 GPU 없는 기기에서 생성이
+    안 된다. 참조곡은 코퍼스에서 고르므로 미리 뽑아 두면 조회로 끝나고, 디코딩조차
+    사라져 지금보다 빨라진다.
+    """
+    import json
+
+    ingest = root / "var" / "ingest"
+    if not ingest.is_dir():
+        return None
+    for path in sorted(ingest.glob("*.keys.jsonl"), reverse=True):
+        try:
+            with path.open(encoding="utf-8") as stream:
+                for line in stream:
+                    if not line.strip():
+                        continue
+                    row = json.loads(line)
+                    break
+                else:
+                    continue
+        except (OSError, ValueError):
+            continue
+        if "full" in ((row.get("stems") or {}).get(stem_set) or {}):
+            return path
+    return None
+
+
+def load_stem_priors(path: Path, stem_set: str) -> dict[str, tuple[tuple[float, ...], int]]:
+    """`source_key → (스템 크로마, 으뜸음)` (D-0074).
+
+    **으뜸음은 전체 믹스 추정을 쓴다.** 스템에서 다시 추정하면 조합마다 회전 기준이
+    달라져 판정 때와 다른 것을 재게 된다 (D-0073과 같은 이유).
+    """
+    import json
+
+    from hathor.domain.value_objects.key import PITCH_CLASSES
+
+    found: dict[str, tuple[tuple[float, ...], int]] = {}
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            vector = ((row.get("stems") or {}).get(stem_set) or {}).get("full")
+            key_text = row.get("key")
+            source = row.get("source_key")
+            if vector is None or key_text is None or source is None:
+                continue
+            tonic = str(key_text).rsplit(" ", 1)[0]
+            if tonic not in PITCH_CLASSES:
+                continue
+            found[str(source)] = (
+                tuple(float(value) for value in vector),
+                PITCH_CLASSES.index(tonic),
+            )
+    return found
+
+
+def _resolve_harmony_prior(
+    args: argparse.Namespace, source_keys: list[str], estimates: dict[str, KeyEstimate]
+) -> tuple[tuple[float, ...] | None, str]:
+    """화성 사전을 고른다. **스템 저장분이 있으면 그것을 쓴다** (D-0074).
+
+    스템 크로마가 전체 믹스보다 세 배 낫다 — 조건화 이득이 K-K 폭 대비 14.1%에서
+    44.3%로 올랐다. 다만 **생성할 때 Demucs를 돌리지는 않는다.** 미리 뽑아 둔 것을
+    조회하고, 없으면 전체 믹스로 물러난다.
+
+    참조곡이 저장분에 하나도 없으면 전체 믹스를 쓴다. **일부만 있으면 그 일부만
+    쓴다** — 섞으면 스템과 믹스가 한 사전 안에서 더해져 무엇을 재는지 알 수 없다.
+    """
+    from hathor.shared.config.paths import repo_root as _root
+
+    if args.stem_set == "mix":
+        return _harmony_prior(estimates), "전체 믹스"
+
+    store = args.priors if args.priors else find_stem_prior_store(_root(), args.stem_set)
+    if store is not None and store.exists():
+        table = load_stem_priors(store, args.stem_set)
+        picked = [table[key] for key in source_keys if key in table]
+        if picked:
+            from hathor.domain.services.harmony_prior import merge_degree_priors
+
+            if len(picked) < len(source_keys):
+                print(
+                    f"참조곡 {len(source_keys)}곡 중 {len(picked)}곡만 스템 저장분에 있다.",
+                    file=sys.stderr,
+                )
+            merged = merge_degree_priors([(vector, tonic) for vector, tonic in picked])
+            return tuple(float(value) for value in merged), f"{args.stem_set} 스템"
+        print(
+            f"참조곡이 스템 저장분에 없다. 전체 믹스로 물러난다: {store.name}",
+            file=sys.stderr,
+        )
+    return _harmony_prior(estimates), "전체 믹스"
 
 
 def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | None:
@@ -1272,6 +1396,11 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                     stacked = np.stack([stems[part] for part in parts])
                     mixed = to_mono(np.asarray(stacked.sum(axis=0), dtype=np.float32))
                     middle = mixed.size // 2
+                    # **`full`은 생성 경로가, `head`/`tail`은 판정이 쓴다** (D-0074).
+                    # 반쪽은 홀드아웃 전용이라 전량 배치에서는 굳이 뽑지 않아도 된다.
+                    segments = [("full", mixed)]
+                    if args.halves:
+                        segments += [("head", mixed[:middle]), ("tail", mixed[middle:])]
                     bundle[name] = {
                         side: [
                             round(float(value), 6)
@@ -1284,10 +1413,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                                 window_seconds=args.window_seconds,
                             )
                         ]
-                        for side, segment in (
-                            ("head", mixed[:middle]),
-                            ("tail", mixed[middle:]),
-                        )
+                        for side, segment in segments
                     }
                 record["stems"] = bundle
             if args.halves:
@@ -1470,7 +1596,9 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
     references = [extract_pattern(segments) for _, segments in chosen]
     estimated_key, estimates = _estimate_key(args, [song[0] for song in chosen])
     output_key = _parse_key(args.key) if args.key else estimated_key
-    harmony_prior = _harmony_prior(estimates)
+    harmony_prior, prior_source = _resolve_harmony_prior(
+        args, [song[0] for song in chosen], estimates
+    )
     job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
     data, summary = render(
         job,
@@ -1491,7 +1619,7 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
             flag = " (애매)" if estimate.margin < KEY_MARGIN_FLOOR else ""
             tag = f"  [{estimate.key}{flag}]"
         print(f"  {pattern.as_text():<20} {source_key[:52]}{tag}")
-    conditioned = "참조곡 반영" if summary["harmony_conditioned"] else "시드만"
+    conditioned = f"참조곡 반영 · {prior_source}" if summary["harmony_conditioned"] else "시드만"
     print(
         f"\n구조 {summary['structure']} / 화성 {' '.join(summary['harmony'])} ({conditioned}) / "
         f"{summary['key']} {summary['tempo_bpm']}BPM"
