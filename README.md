@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **O-27 (a) 타악 분리 실측 (D-0065).** (b) 창별 중앙값은 +5.9%에 그쳐 기각했다. **(a)가 유일하게 남은 후보다** — 리전·GPU 필요, 기준선 0.0187, 상한 K-K 0.0616. (a)도 기각되면 크로마 경로를 접는다 |
+| **다음 작업** | **O-27 (a) 타악 분리 실측 (D-0073).** 구현 완료, 리전에서 50~60분. 기준선 0.0187 · 상한 K-K 0.0616 · **사전 등록 기준 0.031.** 못 넘으면 크로마 경로를 접는다 |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -159,7 +159,21 @@ uv run python -m hathor.cli eval harmony-prior --replay var/ingest/keys-<새 스
 ```
 
 **볼 것은 `달성 가능 폭` 한 줄이다.** `mean` 0.0187 · `median` 0.0198 · K-K 장조 0.0616.
-**(b)는 사전 등록 기준 0.031에 못 미쳐 기각했다** (D-0065). 남은 후보는 (a) 타악 분리다.
+**(b)는 사전 등록 기준 0.031에 못 미쳐 기각했다** (D-0065).
+
+**(a) 타악 분리 — 리전에서만 돈다** (D-0073):
+
+```bash
+cd core
+uv run python -m hathor.cli ingest keys --out var/ingest --halves --separate --limit 200
+for set in other other+bass other+bass+vocals; do
+  uv run python -m hathor.cli eval harmony-prior \
+      --replay var/ingest/keys-<스탬프>.keys.jsonl --stem-set "$set"
+done
+```
+
+스템 조합 셋을 한 번에 뽑으므로 판정은 재분리 없이 돈다. **셋 중 하나도 0.031을 못
+넘으면 (a) 기각이고, 그러면 크로마 경로 자체를 접는다.**
 
 ### 참조곡 화성 조건화 듣기 (O-21 · D-0063)
 

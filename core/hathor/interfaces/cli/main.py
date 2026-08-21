@@ -58,6 +58,27 @@ if TYPE_CHECKING:
     from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
 DEFAULT_LIBRARY_ROOT_ENV = LIBRARY_ROOT_ENV
+
+STEM_SETS: dict[str, tuple[str, ...]] = {
+    "other": ("other",),
+    "other+bass": ("other", "bass"),
+    "other+bass+vocals": ("other", "bass", "vocals"),
+}
+"""분리 후 재 볼 스템 조합 (O-27 (a) · D-0073).
+
+**드럼을 뺀 것이 공통점이다.** 타악은 음정이 없어 12칸에 고르게 퍼진 에너지를 내고,
+그것이 크로마 대비를 K-K 프로파일의 30%로 누른다는 것이 (a)의 가설이다.
+
+| 조합 | 근거 |
+|---|---|
+| `other` | 화성 악기만. 가장 깨끗하나 베이스 근음을 버린다 |
+| `other+bass` | 근음은 화성 판정에 크다. 유력 후보 |
+| `other+bass+vocals` | 멜로디도 화성음이다. 다만 비브라토가 번진다 |
+
+**셋을 한 번에 뽑는다.** 분리가 비싸고(GPU) 크로마는 싸므로, 조합마다 다시 분리하면
+같은 GPU 작업을 세 번 한다. 조합별 크로마를 저장해 두면 판정은 재분리 없이 돈다 —
+D-0059가 크로마를 저장한 것과 같은 이유다.
+"""
 DEFAULT_OUTPUT_ROOT = "var/ingest"
 """산출물 기본 위치. **문자열이어야 한다** (D-0069).
 
@@ -185,6 +206,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--halves",
         action="store_true",
         help="앞뒤 반쪽 크로마도 뽑는다 (D-0062). `eval harmony-prior`가 이것을 요구한다",
+    )
+    keys.add_argument(
+        "--separate",
+        action="store_true",
+        help="타악을 분리하고 스템 조합별 크로마도 뽑는다 (O-27 (a) · D-0073). GPU 필요",
     )
     keys.add_argument(
         "--aggregate",
@@ -347,6 +373,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=resolve_path,
         required=True,
         help="`ingest keys --halves`가 만든 keys.jsonl. 음원도 GPU도 필요 없다",
+    )
+    harmony.add_argument(
+        "--stem-set",
+        default=None,
+        help="스템 조합 이름 (예: other, other+bass). --separate로 뽑은 것만 쓸 수 있다",
     )
     harmony.add_argument(
         "--harmonic", type=float, default=0.0, help="배음 감산 강도. 네 선 전부에 적용된다"
@@ -780,6 +811,42 @@ def _git(root: Path, *arguments: str) -> str | None:
     return done.stdout.strip() if done.returncode == 0 else None
 
 
+def _describe_keys(path: Path) -> str:
+    """조성 산출물 한 줄 요약 (D-0073).
+
+    **첫 행의 조건만 읽는다.** 한 파일은 한 번의 실행이므로 조건이 같다. 전량을
+    읽으면 곡 수가 정확해지지만 `doctor`가 느려지고, 그러면 안 돌리게 된다.
+    """
+    import json
+
+    try:
+        with path.open(encoding="utf-8") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                break
+            else:
+                return "(비어 있다)"
+    except (OSError, ValueError):
+        return "(읽을 수 없다)"
+
+    if "aggregate" not in row:
+        return "(조건 미기록 — D-0073 이전 산출물)"
+    marks = [str(row.get("aggregate"))]
+    if row.get("window_seconds"):
+        marks.append(f"{row['window_seconds']:g}초 창")
+    if row.get("separated"):
+        marks.append("분리")
+    if row.get("halves"):
+        marks.append("반쪽")
+    if row.get("limit"):
+        marks.append(f"{row['limit']}곡")
+    if row.get("profile"):
+        marks.append(str(row["profile"]))
+    return " · ".join(marks)
+
+
 def _run_doctor(args: argparse.Namespace) -> int:
     """**기록된 규약과 지금 이 기기가 맞는지 검사한다** (D-0067).
 
@@ -883,6 +950,8 @@ def _run_doctor(args: argparse.Namespace) -> int:
     scans = sorted(ingest.glob("scan-*.jsonl")) if ingest.exists() else []
     print(f"    {ingest}")
     print(f"    스캔 {len(scans)}건 · 조성 {len(keys)}건")
+    for path in keys[-6:]:
+        print(f"      {path.name}  {_describe_keys(path)}")
     stale = root / "core" / "var"
     if stale.exists():
         check(False, "산출물 위치", str(stale), "루트로 옮긴다: mv core/var var (D-0066)")
@@ -1123,10 +1192,35 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             return 1
 
         decoder = FfmpegAudioDecoder()
+        separator = None
+        if args.separate:
+            # **모델을 한 번만 적재한다.** 곡마다 적재하면 8초씩 200번을 버린다.
+            from hathor.infrastructure.demucs_separator import DemucsStemSeparator
+
+            separator = DemucsStemSeparator()
+            missing = [
+                part
+                for parts in STEM_SETS.values()
+                for part in parts
+                if part not in separator.sources
+            ]
+            if missing:
+                print(
+                    f"모델이 내지 않는 스템을 요구한다: {sorted(set(missing))} "
+                    f"(가진 것: {separator.sources})",
+                    file=sys.stderr,
+                )
+                return 1
         failed = 0
         for index, track in enumerate(tracks, start=1):
             path = root / track.source_key
-            if not path.exists():
+            try:
+                present = path.exists()
+            except OSError as error:
+                print(f"음원 경로를 열 수 없다({error}): {track.source_key[:40]}", file=sys.stderr)
+                failed += 1
+                continue
+            if not present:
                 failed += 1
                 continue
             try:
@@ -1152,12 +1246,50 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 failed += 1
                 continue
             record: dict[str, object] = {
+                # **행마다 조건을 적는다** (D-0073). 파일 이름만 봐서는 `mean`인지
+                # `median`인지, 몇 곡인지, 분리했는지 알 수 없었다. 실제로 리전에
+                # 여섯 개가 쌓인 채 어느 것이 무엇인지 모르는 상태가 됐다.
+                "aggregate": args.aggregate,
+                "window_seconds": args.window_seconds if args.aggregate == "median" else None,
+                "separated": bool(args.separate),
+                "halves": bool(args.halves),
+                "limit": args.limit,
                 "source_key": track.source_key,
                 **estimate.as_record(),
                 "tuning_cents": cents,
                 "profile": args.profile,
                 "chroma": [round(float(value), 6) for value in extracted],
             }
+            if args.separate:
+                # **조합마다 크로마를 실제로 뽑는다.** 스템별 크로마를 저장해 두고
+                # 나중에 더하는 편이 싸지만, 크로마는 크기 스펙트럼이라 신호의 합에
+                # 대해 선형이 아니다 — 스템 크로마의 합은 합친 신호의 크로마와 다르다.
+                # **(a)가 성립하는지 판정하는 자리에서 근사를 끼우지 않는다.**
+                assert separator is not None
+                stems = separator.separate(waveform)
+                bundle: dict[str, dict[str, list[float]]] = {}
+                for name, parts in STEM_SETS.items():
+                    stacked = np.stack([stems[part] for part in parts])
+                    mixed = to_mono(np.asarray(stacked.sum(axis=0), dtype=np.float32))
+                    middle = mixed.size // 2
+                    bundle[name] = {
+                        side: [
+                            round(float(value), 6)
+                            for value in chroma_of(
+                                segment,
+                                mode=args.chroma,
+                                gamma=args.gamma,
+                                harmonic=args.harmonic,
+                                aggregate=args.aggregate,
+                                window_seconds=args.window_seconds,
+                            )
+                        ]
+                        for side, segment in (
+                            ("head", mixed[:middle]),
+                            ("tail", mixed[middle:]),
+                        )
+                    }
+                record["stems"] = bundle
             if args.halves:
                 # **조성을 앞반쪽에서만 추정한다** (D-0062). 곡 전체에서 추정하면
                 # 뒷반쪽이 회전 정렬에 관여해 홀드아웃이 성립하지 않는다.
@@ -2238,7 +2370,17 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
 
     observations: list[HalfChroma] = []
     for row in rows:
-        head, tail, key_text = row.get("chroma_head"), row.get("chroma_tail"), row.get("key_head")
+        key_text = row.get("key_head")
+        if args.stem_set:
+            # **조성은 전체 믹스에서 추정한 것을 그대로 쓴다** (D-0073). 스템에서
+            # 다시 추정하면 조합마다 회전 기준이 달라져 비교가 성립하지 않는다.
+            bundle = row.get("stems") or {}
+            picked = bundle.get(args.stem_set)
+            if picked is None:
+                continue
+            head, tail = picked.get("head"), picked.get("tail")
+        else:
+            head, tail = row.get("chroma_head"), row.get("chroma_tail")
         if head is None or tail is None or key_text is None:
             continue
         tonic = str(key_text).rsplit(" ", 1)[0]
@@ -2253,11 +2395,13 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
         )
 
     if len(observations) < 2:
-        print(
-            f"반쪽 크로마가 있는 곡이 {len(observations)}개다. "
-            "`ingest keys --halves`로 먼저 추출한다.",
-            file=sys.stderr,
+        hint = (
+            f"`ingest keys --halves --separate`로 먼저 추출하고 --stem-set은 "
+            f"{sorted(STEM_SETS)} 중에서 고른다."
+            if args.stem_set
+            else "`ingest keys --halves`로 먼저 추출한다."
         )
+        print(f"반쪽 크로마가 있는 곡이 {len(observations)}개다. {hint}", file=sys.stderr)
         return 1
 
     condition = PriorCondition(
@@ -2271,7 +2415,8 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
     result = compare_priors(observations, condition)
 
     print(
-        f"곡 {result.song_count}개 · 배음 {condition.harmonic:g} · 평활 {condition.smoothing:g}"
+        f"곡 {result.song_count}개 · 스템 {args.stem_set or '전체 믹스'}"
+        f" · 배음 {condition.harmonic:g} · 평활 {condition.smoothing:g}"
         f" · 애매 {result.ambiguous_count}곡(격차<{condition.margin_floor:g})"
         f"{' · 애매 제외' if condition.confident_only else ''}\n"
     )

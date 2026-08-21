@@ -117,3 +117,95 @@ def test_곡이_하나면_거부한다(tmp_path, capsys):
     path = write_keys(tmp_path / "keys.jsonl", synth_rows(1, informative=True))
     assert main(["eval", "harmony-prior", "--replay", str(path)]) == 1
     assert "1개다" in capsys.readouterr().err
+
+
+# ------------------------------------------- 스템 조합 (O-27 (a) · D-0073)
+
+
+def stem_rows(count, *, stem_set="other+bass", informative=True, seed=7):
+    """분리 산출물 형태. 전체 믹스와 스템 조합이 한 행에 함께 있다."""
+    rows = synth_rows(count, informative=informative, seed=seed)
+    rng = np.random.default_rng(seed + 1)
+    for row in rows:
+        latent = rng.dirichlet(np.full(DEGREES, 0.3))
+        row["separated"] = True
+        row["aggregate"] = "mean"
+        row["halves"] = True
+        row["limit"] = count
+        row["stems"] = {
+            stem_set: {
+                side: [
+                    round(float(value), 6)
+                    for value in 0.8 * latent + 0.2 * rng.dirichlet(np.full(DEGREES, 5.0))
+                ]
+                for side in ("head", "tail")
+            }
+        }
+    return rows
+
+
+def test_스템_조합을_고르면_그것으로_판정한다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", stem_rows(120))
+    assert main(["eval", "harmony-prior", "--replay", str(path), "--stem-set", "other+bass"]) == 0
+    out = capsys.readouterr().out
+    assert "스템 other+bass" in out
+
+
+def test_스템을_안_고르면_전체_믹스를_쓴다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", stem_rows(120))
+    assert main(["eval", "harmony-prior", "--replay", str(path)]) == 0
+    assert "스템 전체 믹스" in capsys.readouterr().out
+
+
+def test_같은_파일에서_조합에_따라_결과가_다르다(tmp_path, capsys):
+    """**전체 믹스와 스템 조합이 같은 수를 내면 배관이 안 이어진 것이다.**"""
+    path = write_keys(tmp_path / "keys.jsonl", stem_rows(120))
+    main(["eval", "harmony-prior", "--replay", str(path)])
+    plain = capsys.readouterr().out
+    main(["eval", "harmony-prior", "--replay", str(path), "--stem-set", "other+bass"])
+    stemmed = capsys.readouterr().out
+    assert plain != stemmed
+
+
+def test_없는_조합을_고르면_안내하고_실패한다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", stem_rows(20))
+    assert main(["eval", "harmony-prior", "--replay", str(path), "--stem-set", "drums"]) == 1
+    assert "--separate" in capsys.readouterr().err
+
+
+def test_분리_안_된_산출물에_조합을_고르면_실패한다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", synth_rows(20, informative=True))
+    assert main(["eval", "harmony-prior", "--replay", str(path), "--stem-set", "other"]) == 1
+    assert "--separate" in capsys.readouterr().err
+
+
+# ------------------------------------------------ 산출물 조건 기록 (D-0073)
+
+
+def test_doctor가_산출물_조건을_요약한다(tmp_path, monkeypatch, capsys):
+    from hathor.interfaces.cli.main import main as cli
+    from hathor.shared.config.paths import LIBRARY_ROOT_ENV, PATCH_DIR_ENV
+
+    ingest = tmp_path / "var" / "ingest"
+    write_keys(ingest / "keys-A.keys.jsonl", stem_rows(3))
+    monkeypatch.setattr("hathor.interfaces.cli.main.repo_root", lambda: tmp_path)
+    monkeypatch.setenv(LIBRARY_ROOT_ENV, "/tmp")
+    monkeypatch.setenv(PATCH_DIR_ENV, "/tmp")
+    cli(["doctor"])
+    out = capsys.readouterr().out
+    assert "keys-A.keys.jsonl" in out
+    assert "mean" in out
+    assert "분리" in out
+
+
+def test_조건이_없는_옛_산출물도_다룬다(tmp_path, monkeypatch, capsys):
+    from hathor.interfaces.cli.main import main as cli
+    from hathor.shared.config.paths import LIBRARY_ROOT_ENV, PATCH_DIR_ENV
+
+    ingest = tmp_path / "var" / "ingest"
+    write_keys(ingest / "keys-old.keys.jsonl", synth_rows(2, informative=True))
+    monkeypatch.setattr("hathor.interfaces.cli.main.repo_root", lambda: tmp_path)
+    monkeypatch.setenv(LIBRARY_ROOT_ENV, "/tmp")
+    monkeypatch.setenv(PATCH_DIR_ENV, "/tmp")
+    cli(["doctor"])
+    assert "조건 미기록" in capsys.readouterr().out
