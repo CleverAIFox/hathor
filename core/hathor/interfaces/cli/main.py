@@ -822,6 +822,81 @@ def _git(root: Path, *arguments: str) -> str | None:
     return done.stdout.strip() if done.returncode == 0 else None
 
 
+KEYS_SETTING_FIELDS = (
+    "chroma_mode",
+    "profile",
+    "gamma",
+    "harmonic",
+    "aggregate",
+    "separated",
+    "halves",
+)
+"""이어받기가 같다고 볼 조건 (D-0075).
+
+**하나라도 다르면 새 파일을 연다.** 조건이 섞인 산출물은 무엇을 잰 것인지 알 수 없고,
+그것이 D-0073에서 조건을 행에 적게 만든 이유다. 이어받기가 그 규약을 깨면 안 된다.
+
+`limit`은 뺀다. `--limit 200`으로 돌리다 전량으로 늘리는 것은 같은 조건의 연장이다.
+"""
+
+
+def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
+    """행에 적히는 조건 묶음. 이어받기 판정과 기록이 같은 값을 쓴다."""
+    return {
+        # **`chroma`가 아니라 `chroma_mode`다.** 행에는 이미 `chroma`가 12차원
+        # 벡터로 들어 있어 이름이 겹치면 조용히 덮이고, 그러면 이어받기가 영영
+        # 안 걸린다. 실제로 그렇게 썼다가 잡았다.
+        "chroma_mode": args.chroma,
+        "profile": args.profile,
+        "gamma": args.gamma,
+        "harmonic": args.harmonic,
+        "aggregate": args.aggregate,
+        "separated": bool(args.separate),
+        "halves": bool(args.halves),
+    }
+
+
+def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, set[str]]:
+    """이어받을 파일과 이미 처리한 `source_key`를 낸다 (D-0075).
+
+    **켜야 하는 옵션으로 두지 않는다.** `--resume`을 붙여야 이어받게 하면 붙이는 것을
+    잊고, 잊으면 한 시간 반이 다시 사라진다. 조건이 같은 최근 파일이 있으면 그냥 잇고,
+    조건이 하나라도 다르면 새 파일을 연다.
+
+    깨진 줄은 건너뛴다. 중간에 끊기면 마지막 줄이 잘려 있을 수 있다.
+    """
+    import json
+    from datetime import UTC, datetime
+
+    if out_root.is_dir():
+        for path in sorted(out_root.glob("keys-*.keys.jsonl"), reverse=True):
+            done: set[str] = set()
+            matched = False
+            try:
+                with path.open(encoding="utf-8") as stream:
+                    for line in stream:
+                        if not line.strip():
+                            continue
+                        try:
+                            row = json.loads(line)
+                        except ValueError:
+                            continue  # 잘린 마지막 줄
+                        if not matched:
+                            if any(row.get(k) != v for k, v in settings.items()):
+                                break
+                            matched = True
+                        source = row.get("source_key")
+                        if source:
+                            done.add(str(source))
+            except OSError:
+                continue
+            if matched:
+                return path, done
+
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return out_root / f"keys-{stamp}.keys.jsonl", set()
+
+
 def _describe_keys(path: Path) -> str:
     """조성 산출물 한 줄 요약 (D-0073).
 
@@ -1258,7 +1333,6 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     """
     import json
     from collections import Counter
-    from datetime import UTC, datetime
 
     import numpy as np
 
@@ -1315,6 +1389,17 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             print("스캔 산출물이 없다. --out 경로를 확인한다.", file=sys.stderr)
             return 1
 
+        # **이어받을 파일을 먼저 정한다** (D-0075). 조건이 같은 최근 산출물이 있으면
+        # 거기에 붙이고, 이미 처리한 곡은 건너뛴다.
+        settings = _keys_settings(args)
+        saved, done = _resume_target(out_root, settings)
+        if done:
+            print(f"이어받는다: {saved.name} · 이미 {len(done)}곡", file=sys.stderr, flush=True)
+        remaining = [track for track in tracks if track.source_key not in done]
+        if not remaining:
+            print(f"이미 전부 처리했다: {saved}\n")
+            return 0
+
         decoder = FfmpegAudioDecoder()
         separator = None
         if args.separate:
@@ -1336,7 +1421,11 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 )
                 return 1
         failed = 0
-        for index, track in enumerate(tracks, start=1):
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        # **행마다 즉시 쓴다.** 전에는 1004곡을 메모리에 쌓고 마지막에 한 번 썼다.
+        # 중간에 끊기면 전부 사라졌고, GPU로 한 시간 반짜리 작업에서 실제로 겪었다.
+        stream = saved.open("a", encoding="utf-8")
+        for index, track in enumerate(remaining, start=1):
             path = root / track.source_key
             try:
                 present = path.exists()
@@ -1373,10 +1462,8 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 # **행마다 조건을 적는다** (D-0073). 파일 이름만 봐서는 `mean`인지
                 # `median`인지, 몇 곡인지, 분리했는지 알 수 없었다. 실제로 리전에
                 # 여섯 개가 쌓인 채 어느 것이 무엇인지 모르는 상태가 됐다.
-                "aggregate": args.aggregate,
+                **settings,
                 "window_seconds": args.window_seconds if args.aggregate == "median" else None,
-                "separated": bool(args.separate),
-                "halves": bool(args.halves),
                 "limit": args.limit,
                 "source_key": track.source_key,
                 **estimate.as_record(),
@@ -1437,15 +1524,16 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 record["key_head"] = str(head_estimate.key)
                 record["margin_head"] = round(head_estimate.margin, 4)
             rows.append(record)
+            stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+            stream.flush()
             if index % 50 == 0:
-                print(f"  {index}/{len(tracks)}", file=sys.stderr, flush=True)
-
-        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        saved = out_root / f"keys-{stamp}.keys.jsonl"
-        saved.parent.mkdir(parents=True, exist_ok=True)
-        with saved.open("w", encoding="utf-8") as stream:
-            for row in rows:
-                stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+                print(
+                    f"  {index}/{len(remaining)}"
+                    f"{f' (누적 {len(done) + index}/{len(tracks)})' if done else ''}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        stream.close()
         print(
             f"저장: {saved} · 크로마 {args.chroma} · 프로파일 {args.profile}"
             f" · gamma {args.gamma:g} · 배음 {args.harmonic:g} · 집계 {args.aggregate}"
