@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`docs/DESIGN.md` 부록 A를 `docs/DECISIONS.md`에서 생성하고 어긋남을 검사한다.
+"""결정 기록과 미해결표를 기계가 검사한다. 부록 A 색인도 여기서 생성한다.
 
 ### 왜 필요한가
 
@@ -14,15 +14,41 @@
 **요약을 손으로 유지하면 반드시 어긋난다.** 어긋남은 조용하고, 부록 A만 본 사람이
 잘못된 판단을 내린 뒤에야 드러난다.
 
-### 무엇을 하는가
+### 색인만으로는 모자랐다 (D-0080)
 
-`## D-XXXX. 제목` 줄을 긁어 **제목 그대로** 표를 만든다. 요약하지 않는다.
-요약하는 순간 다시 두 번째 진실 공급원이 생긴다. 부록 A는 이제 **색인**이지
-요약이 아니다.
+색인은 표제를 긁어 표로 만들 뿐 **표제가 있어야 할 자리에 없는 것은 못 본다.**
+`D-0077` 본문이 "D-0076에서 넣은…"이라고 참조하는데 `## D-0076.` 표제가 파일에
+없었고, **78건이 쌓이는 동안 아무 검사도 그것을 보지 않았다.**
+
+미해결표도 같았다. `O-23`이 두 행으로 중복돼 있었고 정렬이 깨져 있었으며 닫힌
+항목이 활성표에 남아 있었다. 전부 눈으로만 유지되던 것이다.
+
+**GR-0.8이 "검사할 수 없는 규약은 잊힌다"고 적어 두고 정작 결정 기록 자신의
+규약에는 검사를 안 걸었다.** 여기서 건다.
+
+### 무엇을 검사하는가
+
+| 검사 | 무엇을 잡는가 |
+|---|---|
+| 색인 일치 | 부록 A가 손으로 고쳐졌거나 낡았다 |
+| 번호 중복·결번 | D-0076처럼 번호가 조용히 비었다 |
+| **참조 무결성** | 본문이 없는 번호를 가리킨다. **D-0076을 그 자리에서 잡았을 검사다** |
+| 후보-선택 짝 | 후보를 적고 무엇을 골랐는지 안 적었다 |
+| 갱신 배지 | 뒤에서 갱신했다고 선언했는데 대상 기록 앞에 표시가 없다 |
+| 미해결표 | ID 중복·정렬 어긋남·닫힌 항목이 활성표에 남음 |
+
+**형식 검사는 `FORMAT_ENFORCED_FROM` 이후 기록에만 건다.** 옛 기록을 소급해 고치면
+추가 전용(GR-0.2)이 깨지고, 그것이 이 기록의 유일한 방어선이다. 상수를 코드에
+두는 것은 **기준을 옮겼는지 나중에 알 수 있게** 하기 위한 것이다.
+
+**굵은 글씨 밀도는 검사하지 않는다.** 밀도가 높은 것은 사실이나(본문 2.7줄당 1개)
+숫자를 걸면 문체를 그 숫자에 맞추게 된다 — D-0058~D-0061에서 네 세션을 태운
+"손잡이 돌리기"와 같은 형태다. 규약으로만 두고 검사하지 않으며, **검사하지 않기로
+했다는 사실을 여기 적는다** (GR-0.8의 예외이므로 이유가 남아야 한다).
 
 사용법:
-    python tools/sync_decision_index.py           # 다시 쓴다
-    python tools/sync_decision_index.py --check   # 어긋나면 1로 끝난다 (make check)
+    python tools/sync_decision_index.py           # 색인을 다시 쓰고 검사한다
+    python tools/sync_decision_index.py --check   # 쓰지 않는다. 어긋나면 1로 끝난다
 """
 
 from __future__ import annotations
@@ -30,6 +56,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,29 +64,178 @@ DECISIONS = ROOT / "docs" / "DECISIONS.md"
 DESIGN = ROOT / "docs" / "DESIGN.md"
 
 HEADING = re.compile(r"^## (D-\d{4})\. (.+?)\s*$", re.MULTILINE)
+REFERENCE = re.compile(r"D-(\d{4})")
+SUPERSEDES = re.compile(r"^- \*\*갱신\*\*: (D-\d{4})", re.MULTILINE)
+BADGE = re.compile(r"^> \*\*갱신됨 — (D-\d{4})", re.MULTILINE)
+CANDIDATES = re.compile(r"^- \*\*후보\*\*", re.MULTILINE)
+CHOICE = re.compile(r"^- \*\*선택\*\*", re.MULTILINE)
 
 BEGIN = "<!-- decision-index:begin -->"
 END = "<!-- decision-index:end -->"
+BLOCK = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
 
-BLOCK = re.compile(
-    re.escape(BEGIN) + r".*?" + re.escape(END),
-    re.DOTALL,
-)
+OPEN_BEGIN = "<!-- open-issues:begin -->"
+OPEN_END = "<!-- open-issues:end -->"
+CLOSED_BEGIN = "<!-- closed-issues:begin -->"
+CLOSED_END = "<!-- closed-issues:end -->"
+ISSUE_ROW = re.compile(r"^\| (O-\d+) \|", re.MULTILINE)
+
+FORMAT_ENFORCED_FROM = 80
+"""형식 검사를 거는 첫 결정 번호 (D-0080).
+
+**옛 기록을 소급해 고치지 않는다.** 78건 중 후보-선택 짝이 어긋난 것이 여럿이나,
+고치는 순간 추가 전용이 깨진다. 판단이 바뀌면 새 번호로 정정하는 것이 규약이고
+그것은 형식에도 똑같이 적용된다.
+
+**이 숫자는 자의적이 아니다** — D-0080이 검사를 넣은 기록이므로 그 뒤부터다.
+옮기면 여기서 드러난다.
+"""
+
+BLANK_RECORD = "(결번)"
+"""내용이 유실된 번호의 표제 표시. **번호를 조용히 비우지 않는다** (D-0080)."""
+
+
+@dataclass(frozen=True)
+class Record:
+    number: int
+    identifier: str
+    title: str
+    body: str
+
+
+def scan_records(text: str) -> list[Record]:
+    """`## D-XXXX. 제목` 단위로 자른다. 본문은 다음 표제 직전까지다."""
+    found: list[Record] = []
+    matches = list(HEADING.finditer(text))
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        found.append(
+            Record(
+                number=int(match.group(1)[2:]),
+                identifier=match.group(1),
+                title=match.group(2),
+                body=text[match.end() : end],
+            )
+        )
+    return found
+
+
+def check_numbering(records: list[Record]) -> list[str]:
+    """번호가 중복이거나 비었는가. **D-0076이 이 검사에 걸렸을 것이다.**"""
+    problems: list[str] = []
+    seen: set[int] = set()
+    for record in records:
+        if record.number in seen:
+            problems.append(f"결정 번호가 중복이다: {record.identifier}")
+        seen.add(record.number)
+    if not seen:
+        return problems
+    for number in sorted(set(range(1, max(seen) + 1)) - seen):
+        problems.append(
+            f"D-{number:04d}가 비어 있다. "
+            f"내용이 유실됐으면 `## D-{number:04d}. {BLANK_RECORD} …` 표제를 남긴다"
+        )
+    return problems
+
+
+def check_references(records: list[Record]) -> list[str]:
+    """본문이 가리키는 번호가 실재하는가.
+
+    **이것이 D-0076을 그 자리에서 잡았을 검사다.** `D-0077`이 "D-0076에서 넣은…"을
+    쓴 순간 걸렸어야 했다. 번호 연속성보다 이쪽이 본질이다 — 참조가 없으면 결번은
+    그냥 건너뛴 번호이고, 참조가 있으면 잃어버린 기록이다.
+    """
+    known = {record.number for record in records}
+    problems: list[str] = []
+    for record in records:
+        for raw in sorted({int(value) for value in REFERENCE.findall(record.body)}):
+            if raw not in known:
+                problems.append(f"{record.identifier}가 없는 기록을 가리킨다: D-{raw:04d}")
+    return problems
+
+
+def check_candidate_pairs(records: list[Record]) -> list[str]:
+    """후보를 적었으면 무엇을 골랐는지도 적는다 (GR-0.2)."""
+    problems: list[str] = []
+    for record in records:
+        if record.number < FORMAT_ENFORCED_FROM:
+            continue
+        if CANDIDATES.search(record.body) and not CHOICE.search(record.body):
+            problems.append(f"{record.identifier}에 `- **후보**`만 있고 `- **선택**`이 없다")
+    return problems
+
+
+def check_supersession(records: list[Record]) -> list[str]:
+    """갱신 선언과 배지가 짝을 이루는가 (D-0080).
+
+    **낡은 수치는 기록 맨 뒤가 아니라 맨 앞에서 알려야 한다.** D-0063의 표에
+    K-K 대비 14.1%가 있고 갱신이 뒤에 붙어 있어, 위에서 아래로 읽는 사람은
+    낡은 값을 먼저 본다. 실제로 결정 기록·코드 독스트링·DESIGN 표 세 곳이
+    동시에 틀렸다 (O-28).
+
+    **앞을 고치는 것이 아니라 표시하는 것이다.** 추가 전용은 깨지지 않는다.
+    """
+    by_number = {record.number: record for record in records}
+    problems: list[str] = []
+    for record in records:
+        for target in SUPERSEDES.findall(record.body):
+            superseded = by_number.get(int(target[2:]))
+            if superseded is None:
+                problems.append(f"{record.identifier}가 없는 기록을 갱신한다고 적었다: {target}")
+                continue
+            if record.identifier not in BADGE.findall(superseded.body):
+                problems.append(
+                    f"{target} 표제 아래에 `> **갱신됨 — {record.identifier}.** …` 배지가 "
+                    f"없다. {record.identifier}가 갱신한다고 선언했다"
+                )
+    return problems
+
+
+def _section(text: str, begin: str, end: str) -> str | None:
+    start, stop = text.find(begin), text.find(end)
+    return None if start < 0 or stop < start else text[start:stop]
+
+
+def check_open_issues(design_text: str) -> list[str]:
+    """미해결표가 중복 없이 정렬돼 있고 닫힌 항목이 섞여 있지 않은가 (D-0080).
+
+    **닫힌 항목을 지우지 않는다.** DESIGN이 "해소되면 결정 기록으로 옮기고 여기서
+    지운다"고 적어 두었으나, 지우면 "이건 왜 안 하기로 했지"를 다시 묻게 된다 —
+    O-11과 O-23이 정확히 그 종류다. **지우는 대신 닫힘 절로 옮기고 한 줄만
+    남긴다.** 규약을 어기는 대신 규약을 고친다.
+    """
+    problems: list[str] = []
+    active = _section(design_text, OPEN_BEGIN, OPEN_END)
+    closed = _section(design_text, CLOSED_BEGIN, CLOSED_END)
+    if active is None or closed is None:
+        return [f"DESIGN에 {OPEN_BEGIN}/{CLOSED_BEGIN} 표식이 없다"]
+
+    for label, block in (("활성", active), ("닫힘", closed)):
+        rows = ISSUE_ROW.findall(block)
+        for name in sorted({name for name in rows if rows.count(name) > 1}):
+            problems.append(f"{label} 미해결표에 {name}이 두 번 있다")
+        numbers = [int(name[2:]) for name in rows]
+        if numbers != sorted(numbers):
+            problems.append(f"{label} 미해결표가 번호 순이 아니다: {rows}")
+
+    for name in sorted(set(ISSUE_ROW.findall(active)) & set(ISSUE_ROW.findall(closed))):
+        problems.append(f"{name}이 활성표와 닫힘표에 동시에 있다")
+
+    for row in active.splitlines():
+        if row.startswith("| O-") and ("~~" in row or "**해결" in row or "**닫힘" in row):
+            problems.append(
+                f"활성표의 {ISSUE_ROW.findall(row + chr(10))}이 닫힘 표시를 달고 있다. "
+                "닫힘 절로 옮긴다"
+            )
+    return problems
 
 
 def build_index(decisions_text: str) -> str:
     """결정 기록 제목을 표로 만든다. 번호 순서는 파일 등장 순서를 따른다."""
-    entries = HEADING.findall(decisions_text)
-    if not entries:
+    records = scan_records(decisions_text)
+    if not records:
         raise SystemExit("결정 기록에서 `## D-XXXX. 제목`을 찾지 못했다")
-
-    seen: set[str] = set()
-    for identifier, _ in entries:
-        if identifier in seen:
-            raise SystemExit(f"결정 번호가 중복이다: {identifier}")
-        seen.add(identifier)
-
-    rows = "\n".join(f"| {identifier} | {title} |" for identifier, title in entries)
+    rows = "\n".join(f"| {record.identifier} | {record.title} |" for record in records)
     return (
         f"{BEGIN}\n"
         "<!-- 이 표는 tools/sync_decision_index.py가 생성한다."
@@ -73,8 +249,22 @@ def build_index(decisions_text: str) -> str:
     )
 
 
+def run_checks(decisions_text: str, design_text: str) -> list[str]:
+    """전부 돌리고 문제를 모아 낸다. **첫 문제에서 멈추지 않는다** — 한 번에 다
+    보여야 고치러 여러 번 오지 않는다.
+    """
+    records = scan_records(decisions_text)
+    return [
+        *check_numbering(records),
+        *check_references(records),
+        *check_candidate_pairs(records),
+        *check_supersession(records),
+        *check_open_issues(design_text),
+    ]
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="부록 A 결정 기록 색인 동기화")
+    parser = argparse.ArgumentParser(description="결정 기록 검사 및 부록 A 색인 동기화")
     parser.add_argument("--check", action="store_true", help="쓰지 않고 어긋남만 검사한다")
     args = parser.parse_args()
 
@@ -83,11 +273,19 @@ def main() -> int:
         print(f"{DESIGN}에 {BEGIN} ... {END} 표식이 없다", file=sys.stderr)
         return 2
 
-    index = build_index(DECISIONS.read_text(encoding="utf-8"))
+    decisions_text = DECISIONS.read_text(encoding="utf-8")
+    problems = run_checks(decisions_text, plan_text)
+    if problems:
+        print(f"결정 기록·미해결표에 문제가 {len(problems)}건 있다.", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+
+    index = build_index(decisions_text)
     updated = BLOCK.sub(lambda _: index, plan_text, count=1)
 
     if updated == plan_text:
-        print(f"부록 A 색인 일치 ({index.count('| D-')}건)")
+        print(f"결정 기록 검사 통과 · 부록 A 색인 일치 ({index.count('| D-')}건)")
         return 0
 
     if args.check:
