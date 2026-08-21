@@ -58,7 +58,13 @@ if TYPE_CHECKING:
     from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
 DEFAULT_LIBRARY_ROOT_ENV = LIBRARY_ROOT_ENV
-DEFAULT_OUTPUT_ROOT = Path("var/ingest")
+DEFAULT_OUTPUT_ROOT = "var/ingest"
+"""산출물 기본 위치. **문자열이어야 한다** (D-0069).
+
+argparse는 기본값이 문자열일 때만 `type`을 적용한다. `Path("var/ingest")`로 두면
+`type=resolve_path`를 붙여도 기본값에는 안 걸려 현재 디렉터리 기준으로 남는다.
+`--out`을 명시했을 때와 안 했을 때가 다른 곳을 가리키게 된다.
+"""
 DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
 DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
 DEFAULT_LAYERS_DIRNAME = "mert-layers"
@@ -107,7 +113,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="참조곡 제목 일부. 여러 번 줄 수 있다. 그 곡의 구조를 조건으로 쓴다",
     )
-    gen.add_argument("--scan-out", default="var/ingest", help="스캔 산출물 루트")
+    gen.add_argument("--scan-out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
     gen.add_argument("--tempo", type=int, default=96, help="템포 (BPM)")
     gen.add_argument("--sections", type=int, default=None, help="구간 수. 기본은 참조곡 평균")
     gen.add_argument(
@@ -135,7 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_sub = ingest.add_subparsers(dest="ingest_command", required=True)
 
     keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22)")
-    keys.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
+    keys.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
     keys.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
     keys.add_argument(
         "--chroma",
@@ -425,7 +431,9 @@ def build_parser() -> argparse.ArgumentParser:
     lyrics_structure = lyrics_sub.add_parser(
         "structure", help="가사 반복 패턴에서 곡 구조 분포 실측 (D-0049)"
     )
-    lyrics_structure.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
+    lyrics_structure.add_argument(
+        "--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트"
+    )
     lyrics_structure.add_argument(
         "--threshold",
         type=float,

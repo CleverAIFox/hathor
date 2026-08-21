@@ -2,14 +2,40 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("mutagen")
+
+MACHINE_ENV_PREFIX = "HATHOR_"
+
+
+@pytest.fixture(autouse=True)
+def isolate_machine_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """**검사는 기기 상태에 의존하지 않는다** (D-0071).
+
+    `.env`가 있는 기기와 없는 기기에서 결과가 갈렸다. 광인사에는 `.env`가 없어
+    초록이었고 리전에서는 `make setup`이 만든 `.env`를 CLI가 읽어 두 건이 깨졌다.
+    **검사가 잡아야 할 부류를 검사 자신이 저질렀다.**
+
+    모든 검사에서 `HATHOR_*` 환경변수를 지우고 `.env` 적재를 막는다. 기기별 값을
+    쓰는 검사는 스스로 `monkeypatch.setenv`로 넣는다 — 이 픽스처가 먼저 돌므로
+    덮이지 않는다.
+
+    `load_dotenv` 자체를 검사하는 것은 `paths` 모듈을 직접 부르므로 영향이 없다.
+    """
+    for key in [name for name in os.environ if name.startswith(MACHINE_ENV_PREFIX)]:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(
+        "hathor.interfaces.cli.main.load_dotenv", lambda *_args, **_kwargs: {}, raising=False
+    )
+    yield
+
 
 FFMPEG = shutil.which("ffmpeg")
 requires_ffmpeg = pytest.mark.skipif(FFMPEG is None, reason="ffmpeg 미설치")

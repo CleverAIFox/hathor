@@ -91,6 +91,32 @@ def load_dotenv(path: Path | None = None) -> dict[str, str]:
     return applied
 
 
+PATH_ARGUMENT_HINTS = (
+    "out",
+    "replay",
+    "midi",
+    "path",
+    "root",
+    "dir",
+    "file",
+    "index",
+    "store",
+    "features",
+    "profile",
+)
+"""CLI 인자 이름이 이 중 하나를 담으면 **경로로 취급한다** (D-0069).
+
+이름 기반이라 완벽하지 않다. `--profile`처럼 경로가 아닌 것도 걸리므로 검사 쪽에서
+예외로 뺀다. **놓치는 것보다 과하게 잡는 편이 낫다** — 놓치면 쓰는 곳과 읽는 곳이
+갈리고, 그것이 실제로 터졌다.
+"""
+
+
+def repo_path_hints() -> tuple[str, ...]:
+    """경로 인자 판별에 쓰는 이름 조각. 검사에서 쓴다."""
+    return PATH_ARGUMENT_HINTS
+
+
 def resolve_path(value: str | Path) -> Path:
     """상대 경로를 **저장소 루트 기준**으로 푼다. 절대 경로는 그대로 둔다.
 

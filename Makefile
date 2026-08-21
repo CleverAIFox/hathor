@@ -33,7 +33,7 @@ env:           ## 해석된 경로와 설정을 찍는다 (D-0066)
 doctor:        ## 기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)
 	cd core && uv run python -m hathor.cli doctor
 
-apply:         ## 패치 적용. make apply [PATCH=이름.patch] (D-0066)
+apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [NOCOMMIT=1] (D-0070)
 	@bash tools/apply_patch.sh $(PATCH)
 
 clean:         ## 파이썬 바이트코드만 지운다
