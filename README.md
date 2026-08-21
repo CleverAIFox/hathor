@@ -334,7 +334,7 @@ MongoDB는 `--wiredTigerCacheSizeGB 0.25`로 캐시를 제한해 core에 포함�
 
 ## 구조
 
-```
+```text
 CONTRIBUTING.md     개발 규약 (GROUND RULES)
 docs/DESIGN.md      설계 단일 진실 공급원 (기획서 3부작)
 core/hathor/        Python 모노레포 (domain · application · engines · infrastructure · interfaces · shared)

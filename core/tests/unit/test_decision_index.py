@@ -116,30 +116,116 @@ def test_같은_번호를_여러_번_가리켜도_한_번만_알린다():
     assert len(tool.check_references(tool.scan_records(text))) == 1
 
 
-# --------------------------------------------------------------- 후보-선택
+# --------------------------------------------------------------- 절과 짝
+
+FULL = "- **배경**: 무엇.\n- **결과**:\n  - 무엇을 했다.\n"
 
 
-def test_후보만_있고_선택이_없으면_잡는다():
-    text = decisions(*range(1, tool.FORMAT_ENFORCED_FROM)) + record(
-        tool.FORMAT_ENFORCED_FROM, "- **후보**: 둘.\n"
-    )
-    problems = tool.check_candidate_pairs(tool.scan_records(text))
-    assert any("선택" in problem for problem in problems)
+def _new(body: str) -> list[tool.Record]:
+    text = decisions(*range(1, tool.FORMAT_ENFORCED_FROM)) + record(tool.FORMAT_ENFORCED_FROM, body)
+    return tool.scan_records(text)
+
+
+def test_필수_절이_다_있으면_통과한다():
+    assert tool.check_sections(_new(FULL)) == []
+
+
+@pytest.mark.parametrize("name", tool.REQUIRED_SECTIONS)
+def test_필수_절이_없으면_잡는다(name):
+    body = "".join(line + "\n" for line in FULL.splitlines() if f"**{name}**" not in line)
+    assert any(name in problem for problem in tool.check_sections(_new(body)))
+
+
+@pytest.mark.parametrize("kept,missing", [("후보", "선택"), ("선택", "후보")])
+def test_후보와_선택은_양방향_짝이다(kept, missing):
+    """**한쪽만 보던 것이 D-0080의 누락이다** (D-0081)."""
+    problems = tool.check_sections(_new(FULL + f"- **{kept}**: 무엇.\n"))
+    assert any(missing in problem for problem in problems)
 
 
 def test_후보와_선택이_짝이면_통과한다():
-    text = decisions(*range(1, tool.FORMAT_ENFORCED_FROM)) + record(
-        tool.FORMAT_ENFORCED_FROM, "- **후보**: 둘.\n- **선택**: 앞의 것.\n"
-    )
-    assert tool.check_candidate_pairs(tool.scan_records(text)) == []
+    assert tool.check_sections(_new(FULL + "- **후보**: 둘.\n- **선택**: 앞의 것.\n")) == []
 
 
-def test_옛_기록은_형식_검사를_받지_않는다():
-    """**소급 수정하지 않는다.** 추가 전용이 이 기록의 유일한 방어선이다."""
+def test_옛_기록은_내용_검사를_받지_않는다():
+    """**내용은 소급하지 않는다.** 채우면 그때 하지 않은 판단을 지어내는 것이다."""
     text = decisions(*range(1, tool.FORMAT_ENFORCED_FROM - 1)) + record(
         tool.FORMAT_ENFORCED_FROM - 1, "- **후보**: 둘.\n"
     )
-    assert tool.check_candidate_pairs(tool.scan_records(text)) == []
+    assert tool.check_sections(tool.scan_records(text)) == []
+
+
+def test_결번_표시는_내용_검사에서_뺀다():
+    """**결번은 결정이 아니라 구멍의 표시다.** 배경·결과를 요구하면 지어내게 된다."""
+    text = decisions(*range(1, tool.FORMAT_ENFORCED_FROM)) + (
+        f"\n---\n\n## D-{tool.FORMAT_ENFORCED_FROM:04d}. {tool.BLANK_RECORD} 유실됐다\n\n"
+        "- **선택**: 결번임을 적는다.\n"
+    )
+    assert tool.check_sections(tool.scan_records(text)) == []
+
+
+# --------------------------------------------------------------- 표기
+
+
+def _layout(body: str) -> list[str]:
+    text = HEAD + record(1) + body
+    return tool.check_layout(tool.scan_records(text), text)
+
+
+def test_표제_앞뒤가_규약대로면_통과한다():
+    assert _layout("\n---\n\n## D-0002. 제목\n\n- **배경**: 무엇.\n") == []
+
+
+def test_표제_앞에_구분선이_없으면_잡는다():
+    """**49대 31로 섞여 있었다** (D-0081)."""
+    assert any("`---`" in problem for problem in _layout("\n## D-0002. 제목\n\n본문\n"))
+
+
+def test_표제_뒤에_빈_줄이_없으면_잡는다():
+    problems = _layout("\n---\n\n## D-0002. 제목\n본문\n")
+    assert any("빈 줄이 없다" in problem for problem in problems)
+
+
+def test_줄이_너무_길면_잡는다():
+    text = {"문서": "가" * (tool.LINE_LIMIT + 1)}
+    assert any("넘는다" in problem for problem in tool.check_text_style(text))
+
+
+def test_짧은_줄은_통과한다():
+    assert tool.check_text_style({"문서": "가" * tool.LINE_LIMIT}) == []
+
+
+def test_펜스에_언어_태그가_없으면_잡는다():
+    problems = tool.check_text_style({"문서": "```\ncd core\n```\n"})
+    assert any("언어 태그가 없다" in problem for problem in problems)
+
+
+def test_닫는_펜스에_태그가_붙으면_잡는다():
+    """**내가 실제로 저지른 결함이다** (D-0081)."""
+    problems = tool.check_text_style({"문서": "```bash\ncd core\n```text\n"})
+    assert any("닫는 펜스" in problem for problem in problems)
+
+
+def test_펜스_짝이_안_맞으면_잡는다():
+    problems = tool.check_text_style({"문서": "```bash\ncd core\n"})
+    assert any("짝이 맞지 않는다" in problem for problem in problems)
+
+
+def test_펜스_안의_긴_줄은_봐준다():
+    """코드는 접을 수 없다. 접으면 붙여넣기가 깨진다."""
+    text = {"문서": "```bash\n" + "x" * (tool.LINE_LIMIT + 20) + "\n```\n"}
+    assert tool.check_text_style(text) == []
+
+
+def test_표_열_수가_다르면_잡는다():
+    text = {"문서": "| 가 | 나 |\n|---|---|\n| 하나 | 둘 | 셋 |\n"}
+    assert any("열 수" in problem for problem in tool.check_text_style(text))
+
+
+def test_이스케이프된_파이프는_열로_세지_않는다():
+    """**처음에 세다가 멀쩡한 표를 결함으로 보고했다** (D-0081)."""
+    text = {"문서": "| 지표 | 정의 |\n|---|---|\n| a | `\\|nA - nB\\|` |\n"}
+    assert tool.check_text_style(text) == []
 
 
 # --------------------------------------------------------------- 갱신 배지

@@ -36,10 +36,20 @@
 | 후보-선택 짝 | 후보를 적고 무엇을 골랐는지 안 적었다 |
 | 갱신 배지 | 뒤에서 갱신했다고 선언했는데 대상 기록 앞에 표시가 없다 |
 | 미해결표 | ID 중복·정렬 어긋남·닫힌 항목이 활성표에 남음 |
+| **표기** | 표제 앞뒤 구분선·빈 줄, 표 열 수, 코드 펜스 태그, 줄 길이 |
 
-**형식 검사는 `FORMAT_ENFORCED_FROM` 이후 기록에만 건다.** 옛 기록을 소급해 고치면
-추가 전용(GR-0.2)이 깨지고, 그것이 이 기록의 유일한 방어선이다. 상수를 코드에
-두는 것은 **기준을 옮겼는지 나중에 알 수 있게** 하기 위한 것이다.
+### 표기는 전수 강제, 내용은 신규만 (D-0081)
+
+처음에 이 둘을 뭉뚱그려 "옛 기록은 소급해 고치지 않는다"고 했다. **틀렸다.**
+
+**표기**(구분선·빈 줄·표 열 수·펜스 태그·줄 길이·낡은 수치)는 고쳐도 **그때의
+판단이 바뀌지 않는다.** 공식 문서이므로 맞춰야 하고, 소급 정규화한 뒤 전수로
+강제한다. 정규화만 하고 검사를 안 걸면 다음 세션에 또 어긋난다.
+
+**내용**(배경·후보·선택·결과)은 다르다. 없는 근거를 지금 채우면 **그때 하지 않은
+판단을 사후에 지어내는 것**이고, 그것이 추가 전용(GR-0.2)이 막으려는 바로 그것이다.
+내용 검사만 `FORMAT_ENFORCED_FROM` 이후에 건다. 상수를 코드에 두는 것은 **기준을
+옮겼는지 나중에 알 수 있게** 하기 위한 것이다.
 
 **굵은 글씨 밀도는 검사하지 않는다.** 밀도가 높은 것은 사실이나(본문 2.7줄당 1개)
 숫자를 걸면 문체를 그 숫자에 맞추게 된다 — D-0058~D-0061에서 네 세션을 태운
@@ -81,14 +91,27 @@ CLOSED_END = "<!-- closed-issues:end -->"
 ISSUE_ROW = re.compile(r"^\| (O-\d+) \|", re.MULTILINE)
 
 FORMAT_ENFORCED_FROM = 80
-"""형식 검사를 거는 첫 결정 번호 (D-0080).
+"""**내용** 항목 검사를 거는 첫 결정 번호 (D-0080 · D-0081).
 
-**옛 기록을 소급해 고치지 않는다.** 78건 중 후보-선택 짝이 어긋난 것이 여럿이나,
-고치는 순간 추가 전용이 깨진다. 판단이 바뀌면 새 번호로 정정하는 것이 규약이고
-그것은 형식에도 똑같이 적용된다.
+옛 기록 30건에 `- **결과**:` 절이 없다. **지금 채우면 그때 하지 않은 판단을 사후에
+지어내는 것**이고 추가 전용이 막으려는 것이 정확히 그것이다.
+
+**표기 검사는 여기 걸리지 않는다** — 전 기록에 건다 (D-0081). 표기는 고쳐도
+판단이 바뀌지 않는다.
 
 **이 숫자는 자의적이 아니다** — D-0080이 검사를 넣은 기록이므로 그 뒤부터다.
 옮기면 여기서 드러난다.
+"""
+
+LINE_LIMIT = 100
+"""문서 줄 길이 상한. 코드(`ruff` line-length)와 같은 값으로 맞춘다.
+
+표·코드 블록·URL은 접을 수 없으므로 검사에서 뺀다.
+"""
+
+REQUIRED_SECTIONS = ("배경", "결과")
+"""신규 기록에 반드시 있어야 하는 절. **후보·선택은 짝으로만 검사한다** — 후보가
+없는 결정(단순 결함 수정 기록)이 실재하며, 강제하면 채우기 위한 글이 나온다.
 """
 
 BLANK_RECORD = "(결번)"
@@ -154,14 +177,84 @@ def check_references(records: list[Record]) -> list[str]:
     return problems
 
 
-def check_candidate_pairs(records: list[Record]) -> list[str]:
-    """후보를 적었으면 무엇을 골랐는지도 적는다 (GR-0.2)."""
+def check_sections(records: list[Record]) -> list[str]:
+    """신규 기록에 필수 절이 있고 후보-선택이 짝을 이루는가 (GR-0.2).
+
+    **내용 검사이므로 `FORMAT_ENFORCED_FROM` 이후에만 건다** (D-0081). 옛 기록 30건에
+    `- **결과**:`가 없는데, 지금 채우면 그때 하지 않은 판단을 사후에 지어내는 것이다.
+    """
     problems: list[str] = []
     for record in records:
-        if record.number < FORMAT_ENFORCED_FROM:
+        if record.number < FORMAT_ENFORCED_FROM or BLANK_RECORD in record.title:
+            # **결번 표시는 결정이 아니라 구멍의 표시다.** 배경·결과를 요구하면
+            # 없는 판단을 지어내게 된다 (D-0081).
             continue
-        if CANDIDATES.search(record.body) and not CHOICE.search(record.body):
-            problems.append(f"{record.identifier}에 `- **후보**`만 있고 `- **선택**`이 없다")
+        for name in REQUIRED_SECTIONS:
+            if not re.search(rf"^- \*\*{name}\*\*", record.body, re.MULTILINE):
+                problems.append(f"{record.identifier}에 `- **{name}**` 절이 없다")
+        has_candidates = CANDIDATES.search(record.body) is not None
+        has_choice = CHOICE.search(record.body) is not None
+        if has_candidates != has_choice:
+            missing = "선택" if has_candidates else "후보"
+            problems.append(f"{record.identifier}에 `- **{missing}**`이 없다. 둘은 짝이다")
+    return problems
+
+
+def check_layout(records: list[Record], decisions_text: str) -> list[str]:
+    """표기 규약. **전 기록에 건다** (D-0081).
+
+    표기는 고쳐도 그때의 판단이 바뀌지 않으므로 소급 정규화했고, 정규화만 하고
+    검사를 안 걸면 **다음 세션에 또 어긋난다.** 실제로 표제 앞이 `---`인 것과 빈
+    줄인 것이 49대 31로 섞여 있었다.
+    """
+    problems: list[str] = []
+    lines = decisions_text.split("\n")
+    for index, line in enumerate(lines):
+        if not line.startswith("## D-"):
+            continue
+        if index >= 2 and not (lines[index - 1] == "" and lines[index - 2].strip() == "---"):
+            problems.append(f"DECISIONS {index + 1}행: 표제 앞이 `---` + 빈 줄이 아니다")
+        if index + 1 < len(lines) and lines[index + 1] != "":
+            problems.append(f"DECISIONS {index + 1}행: 표제 뒤에 빈 줄이 없다")
+    for record in records:
+        if not record.title.strip():
+            problems.append(f"{record.identifier}에 제목이 없다")
+    return problems
+
+
+def check_text_style(paths: dict[str, str]) -> list[str]:
+    """줄 길이·코드 펜스 태그·표 열 수. 문서 4종 전부에 건다 (D-0081)."""
+    problems: list[str] = []
+    for name, text in paths.items():
+        lines = text.split("\n")
+        inside = False
+        header_columns: int | None = None
+        for index, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                if not inside and stripped == "```":
+                    problems.append(f"{name} {index}행: 코드 펜스에 언어 태그가 없다")
+                if inside and stripped != "```":
+                    problems.append(f"{name} {index}행: 닫는 펜스에 언어 태그가 붙었다")
+                inside = not inside
+                continue
+            if inside:
+                continue
+            if line.startswith("|"):
+                # 표 안의 `\|`는 셀 구분이 아니라 이스케이프다. 세면 안 된다.
+                columns = line.replace("\\|", "").count("|")
+                if header_columns is None:
+                    header_columns = columns
+                elif columns != header_columns:
+                    problems.append(
+                        f"{name} {index}행: 표 열 수가 {columns}로 머리글 {header_columns}과 다르다"
+                    )
+                continue
+            header_columns = None
+            if len(line) > LINE_LIMIT and not line.startswith(("http", "  ")):
+                problems.append(f"{name} {index}행: {len(line)}자로 {LINE_LIMIT}자를 넘는다")
+        if inside:
+            problems.append(f"{name}: 코드 펜스 짝이 맞지 않는다")
     return problems
 
 
@@ -254,12 +347,20 @@ def run_checks(decisions_text: str, design_text: str) -> list[str]:
     보여야 고치러 여러 번 오지 않는다.
     """
     records = scan_records(decisions_text)
+    documents = {
+        "DECISIONS": decisions_text,
+        "DESIGN": design_text,
+        "CONTRIBUTING": (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"),
+        "README": (ROOT / "README.md").read_text(encoding="utf-8"),
+    }
     return [
         *check_numbering(records),
         *check_references(records),
-        *check_candidate_pairs(records),
+        *check_sections(records),
         *check_supersession(records),
         *check_open_issues(design_text),
+        *check_layout(records, decisions_text),
+        *check_text_style(documents),
     ]
 
 
