@@ -45,13 +45,19 @@ from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzLookup,
 )
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
+from hathor.shared.config.paths import (
+    LIBRARY_ROOT_ENV,
+    load_dotenv,
+    repo_root,
+    resolve_path,
+)
 
 if TYPE_CHECKING:
     from hathor.domain.entities.scanned_track import ScannedTrack
     from hathor.domain.entities.track_tags import TrackTags
     from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
-DEFAULT_LIBRARY_ROOT_ENV = "HATHOR_LIBRARY_ROOT"
+DEFAULT_LIBRARY_ROOT_ENV = LIBRARY_ROOT_ENV
 DEFAULT_OUTPUT_ROOT = Path("var/ingest")
 DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
 DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
@@ -93,8 +99,8 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--seed", type=int, required=True, help="난수 시드 (GR-6.5)")
     gen.add_argument("--stages", type=str, default="structure,harmony")
     gen.add_argument("--dry-run", action="store_true", help="모델 없이 결정적 산출물만")
-    gen.add_argument("--out", type=Path, default=None, help="JSON 출력 경로")
-    gen.add_argument("--midi", type=Path, default=None, help="MIDI 출력 경로 (D-0052)")
+    gen.add_argument("--out", type=resolve_path, default=None, help="JSON 출력 경로")
+    gen.add_argument("--midi", type=resolve_path, default=None, help="MIDI 출력 경로 (D-0052)")
     gen.add_argument(
         "--reference",
         action="append",
@@ -105,7 +111,10 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--tempo", type=int, default=96, help="템포 (BPM)")
     gen.add_argument("--sections", type=int, default=None, help="구간 수. 기본은 참조곡 평균")
     gen.add_argument(
-        "--root", type=Path, default=None, help="라이브러리 루트. 조성 추정에 음원이 필요하다"
+        "--root",
+        type=resolve_path,
+        default=None,
+        help="라이브러리 루트. 조성 추정에 음원이 필요하다",
     )
     gen.add_argument(
         "--key",
@@ -127,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22)")
     keys.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
-    keys.add_argument("--root", type=Path, default=None, help="라이브러리 루트")
+    keys.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
     keys.add_argument(
         "--chroma",
         choices=("cq", "linear"),
@@ -136,7 +145,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     keys.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
     keys.add_argument(
-        "--replay", type=Path, default=None, help="저장된 keys.jsonl을 재분석. 디코딩하지 않는다"
+        "--replay",
+        type=resolve_path,
+        default=None,
+        help="저장된 keys.jsonl을 재분석. 디코딩하지 않는다",
     )
     keys.add_argument(
         "--tuning",
@@ -184,11 +196,13 @@ def build_parser() -> argparse.ArgumentParser:
     scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
     scan.add_argument(
         "--root",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
     )
-    scan.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리")
+    scan.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
+    )
     scan.add_argument("--force", action="store_true", help="델타 감지를 건너뛰고 전수 재스캔")
     scan.add_argument(
         "--fail-threshold",
@@ -198,7 +212,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     resolve = ingest_sub.add_parser("resolve", help="정규 신원 확정 (MusicBrainz)")
-    resolve.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리")
+    resolve.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
+    )
     resolve.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
     resolve.add_argument(
         "--contact",
@@ -208,11 +224,13 @@ def build_parser() -> argparse.ArgumentParser:
     features = ingest_sub.add_parser("features", help="오디오 특징 추출 (GPU)")
     features.add_argument(
         "--root",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
     )
-    features.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리")
+    features.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
+    )
     features.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
     features.add_argument(
         "--force",
@@ -221,7 +239,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     compact = ingest_sub.add_parser("compact", help="특징 인덱스의 중복·고아 기록 정리 (O-7)")
-    compact.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리")
+    compact.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
+    )
     compact.add_argument(
         "--keep-missing",
         action="store_true",
@@ -233,7 +253,9 @@ def build_parser() -> argparse.ArgumentParser:
     eval_sub = evaluate.add_subparsers(dest="eval_command", required=True)
 
     retrieval = eval_sub.add_parser("retrieval", help="M0/M1/M2 + 무작위 베이스라인")
-    retrieval.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치")
+    retrieval.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+    )
     retrieval.add_argument(
         "--features",
         action="append",
@@ -297,10 +319,10 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
 
     fusion = eval_sub.add_parser("fusion", help="시드 결합 규칙 비교 (M4)")
-    fusion.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    fusion.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
     fusion.add_argument(
         "--features",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
     )
@@ -316,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     harmony.add_argument(
         "--replay",
-        type=Path,
+        type=resolve_path,
         required=True,
         help="`ingest keys --halves`가 만든 keys.jsonl. 음원도 GPU도 필요 없다",
     )
@@ -336,14 +358,16 @@ def build_parser() -> argparse.ArgumentParser:
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
         "--root",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
     )
-    mfcc.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치")
+    mfcc.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+    )
     mfcc.add_argument(
         "--features",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_MFCC_DIRNAME})",
     )
@@ -353,14 +377,16 @@ def build_parser() -> argparse.ArgumentParser:
     layers = eval_sub.add_parser("layers", help="MERT 레이어별 특징 추출 (GPU, 스템 없음)")
     layers.add_argument(
         "--root",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
     )
-    layers.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치")
+    layers.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+    )
     layers.add_argument(
         "--features",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
     )
@@ -379,10 +405,12 @@ def build_parser() -> argparse.ArgumentParser:
     taste_sub = taste.add_subparsers(dest="taste_command", required=True)
 
     compare = taste_sub.add_parser("compare", help="쌍대비교 문항을 내고 응답을 기록한다")
-    compare.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    compare.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치"
+    )
     compare.add_argument(
         "--features",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
     )
@@ -390,7 +418,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추출 시드")
 
     status = taste_sub.add_parser("status", help="수집 현황")
-    status.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    status.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
 
     lyrics = sub.add_parser("lyrics", help="가사축")
     lyrics_sub = lyrics.add_subparsers(dest="lyrics_command", required=True)
@@ -412,11 +440,11 @@ def build_parser() -> argparse.ArgumentParser:
     lyrics_structure.add_argument("--samples", type=int, default=5, help="예시로 보일 곡 수")
     lyrics_extract = lyrics_sub.add_parser("extract", help="가사 특징 추출 (CPU, 수 초)")
     lyrics_extract.add_argument(
-        "--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
     )
     lyrics_extract.add_argument(
         "--features",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LYRICS_DIRNAME})",
     )
@@ -460,10 +488,10 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="검색어",
         help="시드곡. 아티스트·제목·경로 일부로 찾는다. 여러 번 주면 퓨전한다",
     )
-    search.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    search.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
     search.add_argument(
         "--features",
-        type=Path,
+        type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
     )
@@ -481,11 +509,27 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="중심화를 끈다. 허브 곡이 어떤 질의에도 상위에 온다 (비교용)",
     )
+    sub.add_parser("env", help="해석된 경로와 설정을 찍는다. 기기를 옮겼을 때 먼저 본다")
+    sub.add_parser("doctor", help="기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)")
+    setup = sub.add_parser("setup", help="기기를 탐지해 .env를 쓴다. 기기당 한 번 (D-0068)")
+    setup.add_argument("--force", action="store_true", help="이미 있는 값도 덮어쓴다")
+    setup.add_argument("--dry-run", action="store_true", help="찾은 것만 보여주고 쓰지 않는다")
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    # **`.env`를 여기서 읽는다** (D-0066). 이전에는 docker compose만 읽어서
+    # `.env`에 음원 경로를 적어도 CLI에는 아무 영향이 없었다. 셸에 이미 있는
+    # 값은 덮지 않으므로 한 번만 다르게 돌려 보는 것도 그대로 된다.
+    load_dotenv()
     args = build_parser().parse_args(argv)
+    if args.command == "env":
+        return _run_env(args)
+    if args.command == "doctor":
+        return _run_doctor(args)
+    if args.command == "setup":
+        return _run_setup(args)
     if args.command == "lyrics":
         if args.lyrics_command == "structure":
             return _run_lyrics_structure(args)
@@ -598,6 +642,287 @@ def _estimate_key(
 
     best = max(estimates.values(), key=lambda estimate: estimate.margin)
     return best.key, estimates
+
+
+def _run_env(args: argparse.Namespace) -> int:
+    """해석된 경로를 찍는다. **기기를 옮기면 이것부터 본다** (D-0066)."""
+    import os
+
+    from hathor.shared.config.paths import PATCH_DIR_ENV
+
+    root = repo_root()
+    library = os.environ.get(LIBRARY_ROOT_ENV)
+    patches = os.environ.get(PATCH_DIR_ENV)
+    dotenv = root / ".env"
+
+    print(f"저장소       {root}")
+    print(f".env         {dotenv}{'' if dotenv.exists() else '  ← 없다. .env.example을 복사한다'}")
+    print(f"음원 루트    {library or '(미설정) ← .env에 HATHOR_LIBRARY_ROOT를 적는다'}")
+    if library and not Path(library).exists():
+        print("             ← 경로가 없다. 드라이브 마운트를 확인한다")
+    print(f"패치 폴더    {patches or '(미설정)'}")
+
+    ingest = root / "var" / "ingest"
+    keys = sorted(ingest.glob("*.keys.jsonl")) if ingest.exists() else []
+    scans = sorted(ingest.glob("scan-*.jsonl")) if ingest.exists() else []
+    print(f"산출물       {ingest}")
+    print(f"  스캔 {len(scans)}건 · 조성 {len(keys)}건")
+    for path in keys[-3:]:
+        print(f"    {path.name}")
+    return 0
+
+
+CONVENTIONAL_REPO_SUFFIX = Path("projects/hathor")
+
+
+def _run_setup(args: argparse.Namespace) -> int:
+    """기기를 탐지해 `.env`를 쓴다. **기기당 한 번, 손으로 치지 않는다** (D-0068).
+
+    윈도우 사용자 이름이 기기마다 다르고(광인사 `foxlo`, 리전 `Fox`) 음원 드라이브도
+    다르다(`/mnt/d` · `/mnt/f`). **둘 다 탐지할 수 있는 것을 손으로 치게 했다.**
+
+    이미 있는 값은 건드리지 않는다. `--force`로 덮는다.
+    """
+    from hathor.shared.config.paths import (
+        PATCH_DIR_ENV,
+        find_library_candidates,
+        parse_dotenv,
+        windows_user_dir,
+    )
+
+    root = repo_root()
+    target = root / ".env"
+    example = root / ".env.example"
+    current = parse_dotenv(target.read_text(encoding="utf-8")) if target.exists() else {}
+
+    print("기기를 살핀다...\n")
+
+    user = windows_user_dir()
+    patch_value = str(user / "Downloads") if user else ""
+    if user:
+        print(f"윈도우 사용자   {user.name}")
+        print(f"패치 폴더       {patch_value}")
+    else:
+        print("윈도우 사용자   찾지 못했다 (WSL이 아닌가?)")
+
+    candidates = find_library_candidates()
+    library_value = str(candidates[0][0]) if candidates else ""
+    if candidates:
+        print("\n음원 폴더 후보 (바로 아래 파일 수)")
+        for path, count in candidates[:5]:
+            mark = "  ←" if str(path) == library_value else ""
+            print(f"  {count:>6}곡  {path}{mark}")
+    else:
+        print("\n음원 폴더       찾지 못했다. 드라이브가 마운트돼 있는지 본다")
+
+    chosen = {PATCH_DIR_ENV: patch_value, LIBRARY_ROOT_ENV: library_value}
+    writable = {
+        key: value
+        for key, value in chosen.items()
+        if value and (args.force or not current.get(key))
+    }
+    skipped = [key for key, value in chosen.items() if value and key in current and not args.force]
+
+    print()
+    if args.dry_run:
+        for key, value in chosen.items():
+            print(f"{key}={value or '(찾지 못했다)'}")
+        print("\n--dry-run이라 쓰지 않았다.")
+        return 0
+
+    if not target.exists():
+        if not example.exists():
+            print("`.env.example`이 없다.", file=sys.stderr)
+            return 1
+        target.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"{target.name}를 만들었다 (.env.example 복사)")
+
+    lines = target.read_text(encoding="utf-8").splitlines()
+    for key, value in writable.items():
+        replaced = False
+        for index, line in enumerate(lines):
+            if line.strip().startswith(f"{key}="):
+                lines[index] = f"{key}={value}"
+                replaced = True
+                break
+        if not replaced:
+            lines.insert(0, f"{key}={value}")
+        print(f"  {key}={value}")
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    for key in skipped:
+        print(f"  {key} 는 이미 있어 두었다 (--force로 덮는다)")
+
+    if not library_value:
+        print(f"\n\033[33m{LIBRARY_ROOT_ENV}를 못 채웠다. .env에 직접 적는다.\033[0m")
+    print("\n다음:  make doctor")
+    return 0
+
+
+def _git(root: Path, *arguments: str) -> str | None:
+    """git 한 줄. 실패하면 `None`이다."""
+    import subprocess
+
+    try:
+        done = subprocess.run(
+            ("git", *arguments), cwd=root, capture_output=True, text=True, timeout=10, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def _run_doctor(args: argparse.Namespace) -> int:
+    """**기록된 규약과 지금 이 기기가 맞는지 검사한다** (D-0067).
+
+    결정 기록이 예순 건을 넘었다. 아무도 매번 다시 읽지 않는다. D-0004가
+    저장소 위치를 정해 두었는데 **그 사실을 모른 채 두 기기 모두 다른 곳에 클론했고,
+    한 번은 윈도우 드라이브였다.** 규칙이 없어서가 아니라 확인하는 것이 없어서다.
+
+    경고만 하고 막지 않는다. 다른 위치에 클론할 정당한 이유가 있을 수 있다.
+    """
+    import os
+    import shutil
+
+    from hathor.shared.config.paths import PATCH_DIR_ENV
+
+    root = repo_root()
+    problems: list[str] = []
+    notes: list[str] = []
+
+    def check(ok: bool, label: str, detail: str, hint: str = "") -> None:
+        mark = "OK  " if ok else "!!  "
+        print(f"{mark}{label:<14}{detail}")
+        if not ok:
+            (problems if hint else notes).append(f"{label}: {hint or detail}")
+            if hint:
+                print(f"    → {hint}")
+
+    print("== 위치 규약 (D-0004) ==")
+    on_windows_drive = str(root).startswith("/mnt/") and not str(root).startswith("/mnt/wsl")
+    check(
+        not on_windows_drive,
+        "저장소",
+        str(root),
+        "윈도우 드라이브다. drvfs는 파일 입출력이 10~20배 느리다. ext4로 옮긴다"
+        if on_windows_drive
+        else "",
+    )
+    conventional = root.parts[-2:] == CONVENTIONAL_REPO_SUFFIX.parts
+    check(
+        conventional,
+        "위치 규약",
+        "규약대로다" if conventional else f"규약은 ~/{CONVENTIONAL_REPO_SUFFIX}다",
+    )
+
+    print("\n== 설치본 (D-0067) ==")
+    import hathor
+
+    installed = Path(hathor.__file__).resolve().parent.parent.parent
+    same = installed == root
+    check(
+        same,
+        "설치본",
+        str(installed),
+        "**다른 저장소를 실행하고 있다.** 고쳐도 결과가 안 바뀐다. "
+        "`cd core && rm -rf .venv && uv sync --dev`"
+        if not same
+        else "",
+    )
+
+    print("\n== 설정 (D-0066) ==")
+    dotenv = root / ".env"
+    check(
+        dotenv.exists(),
+        ".env",
+        str(dotenv),
+        ".env.example을 복사한다" if not dotenv.exists() else "",
+    )
+    library = os.environ.get(LIBRARY_ROOT_ENV)
+    if not library:
+        check(False, "음원 루트", "미설정", f".env에 {LIBRARY_ROOT_ENV}를 적는다")
+    else:
+        exists = Path(library).exists()
+        check(
+            exists,
+            "음원 루트",
+            library,
+            "경로가 없다. 드라이브 마운트를 확인한다" if not exists else "",
+        )
+    patches = os.environ.get(PATCH_DIR_ENV)
+    check(
+        bool(patches),
+        "패치 폴더",
+        patches or "미설정",
+        f".env에 {PATCH_DIR_ENV}를 적는다" if not patches else "",
+    )
+
+    print("\n== git ==")
+    branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    head = _git(root, "rev-parse", "--short", "HEAD")
+    dirty = _git(root, "status", "--porcelain", "--untracked-files=no")
+    ahead = _git(root, "rev-list", "--count", "--left-right", "@{upstream}...HEAD")
+    print(f"    브랜치        {branch or '?'} @ {head or '?'}")
+    check(dirty == "", "작업 트리", "깨끗하다" if dirty == "" else "커밋되지 않은 변경이 있다")
+    if ahead:
+        behind, forward = [*ahead.split(), "0", "0"][:2]
+        synced = behind == "0" and forward == "0"
+        check(synced, "원격", "동기화됨" if synced else f"뒤 {behind} · 앞 {forward}")
+
+    print("\n== 산출물 ==")
+    ingest = root / "var" / "ingest"
+    keys = sorted(ingest.glob("*.keys.jsonl")) if ingest.exists() else []
+    scans = sorted(ingest.glob("scan-*.jsonl")) if ingest.exists() else []
+    print(f"    {ingest}")
+    print(f"    스캔 {len(scans)}건 · 조성 {len(keys)}건")
+    stale = root / "core" / "var"
+    if stale.exists():
+        check(False, "산출물 위치", str(stale), "루트로 옮긴다: mv core/var var (D-0066)")
+
+    print("\n== 환경 프로파일 (D-0068) ==")
+    import importlib.util
+
+    def has(name: str) -> bool:
+        return importlib.util.find_spec(name) is not None
+
+    heavy = {"torch": has("torch"), "demucs": has("demucs"), "transformers": has("transformers")}
+    profile = "리전형(--all-extras)" if heavy["torch"] else "광인사형(--dev)"
+    print(f"    설치 프로파일  {profile}")
+    for name, present in heavy.items():
+        print(f"      {name:<14}{'있음' if present else '없음'}")
+    cuda = None
+    if heavy["torch"]:
+        try:
+            import torch
+
+            cuda = torch.cuda.is_available()
+        except Exception:
+            cuda = None
+    print(f"      CUDA          {'있음' if cuda else '없음' if cuda is False else '확인 불가'}")
+    if not heavy["torch"]:
+        notes.append("torch가 없어 ML 검사가 건너뛰어진다")
+        print("    !! ML 검사가 건너뛰어진다. **여기서 초록이어도 리전에서 깨질 수 있다**")
+
+    print("\n== 캐시 ==")
+    total = 0
+    for name in (".ruff_cache", ".mypy_cache", ".pytest_cache", ".import_linter_cache"):
+        target = root / "core" / name
+        if target.exists():
+            size = sum(f.stat().st_size for f in target.rglob("*") if f.is_file())
+            total += size
+    print(f"    {total / 1024 / 1024:.1f}MB   전부 내용 해시 기반이라 낡은 결과를 내지 않는다")
+    print("    지우려면 make clean-all (var/과 .venv/는 남는다)")
+    if shutil.which("git") is None:
+        notes.append("git이 없다")
+
+    print()
+    if problems:
+        print(f"\033[31m고칠 것 {len(problems)}건\033[0m")
+        for item in problems:
+            print(f"  - {item}")
+        return 1
+    print("\033[32m규약과 맞다.\033[0m")
+    return 0
 
 
 def _parse_key(text: str) -> Key:

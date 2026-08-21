@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs clean
+.PHONY: up down logs ps check lint type arch test cov docs clean clean-all setup env doctor apply
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -24,5 +24,23 @@ arch:
 test:
 	cd core && uv run pytest --cov=hathor --cov-fail-under=75 -q
 
-clean:
+setup:         ## 기기를 탐지해 .env를 쓴다. 새 기기에서 한 번 (D-0068)
+	cd core && uv run python -m hathor.cli setup
+
+env:           ## 해석된 경로와 설정을 찍는다 (D-0066)
+	cd core && uv run python -m hathor.cli env
+
+doctor:        ## 기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)
+	cd core && uv run python -m hathor.cli doctor
+
+apply:         ## 패치 적용. make apply [PATCH=이름.patch] (D-0066)
+	@bash tools/apply_patch.sh $(PATCH)
+
+clean:         ## 파이썬 바이트코드만 지운다
 	find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+
+clean-all: clean  ## 검사 도구 캐시까지 지운다. **var/과 .venv/는 남긴다** (D-0067)
+	rm -rf core/.ruff_cache core/.mypy_cache core/.pytest_cache \
+	       core/.import_linter_cache core/.coverage
+	@echo "캐시를 지웠다. var/(산출물)과 .venv/(환경)는 그대로다."
+	@echo "산출물은 다시 만드는 데 수십 분, 환경은 수 분 걸린다. 지우려면 손으로 지운다."
