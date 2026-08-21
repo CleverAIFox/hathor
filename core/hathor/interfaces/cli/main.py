@@ -403,6 +403,37 @@ def build_parser() -> argparse.ArgumentParser:
     harmony.add_argument("--seed", type=int, default=20260819, help="귀무선 짝짓기 시드")
     harmony.add_argument("--blend-steps", type=int, default=11, help="λ 격자 수")
 
+    output = eval_sub.add_parser(
+        "harmony-output", help="참조곡을 바꿨을 때 출력이 얼마나 갈리는지 (O-29 · D-0078)"
+    )
+    output.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    output.add_argument(
+        "--stem-set",
+        default=DEFAULT_STEM_SET,
+        help="잴 사전 출처. mix면 전체 믹스 크로마다 (D-0074)",
+    )
+    output.add_argument(
+        "--against",
+        default="mix",
+        help="짝지어 견줄 기준 출처. none이면 견주지 않는다. 기본 mix",
+    )
+    output.add_argument("--seeds", type=int, default=DEFAULT_OUTPUT_SEEDS, help="시드 수")
+    output.add_argument("--bars", type=int, default=DEFAULT_OUTPUT_BARS, help="마디 수")
+    output.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
+    output.add_argument("--key", default="C major", help="출력 조성. 고정한다")
+    output.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
+    output.add_argument(
+        "--bar-sweep",
+        default=None,
+        metavar="8,16,32,64",
+        help="마디 수를 훑어 극한으로 내려가는지 본다. 8마디가 표본인지 여기서 갈린다",
+    )
+
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
         "--root",
@@ -599,6 +630,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_fusion(args)
         if args.eval_command == "harmony-prior":
             return _run_eval_harmony_prior(args)
+        if args.eval_command == "harmony-output":
+            return _run_eval_harmony_output(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "keys":
@@ -1189,6 +1222,19 @@ DEFAULT_STEM_SET = "other"
 달성 가능 폭이 `other` 0.0534 · `other+bass` 0.0497 · `other+bass+vocals` 0.0373이었다.
 넣을수록 나빠진다 — 저역은 CQ 격자에서 반음이 뭉개지고(D-0056) 보컬은 비브라토로
 칸 사이를 번져, 둘 다 균등 성분을 도로 넣는다.
+"""
+
+
+MIX_SOURCE = "mix"
+"""전체 믹스 크로마를 가리키는 출처 이름. 스템 조합 이름과 같은 자리에 쓴다."""
+
+DEFAULT_OUTPUT_SEEDS = 1000
+DEFAULT_OUTPUT_BARS = 8
+DEFAULT_OUTPUT_PAIRS = 100
+"""O-29 표본. **8마디 하나는 표본이 아니다** (D-0078).
+
+100쌍 곱하기 1000시드가 CPU로 약 16초다. D-0078에 "수 초"라고 적었으나 실측은 그보다
+느리다 — 음원도 GPU도 안 쓰는 것은 맞다.
 """
 
 
@@ -2774,6 +2820,171 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
     print("**포착 비율이 크기다** (D-0063). 격차의 절대값은 크로마가 평평하면 어차피 작다.")
     print("`oracle`은 뒷반쪽으로 뒷반쪽을 맞힌 값이며 어떤 선도 이보다 낮을 수 없다.")
     print("중앙값이라 절대값의 부호는 뜻이 없다. 같은 곡 집합 안의 선끼리만 비교한다.")
+    return 0
+
+
+def load_degree_priors(path: Path, source: str) -> dict[str, tuple[float, ...]]:
+    """`source_key → 으뜸음으로 회전된 12차원 도수 사전` (O-29).
+
+    `source`가 `mix`면 전체 믹스 크로마를, 아니면 그 스템 조합의 `full`을 읽는다.
+    **한 함수가 둘을 다 읽는다** — 경로를 나누면 전체 믹스 쪽만 회전을 빠뜨리는
+    식으로 어긋나고, 그것이 D-0034 계열이 열한 번 태어난 형태다.
+
+    **으뜸음은 어느 출처든 전체 믹스 추정(`key`)을 쓴다.** 스템에서 다시 추정하면
+    출처마다 회전 기준이 달라져 비교가 성립하지 않는다 (D-0073).
+    """
+    import json
+
+    from hathor.domain.services.harmony_prior import merge_degree_priors
+    from hathor.domain.value_objects.key import PITCH_CLASSES
+
+    found: dict[str, tuple[float, ...]] = {}
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                # 끊긴 배치의 마지막 줄은 잘려 있는 것이 정상이다 (D-0075).
+                continue
+            vector = (
+                row.get("chroma")
+                if source == MIX_SOURCE
+                else ((row.get("stems") or {}).get(source) or {}).get("full")
+            )
+            key_text, name = row.get("key"), row.get("source_key")
+            if vector is None or key_text is None or name is None:
+                continue
+            tonic = str(key_text).rsplit(" ", 1)[0]
+            if tonic not in PITCH_CLASSES:
+                continue
+            merged = merge_degree_priors(
+                [(tuple(float(value) for value in vector), PITCH_CLASSES.index(tonic))]
+            )
+            found[str(name)] = tuple(float(value) for value in merged)
+    return found
+
+
+def _run_eval_harmony_output(args: argparse.Namespace) -> int:
+    """참조곡을 바꾸면 출력이 얼마나 갈리는지 잰다 (O-29 · D-0078).
+
+    **8마디 한 번을 세는 것으로는 아무것도 판정할 수 없다.** `rng.choices`는
+    가중치에 비례하는 것이 아니라 **가중치가 뽑힌 난수를 넘어설 때만** 바뀌는
+    문턱이다. 시드 1000개로 늘리고 비교선 일곱을 함께 낸다.
+
+    저장된 크로마만 읽으므로 **음원도 GPU도 필요 없다.**
+    """
+    from hathor.application.evaluate_harmony_output import (
+        EvaluateHarmonyOutput,
+        OutputCondition,
+        OutputReport,
+        ReferencePrior,
+        SourceComparison,
+        sweep_bar_counts,
+    )
+    from hathor.shared.config.paths import repo_root as _root
+
+    target = args.stem_set
+    baseline = None if args.against.lower() == "none" else args.against
+    store = args.priors
+    if store is None:
+        store = find_stem_prior_store(_root(), target if target != MIX_SOURCE else "other")
+    if store is None or not store.exists():
+        print(
+            "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "
+            "--priors로 경로를 준다.",
+            file=sys.stderr,
+        )
+        return 1
+
+    tables = {name: load_degree_priors(store, name) for name in {target, baseline} if name}
+    for name, table in tables.items():
+        if len(table) < 2:
+            print(
+                f"출처 `{name}`의 사전이 {len(table)}개다. {store.name}에 그 출처가 없다.",
+                file=sys.stderr,
+            )
+            return 1
+
+    # **두 출처가 같은 곡 집합을 써야 짝지은 비교가 된다.** 곡이 다르면 쌍 추첨이
+    # 서로 다른 곡을 가리켜 출처 차이인지 쌍 차이인지 갈리지 않는다 (D-0033).
+    shared = sorted(set.intersection(*(set(table) for table in tables.values())))
+    if len(shared) < 2:
+        print(f"두 출처에 공통인 곡이 {len(shared)}개다.", file=sys.stderr)
+        return 1
+
+    condition = OutputCondition(
+        seed_count=args.seeds,
+        bar_count=args.bars,
+        pair_count=args.pairs,
+        key=_parse_key(args.key),
+        seed=args.seed,
+    )
+    harness = EvaluateHarmonyOutput(condition)
+
+    def references(name: str) -> list[ReferencePrior]:
+        return [ReferencePrior(source_key=key, prior=tables[name][key]) for key in shared]
+
+    reports: dict[str, OutputReport] = {
+        name: harness.run(references(name), name) for name in tables
+    }
+    result = reports[target]
+
+    print(
+        f"곡 {len(shared)}개 · 쌍 {result.line('paired').pair_count}"
+        f" · 시드 {condition.seed_count} · {condition.bar_count}마디"
+        f" · {condition.key} · 출처 {target}"
+        f"{f' (기준 {baseline})' if baseline else ''}\n"
+        f"사전: {store.name}\n"
+    )
+
+    for name, report in reports.items():
+        print(f"[{name}]")
+        header = (
+            f"{'선':<10}{'도수 거리':>12}{'표준오차':>10}"
+            f"{'마디 환산':>11}{'극한':>10}{'마디 불일치':>13}"
+        )
+        print(header)
+        print("-" * 68)
+        for item in report.lines:
+            print(
+                f"{item.name:<10}{item.mean_distance:>12.4f}{item.standard_error:>10.4f}"
+                f"{item.mean_distance * condition.bar_count:>11.2f}"
+                f"{item.mean_limit:>10.4f}{item.mean_mismatch:>13.4f}"
+            )
+        verdict = "정보 있음" if report.is_output_conditioned else "정보 없음"
+        sound = "건전" if report.is_harness_sound else "**고장**"
+        print(f"하네스 {sound} · 판정: **{verdict}**\n")
+
+    if baseline:
+        comparison = SourceComparison(baseline=reports[baseline], target=result)
+        moved = comparison.gain * condition.bar_count
+        print(
+            f"짝지은 비교 ({baseline} → {target})\n"
+            f"  출력 차이 이득 {comparison.gain:+.4f}  (마디 환산 {moved:+.2f})\n"
+            f"  사전 극한 이득 {comparison.limit_gain:+.4f}\n"
+            f"  쌍 단위 승률  {comparison.win_rate:.1%}\n"
+            f"  전달: **{'그렇다' if comparison.transmits_prior_contrast else '아니다'}**\n"
+        )
+
+    if args.bar_sweep:
+        counts = tuple(int(token) for token in args.bar_sweep.split(",") if token.strip())
+        print("마디 수 훑기 (실측이 극한으로 내려가는가)")
+        for bars, observed, limit in sweep_bar_counts(references(target), counts, condition):
+            print(f"  {bars:>5}마디  {observed:.4f}  (극한 {limit:.4f})")
+        print()
+
+    print("--- 읽는 법 ---")
+    print("**도수 히스토그램 거리가 지표다.** 마디별 일치율이 아니다 — 같은 어휘를 다른")
+    print("순서로 뽑은 것과 다른 어휘를 뽑은 것은 다르다. `마디 환산`은 거리에 마디 수를")
+    print("곱한 값이며 지난 세션이 센 `다른 마디 수`와 같은 단위다.")
+    print("**`극한`이 상한이다** (O-25 (3)). 사전 가중치 벡터 자체의 거리이며 마디 수를")
+    print("늘리면 실측이 거기로 내려간다. 실측이 극한보다 큰 것은 정상이고, 그 초과분은")
+    print("**전달된 정보가 아니라 8마디의 되튐이다.** `--bar-sweep`으로 확인한다.")
+    print("`identical`은 0, `onehot`은 1.0이어야 한다. 아니면 하네스가 고장이므로 나머지")
+    print("숫자를 읽지 않는다. `random`은 아무 사전 둘이라 느슨하고, `shuffled`가 뾰족함을")
+    print("맞춘 귀무선이다 — 실측이 그보다 작으면 곡들이 화성 어휘를 공유한다는 뜻이다.")
     return 0
 
 
