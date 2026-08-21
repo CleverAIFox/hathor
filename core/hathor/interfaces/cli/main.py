@@ -856,7 +856,78 @@ def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
-def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, set[str]]:
+BROKEN_LINE_TOLERANCE = 0.02
+"""이어받을 때 견디는 깨진 줄 비율 (D-0077).
+
+끊기면 **마지막 한 줄**이 잘려 있을 수 있고 그것은 정상이다. 그보다 많이 깨졌다면
+동시 실행으로 줄이 섞였다는 뜻이며, **조용히 건너뛰면 49곡이 5곡으로 보인다.**
+실제로 그렇게 됐고 그때는 파일이 이미 못 쓰게 된 뒤였다.
+"""
+
+
+class BatchLock:
+    """산출물 디렉터리마다 하나만 돌게 한다 (D-0077).
+
+    ### 왜 필요해졌나
+
+    D-0075 이전에는 실행마다 새 타임스탬프 파일을 썼으므로 두 개가 동시에 돌아도
+    겹치지 않았다. **같은 파일에 이어 쓰게 만든 순간 생긴 문제다.**
+
+    `cd core`가 실패했는데도 뒤 명령이 실행돼 배치가 둘 떴고, 둘째가 첫째의 49곡을
+    읽고 이어받아 **같은 파일에 동시에 append했다.** 줄이 섞여 파일이 깨졌다.
+
+    ### 죽은 프로세스의 락은 자동으로 푼다
+
+    락 파일에 PID를 적고, 그 PID가 살아 있지 않으면 가져간다. 그러지 않으면 강제
+    종료 뒤 손으로 지워야 하고, **손으로 지우게 하면 결국 지우고 돌리게 된다.**
+
+    **이것이 예외 안전을 대신한다.** 추출 도중 예외로 죽으면 락 파일이 남지만, 그
+    PID는 이미 없으므로 다음 실행이 그냥 가져간다. `try/finally`로 감싸려면 본문
+    전체를 들여써야 하고, 그 재들여쓰기가 이 함수에서는 위험이 더 크다.
+    """
+
+    def __init__(self, root: Path, name: str = "ingest-keys") -> None:
+        self.path = root / f".{name}.lock"
+
+    def _holder(self) -> int | None:
+        try:
+            return int(self.path.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _alive(pid: int) -> bool:
+        import os
+
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return True
+        return True
+
+    def acquire(self) -> int | None:
+        """잡으면 `None`, 이미 살아 있는 주인이 있으면 그 PID를 낸다."""
+        import os
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        holder = self._holder()
+        if holder is not None and holder != os.getpid() and self._alive(holder):
+            return holder
+        self.path.write_text(str(os.getpid()), encoding="utf-8")
+        return None
+
+    def release(self) -> None:
+        import os
+
+        if self._holder() == os.getpid():
+            self.path.unlink(missing_ok=True)
+
+
+def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, set[str], int]:
     """이어받을 파일과 이미 처리한 `source_key`를 낸다 (D-0075).
 
     **켜야 하는 옵션으로 두지 않는다.** `--resume`을 붙여야 이어받게 하면 붙이는 것을
@@ -872,15 +943,19 @@ def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, s
         for path in sorted(out_root.glob("keys-*.keys.jsonl"), reverse=True):
             done: set[str] = set()
             matched = False
+            broken = 0
+            total = 0
             try:
                 with path.open(encoding="utf-8") as stream:
                     for line in stream:
                         if not line.strip():
                             continue
+                        total += 1
                         try:
                             row = json.loads(line)
                         except ValueError:
-                            continue  # 잘린 마지막 줄
+                            broken += 1
+                            continue  # 잘린 마지막 줄이면 정상, 많으면 손상이다
                         if not matched:
                             if any(row.get(k) != v for k, v in settings.items()):
                                 break
@@ -891,10 +966,10 @@ def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, s
             except OSError:
                 continue
             if matched:
-                return path, done
+                return path, done, broken
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    return out_root / f"keys-{stamp}.keys.jsonl", set()
+    return out_root / f"keys-{stamp}.keys.jsonl", set(), 0
 
 
 def _describe_keys(path: Path) -> str:
@@ -1392,11 +1467,31 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         # **이어받을 파일을 먼저 정한다** (D-0075). 조건이 같은 최근 산출물이 있으면
         # 거기에 붙이고, 이미 처리한 곡은 건너뛴다.
         settings = _keys_settings(args)
-        saved, done = _resume_target(out_root, settings)
+        # **같은 산출물에 둘이 못 쓰게 한다** (D-0077). 이어받기가 같은 파일에
+        # append하므로, 동시에 돌면 줄이 섞여 파일이 통째로 깨진다.
+        lock = BatchLock(out_root)
+        holder = lock.acquire()
+        if holder is not None:
+            print(
+                f"이미 다른 추출이 돌고 있다 (PID {holder}). 끝나기를 기다리거나 그 쪽을 멈춘다.",
+                file=sys.stderr,
+            )
+            return 1
+        saved, done, broken = _resume_target(out_root, settings)
+        if broken > max(1, int(len(done) * BROKEN_LINE_TOLERANCE)):
+            lock.release()
+            print(
+                f"{saved.name}에 깨진 줄이 {broken}개다. **동시 실행으로 섞였을 수 있다.**\n"
+                f"  조용히 건너뛰면 처리한 곡 수를 잘못 세고 그 위에 이어 쓴다.\n"
+                f"  파일을 확인하고 지운 뒤 다시 실행한다: {saved}",
+                file=sys.stderr,
+            )
+            return 1
         if done:
             print(f"이어받는다: {saved.name} · 이미 {len(done)}곡", file=sys.stderr, flush=True)
         remaining = [track for track in tracks if track.source_key not in done]
         if not remaining:
+            lock.release()
             print(f"이미 전부 처리했다: {saved}\n")
             return 0
 
@@ -1414,6 +1509,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 if part not in separator.sources
             ]
             if missing:
+                lock.release()
                 print(
                     f"모델이 내지 않는 스템을 요구한다: {sorted(set(missing))} "
                     f"(가진 것: {separator.sources})",
@@ -1534,6 +1630,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                     flush=True,
                 )
         stream.close()
+        lock.release()
         print(
             f"저장: {saved} · 크로마 {args.chroma} · 프로파일 {args.profile}"
             f" · gamma {args.gamma:g} · 배음 {args.harmonic:g} · 집계 {args.aggregate}"
