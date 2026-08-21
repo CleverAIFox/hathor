@@ -112,6 +112,39 @@ uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10  
 uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 (M4)
 ```
 
+### 기기를 옮겼다면 (D-0066)
+
+**저장소는 양쪽 기기에서 `~/projects/hathor`다.** 윈도우 드라이브(`/mnt/c`)에 두지 않는다 —
+`uv sync`가 105초에서 105밀리초로 줄었다.
+
+```bash
+cd ~/projects/hathor
+make setup                # 기기를 탐지해 .env를 쓴다. 기기당 한 번
+make doctor               # 규약과 맞는지 검사한다
+```
+
+`make setup`이 윈도우 사용자 이름(광인사 `foxlo` · 리전 `Fox`)과 음원 루트를 찾아
+`.env`에 적는다. **손으로 치지 않는다.** 이미 있는 값은 두고 `--force`로 덮는다.
+후보를 파일 수와 함께 보여주므로 틀렸으면 `.env`를 고치면 된다.
+
+`make doctor`가 위치 규약(D-0004), **설치본이 이 저장소를 가리키는지**, `.env`와 필수 키,
+음원 루트 실재 여부, git 상태, 산출물 현황, **설치 프로파일**을 본다. 광인사(`--dev`)는
+ML 검사를 건너뛰므로 **거기서 초록이어도 리전에서 깨질 수 있다** — `doctor`가 그것을 알린다. 고칠 것이 있으면 고치는 명령까지 낸다.
+`make env`는 경로만 짧게 찍는다.
+
+`make env`가 저장소 루트, `.env` 유무, 음원 루트가 실제로 있는지, 산출물이 몇 건인지를
+찍는다. **경로를 셸에 export하지 않는다** — `.env` 한 곳에만 적는다.
+
+패치는 `HATHOR_PATCH_DIR`에 받아 두고:
+
+```bash
+make apply                    # 가장 최근 .patch
+make apply PATCH=D0067.patch
+```
+
+작업 트리가 깨끗한지 보고, 이미 적용됐으면 아무것도 하지 않는다. 되돌리기는
+`git apply -R`이다 — **별도 백업 디렉터리를 만들지 않는다** (GR-0.7).
+
 ### 크로마 대비 개선 실측 (O-27 · D-0064)
 
 ```bash
