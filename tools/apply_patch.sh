@@ -58,11 +58,27 @@ fi
 MESSAGE="$(grep -m1 '^# hathor-commit:' "$PATCH" | sed 's/^# hathor-commit:[[:space:]]*//' || true)"
 [[ -n "$MESSAGE" ]] || MESSAGE="chore: $(basename "$PATCH" .patch) 적용"
 
-# **`git add -A`다. 파일 목록을 손으로 적지 않는다** — 그렇게 적다가 실제로
-# CONTRIBUTING.md와 tools/apply_patch.sh를 빠뜨렸다 (D-0070).
-git add -A
+# **패치가 목록을 갖고 있으므로 손으로 적지도, 눈감고 `add -A` 하지도 않는다**
+# (D-0072). 패치가 건드린다고 선언한 파일과 실제로 바뀐 파일이 정확히 같아야 한다.
+# 다르면 다른 작업이 섞인 것이고, 그대로 커밋하면 남의 변경이 딸려 들어간다.
+EXPECTED="$(git apply --numstat "$PATCH" | cut -f3- | sort)"
+ACTUAL="$(git status --porcelain | sed 's/^...//' | tr -d '"' | sort)"
+
+if [[ "$EXPECTED" != "$ACTUAL" ]]; then
+  echo
+  printf '\033[31m패치가 건드린 파일과 실제 변경이 다르다.\033[0m\n' >&2
+  diff <(echo "$EXPECTED") <(echo "$ACTUAL") | sed 's/^</  패치에만: /; s/^>/  트리에만: /' >&2
+  echo >&2
+  echo "  다른 작업이 섞여 있다. 정리한 뒤 다시 실행한다." >&2
+  echo "  붙인 것은 그대로 두었다. 되돌리려면: git apply -R '${PATCH}'" >&2
+  exit 1
+fi
+
+# 검증했으므로 선언된 목록으로만 담는다.
+git apply --numstat "$PATCH" | cut -f3- | while IFS= read -r file; do git add -- "$file"; done
 git commit -q -m "$MESSAGE"
 ok "커밋: ${MESSAGE}"
+printf "  파일 %s개 · 패치 선언과 일치\n" "$(echo "$EXPECTED" | wc -l)"
 
 echo
 echo "다음:  make check  &&  git push"
