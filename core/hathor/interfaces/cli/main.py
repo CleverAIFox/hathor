@@ -434,6 +434,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="마디 수를 훑어 극한으로 내려가는지 본다. 8마디가 표본인지 여기서 갈린다",
     )
 
+    restriction = eval_sub.add_parser(
+        "degree-restriction", help="다이어토닉 6도수 제한이 버리는 몫 (O-31 · D-0083)"
+    )
+    restriction.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    restriction.add_argument(
+        "--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스 크로마다"
+    )
+    restriction.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
+    restriction.add_argument("--key", default="C major", help="선법을 정한다. 버리는 칸이 달라진다")
+    restriction.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
+
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
         "--root",
@@ -632,6 +648,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_harmony_prior(args)
         if args.eval_command == "harmony-output":
             return _run_eval_harmony_output(args)
+        if args.eval_command == "degree-restriction":
+            return _run_eval_degree_restriction(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "keys":
@@ -2985,6 +3003,69 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     print("`identical`은 0, `onehot`은 1.0이어야 한다. 아니면 하네스가 고장이므로 나머지")
     print("숫자를 읽지 않는다. `random`은 아무 사전 둘이라 느슨하고, `shuffled`가 뾰족함을")
     print("맞춘 귀무선이다 — 실측이 그보다 작으면 곡들이 화성 어휘를 공유한다는 뜻이다.")
+    return 0
+
+
+def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
+    """다이어토닉 제한이 버리는 몫을 잰다 (O-31 · D-0083).
+
+    **사전 벡터만 읽는다** — 생성도 음원도 GPU도 필요 없다. 1초 이내다.
+    """
+    from hathor.application.evaluate_degree_restriction import (
+        EvaluateDegreeRestriction,
+        off_scale_indices,
+    )
+    from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
+    from hathor.shared.config.paths import repo_root as _root
+
+    source = args.stem_set
+    store = args.priors
+    if store is None:
+        store = find_stem_prior_store(_root(), source if source != MIX_SOURCE else "other")
+    if store is None or not store.exists():
+        print(
+            "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "
+            "--priors로 경로를 준다.",
+            file=sys.stderr,
+        )
+        return 1
+
+    table = load_degree_priors(store, source)
+    if len(table) < 2:
+        print(f"출처 `{source}`의 사전이 {len(table)}개다.", file=sys.stderr)
+        return 1
+
+    condition = OutputCondition(pair_count=args.pairs, key=_parse_key(args.key), seed=args.seed)
+    references = [ReferencePrior(key, table[key]) for key in sorted(table)]
+    report = EvaluateDegreeRestriction(condition).run(references, source)
+    observed = report.line("observed")
+    off = off_scale_indices(condition.key.mode)
+
+    print(
+        f"곡 {len(references)}개 · 쌍 {len(observed.shares)} · {condition.key}"
+        f" · 출처 {source}\n사전: {store.name}\n"
+        f"버리는 칸 {len(off)}개 (반음 {', '.join(str(value) for value in off)})\n"
+    )
+    header = f"{'선':<10}{'비음계 몫':>12}{'표준오차':>10}"
+    print(header + f"{'질량':>10}{'제한 후/전':>12}{'순위상관':>10}")
+    print("-" * 64)
+    for line in report.lines:
+        print(
+            f"{line.name:<10}{line.mean_share:>12.4f}{line.standard_error:>10.4f}"
+            f"{line.mean_mass:>10.4f}{line.survival:>12.4f}{line.rank_agreement:>10.3f}"
+        )
+    print(
+        f"\n실측 - 귀무 = {report.gap:+.4f} · 쌍 단위 승률 {report.win_rate:.1%}\n"
+        f"판정: **{'제한이 옳다' if report.restriction_is_sound else '제한이 곡 정보를 버린다'}**\n"
+    )
+    print("--- 읽는 법 ---")
+    print("**전변동은 칸별 절댓값의 합이라 다이어토닉과 비음계로 정확히 쪼개진다.** 모형이")
+    print("필요 없다. `비음계 몫`은 두 사전의 거리 중 버려지는 칸이 낸 비율이다.")
+    print("**칸 수 비율(6/12)은 기준선이 아니다.** 사전 질량이 다이어토닉에 몰려 있으면 몫도")
+    print("자연히 낮아진다. 뾰족함과 질량을 그대로 두고 칸 정체성만 지운 `shuffled`가 기준선이다.")
+    print("실측이 귀무보다 **작으면** 버리는 칸이 곡 고유 대비를 덜 담는다 — D-0063이 옳았다.")
+    print("**`순위상관`은 진단이다.** 탐색에서 곡 고유 성분이 없을 때도 0.54였다 — 갈리지 않는")
+    print("지표는 판정에 쓰지 않는다 (O-25 (2)).")
     return 0
 
 

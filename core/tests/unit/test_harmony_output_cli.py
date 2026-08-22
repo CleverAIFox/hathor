@@ -190,3 +190,33 @@ def test_로더는_잘린_줄을_건너뛴다(tmp_path):
     with path.open("a", encoding="utf-8") as stream:
         stream.write('{"source_key": "잘린곡.flac", "key": "C maj')
     assert len(load_degree_priors(path, "mix")) == 3
+
+
+# ------------------------------------------------------------------ O-31 배선
+
+
+def test_도수_제한_손실을_낸다(tmp_path, capsys):
+    """`eval degree-restriction` 배선 (O-31 · D-0083). **인코더 테스트는 배선을 안 본다.**"""
+    path = write_keys(tmp_path / "keys.jsonl")
+    assert main(["eval", "degree-restriction", "--priors", str(path), "--pairs", "20"]) == 0
+    out = capsys.readouterr().out
+    assert "observed" in out and "shuffled" in out
+    assert "비음계 몫" in out and "판정" in out
+
+
+def test_선법을_바꾸면_버리는_칸이_달라진다(tmp_path, capsys):
+    """**선언한 인자가 결과를 바꾸는지 본다** (D-0064 · O-25)."""
+    path = write_keys(tmp_path / "keys.jsonl")
+    outputs = []
+    for key in ("C major", "A minor"):
+        command = ["eval", "degree-restriction", "--priors", str(path), "--pairs", "20"]
+        assert main([*command, "--key", key]) == 0
+        outputs.append(capsys.readouterr().out)
+    assert "반음 1, 3, 6, 8, 10, 11" in outputs[0]
+    assert "반음 1, 2, 4, 6, 9, 11" in outputs[1]
+    assert outputs[0] != outputs[1]
+
+
+def test_제한_손실도_사전_파일이_없으면_비정상_종료한다(tmp_path, capsys):
+    assert main(["eval", "degree-restriction", "--priors", str(tmp_path / "없다.jsonl")]) == 1
+    assert "찾지 못했다" in capsys.readouterr().err
