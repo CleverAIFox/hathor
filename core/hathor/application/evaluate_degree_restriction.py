@@ -26,10 +26,30 @@ D-0082에서 그 자국이 나왔다. 조건화 이득 3.14배는 전변동 거�
 | 선 | 사전 | 무엇을 재는가 |
 |---|---|---|
 | `observed` | 참조곡 A, B | 재려는 것 |
-| `shuffled` | 같은 사전의 **도수를 치환** | **귀무선.** 질량 분포는 같고 칸 정체성만 없다 |
+| `shuffled` | 12칸 **전체 치환** | D-0083의 귀무선. **질량 교란이 있다** — 아래 |
+| `within` | 다이어토닉·비음계 **조 안에서만 치환** | **질량이 보존되는 귀무선** (D-0084) |
 
-실측 몫이 귀무 몫보다 **작으면** 비음계 칸이 곡 고유 대비를 덜 담는다는 뜻이고,
-**D-0063의 판단이 옳았던 것이다.** 같으면 버리는 것이 손실이다.
+### 전체 치환은 질량까지 바꾼다 (D-0084)
+
+D-0083은 `shuffled`만 두고 "뾰족함이 정확히 같고 칸 정체성만 사라진다"고 적었다.
+**틀렸다.** 12칸을 통째로 뒤섞으면 비음계 칸이 붙드는 **질량이 달라진다.**
+
+1004곡 실측에서 비음계 질량이 실측 0.4047 대 전체 치환 0.5097이었다. 전변동 기여는
+질량에 대략 비례하므로 **몫 차이 -0.0813의 대부분을 질량 차이 -0.1050이 만들었다.**
+질량으로 기대되는 몫은 0.4105인데 실측이 0.4357로 **오히려 높았다.**
+
+**D-0062가 경고한 부류에 다시 빠진 것이다** — 이겼을 때 정보 때문인지 다른 것
+때문인지 갈리지 않는 귀무선이었다.
+
+`within`은 다이어토닉 6칸 안에서, 비음계 6칸 안에서 **각각** 치환한다. 조별 질량이
+정확히 보존되고 **어느 칸인지만** 사라진다. 남는 차이는 순수하게 **"두 곡이 같은
+비음계 자리를 강조하는가"**다.
+
+탐색에서 비음계 질량을 0.35와 0.50으로 바꿔 보면 `shuffled` 차이는 -0.159에서
+-0.000까지 흔들리는데 `within` 차이는 **0 교차점이 질량과 무관하다.**
+
+실측 몫이 `within`보다 **작으면** 곡들이 같은 비음계 자리에서 닮았다는 뜻이고
+버려도 곡 정체성을 잃지 않는다. **크거나 같으면 버리는 칸이 곡을 가른다.**
 
 ### 순위상관은 판정에 안 쓴다
 
@@ -128,6 +148,16 @@ class RestrictionLine:
         return float(np.std(self.shares, ddof=1) / np.sqrt(len(self.shares)))
 
     @property
+    def share_per_mass(self) -> float:
+        """몫을 질량으로 나눈 값. **1 근처면 질량에 비례해 갈린다는 뜻이다.**
+
+        질량 교란을 눈으로 잡는 자리다 (D-0084). 실측이 귀무보다 크면 비음계 칸이
+        질량 대비 **더** 갈린다.
+        """
+        mass = self.mean_mass
+        return self.mean_share / mass if mass > 0 else 0.0
+
+    @property
     def survival(self) -> float:
         """제한 후 거리 / 제한 전 거리. 1보다 크면 정규화가 대비를 키운 것이다."""
         full = float(np.mean(self.distances_full)) if self.distances_full else 0.0
@@ -154,23 +184,59 @@ class RestrictionReport:
                 return item
         raise KeyError(f"그런 비교선이 없다: {name}")
 
+    def _gap(self, null: str) -> float:
+        return self.line("observed").mean_share - self.line(null).mean_share
+
+    def _win_rate(self, null: str) -> float:
+        observed = np.asarray(self.line("observed").shares)
+        other = np.asarray(self.line(null).shares)
+        if observed.size == 0 or observed.size != other.size:
+            return 0.0
+        return float(np.mean(observed < other))
+
     @property
     def gap(self) -> float:
-        """실측 몫에서 귀무 몫을 뺀 값. **음수면 제한이 옳다.**"""
-        return self.line("observed").mean_share - self.line("shuffled").mean_share
+        """실측 몫에서 **전체 치환** 귀무 몫을 뺀 값 (D-0083).
+
+        **이 값만 보면 안 된다** — 질량 교란이 있다 (D-0084).
+        """
+        return self._gap("shuffled")
 
     @property
     def win_rate(self) -> float:
-        """쌍마다 실측 몫이 귀무보다 작았는가. 평균 한 점의 우연이 아님을 본다."""
-        observed = np.asarray(self.line("observed").shares)
-        null = np.asarray(self.line("shuffled").shares)
-        if observed.size == 0 or observed.size != null.size:
-            return 0.0
-        return float(np.mean(observed < null))
+        """쌍마다 실측 몫이 전체 치환보다 작았는가 (D-0083)."""
+        return self._win_rate("shuffled")
+
+    @property
+    def mass_matched_gap(self) -> float:
+        """실측 몫에서 **조 내 치환** 귀무 몫을 뺀 값. 질량이 보존된다 (D-0084)."""
+        return self._gap("within")
+
+    @property
+    def mass_matched_win_rate(self) -> float:
+        return self._win_rate("within")
+
+    @property
+    def off_scale_is_shared(self) -> bool:
+        """**사전 등록한 판정 규칙이다** (D-0084 · GR-6.5). 결과를 보고 고치지 않는다.
+
+        1. 실측 비음계 몫이 **조 내 치환** 귀무선보다 작다.
+        2. **쌍 과반에서** 그렇다.
+
+        둘 다 넘으면 곡들이 **같은 비음계 자리에서 닮았다**는 뜻이고, 버려도 곡
+        정체성을 잃지 않는다 — D-0063의 판단이 옳았던 것이다. 넘지 못하면 **버리는
+        칸이 곡을 가르며**, 순서(O-32)를 건드리기 전에 어휘 표현부터 고쳐야 한다.
+
+        **질 수 있다.** 탐색에서 비음계 칸의 곡 고유 성분을 올리자 차이가 0을 지나
+        부호가 바뀌었고, **그 교차점이 질량과 무관했다.**
+        """
+        return self.mass_matched_gap < 0.0 and self.mass_matched_win_rate > 0.5
 
     @property
     def restriction_is_sound(self) -> bool:
-        """**사전 등록한 판정 규칙이다** (GR-6.5). 결과를 보고 고치지 않는다.
+        """D-0083이 사전 등록한 규칙. **질량 교란이 있어 단독으로 읽지 않는다** (D-0084).
+
+        결과를 보고 고치지 않는다 — 통과했다는 사실은 그대로 두고 새 규칙을 옆에 둔다.
 
         1. 실측 비음계 몫이 치환 귀무선보다 **작다.**
         2. **쌍 과반에서** 그렇다.
@@ -201,8 +267,15 @@ class EvaluateDegreeRestriction:
         pairs = EvaluateHarmonyOutput(settings).pair_indices(len(references))
         priors: list[Histogram] = [np.asarray(item.prior, dtype=np.float64) for item in references]
 
+        on = [index for index in range(DEGREE_COUNT) if index not in set(off)]
         generator = np.random.default_rng(settings.seed)
         shuffled: list[Histogram] = [generator.permutation(vector) for vector in priors]
+        within: list[Histogram] = []
+        for vector in priors:
+            moved = vector.copy()
+            moved[on] = generator.permutation(vector[on])
+            moved[off] = generator.permutation(vector[off])
+            within.append(moved)
 
         def measure(name: str, table: list[Histogram]) -> RestrictionLine:
             shares, full, restricted, masses = [], [], [], []
@@ -224,5 +297,9 @@ class EvaluateDegreeRestriction:
             label=label,
             condition=settings,
             reference_count=len(references),
-            lines=(measure("observed", priors), measure("shuffled", shuffled)),
+            lines=(
+                measure("observed", priors),
+                measure("shuffled", shuffled),
+                measure("within", within),
+            ),
         )

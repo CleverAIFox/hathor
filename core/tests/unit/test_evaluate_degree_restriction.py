@@ -143,3 +143,72 @@ def test_없는_비교선을_찾으면_거부한다():
     report = EvaluateDegreeRestriction(FAST).run(_references(40, off_signal=0.0), "test")
     with pytest.raises(KeyError):
         report.line("없는선")
+
+
+# ------------------------------------------------------------------ 질량 보존 귀무선
+
+
+def _split_references(
+    count: int, *, off_signal: float, off_mass: float, seed: int = 9
+) -> list[ReferencePrior]:
+    """**비음계 질량과 곡 고유 성분을 따로 돌린다.** 둘을 갈라야 교란이 보인다 (D-0084)."""
+    off = list(off_scale_indices(Mode.MAJOR))
+    on = [index for index in range(DEGREES) if index not in off]
+    rng = np.random.default_rng(seed)
+    shared = rng.dirichlet(np.full(len(off), 2.0))
+    made: list[ReferencePrior] = []
+    for index in range(count):
+        vector = np.zeros(DEGREES)
+        vector[on] = rng.dirichlet(np.full(len(on), 0.8)) * (1.0 - off_mass)
+        raw = rng.dirichlet(np.full(len(off), 0.8))
+        mixed = (1.0 - off_signal) * shared + off_signal * raw
+        vector[off] = mixed / mixed.sum() * off_mass
+        made.append(
+            ReferencePrior(f"곡{index:03d}.flac", tuple(float(v) for v in vector / vector.sum()))
+        )
+    return made
+
+
+def test_전체_치환은_질량을_바꾼다():
+    """**D-0083의 결함이다.** 12칸을 뒤섞으면 비음계 칸이 붙드는 질량이 달라진다."""
+    made = _split_references(60, off_signal=0.5, off_mass=0.35)
+    report = EvaluateDegreeRestriction(FAST).run(made, "test")
+    assert report.line("observed").mean_mass == pytest.approx(0.35, abs=0.02)
+    assert report.line("shuffled").mean_mass > report.line("observed").mean_mass + 0.05
+
+
+def test_조_내_치환은_질량을_보존한다():
+    made = _split_references(60, off_signal=0.5, off_mass=0.35)
+    report = EvaluateDegreeRestriction(FAST).run(made, "test")
+    assert report.line("within").mean_mass == pytest.approx(
+        report.line("observed").mean_mass, abs=1e-9
+    )
+
+
+@pytest.mark.parametrize("mass", [0.35, 0.50])
+def test_조_내_치환_판정은_질량과_무관하다(mass):
+    """**전체 치환 차이는 질량에 따라 흔들리는데 조 내 치환은 0 교차점이 고정이다.**"""
+    shared = EvaluateDegreeRestriction(FAST).run(
+        _split_references(60, off_signal=0.0, off_mass=mass), "test"
+    )
+    specific = EvaluateDegreeRestriction(FAST).run(
+        _split_references(60, off_signal=1.0, off_mass=mass), "test"
+    )
+    assert shared.off_scale_is_shared
+    assert not specific.off_scale_is_shared
+
+
+def test_곡_고유_성분을_올리면_질량_보존_차이가_단조로_커진다():
+    gaps = [
+        EvaluateDegreeRestriction(FAST)
+        .run(_split_references(60, off_signal=signal, off_mass=0.4), "test")
+        .mass_matched_gap
+        for signal in (0.0, 0.5, 1.0)
+    ]
+    assert gaps[0] < gaps[1] < gaps[2]
+
+
+def test_몫_질량_비를_낸다():
+    """질량 교란을 눈으로 잡는 자리다 (D-0084)."""
+    report = EvaluateDegreeRestriction(FAST).run(_references(40, off_signal=0.0), "test")
+    assert report.line("observed").share_per_mass > 0.0

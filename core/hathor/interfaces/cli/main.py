@@ -3046,24 +3046,34 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
         f" · 출처 {source}\n사전: {store.name}\n"
         f"버리는 칸 {len(off)}개 (반음 {', '.join(str(value) for value in off)})\n"
     )
-    header = f"{'선':<10}{'비음계 몫':>12}{'표준오차':>10}"
-    print(header + f"{'질량':>10}{'제한 후/전':>12}{'순위상관':>10}")
-    print("-" * 64)
+    header = f"{'선':<10}{'비음계 몫':>12}{'표준오차':>10}{'질량':>10}"
+    print(header + f"{'몫/질량':>11}{'제한 후/전':>12}{'순위상관':>10}")
+    print("-" * 75)
     for line in report.lines:
         print(
             f"{line.name:<10}{line.mean_share:>12.4f}{line.standard_error:>10.4f}"
-            f"{line.mean_mass:>10.4f}{line.survival:>12.4f}{line.rank_agreement:>10.3f}"
+            f"{line.mean_mass:>10.4f}{line.share_per_mass:>11.4f}"
+            f"{line.survival:>12.4f}{line.rank_agreement:>10.3f}"
         )
+    verdict = "버려도 된다" if report.off_scale_is_shared else "**버리는 칸이 곡을 가른다**"
     print(
-        f"\n실측 - 귀무 = {report.gap:+.4f} · 쌍 단위 승률 {report.win_rate:.1%}\n"
-        f"판정: **{'제한이 옳다' if report.restriction_is_sound else '제한이 곡 정보를 버린다'}**\n"
+        f"\n조 내 치환 대비 (질량 보존) = {report.mass_matched_gap:+.4f}"
+        f" · 쌍 단위 승률 {report.mass_matched_win_rate:.1%}\n"
+        f"판정: {verdict}\n"
+        f"\n[참고] 전체 치환 대비 = {report.gap:+.4f} · 승률 {report.win_rate:.1%}"
+        f" · D-0083 규칙 {'통과' if report.restriction_is_sound else '실패'}\n"
+        f"       **질량 교란이 있어 단독으로 읽지 않는다** (D-0084).\n"
     )
     print("--- 읽는 법 ---")
     print("**전변동은 칸별 절댓값의 합이라 다이어토닉과 비음계로 정확히 쪼개진다.** 모형이")
     print("필요 없다. `비음계 몫`은 두 사전의 거리 중 버려지는 칸이 낸 비율이다.")
     print("**칸 수 비율(6/12)은 기준선이 아니다.** 사전 질량이 다이어토닉에 몰려 있으면 몫도")
-    print("자연히 낮아진다. 뾰족함과 질량을 그대로 두고 칸 정체성만 지운 `shuffled`가 기준선이다.")
-    print("실측이 귀무보다 **작으면** 버리는 칸이 곡 고유 대비를 덜 담는다 — D-0063이 옳았다.")
+    print("자연히 낮아진다. 그래서 귀무선이 필요한데, **`shuffled`(12칸 전체 치환)는 질량까지")
+    print("바꾼다** — 그것이 D-0083의 결함이었다 (D-0084).")
+    print("**`within`이 기준선이다.** 다이어토닉·비음계 조 안에서만 치환하므로 조별 질량이")
+    print("정확히 보존되고 어느 칸인지만 사라진다. 실측이 `within`보다 **작으면** 곡들이 같은")
+    print("비음계 자리에서 닮았다는 뜻이고 버려도 곡 정체성을 잃지 않는다.")
+    print("**`몫/질량`이 1보다 크면 비음계 칸이 질량 대비 더 갈린다는 뜻이다.**")
     print("**`순위상관`은 진단이다.** 탐색에서 곡 고유 성분이 없을 때도 0.54였다 — 갈리지 않는")
     print("지표는 판정에 쓰지 않는다 (O-25 (2)).")
     return 0
