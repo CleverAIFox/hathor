@@ -27,7 +27,8 @@ D-0082에서 그 자국이 나왔다. 조건화 이득 3.14배는 전변동 거�
 |---|---|---|
 | `observed` | 참조곡 A, B | 재려는 것 |
 | `shuffled` | 12칸 **전체 치환** | D-0083의 귀무선. **질량 교란이 있다** — 아래 |
-| `within` | 다이어토닉·비음계 **조 안에서만 치환** | **질량이 보존되는 귀무선** (D-0084) |
+| `within` | 다이어토닉·비음계 **조 안에서만 치환** | 질량이 보존되는 귀무선 (D-0084) |
+| `matched` | 온음계 칸의 **곡별 편차를 이식** | **등가선.** 두 조가 똑같을 때의 값 (D-0086) |
 
 ### 전체 치환은 질량까지 바꾼다 (D-0084)
 
@@ -48,8 +49,32 @@ D-0083은 `shuffled`만 두고 "뾰족함이 정확히 같고 칸 정체성만 �
 탐색에서 비음계 질량을 0.35와 0.50으로 바꿔 보면 `shuffled` 차이는 -0.159에서
 -0.000까지 흔들리는데 `within` 차이는 **0 교차점이 질량과 무관하다.**
 
-실측 몫이 `within`보다 **작으면** 곡들이 같은 비음계 자리에서 닮았다는 뜻이고
-버려도 곡 정체성을 잃지 않는다. **크거나 같으면 버리는 칸이 곡을 가른다.**
+### `within`의 0점은 0이 아니다 (D-0086)
+
+D-0085가 `실측 - within`의 **부호만 보고** "비음계 칸이 다이어토닉보다 더 갈린다"고
+읽었다. **틀렸다.**
+
+온음계 칸에는 코퍼스가 공유하는 조성 모양(K-K 꼴)이 있어 자리를 뒤섞으면 기여가
+크게 늘고, 비음계 칸의 공유 모양은 평평해 조금만 는다. **그 비대칭만으로 부호가
+양수가 된다.** 합성에서 두 조의 곡별 성분을 똑같이 맞춰도 `실측 - within`이
+**+0.0553**이었다 — 0이 아니다.
+
+| 비음계 곡별 성분 | 0 | 0.125 | **0.25 (온음계와 같음)** | 0.5 |
+|---|---|---|---|---|
+| `실측 - within` | -0.0252 | +0.0245 | **+0.0553** | +0.0665 |
+
+**0점을 모르면 부호는 아무것도 말하지 않는다.**
+
+### 등가선을 자료에서 만든다 — 모형 없이
+
+곡마다 온음계 칸의 **상대 편차**(`값 / 코퍼스 평균`)를 뽑아 비음계 칸에 옮겨 심는다.
+조별 질량과 코퍼스 평균 모양은 그대로 두므로 **두 조가 똑같이 곡 고유한 사전**이 된다.
+
+합성에서 `실측 - matched`가 곡별 성분에 따라 -0.217, -0.112, **-0.000**, +0.125로
+움직인다. **등가점에서 정확히 0이다** — 눈금이 자료에서 나오므로 모형 가정이 없다.
+
+실측 몫이 `matched`보다 **크면** 버리는 칸이 다이어토닉보다 더 곡 고유하다는 뜻이고,
+**작으면 덜하다.** `within`은 "자리를 공유하는가"의 진단으로만 남긴다.
 
 ### 순위상관은 판정에 안 쓴다
 
@@ -249,6 +274,29 @@ class RestrictionReport:
         return self._win_rate("shuffled")
 
     @property
+    def specificity_gap(self) -> float:
+        """실측 몫에서 **등가선** 몫을 뺀 값 (D-0086). **0점이 자료에서 나온다.**"""
+        return self._gap("matched")
+
+    @property
+    def specificity_win_rate(self) -> float:
+        return 1.0 - self._win_rate("matched")
+
+    @property
+    def off_scale_exceeds_matched(self) -> bool:
+        """**사전 등록한 판정 규칙이다** (D-0086). 결과를 보고 고치지 않는다.
+
+        1. 실측 비음계 몫이 **등가선**보다 크다.
+        2. **쌍 과반에서** 그렇다.
+
+        둘 다 넘으면 버리는 칸이 다이어토닉보다 **더** 곡 고유하다. 넘지 못하면
+        **덜하거나 같다** — 버린다는 사실은 그대로이나 "더 갈린다"는 말은 못 한다.
+
+        **질 수 있다.** 합성에서 등가점을 지나며 부호가 바뀐다.
+        """
+        return self.specificity_gap > 0.0 and self.specificity_win_rate > 0.5
+
+    @property
     def mass_matched_gap(self) -> float:
         """실측 몫에서 **조 내 치환** 귀무 몫을 뺀 값. 질량이 보존된다 (D-0084)."""
         return self._gap("within")
@@ -259,7 +307,9 @@ class RestrictionReport:
 
     @property
     def off_scale_is_shared(self) -> bool:
-        """**사전 등록한 판정 규칙이다** (D-0084 · GR-6.5). 결과를 보고 고치지 않는다.
+        """D-0084가 사전 등록한 규칙. **0점이 0이 아니라 단독으로 읽지 않는다** (D-0086).
+
+        결과를 보고 고치지 않는다 — 통과했다는 사실은 그대로 두고 등가선을 옆에 둔다.
 
         1. 실측 비음계 몫이 **조 내 치환** 귀무선보다 작다.
         2. **쌍 과반에서** 그렇다.
@@ -310,6 +360,16 @@ class EvaluateDegreeRestriction:
 
         on = [index for index in range(DEGREE_COUNT) if index not in set(off)]
         generator = np.random.default_rng(settings.seed)
+        corpus_mean = np.asarray(priors, dtype=np.float64).mean(axis=0)
+        matched: list[Histogram] = []
+        for vector in priors:
+            ratio = vector[on] / np.maximum(corpus_mean[on], 1e-12)
+            moved = vector.copy()
+            transplanted = corpus_mean[off] * generator.permutation(ratio)
+            total = float(transplanted.sum())
+            if total > 0:
+                moved[off] = transplanted / total * float(vector[off].sum())
+            matched.append(moved)
         shuffled: list[Histogram] = [generator.permutation(vector) for vector in priors]
         within: list[Histogram] = []
         for vector in priors:
@@ -350,5 +410,6 @@ class EvaluateDegreeRestriction:
                 measure("observed", priors),
                 measure("shuffled", shuffled),
                 measure("within", within),
+                measure("matched", matched),
             ),
         )

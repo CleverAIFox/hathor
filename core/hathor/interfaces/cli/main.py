@@ -3065,14 +3065,19 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
     print("-" * 50)
     for line in report.lines:
         print(f"{line.name:<10}{line.mean_scale_share:>12.4f}{line.mean_chromatic_share:>12.4f}")
-    verdict = "버려도 된다" if report.off_scale_is_shared else "**버리는 칸이 곡을 가른다**"
+    verdict = (
+        "**버리는 칸이 다이어토닉보다 더 곡 고유하다**"
+        if report.off_scale_exceeds_matched
+        else "버리는 칸이 다이어토닉보다 **덜하거나 같다**"
+    )
     print(
-        f"\n조 내 치환 대비 (질량 보존) = {report.mass_matched_gap:+.4f}"
-        f" · 쌍 단위 승률 {report.mass_matched_win_rate:.1%}\n"
+        f"\n등가선 대비 = {report.specificity_gap:+.4f}"
+        f" · 쌍 단위 승률 {report.specificity_win_rate:.1%}\n"
         f"판정: {verdict}\n"
-        f"\n[참고] 전체 치환 대비 = {report.gap:+.4f} · 승률 {report.win_rate:.1%}"
-        f" · D-0083 규칙 {'통과' if report.restriction_is_sound else '실패'}\n"
-        f"       **질량 교란이 있어 단독으로 읽지 않는다** (D-0084).\n"
+        f"\n[참고] 조 내 치환 대비 = {report.mass_matched_gap:+.4f}"
+        f" · 승률 {report.mass_matched_win_rate:.1%}"
+        f" · 전체 치환 대비 = {report.gap:+.4f}\n"
+        f"       **둘 다 0점이 0이 아니라 단독으로 읽지 않는다** (D-0084 · D-0086).\n"
     )
     print("--- 읽는 법 ---")
     print("**전변동은 칸별 절댓값의 합이라 다이어토닉과 비음계로 정확히 쪼개진다.** 모형이")
@@ -3080,10 +3085,12 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
     print("**칸 수 비율(6/12)은 기준선이 아니다.** 사전 질량이 다이어토닉에 몰려 있으면 몫도")
     print("자연히 낮아진다. 그래서 귀무선이 필요한데, **`shuffled`(12칸 전체 치환)는 질량까지")
     print("바꾼다** — 그것이 D-0083의 결함이었다 (D-0084).")
-    print("**`within`이 기준선이다.** 다이어토닉·비음계 조 안에서만 치환하므로 조별 질량이")
-    print("정확히 보존되고 어느 칸인지만 사라진다. 실측이 `within`보다 **작으면** 곡들이 같은")
-    print("비음계 자리에서 닮았다는 뜻이고 버려도 곡 정체성을 잃지 않는다.")
-    print("**`몫/질량`이 1보다 크면 비음계 칸이 질량 대비 더 갈린다는 뜻이다.**")
+    print("**`within`도 0점이 0이 아니다** — 온음계 칸에는 코퍼스가 공유하는 조성 모양이 있어")
+    print("자리를 뒤섞으면 기여가 크게 늘고, 비음계 칸은 평평해 조금만 는다. 그 비대칭만으로")
+    print("부호가 양수가 된다 (D-0086).")
+    print("**`matched`가 눈금이다.** 온음계 칸의 곡별 편차를 비음계 칸에 이식해 **두 조가")
+    print("똑같이 곡 고유한** 사전을 만든다. 조별 질량과 코퍼스 모양은 그대로다. 실측이")
+    print("`matched`보다 **크면** 버리는 칸이 더, **작으면** 덜 곡 고유하다.")
     print("**`순위상관`은 진단이다.** 탐색에서 곡 고유 성분이 없을 때도 0.54였다 — 갈리지 않는")
     print("지표는 판정에 쓰지 않는다 (O-25 (2)).")
     return 0

@@ -249,3 +249,66 @@ def test_이끔음만_다르면_온음계_몫이_1이다():
     right[11] += 0.1
     assert cell_share(left, right, scale_but_discarded(Mode.MAJOR)) == pytest.approx(1.0)
     assert cell_share(left, right, chromatic_indices(Mode.MAJOR)) == pytest.approx(0.0)
+
+
+# ------------------------------------------------------------------ 등가선 (D-0086)
+
+KRUMHANSL = np.asarray([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+
+
+def _tonal_references(count: int, *, off_jitter: float, on_jitter: float = 0.25, seed=4):
+    """**코퍼스가 공유하는 조성 모양을 넣는다** (D-0086).
+
+    이 구조가 없으면 통계가 실제 자료와 다르게 움직이고, **그것이 D-0083부터 D-0085까지
+    귀무선을 세 번 틀리게 만든 원인이다.** 합성 귀무 자료는 실측에서 확인된 구조를
+    재현해야 한다 (O-25 (5)).
+    """
+    off = list(off_scale_indices(Mode.MAJOR))
+    on = [index for index in range(DEGREES) if index not in off]
+    rng = np.random.default_rng(seed)
+    shape = KRUMHANSL / KRUMHANSL.sum()
+    made = []
+    for index in range(count):
+        vector = shape.copy()
+        vector[on] = vector[on] * rng.lognormal(0.0, on_jitter, len(on))
+        vector[off] = vector[off] * rng.lognormal(0.0, off_jitter, len(off))
+        made.append(
+            ReferencePrior(f"곡{index:03d}.flac", tuple(float(v) for v in vector / vector.sum()))
+        )
+    return made
+
+
+def test_등가선은_두_조가_같을_때_0이_된다():
+    """**눈금이 자료에서 나온다.** 모형 가정이 없다."""
+    made = _tonal_references(200, off_jitter=0.25, on_jitter=0.25)
+    report = EvaluateDegreeRestriction(OutputCondition(pair_count=200)).run(made, "test")
+    assert report.specificity_gap == pytest.approx(0.0, abs=0.02)
+
+
+def test_비음계_성분이_작으면_등가선보다_아래다():
+    made = _tonal_references(200, off_jitter=0.02, on_jitter=0.25)
+    report = EvaluateDegreeRestriction(OutputCondition(pair_count=200)).run(made, "test")
+    assert report.specificity_gap < 0.0
+    assert not report.off_scale_exceeds_matched
+
+
+def test_비음계_성분이_크면_등가선보다_위다():
+    made = _tonal_references(200, off_jitter=0.7, on_jitter=0.25)
+    report = EvaluateDegreeRestriction(OutputCondition(pair_count=200)).run(made, "test")
+    assert report.specificity_gap > 0.0
+    assert report.off_scale_exceeds_matched
+
+
+def test_조_내_치환의_0점은_0이_아니다():
+    """**D-0085가 부호만 보고 읽은 자리다.** 두 조를 똑같이 맞춰도 양수가 나온다."""
+    made = _tonal_references(200, off_jitter=0.25, on_jitter=0.25)
+    report = EvaluateDegreeRestriction(OutputCondition(pair_count=200)).run(made, "test")
+    assert report.mass_matched_gap > 0.02
+
+
+def test_등가선은_조별_질량을_보존한다():
+    made = _tonal_references(100, off_jitter=0.3)
+    report = EvaluateDegreeRestriction(OutputCondition(pair_count=50)).run(made, "test")
+    assert report.line("matched").mean_mass == pytest.approx(
+        report.line("observed").mean_mass, abs=1e-9
+    )
