@@ -3070,14 +3070,18 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
         if report.off_scale_exceeds_matched
         else "버리는 칸이 다이어토닉보다 **덜하거나 같다**"
     )
+    from hathor.application.evaluate_degree_restriction import NULL_REPEATS
+
     print(
         f"\n등가선 대비 = {report.specificity_gap:+.4f}"
+        f" ±{report.specificity_standard_error:.4f} (짝지은 표준오차)"
         f" · 쌍 단위 승률 {report.specificity_win_rate:.1%}\n"
         f"판정: {verdict}\n"
         f"\n[참고] 조 내 치환 대비 = {report.mass_matched_gap:+.4f}"
         f" · 승률 {report.mass_matched_win_rate:.1%}"
         f" · 전체 치환 대비 = {report.gap:+.4f}\n"
         f"       **둘 다 0점이 0이 아니라 단독으로 읽지 않는다** (D-0084 · D-0086).\n"
+        f"\n귀무선은 {NULL_REPEATS}회 뽑아 쌍별로 평균했다. 선마다 난수 흐름이 따로다 (D-0087).\n"
     )
     print("--- 읽는 법 ---")
     print("**전변동은 칸별 절댓값의 합이라 다이어토닉과 비음계로 정확히 쪼개진다.** 모형이")
@@ -3093,6 +3097,8 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
     print("`matched`보다 **크면** 버리는 칸이 더, **작으면** 덜 곡 고유하다.")
     print("**`순위상관`은 진단이다.** 탐색에서 곡 고유 성분이 없을 때도 0.54였다 — 갈리지 않는")
     print("지표는 판정에 쓰지 않는다 (O-25 (2)).")
+    print("**쌍 단위 승률이 60%를 못 넘으면 동전 던지기와 구분되지 않는다** — 쌍 100개에서")
+    print("57%의 단측 확률이 0.10이다 (D-0087).")
     return 0
 
 

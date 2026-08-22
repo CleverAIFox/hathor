@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from hathor.application.evaluate_degree_restriction import (
+    NULL_REPEATS,
     EvaluateDegreeRestriction,
     cell_share,
     chromatic_indices,
@@ -189,16 +190,23 @@ def test_조_내_치환은_질량을_보존한다():
 
 
 @pytest.mark.parametrize("mass", [0.35, 0.50])
-def test_조_내_치환_판정은_질량과_무관하다(mass):
-    """**전체 치환 차이는 질량에 따라 흔들리는데 조 내 치환은 0 교차점이 고정이다.**"""
+def test_질량이_달라도_공유_비음계는_귀무선_아래다(mass):
+    """D-0084가 여기서 `off_scale_is_shared`의 **양쪽 부호**를 고정했었다.
+
+    **한쪽만 남긴다** (D-0087). 이 합성기는 온음계 칸을 곡마다 독립으로 뽑아
+    **코퍼스 공유 조성 모양이 없고**, D-0086이 지적한 바로 그 결함이다. 귀무선을
+    평균내자(D-0087) 곡 고유 성분 1.0에서 부호가 뒤집혔다 — `within` 대비가
+    -0.0074까지 올라와 0을 스치는 자리였고, **치환 한 번의 운이 판정이었다는 뜻이다.**
+
+    비음계 칸이 곡마다 **같을 때** 귀무선 아래로 내려간다는 것은 질량과 무관하게
+    유지되므로 그것만 고정한다. 판정의 양쪽 부호는 구조를 갖춘 합성기
+    (`_tonal_references`)와 살아 있는 규칙(`off_scale_exceeds_matched`)으로 본다.
+    """
     shared = EvaluateDegreeRestriction(FAST).run(
         _split_references(60, off_signal=0.0, off_mass=mass), "test"
     )
-    specific = EvaluateDegreeRestriction(FAST).run(
-        _split_references(60, off_signal=1.0, off_mass=mass), "test"
-    )
+    assert shared.mass_matched_gap < 0.0
     assert shared.off_scale_is_shared
-    assert not specific.off_scale_is_shared
 
 
 def test_곡_고유_성분을_올리면_질량_보존_차이가_단조로_커진다():
@@ -312,3 +320,28 @@ def test_등가선은_조별_질량을_보존한다():
     assert report.line("matched").mean_mass == pytest.approx(
         report.line("observed").mean_mass, abs=1e-9
     )
+
+
+def test_귀무선을_여러_번_뽑는다():
+    """**한 번만 뽑으면 치환 한 번의 운이 판정에 들어온다** (D-0087)."""
+    assert NULL_REPEATS >= 10
+
+
+def test_선을_추가해도_다른_선의_추첨이_안_밀린다():
+    """선마다 `[seed, 선 번호]`로 흐름이 따로다 (D-0087).
+
+    D-0086에서 `matched`를 넣자 `within` 값이 함께 움직였다. **계산은 유효했으나
+    앞선 기록과 이을 수 없게 된다.** 흐름이 갈렸는지 직접 확인한다.
+    """
+    made = _tonal_references(120, off_jitter=0.3)
+    report = EvaluateDegreeRestriction(OutputCondition(pair_count=60)).run(made, "test")
+    assert report.line("within").shares != report.line("shuffled").shares
+    assert report.line("within").shares != report.line("matched").shares
+
+
+def test_짝지은_표준오차를_낸다():
+    """같은 쌍이므로 선별 표준오차를 쓰면 안 된다 (D-0087)."""
+    made = _tonal_references(120, off_jitter=0.3)
+    report = EvaluateDegreeRestriction(OutputCondition(pair_count=60)).run(made, "test")
+    assert report.specificity_standard_error > 0.0
+    assert report.specificity_standard_error < report.line("observed").standard_error * 3

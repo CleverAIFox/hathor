@@ -82,6 +82,19 @@ D-0085가 `실측 - within`의 **부호만 보고** "비음계 칸이 다이어�
 탐색에서 비음계 칸에 곡 고유 성분이 전혀 없을 때도 0.54였고 가득 있을 때도
 0.50이었다 — **갈리지 않는 지표는 판정에 쓸 수 없다** (O-25 (2)).
 
+### 귀무선은 여러 번 뽑고, 선마다 난수 흐름이 따로다 (D-0087)
+
+D-0086에서 `matched`를 **추가했더니 `within`과 `shuffled`의 값이 같이 바뀌었다.**
+`mix` 기준 조 내 치환 대비가 +0.0430에서 +0.0270으로, 승률이 30.0%에서 38.0%로
+움직였다. 코드가 난수기 하나를 순서대로 쓰고 있어 **앞에 선을 하나 끼우면 뒤 선의
+추첨이 통째로 밀린 것이다.**
+
+계산은 전부 유효했다. 그러나 **비교선을 추가하는 것만으로 다른 비교선의 수가
+바뀌면 앞선 기록과 이을 수 없다.** 선마다 `[seed, 선 번호]`로 독립 흐름을 판다.
+
+그리고 그 이탈 폭이 애초에 **귀무선을 한 번만 뽑아서** 컸다. 치환을 `NULL_REPEATS`번
+반복해 쌍별로 평균한다. **귀무선의 잡음을 재는 값에 섞지 않는다.**
+
 ### 쌍은 D-0082와 같은 것을 쓴다
 
 `OutputCondition`의 쌍 추첨을 그대로 받는다. 같은 쌍이어야 D-0082의 극한값과
@@ -90,7 +103,7 @@ D-0085가 `실측 - within`의 **부호만 보고** "비음계 칸이 다이어�
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -173,6 +186,15 @@ def _weights(prior: Histogram, mode: Mode) -> Histogram:
     return np.asarray(
         degree_weights(tuple(float(value) for value in prior), mode), dtype=np.float64
     )
+
+
+NULL_REPEATS = 20
+"""귀무선을 몇 번 뽑아 평균할 것인가 (D-0087).
+
+한 번만 뽑으면 **치환 한 번의 운이 판정에 그대로 들어온다.** 20회로 잡은 것은
+쌍별 평균의 표준오차를 4~5배 줄이면서 실행이 여전히 1초 안이기 때문이며,
+**그 이상 올릴 근거는 아직 없다.**
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +295,19 @@ class RestrictionReport:
         """쌍마다 실측 몫이 전체 치환보다 작았는가 (D-0083)."""
         return self._win_rate("shuffled")
 
+    def paired_standard_error(self, null: str) -> float:
+        """**짝지은 차이의 표준오차** (D-0087). 같은 쌍이므로 선별 표준오차를 못 쓴다."""
+        observed = np.asarray(self.line("observed").shares)
+        other = np.asarray(self.line(null).shares)
+        if observed.size < 2 or observed.size != other.size:
+            return 0.0
+        difference = observed - other
+        return float(np.std(difference, ddof=1) / np.sqrt(difference.size))
+
+    @property
+    def specificity_standard_error(self) -> float:
+        return self.paired_standard_error("matched")
+
     @property
     def specificity_gap(self) -> float:
         """실측 몫에서 **등가선** 몫을 뺀 값 (D-0086). **0점이 자료에서 나온다.**"""
@@ -342,6 +377,12 @@ class RestrictionReport:
         return self.gap < 0.0 and self.win_rate > 0.5
 
 
+def _average(lines: Sequence[RestrictionLine], field: str) -> tuple[float, ...]:
+    """여러 번 뽑은 귀무선을 **쌍 단위로** 평균한다. 순서가 유지돼야 짝짓기가 산다."""
+    stacked = np.asarray([getattr(line, field) for line in lines], dtype=np.float64)
+    return tuple(float(value) for value in stacked.mean(axis=0))
+
+
 class EvaluateDegreeRestriction:
     """다이어토닉 제한이 버리는 몫을 잰다. **쌍은 D-0082와 같은 것을 쓴다.**"""
 
@@ -359,24 +400,35 @@ class EvaluateDegreeRestriction:
         priors: list[Histogram] = [np.asarray(item.prior, dtype=np.float64) for item in references]
 
         on = [index for index in range(DEGREE_COUNT) if index not in set(off)]
-        generator = np.random.default_rng(settings.seed)
         corpus_mean = np.asarray(priors, dtype=np.float64).mean(axis=0)
-        matched: list[Histogram] = []
-        for vector in priors:
-            ratio = vector[on] / np.maximum(corpus_mean[on], 1e-12)
-            moved = vector.copy()
-            transplanted = corpus_mean[off] * generator.permutation(ratio)
-            total = float(transplanted.sum())
-            if total > 0:
-                moved[off] = transplanted / total * float(vector[off].sum())
-            matched.append(moved)
-        shuffled: list[Histogram] = [generator.permutation(vector) for vector in priors]
-        within: list[Histogram] = []
-        for vector in priors:
-            moved = vector.copy()
-            moved[on] = generator.permutation(vector[on])
-            moved[off] = generator.permutation(vector[off])
-            within.append(moved)
+
+        def stream(line: int, repeat: int) -> np.random.Generator:
+            """**선마다 흐름이 따로다** (D-0087). 선을 추가해도 다른 선이 안 밀린다."""
+            return np.random.default_rng([settings.seed, line, repeat])
+
+        def make_shuffled(rng: np.random.Generator) -> list[Histogram]:
+            return [rng.permutation(vector) for vector in priors]
+
+        def make_within(rng: np.random.Generator) -> list[Histogram]:
+            built: list[Histogram] = []
+            for vector in priors:
+                moved = vector.copy()
+                moved[on] = rng.permutation(vector[on])
+                moved[off] = rng.permutation(vector[off])
+                built.append(moved)
+            return built
+
+        def make_matched(rng: np.random.Generator) -> list[Histogram]:
+            built: list[Histogram] = []
+            for vector in priors:
+                ratio = vector[on] / np.maximum(corpus_mean[on], 1e-12)
+                moved = vector.copy()
+                transplanted = corpus_mean[off] * rng.permutation(ratio)
+                total = float(transplanted.sum())
+                if total > 0:
+                    moved[off] = transplanted / total * float(vector[off].sum())
+                built.append(moved)
+            return built
 
         scale_cells = scale_but_discarded(mode)
         chromatic_cells = chromatic_indices(mode)
@@ -402,14 +454,33 @@ class EvaluateDegreeRestriction:
                 chromatic_shares=tuple(chromatic_shares),
             )
 
+        def repeated(
+            name: str, line: int, build: Callable[[np.random.Generator], list[Histogram]]
+        ) -> RestrictionLine:
+            """**귀무선을 여러 번 뽑아 쌍별로 평균한다** (D-0087).
+
+            한 번만 뽑으면 치환 한 번의 운이 판정에 그대로 들어온다. 쌍 단위로
+            평균해야 `observed`와의 짝짓기가 유지된다.
+            """
+            drawn = [measure(name, build(stream(line, index))) for index in range(NULL_REPEATS)]
+            return RestrictionLine(
+                name=name,
+                shares=_average(drawn, "shares"),
+                distances_full=_average(drawn, "distances_full"),
+                distances_restricted=_average(drawn, "distances_restricted"),
+                masses=_average(drawn, "masses"),
+                scale_shares=_average(drawn, "scale_shares"),
+                chromatic_shares=_average(drawn, "chromatic_shares"),
+            )
+
         return RestrictionReport(
             label=label,
             condition=settings,
             reference_count=len(references),
             lines=(
                 measure("observed", priors),
-                measure("shuffled", shuffled),
-                measure("within", within),
-                measure("matched", matched),
+                repeated("shuffled", 1, make_shuffled),
+                repeated("within", 2, make_within),
+                repeated("matched", 3, make_matched),
             ),
         )
