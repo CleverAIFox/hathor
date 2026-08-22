@@ -11,8 +11,11 @@ import pytest
 
 from hathor.application.evaluate_degree_restriction import (
     EvaluateDegreeRestriction,
+    cell_share,
+    chromatic_indices,
     off_scale_indices,
     off_scale_share,
+    scale_but_discarded,
 )
 from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
 from hathor.domain.value_objects.key import Key, Mode
@@ -212,3 +215,37 @@ def test_몫_질량_비를_낸다():
     """질량 교란을 눈으로 잡는 자리다 (D-0084)."""
     report = EvaluateDegreeRestriction(FAST).run(_references(40, off_signal=0.0), "test")
     assert report.line("observed").share_per_mass > 0.0
+
+
+# ------------------------------------------------------------------ 칸 쪼개기 (D-0085)
+
+
+@pytest.mark.parametrize(
+    "mode,scale,chromatic",
+    [(Mode.MAJOR, (11,), (1, 3, 6, 8, 10)), (Mode.MINOR, (2,), (1, 4, 6, 9, 11))],
+)
+def test_버리는_칸_중_하나는_온음계_음이다(mode, scale, chromatic):
+    """**반음계음이 아니다.** 감화음을 코드 풀에서 뺐다는 이유로 음 자체가 버려진다.
+
+    장조의 반음 11은 C장조의 B, 이끔음이며 V화음 구성음이다.
+    """
+    assert scale_but_discarded(mode) == scale
+    assert chromatic_indices(mode) == chromatic
+    assert set(scale) | set(chromatic) == set(off_scale_indices(mode))
+
+
+def test_온음계_몫과_반음계_몫을_더하면_전체_몫이다():
+    """**쪼개도 합이 보존돼야 한다.** 전변동은 칸별 절댓값의 합이다."""
+    report = EvaluateDegreeRestriction(FAST).run(_references(40, off_signal=0.5), "test")
+    line = report.line("observed")
+    assert line.mean_scale_share + line.mean_chromatic_share == pytest.approx(
+        line.mean_share, abs=1e-9
+    )
+
+
+def test_이끔음만_다르면_온음계_몫이_1이다():
+    left = np.full(DEGREES, 1.0 / DEGREES)
+    right = left.copy()
+    right[11] += 0.1
+    assert cell_share(left, right, scale_but_discarded(Mode.MAJOR)) == pytest.approx(1.0)
+    assert cell_share(left, right, chromatic_indices(Mode.MAJOR)) == pytest.approx(0.0)

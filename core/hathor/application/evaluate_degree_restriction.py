@@ -84,6 +84,17 @@ from hathor.engines.compose.harmony_generator import (
     degree_weights,
 )
 
+SCALE_SEMITONES: dict[Mode, tuple[int, ...]] = {
+    Mode.MAJOR: (0, 2, 4, 5, 7, 9, 11),
+    Mode.MINOR: (0, 2, 3, 5, 7, 8, 10),
+}
+"""온음계 음. **근음 집합이 아니다** (D-0085).
+
+`DIATONIC_ROOT_SEMITONES`는 **화음 근음** 6개이고 이것은 **음계 음** 7개다. 장조에서
+둘의 차이는 반음 11 — C장조의 B, 이끔음이다. 감화음(vii°)을 코드 풀에서 뺐다는
+이유로 **음 자체가 버려지고 있었다.** 단조에서는 반음 2(ii°의 근음)가 같은 처지다.
+"""
+
 
 def off_scale_indices(mode: Mode) -> tuple[int, ...]:
     """버려지는 칸. **선법마다 다르다** — 장조 기준으로 박으면 단조에서 틀린다."""
@@ -91,8 +102,20 @@ def off_scale_indices(mode: Mode) -> tuple[int, ...]:
     return tuple(index for index in range(DEGREE_COUNT) if index not in roots)
 
 
-def off_scale_share(left: Histogram, right: Histogram, mode: Mode) -> float:
-    """두 사전의 전변동 중 **비음계 칸이 차지하는 몫.**
+def scale_but_discarded(mode: Mode) -> tuple[int, ...]:
+    """버려지는 칸 중 **온음계 음.** 장조는 반음 11(이끔음), 단조는 반음 2다."""
+    scale = set(SCALE_SEMITONES[mode])
+    return tuple(index for index in off_scale_indices(mode) if index in scale)
+
+
+def chromatic_indices(mode: Mode) -> tuple[int, ...]:
+    """버려지는 칸 중 **진짜 반음계 음** 5개."""
+    scale = set(SCALE_SEMITONES[mode])
+    return tuple(index for index in off_scale_indices(mode) if index not in scale)
+
+
+def cell_share(left: Histogram, right: Histogram, cells: Sequence[int]) -> float:
+    """두 사전의 전변동 중 **지정한 칸들이 차지하는 몫.**
 
     전변동은 칸별 절댓값의 합이므로 나눗셈 하나로 정확히 갈린다. 거리가 0이면
     나눌 것이 없으므로 0을 낸다.
@@ -101,7 +124,12 @@ def off_scale_share(left: Histogram, right: Histogram, mode: Mode) -> float:
     total = float(gap.sum())
     if total <= 0.0:
         return 0.0
-    return float(gap[list(off_scale_indices(mode))].sum() / total)
+    return float(gap[list(cells)].sum() / total)
+
+
+def off_scale_share(left: Histogram, right: Histogram, mode: Mode) -> float:
+    """버려지는 칸 전체의 몫."""
+    return cell_share(left, right, off_scale_indices(mode))
 
 
 def _spearman(left: Sequence[float], right: Sequence[float]) -> float:
@@ -146,6 +174,19 @@ class RestrictionLine:
         if len(self.shares) < 2:
             return 0.0
         return float(np.std(self.shares, ddof=1) / np.sqrt(len(self.shares)))
+
+    scale_shares: tuple[float, ...] = ()
+    """버려지는 칸 중 **온음계 음**이 낸 몫 (D-0085)."""
+    chromatic_shares: tuple[float, ...] = ()
+    """버려지는 칸 중 **진짜 반음계 음**이 낸 몫."""
+
+    @property
+    def mean_scale_share(self) -> float:
+        return float(np.mean(self.scale_shares)) if self.scale_shares else 0.0
+
+    @property
+    def mean_chromatic_share(self) -> float:
+        return float(np.mean(self.chromatic_shares)) if self.chromatic_shares else 0.0
 
     @property
     def share_per_mass(self) -> float:
@@ -277,11 +318,17 @@ class EvaluateDegreeRestriction:
             moved[off] = generator.permutation(vector[off])
             within.append(moved)
 
+        scale_cells = scale_but_discarded(mode)
+        chromatic_cells = chromatic_indices(mode)
+
         def measure(name: str, table: list[Histogram]) -> RestrictionLine:
             shares, full, restricted, masses = [], [], [], []
+            scale_shares, chromatic_shares = [], []
             for left, right in pairs:
                 a, b = table[left], table[right]
                 shares.append(off_scale_share(a, b, mode))
+                scale_shares.append(cell_share(a, b, scale_cells))
+                chromatic_shares.append(cell_share(a, b, chromatic_cells))
                 full.append(total_variation(a, b))
                 restricted.append(total_variation(_weights(a, mode), _weights(b, mode)))
                 masses.append(float(a[off].sum()))
@@ -291,6 +338,8 @@ class EvaluateDegreeRestriction:
                 distances_full=tuple(full),
                 distances_restricted=tuple(restricted),
                 masses=tuple(masses),
+                scale_shares=tuple(scale_shares),
+                chromatic_shares=tuple(chromatic_shares),
             )
 
         return RestrictionReport(

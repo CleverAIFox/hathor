@@ -3013,7 +3013,9 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
     """
     from hathor.application.evaluate_degree_restriction import (
         EvaluateDegreeRestriction,
+        chromatic_indices,
         off_scale_indices,
+        scale_but_discarded,
     )
     from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
     from hathor.shared.config.paths import repo_root as _root
@@ -3040,11 +3042,15 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
     report = EvaluateDegreeRestriction(condition).run(references, source)
     observed = report.line("observed")
     off = off_scale_indices(condition.key.mode)
+    scale_cells = scale_but_discarded(condition.key.mode)
+    chromatic_cells = chromatic_indices(condition.key.mode)
 
     print(
         f"곡 {len(references)}개 · 쌍 {len(observed.shares)} · {condition.key}"
         f" · 출처 {source}\n사전: {store.name}\n"
         f"버리는 칸 {len(off)}개 (반음 {', '.join(str(value) for value in off)})\n"
+        f"  그중 온음계 음 {scale_cells} — **반음계음이 아니다.** 화음 근음에서만 빠졌다\n"
+        f"  진짜 반음계 음 {chromatic_cells}\n"
     )
     header = f"{'선':<10}{'비음계 몫':>12}{'표준오차':>10}{'질량':>10}"
     print(header + f"{'몫/질량':>11}{'제한 후/전':>12}{'순위상관':>10}")
@@ -3055,6 +3061,10 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
             f"{line.mean_mass:>10.4f}{line.share_per_mass:>11.4f}"
             f"{line.survival:>12.4f}{line.rank_agreement:>10.3f}"
         )
+    print(f"\n{'선':<10}{'온음계 몫':>12}{'반음계 몫':>12}  (버리는 칸을 쪼갠다 · D-0085)")
+    print("-" * 50)
+    for line in report.lines:
+        print(f"{line.name:<10}{line.mean_scale_share:>12.4f}{line.mean_chromatic_share:>12.4f}")
     verdict = "버려도 된다" if report.off_scale_is_shared else "**버리는 칸이 곡을 가른다**"
     print(
         f"\n조 내 치환 대비 (질량 보존) = {report.mass_matched_gap:+.4f}"
