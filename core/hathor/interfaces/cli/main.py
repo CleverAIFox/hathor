@@ -450,6 +450,27 @@ def build_parser() -> argparse.ArgumentParser:
     restriction.add_argument("--key", default="C major", help="선법을 정한다. 버리는 칸이 달라진다")
     restriction.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
 
+    origin = eval_sub.add_parser(
+        "chromatic-origin", help="반음계 질량이 차용인지 조성 오차인지 (O-33 · D-0089)"
+    )
+    origin.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    origin.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스")
+    origin.add_argument("--key", default="C major", help="선법을 정한다. 치환 짝이 달라진다")
+    origin.add_argument("--seed", type=int, default=20260822, help="귀무선·회전·부트스트랩 시드")
+    origin.add_argument(
+        "--rotated-share", type=float, default=0.30, help="눈금선에서 일부러 회전시킬 곡 비율"
+    )
+    origin.add_argument(
+        "--margin-split",
+        action="store_true",
+        help="조성 추정 신뢰도 상·하위 절반을 따로 낸다. **역인과가 있어 보조 시야다**",
+    )
+
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
         "--root",
@@ -650,6 +671,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_harmony_output(args)
         if args.eval_command == "degree-restriction":
             return _run_eval_degree_restriction(args)
+        if args.eval_command == "chromatic-origin":
+            return _run_eval_chromatic_origin(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "keys":
@@ -3003,6 +3026,109 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     print("`identical`은 0, `onehot`은 1.0이어야 한다. 아니면 하네스가 고장이므로 나머지")
     print("숫자를 읽지 않는다. `random`은 아무 사전 둘이라 느슨하고, `shuffled`가 뾰족함을")
     print("맞춘 귀무선이다 — 실측이 그보다 작으면 곡들이 화성 어휘를 공유한다는 뜻이다.")
+    return 0
+
+
+def load_key_margins(path: Path) -> dict[str, float]:
+    """`source_key → margin`. 조성 추정의 1위-2위 상관 차다 (D-0089)."""
+    import json
+
+    found: dict[str, float] = {}
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            name, margin = row.get("source_key"), row.get("margin")
+            if name is not None and margin is not None:
+                found[str(name)] = float(margin)
+    return found
+
+
+def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
+    """반음계 질량이 **치환(조성 오차)인지 첨가(차용화음)인지** 잰다 (O-33 · D-0089).
+
+    사전 벡터만 읽는다. 생성도 음원도 GPU도 필요 없다.
+    """
+    from hathor.application.evaluate_chromatic_origin import (
+        SUBSTITUTION_PAIRS,
+        EvaluateChromaticOrigin,
+        OriginCondition,
+        OriginReport,
+    )
+    from hathor.application.evaluate_harmony_output import ReferencePrior
+    from hathor.shared.config.paths import repo_root as _root
+
+    source = args.stem_set
+    store = args.priors
+    if store is None:
+        store = find_stem_prior_store(_root(), source if source != MIX_SOURCE else "other")
+    if store is None or not store.exists():
+        print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
+        return 1
+
+    table = load_degree_priors(store, source)
+    if len(table) < 3:
+        print(f"출처 `{source}`의 사전이 {len(table)}개다.", file=sys.stderr)
+        return 1
+
+    key = _parse_key(args.key)
+    condition = OriginCondition(key_mode=key.mode, seed=args.seed, rotated_share=args.rotated_share)
+    harness = EvaluateChromaticOrigin(condition)
+    names = sorted(table)
+    everything = [ReferencePrior(name, table[name]) for name in names]
+
+    groups: list[tuple[str, list[ReferencePrior]]] = [("전체", everything)]
+    if args.margin_split:
+        margins = load_key_margins(store)
+        ranked = sorted((margins.get(name, 0.0), name) for name in names)
+        half = len(ranked) // 2
+        groups.append(("추정 확실", [ReferencePrior(n, table[n]) for _, n in ranked[half:]]))
+        groups.append(("추정 불확실", [ReferencePrior(n, table[n]) for _, n in ranked[:half]]))
+
+    pairs = ", ".join(f"{chromatic}<-{scale}" for chromatic, scale in SUBSTITUTION_PAIRS[key.mode])
+    print(
+        f"곡 {len(everything)}개 · {key} · 출처 {source}\n사전: {store.name}\n"
+        f"치환 짝 (반음계<-온음계): {pairs}\n"
+    )
+    print(
+        f"{'묶음':<12}{'곡':>6}{'초과':>10}{'표준오차':>10}{'t':>8}{'눈금선':>10}{'온음계질량':>12}"
+    )
+    print("-" * 70)
+    results: list[tuple[str, OriginReport]] = []
+    for name, subset in groups:
+        report = harness.run(subset, name)
+        results.append((name, report))
+        print(
+            f"{name:<12}{report.reference_count:>6}{report.excess:>10.4f}"
+            f"{report.standard_error:>10.4f}{report.t_statistic:>8.2f}"
+            f"{report.rotated_excess:>10.4f}{report.scale_mass:>12.4f}"
+        )
+    whole = results[0][1]
+    verdict = (
+        "**조성 추정 오차가 지배한다**"
+        if whole.chromatic_is_substitution
+        else "오차로 설명되지 않는다"
+    )
+    print(f"\n판정: {verdict}\n")
+    print("--- 읽는 법 ---")
+    print("**오차는 치환이고 차용은 첨가다.** 조성 추정이 5도 틀리면 ♭7이 오르면서")
+    print("이끔음이 **사라진다.** 진짜 믹솔리디안 차용은 ♭7이 오르되 이끔음이 남는다 —")
+    print("곡의 다른 곳에서 V화음을 쓰기 때문이다.")
+    print("`초과`는 반음계 칸과 그 짝 온음계 칸의 곡 간 상관에서 조 내 치환 귀무선을 뺀 값이다.")
+    print("**음수면 대체, 양수면 첨가다.** 합이 1인 자료라 아무 상관이나 음수로 치우치므로")
+    print("귀무선을 빼야 한다.")
+    print("**`눈금선`은 실제 곡의 일부를 일부러 잘못 회전시킨 값이다** — 오차가 그만큼")
+    print("있으면 값이 어디까지 내려가는지 자료로 보여 준다.")
+    print("**검출력이 한쪽만 강하다.** 합성에서 오차는 t=-8로 잡히고 차용은 t=+1.4로 겨우")
+    print('보인다. 그러니 **뚜렷한 음수만 강한 결론이고**, 아닌 쪽은 "오차로 설명 안 됨"까지다.')
+    print("**크로마 누설은 이웃 반음으로 번져 첨가를 흉내 낸다 — 이 도구는 못 가른다.**")
+    if args.margin_split:
+        print("**`추정 확실`은 보조 시야다.** 차용화음이 많으면 조성 추정도 어려워지므로")
+        print("역인과가 있다. 상위 묶음에서도 음수가 아니면 오차로 설명되지 않는다는 쪽이 는다.")
     return 0
 
 

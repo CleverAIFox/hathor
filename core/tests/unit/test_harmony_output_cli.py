@@ -220,3 +220,47 @@ def test_선법을_바꾸면_버리는_칸이_달라진다(tmp_path, capsys):
 def test_제한_손실도_사전_파일이_없으면_비정상_종료한다(tmp_path, capsys):
     assert main(["eval", "degree-restriction", "--priors", str(tmp_path / "없다.jsonl")]) == 1
     assert "찾지 못했다" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------ O-33 배선
+
+
+def test_반음계_정체를_낸다(tmp_path, capsys):
+    """`eval chromatic-origin` 배선 (O-33 · D-0089)."""
+    path = write_keys(tmp_path / "keys.jsonl", count=60)
+    assert main(["eval", "chromatic-origin", "--priors", str(path)]) == 0
+    out = capsys.readouterr().out
+    assert "치환 짝" in out and "눈금선" in out and "판정" in out
+
+
+def test_신뢰도_분할이_묶음을_셋으로_만든다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", count=60)
+    assert main(["eval", "chromatic-origin", "--priors", str(path), "--margin-split"]) == 0
+    out = capsys.readouterr().out
+    assert "추정 확실" in out and "추정 불확실" in out
+    assert "역인과가 있다" in out
+
+
+def test_선법을_바꾸면_치환_짝이_달라진다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", count=60)
+    outputs = []
+    for key in ("C major", "A minor"):
+        command = ["eval", "chromatic-origin", "--priors", str(path)]
+        assert main([*command, "--key", key]) == 0
+        outputs.append(capsys.readouterr().out)
+    assert "1<-2" in outputs[0]
+    assert "1<-0" in outputs[1]
+
+
+def test_반음계_정체도_사전이_없으면_비정상_종료한다(tmp_path, capsys):
+    assert main(["eval", "chromatic-origin", "--priors", str(tmp_path / "없다.jsonl")]) == 1
+    assert "찾지 못했다" in capsys.readouterr().err
+
+
+def test_신뢰도를_읽는다(tmp_path):
+    from hathor.interfaces.cli.main import load_key_margins
+
+    path = write_keys(tmp_path / "keys.jsonl", count=5)
+    margins = load_key_margins(path)
+    assert len(margins) == 5
+    assert all(value == pytest.approx(0.2) for value in margins.values())
