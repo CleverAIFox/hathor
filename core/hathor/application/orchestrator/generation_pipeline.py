@@ -14,7 +14,31 @@ from hathor.engines.compose.harmony_generator import generate_harmony
 from hathor.engines.compose.structure_generator import generate_structure
 
 DEFAULT_KEY = Key(tonic="C", mode=Mode.MAJOR)
+
 DEFAULT_SECTIONS = 8
+"""섹션 수. `generate_structure`가 이만큼의 구간 이름을 낸다."""
+
+BARS_PER_SECTION = 8
+"""섹션 하나가 몇 마디인가 (D-0097).
+
+**대중가요의 관례이지 측정값이 아니다.** 8마디 또는 16마디가 표준이고 짧은 쪽을
+골랐다. 근거가 생기면 새 번호로 바꾼다.
+"""
+
+DEFAULT_BARS = DEFAULT_SECTIONS * BARS_PER_SECTION
+"""화성 진행의 마디 수 = 64.
+
+### 여기 결함이 있었다 (D-0097)
+
+예전에는 `bar_count=DEFAULT_SECTIONS`였다. **섹션 수를 마디 수로 넘기고 있었다** —
+섹션당 화음 하나라는 뜻이고, 그런 곡은 없다.
+
+이름이 `DEFAULT_SECTIONS`인데 `bar_count` 자리에 들어간 것이 신호였고 아무도 안 봤다.
+**D-0078이 "8마디 출력"을 세며 판정을 미룬 그 8이 마디 수가 아니라 섹션 수였다.**
+
+그리고 그것이 O-36에서 어휘 이득이 안 보인 뿌리다. 8마디에서는 되튐이 이득을
+6.1배로 덮어 극한 차이의 **30.3%**만 오고, 64마디에서는 **77.9%**가 온다 (D-0096).
+"""
 
 
 def render(
@@ -37,7 +61,7 @@ def render(
     각 단계를 갈아 끼우기만 하면 된다** (GR-6.2).
     """
     pattern = generate_pattern(job.seed, references)
-    progression = generate_harmony(job.seed, key, bar_count=DEFAULT_SECTIONS, prior=harmony_prior)
+    progression = generate_harmony(job.seed, key, bar_count=DEFAULT_BARS, prior=harmony_prior)
     notes = arrange(pattern, progression)
     data = render_smf(notes, tempo_bpm=tempo_bpm)
     summary: dict[str, Any] = {

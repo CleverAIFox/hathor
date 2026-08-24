@@ -52,3 +52,34 @@ def test_pipeline_partial_stage():
     out = run_dry(GenerationJob(seed=5, stages=(Stage.HARMONY,)))
     assert "harmony" in out and "structure" not in out
     assert out["status"] == "succeeded"
+
+
+def test_섹션_수와_마디_수는_다른_것이다():
+    """**섹션 수를 마디 수로 넘기고 있었다** (D-0097).
+
+    이름이 `DEFAULT_SECTIONS`인데 `bar_count` 자리에 들어갔고 아무도 안 봤다.
+    섹션당 화음 하나인 곡은 없다.
+    """
+    from hathor.application.orchestrator.generation_pipeline import (
+        BARS_PER_SECTION,
+        DEFAULT_BARS,
+        DEFAULT_SECTIONS,
+    )
+
+    assert BARS_PER_SECTION > 1
+    assert DEFAULT_BARS == DEFAULT_SECTIONS * BARS_PER_SECTION
+    assert DEFAULT_BARS > DEFAULT_SECTIONS
+
+
+def test_생성이_섹션_수보다_많은_마디를_낸다():
+    """**어휘 이득이 8마디에서 안 보인 뿌리다** (D-0096 · D-0097)."""
+    from hathor.application.orchestrator.generation_pipeline import (
+        DEFAULT_BARS,
+        DEFAULT_SECTIONS,
+    )
+    from hathor.domain.value_objects.key import Key, Mode
+    from hathor.engines.compose.harmony_generator import generate_harmony
+
+    key = Key(tonic="C", mode=Mode.MAJOR)
+    assert len(generate_harmony(7, key, bar_count=DEFAULT_BARS).degrees) == DEFAULT_BARS
+    assert DEFAULT_BARS != DEFAULT_SECTIONS
