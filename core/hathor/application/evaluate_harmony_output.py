@@ -73,10 +73,11 @@ import numpy as np
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.domain.value_objects.key import Key, Mode
 from hathor.engines.compose.harmony_generator import (
-    DIATONIC_DEGREES,
     DIATONIC_ROOT_SEMITONES,
+    Vocabulary,
     degree_weights,
     generate_harmony,
+    vocabulary_degrees,
 )
 
 Histogram = np.ndarray[tuple[int], np.dtype[np.float64]]
@@ -124,7 +125,16 @@ class OutputCondition:
     """출력 조성. **고정한다** — 조성이 갈리면 화성만 떼어 볼 수 없다 (D-0063)."""
 
     seed: int = DEFAULT_SEED
-    """쌍 추첨·도수 치환·무작위 사전의 시드. 명시 고정한다 (GR-6.5)."""
+    """쌍 추첨·도수 치환·무작위 사전의 시드. 명시 고정한다 (GR-6.5).
+
+    **선마다 흐름이 따로다** (O-34 · D-0094). 예전에는 난수기 하나에서 차례로 뽑아
+    **비교선을 하나 더하면 뒤 선의 추첨이 통째로 밀렸다.** `evaluate_degree_restriction`
+    에서 실제로 그 일이 났고(D-0086 → D-0087) 여기도 같은 상태였다.
+    **어휘 선을 더하는 이번이 그것을 고칠 때다.**
+    """
+
+    vocabulary: Vocabulary = Vocabulary.BASE
+    """코드 풀. **`MIXTURE`는 `CONTROL`과 견주지 않으면 읽을 수 없다** (D-0094)."""
 
     def __post_init__(self) -> None:
         if self.seed_count < 1:
@@ -139,10 +149,16 @@ class OutputCondition:
         return tuple(range(self.seed_count))
 
 
-def degree_histogram(progression: Progression, mode: Mode) -> Histogram:
-    """진행을 다이어토닉 6도수 히스토그램으로. 합이 1이다."""
+def degree_histogram(
+    progression: Progression, mode: Mode, vocabulary: Vocabulary = Vocabulary.BASE
+) -> Histogram:
+    """진행을 코드 풀의 도수 히스토그램으로. 합이 1이다.
+
+    **칸 수가 어휘마다 다르다.** 칸이 늘면 두 진행이 겹칠 확률이 낮아져 거리가
+    기계적으로 오르므로 **같은 칸 수의 대조군과만 견준다** (D-0094).
+    """
     counts = Counter(progression)
-    pool = DIATONIC_DEGREES[mode]
+    pool = vocabulary_degrees(mode, vocabulary)
     vector = np.asarray([counts.get(name, 0) for name in pool], dtype=np.float64)
     total = float(vector.sum())
     return vector / total if total > 0 else vector
@@ -153,15 +169,20 @@ def total_variation(left: Histogram, right: Histogram) -> float:
     return 0.5 * float(np.abs(left - right).sum())
 
 
-def weight_distance(left: DegreePrior, right: DegreePrior, mode: Mode) -> float:
+def weight_distance(
+    left: DegreePrior,
+    right: DegreePrior,
+    mode: Mode,
+    vocabulary: Vocabulary = Vocabulary.BASE,
+) -> float:
     """두 사전의 **가중치 벡터** 거리. 마디 수를 늘렸을 때의 극한이다 (O-25 (3)).
 
     생성기가 실제로 쓰는 `degree_weights`를 그대로 부른다. 여기서 6도수 정규화를
     다시 구현하면 생성기와 어긋날 수 있고, **어긋나도 아무도 모른다.**
     """
     return total_variation(
-        np.asarray(degree_weights(left, mode), dtype=np.float64),
-        np.asarray(degree_weights(right, mode), dtype=np.float64),
+        np.asarray(degree_weights(left, mode, vocabulary), dtype=np.float64),
+        np.asarray(degree_weights(right, mode, vocabulary), dtype=np.float64),
     )
 
 
@@ -322,17 +343,22 @@ class EvaluateHarmonyOutput:
         if len(references) < 2:
             raise ValueError(f"참조곡이 2개 이상 필요하다: {len(references)}")
 
-        generator = np.random.default_rng(settings.seed)
-        pairs = self._sample_pairs(len(references), generator)
+        def stream(line: int) -> np.random.Generator:
+            """**선마다 흐름이 따로다** (O-34 · D-0094). 선을 더해도 다른 선이 안 밀린다."""
+            return np.random.default_rng([settings.seed, line])
+
+        pairs = self._sample_pairs(len(references), stream(0))
         priors = [item.prior for item in references]
 
         uniform: DegreePrior = tuple([1.0 / DEGREE_COUNT] * DEGREE_COUNT)
+        shuffle_rng = stream(1)
         shuffled = [
-            tuple(float(value) for value in generator.permutation(np.asarray(item)))
+            tuple(float(value) for value in shuffle_rng.permutation(np.asarray(item)))
             for item in priors
         ]
+        draw_rng = stream(2)
         drawn = [
-            tuple(float(value) for value in generator.dirichlet(np.ones(DEGREE_COUNT)))
+            tuple(float(value) for value in draw_rng.dirichlet(np.ones(DEGREE_COUNT)))
             for _ in range(2 * len(pairs))
         ]
         stacked = np.asarray(priors, dtype=np.float64)
@@ -373,6 +399,7 @@ class EvaluateHarmonyOutput:
                         settings.key,
                         bar_count=settings.bar_count,
                         prior=table[index],
+                        vocabulary=settings.vocabulary,
                     ).degrees
                     for seed in settings.seeds
                 )
@@ -386,8 +413,8 @@ class EvaluateHarmonyOutput:
                 first, second = progressions(left), progressions(right)
                 per_seed = [
                     total_variation(
-                        degree_histogram(a, settings.key.mode),
-                        degree_histogram(b, settings.key.mode),
+                        degree_histogram(a, settings.key.mode, settings.vocabulary),
+                        degree_histogram(b, settings.key.mode, settings.vocabulary),
                     )
                     for a, b in zip(first, second, strict=True)
                 ]
@@ -429,7 +456,7 @@ class EvaluateHarmonyOutput:
 
     def pair_indices(self, count: int) -> tuple[tuple[int, int], ...]:
         """쌍 추첨을 밖에서도 볼 수 있게 낸다. **두 출처가 같은 쌍을 써야 한다.**"""
-        return self._sample_pairs(count, np.random.default_rng(self._condition.seed))
+        return self._sample_pairs(count, np.random.default_rng([self._condition.seed, 0]))
 
     def _sample_pairs(
         self, count: int, generator: np.random.Generator

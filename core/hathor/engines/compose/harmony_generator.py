@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
+from enum import StrEnum
 
 import numpy as np
 
@@ -15,6 +16,64 @@ DIATONIC_DEGREES: dict[Mode, tuple[str, ...]] = {
     Mode.MAJOR: ("I", "ii", "iii", "IV", "V", "vi"),
     Mode.MINOR: ("i", "III", "iv", "v", "VI", "VII"),
 }
+
+
+class Vocabulary(StrEnum):
+    """코드 풀을 무엇으로 할 것인가 (O-36 · D-0094).
+
+    - `BASE` — 다이어토닉 6도수. **기존 동작이며 기본값이다.**
+    - `MIXTURE` — 거기에 `♭III` · `♭VI` · `♭VII`를 더한 9도수.
+    - `CONTROL` — 거기에 **뭉치지 않는 세 칸**(♭2 · ♯4 · 이끔음)을 더한 9도수.
+
+    **`CONTROL`이 없으면 `MIXTURE`를 읽을 수 없다.** 도수를 6에서 9로 늘리는 것만으로
+    히스토그램 거리가 오른다 — 칸이 늘면 두 진행이 겹칠 확률이 낮아지기 때문이다.
+    탐색에서 차용이 전혀 없는 코퍼스에서도 0.2155에서 0.2696으로 **공짜로 올랐다.**
+    같은 칸 수의 대조군을 빼야 진짜 몫이 남는다.
+    """
+
+    BASE = "base"
+    MIXTURE = "mixture"
+    CONTROL = "control"
+
+
+MODAL_MIXTURE_CELLS = (3, 8, 10)
+"""D-0093이 뭉침을 잰 칸. ♭3 · ♭6 · ♭7이며 **차용 3화음의 근음과 같다.**"""
+
+BORROWED_DEGREES: dict[Mode, tuple[str, ...]] = {
+    Mode.MAJOR: ("bIII", "bVI", "bVII"),
+    Mode.MINOR: (),
+}
+BORROWED_ROOT_SEMITONES: dict[Mode, tuple[int, ...]] = {
+    Mode.MAJOR: MODAL_MIXTURE_CELLS,
+    Mode.MINOR: (),
+}
+"""단조 차용 3화음의 **근음**. D-0093이 잰 삼총사 칸과 정확히 같다.
+
+`♭III`(3·7·10) · `♭VI`(8·0·3) · `♭VII`(10·2·5)의 근음이 3·8·10이므로 **근음만으로
+들어간다.** 기존 방식을 안 바꿔도 된다는 뜻이다.
+
+**`iv`는 뺐다.** 근음이 5로 `IV`와 같아 근음만으로는 안 갈리고, 가르는 것은 3음
+(♭6 = 8)인데 그것은 이미 `♭VI`의 근음이라 **이중 계산이 된다.** 3화음 평균으로
+바꾸면 되지만 그러면 `I`와 `vi`가 2음을 공유해 **판별력이 사라진다**(위 참고) —
+O-26이 그 자리다. 근거가 있는 셋만 넣는다.
+
+**단조는 비었다.** D-0093은 장조만 쟀다. **재지 않은 것을 넣지 않는다** (GR-0.5).
+"""
+
+CONTROL_DEGREES: dict[Mode, tuple[str, ...]] = {
+    Mode.MAJOR: ("x-b2", "x-#4", "x-vii"),
+    Mode.MINOR: (),
+}
+CONTROL_ROOT_SEMITONES: dict[Mode, tuple[int, ...]] = {
+    Mode.MAJOR: (1, 6, 11),
+    Mode.MINOR: (),
+}
+"""대조군 근음. **화음이 아니라 자리 표시다** — 이름에 `x-`를 붙인 이유다.
+
+♭2 · ♯4는 D-0093에서 뭉치지 않았고 이끔음은 D-0088에서 코퍼스 공통이었다.
+**셋 다 곡을 가르지 않는 칸이므로**, 여기서 오르는 몫은 전부 "칸이 늘어서"다.
+"""
+
 
 DIATONIC_ROOT_SEMITONES: dict[Mode, tuple[int, ...]] = {
     Mode.MAJOR: (0, 2, 4, 5, 7, 9),
@@ -30,16 +89,41 @@ DIATONIC_ROOT_SEMITONES: dict[Mode, tuple[int, ...]] = {
 """
 
 
-def degree_weights(prior: Sequence[float], mode: Mode) -> tuple[float, ...]:
-    """도수 사전(12차원, 인덱스 0이 으뜸음)을 다이어토닉 6도수 가중치로 좁힌다.
+def vocabulary_degrees(mode: Mode, vocabulary: Vocabulary = Vocabulary.BASE) -> tuple[str, ...]:
+    """코드 풀의 도수 이름. **근음 오름차순으로 정렬한다** — 순서가 추출을 정한다."""
+    return tuple(name for _, name in _vocabulary_table(mode, vocabulary))
 
-    비음계음 6칸을 버리고 남은 6칸을 정규화한다. 버리는 쪽이 균등 성분을 상당히
-    걷어낸다 — 잡음 바닥이 12칸에 고루 퍼져 있기 때문이다.
+
+def vocabulary_roots(mode: Mode, vocabulary: Vocabulary = Vocabulary.BASE) -> tuple[int, ...]:
+    """코드 풀의 근음 반음."""
+    return tuple(root for root, _ in _vocabulary_table(mode, vocabulary))
+
+
+def _vocabulary_table(mode: Mode, vocabulary: Vocabulary) -> tuple[tuple[int, str], ...]:
+    entries = list(zip(DIATONIC_ROOT_SEMITONES[mode], DIATONIC_DEGREES[mode], strict=True))
+    if vocabulary is Vocabulary.MIXTURE:
+        entries += list(zip(BORROWED_ROOT_SEMITONES[mode], BORROWED_DEGREES[mode], strict=True))
+    elif vocabulary is Vocabulary.CONTROL:
+        entries += list(zip(CONTROL_ROOT_SEMITONES[mode], CONTROL_DEGREES[mode], strict=True))
+    return tuple(sorted(entries))
+
+
+def degree_weights(
+    prior: Sequence[float], mode: Mode, vocabulary: Vocabulary = Vocabulary.BASE
+) -> tuple[float, ...]:
+    """도수 사전(12차원, 인덱스 0이 으뜸음)을 코드 풀의 도수 가중치로 좁힌다.
+
+    기본값은 다이어토닉 6도수다. 비음계음 6칸을 버리고 남은 6칸을 정규화한다.
+    버리는 쪽이 균등 성분을 상당히 걷어낸다 — 잡음 바닥이 12칸에 고루 퍼져 있기
+    때문이다.
+
+    **버리는 몫이 거리의 44~47%이고 그 곡 고유성이 다이어토닉과 대등하다**는 것이
+    나중에 측정됐다 (D-0088). `Vocabulary.MIXTURE`가 그중 근거가 선 셋을 되살린다.
     """
     vector = np.asarray(prior, dtype=np.float64)
     if vector.shape != (DEGREE_COUNT,):
         raise ValueError(f"도수 사전은 12차원이어야 한다: {vector.shape}")
-    picked = np.maximum(vector[list(DIATONIC_ROOT_SEMITONES[mode])], 0.0)
+    picked = np.maximum(vector[list(vocabulary_roots(mode, vocabulary))], 0.0)
     total = float(picked.sum())
     if total <= 0.0:
         return tuple(1.0 / len(picked) for _ in picked)
@@ -52,6 +136,7 @@ def generate_harmony(
     bar_count: int = 4,
     *,
     prior: Sequence[float] | None = None,
+    vocabulary: Vocabulary = Vocabulary.BASE,
 ) -> ChordProgression:
     """시드와 조성이 같으면 항상 같은 진행을 반환한다.
 
@@ -82,15 +167,24 @@ def generate_harmony(
     돌리는 자리로 되돌아간다 (D-0058~D-0061에서 네 세션을 쓴 곳). **크기를 키우려면
     사전의 출처를 바꾼다** — 그것이 (a)가 한 일이다.
 
+    ### 어휘를 넓히면 아무것도 안 배워도 거리가 오른다
+
+    `vocabulary`로 코드 풀을 바꾼다. **기본값은 기존 동작과 완전히 같다.**
+
+    도수를 6에서 9로 늘리면 두 진행이 겹칠 확률이 낮아져 **히스토그램 거리가
+    기계적으로 오른다** — 탐색에서 차용이 전혀 없는 코퍼스에서도 0.2155에서
+    0.2696으로 올랐다. **`Vocabulary.CONTROL`과 견주지 않은 `MIXTURE` 값은 읽으면
+    안 된다** (D-0094).
+
     P4에서 A* 탐색 기반 화성 생성으로 교체된다.
     """
     if bar_count < 1:
         raise ValueError("마디 수는 1 이상이어야 한다")
     rng = random.Random(seed ^ key.tonic_pitch_class)
-    pool = DIATONIC_DEGREES[key.mode]
+    pool = vocabulary_degrees(key.mode, vocabulary)
     if prior is None:
         degrees = tuple(rng.choice(pool) for _ in range(bar_count))
     else:
-        weights = degree_weights(prior, key.mode)
+        weights = degree_weights(prior, key.mode, vocabulary)
         degrees = tuple(rng.choices(pool, weights=weights, k=1)[0] for _ in range(bar_count))
     return ChordProgression(key=key, degrees=degrees)

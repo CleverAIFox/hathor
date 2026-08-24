@@ -149,7 +149,7 @@ def test_사전을_무시하는_생성기를_끼우면_하네스가_빨갛게_�
     """
     from hathor.engines.compose.harmony_generator import generate_harmony as real
 
-    def ignores_prior(seed, key, bar_count=4, *, prior=None):
+    def ignores_prior(seed, key, bar_count=4, *, prior=None, vocabulary=None):
         return real(seed, key, bar_count, prior=None)
 
     monkeypatch.setattr(module, "generate_harmony", ignores_prior)
@@ -266,3 +266,67 @@ def test_없는_비교선을_찾으면_거부한다():
     report = EvaluateHarmonyOutput(FAST).run(_references(20, contrast=0.9), "test")
     with pytest.raises(KeyError):
         report.line("없는선")
+
+
+# ------------------------------------------------------------------ 어휘 (O-36 · D-0094)
+
+
+def test_기본_어휘는_기존_동작과_같다():
+    """**기존 산출물이 안 바뀐다.** 어휘를 더해도 기본값은 6도수다."""
+    from hathor.engines.compose.harmony_generator import Vocabulary, generate_harmony
+
+    key = Key(tonic="C", mode=Mode.MAJOR)
+    assert (
+        generate_harmony(7, key, 8).degrees
+        == generate_harmony(7, key, 8, vocabulary=Vocabulary.BASE).degrees
+    )
+
+
+@pytest.mark.parametrize("vocabulary,expected", [("base", 6), ("mixture", 9), ("control", 9)])
+def test_어휘마다_칸_수가_다르다(vocabulary, expected):
+    from hathor.engines.compose.harmony_generator import Vocabulary, vocabulary_roots
+
+    assert len(vocabulary_roots(Mode.MAJOR, Vocabulary(vocabulary))) == expected
+
+
+def test_차용_어휘의_근음은_삼총사와_같다():
+    """**D-0093이 잰 칸이 그대로 근음이다** — 그래서 근음만으로 들어간다."""
+    from hathor.engines.compose.harmony_generator import (
+        BORROWED_ROOT_SEMITONES,
+        MODAL_MIXTURE_CELLS,
+    )
+
+    assert BORROWED_ROOT_SEMITONES[Mode.MAJOR] == MODAL_MIXTURE_CELLS
+
+
+def test_대조군은_차용_어휘와_칸_수가_같다():
+    """**칸 수가 다르면 대조가 아니다.** 늘어난 칸만으로 거리가 오른다."""
+    from hathor.engines.compose.harmony_generator import Vocabulary, vocabulary_roots
+
+    assert len(vocabulary_roots(Mode.MAJOR, Vocabulary.MIXTURE)) == len(
+        vocabulary_roots(Mode.MAJOR, Vocabulary.CONTROL)
+    )
+    assert not set(vocabulary_roots(Mode.MAJOR, Vocabulary.MIXTURE)) & {1, 6, 11}
+
+
+def test_어휘를_넓히면_아무것도_안_배워도_거리가_오른다():
+    """**대조군이 필요한 이유다** (D-0094). 이 검사가 그것을 고정한다."""
+    from dataclasses import replace
+
+    from hathor.engines.compose.harmony_generator import Vocabulary
+
+    made = _references(30, contrast=0.9)
+    base = EvaluateHarmonyOutput(FAST).run(made, "base")
+    control = EvaluateHarmonyOutput(replace(FAST, vocabulary=Vocabulary.CONTROL)).run(
+        made, "control"
+    )
+    assert control.line("paired").mean_distance > base.line("paired").mean_distance
+
+
+def test_단조에는_차용_어휘가_없다():
+    """**D-0093은 장조만 쟀다. 재지 않은 것을 넣지 않는다** (GR-0.5)."""
+    from hathor.engines.compose.harmony_generator import Vocabulary, vocabulary_roots
+
+    assert vocabulary_roots(Mode.MINOR, Vocabulary.MIXTURE) == vocabulary_roots(
+        Mode.MINOR, Vocabulary.BASE
+    )

@@ -428,6 +428,17 @@ def build_parser() -> argparse.ArgumentParser:
     output.add_argument("--key", default="C major", help="출력 조성. 고정한다")
     output.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
     output.add_argument(
+        "--vocabulary",
+        choices=("base", "mixture", "control"),
+        default="base",
+        help="코드 풀. mixture는 ♭III·♭VI·♭VII를 더한다 (O-36 · D-0094)",
+    )
+    output.add_argument(
+        "--compare-vocabulary",
+        action="store_true",
+        help="base·mixture·control 셋을 같은 쌍·같은 시드로 짝지어 잰다. **개입이다**",
+    )
+    output.add_argument(
         "--bar-sweep",
         default=None,
         metavar="8,16,32,64",
@@ -2924,6 +2935,7 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
         SourceComparison,
         sweep_bar_counts,
     )
+    from hathor.engines.compose.harmony_generator import vocabulary_roots
     from hathor.shared.config.paths import repo_root as _root
 
     target = args.stem_set
@@ -2955,12 +2967,15 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
         print(f"두 출처에 공통인 곡이 {len(shared)}개다.", file=sys.stderr)
         return 1
 
+    from hathor.engines.compose.harmony_generator import Vocabulary
+
     condition = OutputCondition(
         seed_count=args.seeds,
         bar_count=args.bars,
         pair_count=args.pairs,
         key=_parse_key(args.key),
         seed=args.seed,
+        vocabulary=Vocabulary(args.vocabulary),
     )
     harness = EvaluateHarmonyOutput(condition)
 
@@ -3008,6 +3023,58 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
             f"  쌍 단위 승률  {comparison.win_rate:.1%}\n"
             f"  전달: **{'그렇다' if comparison.transmits_prior_contrast else '아니다'}**\n"
         )
+
+    if args.compare_vocabulary:
+        from dataclasses import replace
+
+        print("어휘 비교 (같은 쌍·같은 시드) — O-36 · D-0094")
+        columns = (
+            ("어휘", "<10"),
+            ("칸", ">5"),
+            ("paired", ">10.4f"),
+            ("극한", ">10.4f"),
+            ("마디환산", ">11.2f"),
+        )
+        measured: dict[str, OutputReport] = {}
+        rows: list[tuple[object, ...]] = []
+        for name in ("base", "control", "mixture"):
+            chosen = replace(condition, vocabulary=Vocabulary(name))
+            report = EvaluateHarmonyOutput(chosen).run(references(target), name)
+            measured[name] = report
+            line = report.line("paired")
+            rows.append(
+                (
+                    name,
+                    len(vocabulary_roots(condition.key.mode, Vocabulary(name))),
+                    line.mean_distance,
+                    line.mean_limit,
+                    line.mean_distance * condition.bar_count,
+                )
+            )
+        for text in render_table(columns, rows):
+            print(text)
+        mixture_line = measured["mixture"].line("paired")
+        control_line = measured["control"].line("paired")
+        gain = mixture_line.mean_distance - control_line.mean_distance
+        wins = sum(
+            1
+            for left, right in zip(mixture_line.distances, control_line.distances, strict=True)
+            if left > right
+        )
+        share = wins / max(len(mixture_line.distances), 1)
+        free = control_line.mean_distance - measured["base"].line("paired").mean_distance
+        beats = gain > 0 and share > 0.5
+        verdict = "차용 어휘가 출력을 더 가른다" if beats else "대조군을 못 넘는다"
+        print(
+            f"\n칸이 늘어 공짜로 오른 몫 (control - base) = {free:+.4f}\n"
+            f"차용이 번 몫 (mixture - control) = {gain:+.4f}"
+            f" · 쌍 단위 승률 {share:.1%}\n"
+            f"판정: **{verdict}**\n"
+        )
+        print("**`control`을 안 빼면 아무것도 못 읽는다.** 도수를 6에서 9로 늘리는 것만으로")
+        print("두 진행이 겹칠 확률이 낮아져 거리가 오른다 — 합성에서 차용이 전혀 없어도")
+        print("0.2155에서 0.2696으로 올랐다. `control`은 **뭉치지 않는 세 칸**(♭2·♯4·이끔음)을")
+        print("같은 개수로 넣은 선이며, 거기서 오르는 몫은 전부 칸이 늘어서다 (D-0094).\n")
 
     if args.bar_sweep:
         counts = tuple(int(token) for token in args.bar_sweep.split(",") if token.strip())

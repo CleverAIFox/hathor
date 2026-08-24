@@ -331,3 +331,41 @@ def test_열_이름에_공백을_금지한다():
 
     with pytest.raises(ValueError, match="공백"):
         render_table((("가 나", "<6"),), [("하나",)])
+
+
+# ------------------------------------------------------------------ 어휘 비교 (D-0094)
+
+
+def test_어휘_비교가_대조군을_함께_낸다(tmp_path, capsys):
+    """**`control`이 없으면 `mixture`를 읽을 수 없다** (D-0094)."""
+    path = write_keys(tmp_path / "keys.jsonl")
+    assert (
+        main(
+            [
+                "eval",
+                "harmony-output",
+                "--priors",
+                str(path),
+                "--against",
+                "none",
+                "--compare-vocabulary",
+                *FAST,
+            ]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "base" in out and "control" in out and "mixture" in out
+    assert "칸이 늘어 공짜로 오른 몫" in out
+    assert "차용이 번 몫" in out
+
+
+def test_어휘_인자가_실제로_걸린다(tmp_path, capsys):
+    """**선언한 인자가 결과를 바꾸는지 본다** (D-0064 · O-25)."""
+    path = write_keys(tmp_path / "keys.jsonl")
+    outputs = []
+    for vocabulary in ("base", "mixture"):
+        command = ["eval", "harmony-output", "--priors", str(path), "--against", "none"]
+        assert main([*command, "--vocabulary", vocabulary, *FAST]) == 0
+        outputs.append(capsys.readouterr().out)
+    assert outputs[0] != outputs[1]
