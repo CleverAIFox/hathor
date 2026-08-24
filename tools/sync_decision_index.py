@@ -462,6 +462,7 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_sections(records),
         *check_supersession(records),
         *check_open_issues(design_text),
+        *check_split(parts),
         *check_layout(parts),
         *check_text_style(documents),
     ]
