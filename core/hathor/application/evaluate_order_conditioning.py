@@ -156,6 +156,8 @@ class EvaluateOrderConditioning:
         mine: list[float] = []
         theirs: list[float] = []
         for index, item in enumerate(references):
+            per_song_self: list[float] = []
+            per_song_other: list[float] = []
             others = [
                 int(value)
                 for value in generator.choice(
@@ -176,10 +178,13 @@ class EvaluateOrderConditioning:
                 observed = bigram_matrix(
                     degrees, settings.key.mode, settings.vocabulary, drop_diagonal=True
                 )
-                mine.append(total_variation(observed, restricted[index]))
-                theirs.append(
+                per_song_self.append(total_variation(observed, restricted[index]))
+                per_song_other.append(
                     float(np.mean([total_variation(observed, restricted[pick]) for pick in others]))
                 )
+            # **곡 단위로 묶는다** (D-0113). 시드는 곡 안의 반복이지 표본이 아니다.
+            mine.append(float(np.mean(per_song_self)))
+            theirs.append(float(np.mean(per_song_other)))
         return OrderReport(
             condition=settings,
             reference_count=len(references),

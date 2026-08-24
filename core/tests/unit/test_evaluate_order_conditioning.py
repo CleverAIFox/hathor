@@ -127,3 +127,38 @@ def test_모양이_틀리면_거부한다(field, value):
 def test_참조곡이_둘_미만이면_거부한다():
     with pytest.raises(ValueError, match="2개 이상"):
         EvaluateOrderConditioning(FAST).run(_references(1))
+
+
+# ------------------------------------------------------------------ 곡 단위 (D-0113)
+
+
+def test_표본이_곡_수와_같다():
+    """**시드는 곡 안의 반복이지 표본이 아니다** (D-0113).
+
+    시드마다 하나씩 세면 같은 곡의 시드들이 **같은 전이 사전을 쓰므로** 독립이
+    아니다. 실측 200곡x200시드에서 `t = 531`이 나왔고 곡 단위로는 38이었다.
+    """
+    made = _references(12)
+    report = EvaluateOrderConditioning(OutputCondition(seed_count=15, bar_count=32)).run(made)
+    assert len(report.self_distances) == len(made)
+    assert len(report.other_distances) == len(made)
+
+
+def test_시드를_늘려도_표본_수가_안_는다():
+    """**늘어나면 표준오차가 가짜로 줄어든다.**"""
+    made = _references(10)
+    few = EvaluateOrderConditioning(OutputCondition(seed_count=5, bar_count=32)).run(made)
+    many = EvaluateOrderConditioning(OutputCondition(seed_count=40, bar_count=32)).run(made)
+    assert len(few.self_distances) == len(many.self_distances) == len(made)
+
+
+def test_곡_승률이_곡_단위다():
+    """D-0062가 \"곡 과반\"이라 한 것은 곡 단위였다."""
+    made = _references(20)
+    report = EvaluateOrderConditioning(OutputCondition(seed_count=15, bar_count=32)).run(made)
+    wins = sum(
+        1
+        for mine, theirs in zip(report.self_distances, report.other_distances, strict=True)
+        if theirs > mine
+    )
+    assert report.win_rate == pytest.approx(wins / len(made))
