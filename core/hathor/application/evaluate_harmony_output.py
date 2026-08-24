@@ -67,6 +67,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 
 import numpy as np
 
@@ -164,6 +165,24 @@ def degree_histogram(
     return vector / total if total > 0 else vector
 
 
+def bigram_matrix(
+    progression: Progression, mode: Mode, vocabulary: Vocabulary = Vocabulary.BASE
+) -> Histogram:
+    """이웃한 두 마디의 도수 쌍 분포 (O-32 · D-0102).
+
+    **도수 히스토그램은 순서에 눈이 없다** — `I V vi IV`와 `IV vi V I`의 거리가 0이다.
+    전이 행렬은 이웃 관계를 보므로 배열이 달라지면 값이 달라진다.
+    """
+    pool = vocabulary_degrees(mode, vocabulary)
+    index = {name: position for position, name in enumerate(pool)}
+    matrix = np.zeros((len(pool), len(pool)), dtype=np.float64)
+    for left, right in pairwise(progression):
+        matrix[index[left], index[right]] += 1.0
+    total = float(matrix.sum())
+    result: Histogram = matrix / total if total > 0 else matrix
+    return result
+
+
 def total_variation(left: Histogram, right: Histogram) -> float:
     """전변동 거리. 0~1이며 **`TV * 마디 수`가 옮겨야 하는 마디 수다.**"""
     return 0.5 * float(np.abs(left - right).sum())
@@ -197,6 +216,52 @@ class OutputLine:
     """쌍마다 시드 평균 마디 불일치율. 진단이다."""
     limits: tuple[float, ...]
     """쌍마다 사전 가중치 거리. 무한 마디 극한이다."""
+    transitions: tuple[float, ...] = ()
+    """쌍마다 시드 평균 전이 행렬 거리 (O-32 · D-0102)."""
+    transition_nulls: tuple[float, ...] = ()
+    """**같은 치환을 두 진행에 적용한** 귀무선.
+
+    마디를 각자 뒤섞으면 **시드 커플링까지 깨져** 거리가 오히려 커진다 — 탐색에서
+    초과가 -0.25로 나왔다. 같은 치환을 쓰면 짝짓기가 유지되고 **순서만 사라진다.**
+    """
+
+    @property
+    def mean_transition(self) -> float:
+        return float(np.mean(self.transitions)) if self.transitions else 0.0
+
+    @property
+    def order_excess(self) -> float:
+        """전이 거리에서 순서를 없앤 귀무선을 뺀 값. **어휘 몫이 빠진다.**
+
+        현재 생성기는 마디를 독립으로 뽑으므로 **0이 나와야 한다** — 그것이 이
+        지표의 음성 대조다. 곡마다 다른 전이로 뽑는 생성기에서는 32마디에서
+        0.1012까지 올랐다 (D-0102).
+        """
+        if not self.transitions:
+            return 0.0
+        return self.mean_transition - float(np.mean(self.transition_nulls))
+
+    @property
+    def order_standard_error(self) -> float:
+        """**짝지은 차이의 표준오차** (D-0087). 같은 쌍이므로 선별 표준오차를 못 쓴다."""
+        if len(self.transitions) < 2:
+            return 0.0
+        gap = np.asarray(self.transitions) - np.asarray(self.transition_nulls)
+        return float(np.std(gap, ddof=1) / np.sqrt(gap.size))
+
+    @property
+    def order_t(self) -> float:
+        error = self.order_standard_error
+        return self.order_excess / error if error > 0 else 0.0
+
+    @property
+    def carries_order(self) -> bool:
+        """**사전 등록한 판정 규칙이다** (D-0102 · GR-6.5).
+
+        전이 초과분이 양수이고 `t > 2`면 배열이 참조곡을 담는다. **지금은 거짓이어야
+        한다** — 순서를 시드가 정하기 때문이다 (D-0062).
+        """
+        return self.order_excess > 0.0 and self.order_t > 2.0
 
     @property
     def pair_count(self) -> int:
@@ -405,10 +470,14 @@ class EvaluateHarmonyOutput:
                 )
             return cache[index]
 
+        order_rng = np.random.default_rng([settings.seed, 3])
+
         def measure(name: str, index_pairs: Sequence[tuple[int, int]]) -> OutputLine:
             distances: list[float] = []
             mismatches: list[float] = []
             limits: list[float] = []
+            transitions: list[float] = []
+            transition_nulls: list[float] = []
             for left, right in index_pairs:
                 first, second = progressions(left), progressions(right)
                 per_seed = [
@@ -422,6 +491,43 @@ class EvaluateHarmonyOutput:
                     sum(1 for x, y in zip(a, b, strict=True) if x != y) / settings.bar_count
                     for a, b in zip(first, second, strict=True)
                 ]
+                moved = [order_rng.permutation(settings.bar_count) for _ in range(len(first))]
+                transitions.append(
+                    float(
+                        np.mean(
+                            [
+                                total_variation(
+                                    bigram_matrix(a, settings.key.mode, settings.vocabulary),
+                                    bigram_matrix(b, settings.key.mode, settings.vocabulary),
+                                )
+                                for a, b in zip(first, second, strict=True)
+                            ]
+                        )
+                    )
+                )
+                transition_nulls.append(
+                    float(
+                        np.mean(
+                            [
+                                total_variation(
+                                    bigram_matrix(
+                                        tuple(a[i] for i in order),
+                                        settings.key.mode,
+                                        settings.vocabulary,
+                                    ),
+                                    bigram_matrix(
+                                        tuple(b[i] for i in order),
+                                        settings.key.mode,
+                                        settings.vocabulary,
+                                    ),
+                                )
+                                for (a, b), order in zip(
+                                    zip(first, second, strict=True), moved, strict=True
+                                )
+                            ]
+                        )
+                    )
+                )
                 distances.append(float(np.mean(per_seed)))
                 mismatches.append(float(np.mean(mismatch)))
                 limits.append(
@@ -434,6 +540,8 @@ class EvaluateHarmonyOutput:
                 distances=tuple(distances),
                 mismatches=tuple(mismatches),
                 limits=tuple(limits),
+                transitions=tuple(transitions),
+                transition_nulls=tuple(transition_nulls),
             )
 
         lines = (

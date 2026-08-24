@@ -359,3 +359,60 @@ def test_칸_흔들림을_잰다():
     flat = _references(40, contrast=0.05)
     peaky = _references(40, contrast=0.95)
     assert cell_spread(peaky, (3, 8, 10)) > cell_spread(flat, (3, 8, 10))
+
+
+# ------------------------------------------------------------------ 순서 지표 (O-32 · D-0102)
+
+
+def test_전이_행렬은_순서를_본다():
+    """**도수 히스토그램은 순서에 눈이 없다.** `I V vi IV`와 `IV vi V I`의 거리가 0이다."""
+    from hathor.application.evaluate_harmony_output import bigram_matrix
+
+    forward = ("I", "V", "vi", "IV")
+    backward = ("IV", "vi", "V", "I")
+    assert total_variation(
+        degree_histogram(forward, Mode.MAJOR), degree_histogram(backward, Mode.MAJOR)
+    ) == pytest.approx(0.0)
+    assert (
+        total_variation(bigram_matrix(forward, Mode.MAJOR), bigram_matrix(backward, Mode.MAJOR))
+        > 0.0
+    )
+
+
+def test_전이_행렬은_합이_1이다():
+    from hathor.application.evaluate_harmony_output import bigram_matrix
+
+    assert bigram_matrix(("I", "V", "I"), Mode.MAJOR).sum() == pytest.approx(1.0)
+
+
+def test_한_마디짜리_진행은_전이가_없다():
+    """**0으로 나누지 않는다.**"""
+    from hathor.application.evaluate_harmony_output import bigram_matrix
+
+    assert bigram_matrix(("I",), Mode.MAJOR).sum() == 0.0
+
+
+def test_지금은_순서_정보가_없다():
+    """**음성 대조.** 생성기가 마디를 독립으로 뽑으므로 초과가 0이어야 한다 (D-0062).
+
+    이것이 참이 되는 날이 O-32가 풀린 날이다.
+    """
+    report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
+    line = report.line("paired")
+    assert not line.carries_order
+    assert abs(line.order_excess) < 0.02
+
+
+def test_같은_치환_귀무선이라야_커플링이_산다():
+    """마디를 **각자** 뒤섞으면 시드 짝짓기까지 깨져 거리가 오히려 커진다 (D-0102).
+
+    탐색에서 초과가 -0.25로 나왔다. 같은 치환을 쓰면 -0.00이다.
+    """
+    report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
+    line = report.line("paired")
+    assert line.mean_transition == pytest.approx(float(np.mean(line.transition_nulls)), abs=0.03)
+
+
+def test_같은_사전_두_번은_전이도_0이다():
+    report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
+    assert report.line("identical").mean_transition == 0.0

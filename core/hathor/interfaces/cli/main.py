@@ -3035,21 +3035,36 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
 
     for name, report in reports.items():
         print(f"[{name}]")
-        header = (
-            f"{'선':<10}{'도수 거리':>12}{'표준오차':>10}"
-            f"{'마디 환산':>11}{'극한':>10}{'마디 불일치':>13}"
-        )
-        print(header)
-        print("-" * 68)
-        for item in report.lines:
-            print(
-                f"{item.name:<10}{item.mean_distance:>12.4f}{item.standard_error:>10.4f}"
-                f"{item.mean_distance * condition.bar_count:>11.2f}"
-                f"{item.mean_limit:>10.4f}{item.mean_mismatch:>13.4f}"
-            )
+        for text in render_table(
+            (
+                ("선", "<10"),
+                ("도수거리", ">12.4f"),
+                ("표준오차", ">10.4f"),
+                ("마디환산", ">11.2f"),
+                ("극한", ">10.4f"),
+                ("마디불일치", ">13.4f"),
+                ("전이초과", ">11.4f"),
+                ("t", ">7.2f"),
+            ),
+            [
+                (
+                    item.name,
+                    item.mean_distance,
+                    item.standard_error,
+                    item.mean_distance * condition.bar_count,
+                    item.mean_limit,
+                    item.mean_mismatch,
+                    item.order_excess,
+                    item.order_t,
+                )
+                for item in report.lines
+            ],
+        ):
+            print(text)
         verdict = "정보 있음" if report.is_output_conditioned else "정보 없음"
         sound = "건전" if report.is_harness_sound else "**고장**"
-        print(f"하네스 {sound} · 판정: **{verdict}**\n")
+        order = "**있음**" if report.line("paired").carries_order else "없음"
+        print(f"하네스 {sound} · 어휘 판정: **{verdict}** · 순서 판정: {order}\n")
 
     if baseline:
         comparison = SourceComparison(baseline=reports[baseline], target=result)
@@ -3200,6 +3215,11 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     print("**`극한`이 상한이다** (O-25 (3)). 사전 가중치 벡터 자체의 거리이며 마디 수를")
     print("늘리면 실측이 거기로 내려간다. 실측이 극한보다 큰 것은 정상이고, 그 초과분은")
     print("**전달된 정보가 아니라 8마디의 되튐이다.** `--bar-sweep`으로 확인한다.")
+    print("**`전이초과`가 순서 지표다** (O-32 · D-0102). 도수 히스토그램은 순서에 눈이 없어")
+    print("`I V vi IV`와 `IV vi V I`의 거리가 0이다. 전이 행렬은 이웃 관계를 본다.")
+    print("귀무선은 **같은 치환을 두 진행에 적용한 것**이다 — 각자 뒤섞으면 시드 짝짓기까지")
+    print("깨져 초과가 -0.25로 나온다. **지금은 0이어야 한다** — 순서를 시드가 정하므로")
+    print("(D-0062). **이 값이 양수가 되는 날이 O-32가 풀린 날이다.**")
     print("`identical`은 0, `onehot`은 1.0이어야 한다. 아니면 하네스가 고장이므로 나머지")
     print("숫자를 읽지 않는다. `random`은 아무 사전 둘이라 느슨하고, `shuffled`가 뾰족함을")
     print("맞춘 귀무선이다 — 실측이 그보다 작으면 곡들이 화성 어휘를 공유한다는 뜻이다.")
