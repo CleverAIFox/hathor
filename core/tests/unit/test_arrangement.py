@@ -81,10 +81,12 @@ def test_arrangement_is_deterministic():
 
 
 def test_total_bars_and_duration():
+    """**상수를 따라간다** (D-0111). 숫자를 박아 두면 섹션 길이를 바꿀 때 갈린다."""
     structure = pattern("URUR")
-    assert total_bars(structure) == 16
-    # 16마디 × 4박 = 64박, 96BPM이면 40초
-    assert duration_seconds(structure, 96) == pytest.approx(40.0)
+    bars = 4 * BARS_PER_SECTION
+    assert total_bars(structure) == bars
+    # 마디마다 4박이므로 96BPM에서 마디당 2.5초다
+    assert duration_seconds(structure, 96) == pytest.approx(bars * 2.5)
 
 
 def test_invalid_inputs_are_rejected():
@@ -109,3 +111,46 @@ def test_unique_sections_differ_for_every_progression_length(degree_count):
     first = [n.pitch for n in notes if n.start_tick < boundary]
     second = [n.pitch for n in notes if n.start_tick >= boundary]
     assert first != second, f"진행 길이 {degree_count}에서 U 구간이 같다"
+
+
+# ------------------------------------------------------------------ 블록 읽기 (D-0111)
+
+
+def test_긴_진행이면_섹션마다_겹치지_않는_블록을_읽는다():
+    """**배열 조건화가 소리에 닿으려면 진행을 넓게 읽어야 한다** (O-32 · D-0110).
+
+    한 칸씩 밀어 읽으면 6섹션이 64마디 진행의 앞 일곱 마디만 쓴다. 실측에서
+    그 일이 났다.
+    """
+    degrees = tuple(str(index) for index in range(4 * BARS_PER_SECTION))
+    long = ChordProgression(key=KEY, degrees=degrees)
+    read = set()
+    for index in range(2):
+        rotation = (index + 1) * BARS_PER_SECTION
+        read |= {(rotation + offset) % long.length for offset in range(BARS_PER_SECTION)}
+    # 두 `U` 구간이 서로 겹치지 않는 두 블록을 읽는다
+    assert len(read) == 2 * BARS_PER_SECTION
+
+
+def test_짧은_진행이면_예전처럼_한_칸씩_민다():
+    """**고칠 것을 고치되 고쳤던 것을 되돌리지 않는다.**
+
+    진행이 섹션과 같은 길이면 순차 블록이 전부 같아진다 — 그것을 고친 것이
+    회전이었다 (`test_unique_sections_differ_from_each_other`).
+    """
+    short = ChordProgression(key=KEY, degrees=("I", "V", "vi", "IV"))
+    notes = arrange(pattern("UU"), short, bars_per_section=4)
+    boundary = TICKS_PER_BAR * 4
+    head = [note.pitch for note in notes if note.start_tick < boundary]
+    tail = [note.pitch for note in notes if note.start_tick >= boundary]
+    assert head != tail
+
+
+def test_섹션당_마디는_한_곳에서_온다():
+    """**한 이름이 두 값이면 둘 중 하나는 반드시 틀린다** (D-0111)."""
+    from hathor.application.orchestrator import generation_pipeline
+
+    assert generation_pipeline.BARS_PER_SECTION is BARS_PER_SECTION
+    assert generation_pipeline.DEFAULT_BARS == (
+        generation_pipeline.DEFAULT_SECTIONS * BARS_PER_SECTION
+    )

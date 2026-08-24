@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from hathor.application.arrangement import arrange, duration_seconds, total_bars
+from hathor.application.arrangement import BARS_PER_SECTION, arrange, duration_seconds, total_bars
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.services.midi_writer import DEFAULT_TEMPO_BPM, render_smf
 from hathor.domain.services.song_structure import StructurePattern, generate_pattern
@@ -18,8 +18,11 @@ DEFAULT_KEY = Key(tonic="C", mode=Mode.MAJOR)
 DEFAULT_SECTIONS = 8
 """섹션 수. `generate_structure`가 이만큼의 구간 이름을 낸다."""
 
-BARS_PER_SECTION = 8
-"""섹션 하나가 몇 마디인가 (D-0097).
+"""섹션당 마디 수는 `arrangement`에서 온다 (D-0111).
+
+D-0097이 여기 같은 이름의 상수를 만들었는데 **편곡에 이미 있었고 값이 4로 달랐다.**
+화성은 64마디를 뽑고 편곡은 24마디만 썼다. **한 이름이 두 값이면 둘 중 하나는
+반드시 틀린다.**
 
 **대중가요의 관례이지 측정값이 아니다.** 8마디 또는 16마디가 표준이고 짧은 쪽을
 골랐다. 근거가 생기면 새 번호로 바꾼다.

@@ -28,7 +28,13 @@ from hathor.domain.services.song_structure import REPEATED, StructurePattern
 from hathor.domain.value_objects.chord_progression import ChordProgression
 
 BEATS_PER_BAR = 4
-BARS_PER_SECTION = 4
+BARS_PER_SECTION = 8
+"""섹션 하나가 몇 마디인가.
+
+**여기 하나만 둔다** (D-0111). 파이프라인에도 같은 이름의 상수가 4가 아닌 8로 따로
+있었고, 그래서 화성은 64마디를 뽑는데 편곡은 24마디만 썼다. **한 이름이 두 값이면
+둘 중 하나는 반드시 틀린다.**
+"""
 TICKS_PER_BAR = TICKS_PER_BEAT * BEATS_PER_BAR
 
 
@@ -50,8 +56,20 @@ def arrange(
     unique_index = 0
     bar_index = 0
 
+    # **진행이 충분히 길면 섹션마다 겹치지 않는 블록을 읽는다** (D-0111).
+    #
+    # 예전에는 한 칸씩 밀어 읽었다. 진행이 섹션과 같은 길이(4마디 진행·4마디 섹션)일
+    # 때 순차 블록이 전부 같아지는 것을 고친 자리였고 그때는 옳았다. **진행이
+    # 64마디가 된 지금은 그 전제가 사라졌고**, 한 칸씩 밀면 6섹션이 진행의 앞
+    # 일곱 마디만 읽는다 — **배열 조건화가 소리에 거의 안 닿는다** (O-32 · D-0110).
+    #
+    # 짧은 진행에서는 예전처럼 한 칸씩 민다. **고칠 것을 고치되 고쳤던 것을 되돌리지
+    # 않는다.**
+    unique_total = sum(1 for label in pattern.labels if label != REPEATED)
+    stride = bars_per_section if progression.length >= bars_per_section * (unique_total + 1) else 1
+
     for label in pattern.labels:
-        rotation = 0 if label == REPEATED else unique_index + 1
+        rotation = 0 if label == REPEATED else (unique_index + 1) * stride
         if label != REPEATED:
             unique_index += 1
         for offset in range(bars_per_section):
