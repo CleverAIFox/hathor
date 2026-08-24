@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -3048,12 +3048,46 @@ def load_key_margins(path: Path) -> dict[str, float]:
     return found
 
 
+def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[object]]) -> list[str]:
+    """머리글과 값을 **같은 열 명세 하나에서** 그린다 (D-0092).
+
+    `columns`는 `(이름, 형식)` 목록이다. 형식은 `>10.4f` 같은 형식 명세이며 폭을
+    포함한다. 머리글은 같은 폭으로 정렬한다.
+
+    **머리글 문자열과 행 문자열을 따로 쓰다가 한쪽만 고쳐 이름표와 값이 어긋났다.**
+    실제로 `eval chromatic-origin`이 그 상태로 실측을 한 번 냈다 — 값은 옳았고
+    이름표가 두 칸 밀려 있었다. **여기서는 갈릴 수 없다.**
+    """
+    for name, _ in columns:
+        # **공백이 들어가면 표를 다시 읽을 수 없다.** 검사도 사람도 못 읽는다.
+        if any(ch.isspace() for ch in name):
+            raise ValueError(f"열 이름에 공백을 넣지 않는다: {name!r}")
+    widths: list[int] = []
+    for _, spec in columns:
+        digits = "".join(ch for ch in spec.split(".")[0] if ch.isdigit())
+        widths.append(int(digits) if digits else 10)
+    aligns = [spec[0] if spec[:1] in "<>^" else ">" for _, spec in columns]
+    header = "".join(
+        f"{name:{align}{width}}"
+        for (name, _), align, width in zip(columns, aligns, widths, strict=True)
+    )
+    lines = [header, "-" * len(header.encode("utf-8"))]
+    for row in rows:
+        if len(row) != len(columns):
+            raise ValueError(f"열 수가 머리글과 다르다: {len(row)} vs {len(columns)}")
+        lines.append(
+            "".join(f"{value:{spec}}" for value, (_, spec) in zip(row, columns, strict=True))
+        )
+    return lines
+
+
 def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
     """반음계 질량이 **치환(조성 오차)인지 첨가(차용화음)인지** 잰다 (O-33 · D-0089).
 
     사전 벡터만 읽는다. 생성도 음원도 GPU도 필요 없다.
     """
     from hathor.application.evaluate_chromatic_origin import (
+        MODAL_MIXTURE,
         SUBSTITUTION_PAIRS,
         EvaluateChromaticOrigin,
         OriginCondition,
@@ -3090,24 +3124,41 @@ def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
         groups.append(("추정 불확실", [ReferencePrior(n, table[n]) for _, n in ranked[:half]]))
 
     pairs = ", ".join(f"{chromatic}<-{scale}" for chromatic, scale in SUBSTITUTION_PAIRS[key.mode])
+    mixture_cells = ", ".join(str(cell) for cell in MODAL_MIXTURE[key.mode])
     print(
         f"곡 {len(everything)}개 · {key} · 출처 {source}\n사전: {store.name}\n"
         f"치환 짝 (반음계<-온음계): {pairs}\n"
     )
-    print(
-        f"{'묶음':<12}{'곡':>6}{'초과':>10}{'표준오차':>10}{'t':>8}{'눈금선':>10}{'온음계질량':>12}"
+    print(f"단조 차용 삼총사: {mixture_cells} (D-0091)\n")
+    columns = (
+        ("묶음", "<12"),
+        ("곡", ">6"),
+        ("치환초과", ">11.4f"),
+        ("t", ">8.2f"),
+        ("눈금선", ">10.4f"),
+        ("뭉침대비", ">11.4f"),
+        ("t", ">8.2f"),
+        ("온음계질량", ">12.4f"),
     )
-    print("-" * 70)
     results: list[tuple[str, OriginReport]] = []
+    rows: list[tuple[object, ...]] = []
     for name, subset in groups:
         report = harness.run(subset, name)
         results.append((name, report))
-        print(
-            f"{name:<12}{report.reference_count:>6}{report.excess:>11.4f}"
-            f"{report.t_statistic:>8.2f}{report.rotated_excess:>10.4f}"
-            f"{report.mixture_excess:>11.4f}{report.mixture_t:>8.2f}"
-            f"{report.scale_mass:>12.4f}"
+        rows.append(
+            (
+                name,
+                report.reference_count,
+                report.excess,
+                report.t_statistic,
+                report.rotated_excess,
+                report.mixture_excess,
+                report.mixture_t,
+                report.scale_mass,
+            )
         )
+    for line in render_table(columns, rows):
+        print(line)
     whole = results[0][1]
     verdict = (
         "**조성 추정 오차가 지배한다**"
@@ -3117,7 +3168,12 @@ def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
     mixture_verdict = (
         "**단조 차용이 있다**" if whole.modal_mixture_present else "삼총사가 안 뭉친다"
     )
-    print(f"\n치환 판정: {verdict}\n뭉침 판정: {mixture_verdict}\n")
+    print(
+        f"\n치환 판정: {verdict}"
+        f"\n뭉침 판정: {mixture_verdict}"
+        f"  (대비 {whole.mixture_excess:+.4f} ±{whole.mixture_standard_error:.4f},"
+        f" t = {whole.mixture_t:.2f})\n"
+    )
     print("--- 읽는 법 ---")
     print("**오차는 치환이고 차용은 첨가다.** 조성 추정이 5도 틀리면 ♭7이 오르면서")
     print("이끔음이 **사라진다.** 진짜 믹솔리디안 차용은 ♭7이 오르되 이끔음이 남는다 —")
@@ -3185,19 +3241,37 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
         f"  그중 온음계 음 {scale_cells} — **반음계음이 아니다.** 화음 근음에서만 빠졌다\n"
         f"  진짜 반음계 음 {chromatic_cells}\n"
     )
-    header = f"{'선':<10}{'비음계 몫':>12}{'표준오차':>10}{'질량':>10}"
-    print(header + f"{'몫/질량':>11}{'제한 후/전':>12}{'순위상관':>10}")
-    print("-" * 75)
-    for line in report.lines:
-        print(
-            f"{line.name:<10}{line.mean_share:>12.4f}{line.standard_error:>10.4f}"
-            f"{line.mean_mass:>10.4f}{line.share_per_mass:>11.4f}"
-            f"{line.survival:>12.4f}{line.rank_agreement:>10.3f}"
-        )
-    print(f"\n{'선':<10}{'온음계 몫':>12}{'반음계 몫':>12}  (버리는 칸을 쪼갠다 · D-0085)")
-    print("-" * 50)
-    for line in report.lines:
-        print(f"{line.name:<10}{line.mean_scale_share:>12.4f}{line.mean_chromatic_share:>12.4f}")
+    columns = (
+        ("선", "<10"),
+        ("비음계몫", ">12.4f"),
+        ("표준오차", ">10.4f"),
+        ("질량", ">10.4f"),
+        ("몫/질량", ">11.4f"),
+        ("제한후/전", ">12.4f"),
+        ("순위상관", ">10.3f"),
+    )
+    for line in render_table(
+        columns,
+        [
+            (
+                item.name,
+                item.mean_share,
+                item.standard_error,
+                item.mean_mass,
+                item.share_per_mass,
+                item.survival,
+                item.rank_agreement,
+            )
+            for item in report.lines
+        ],
+    ):
+        print(line)
+    print("\n(버리는 칸을 쪼갠다 · D-0085)")
+    for line in render_table(
+        (("선", "<10"), ("온음계몫", ">12.4f"), ("반음계몫", ">12.4f")),
+        [(item.name, item.mean_scale_share, item.mean_chromatic_share) for item in report.lines],
+    ):
+        print(line)
     verdict = (
         "**버리는 칸이 다이어토닉보다 더 곡 고유하다**"
         if report.off_scale_exceeds_matched

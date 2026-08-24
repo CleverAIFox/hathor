@@ -264,3 +264,70 @@ def test_신뢰도를_읽는다(tmp_path):
     margins = load_key_margins(path)
     assert len(margins) == 5
     assert all(value == pytest.approx(0.2) for value in margins.values())
+
+
+# ------------------------------------------------------------------ 표 그리기 (D-0092)
+
+
+def _tables(out: str) -> list[list[list[str]]]:
+    """구분선을 기준으로 **표 하나씩** 끊는다. 한 리포트에 표가 여럿이다."""
+    lines = out.splitlines()
+    found: list[list[list[str]]] = []
+    for index, line in enumerate(lines):
+        if set(line.strip()) != {"-"} or index == 0:
+            continue
+        block = [lines[index - 1].split()]
+        cursor = index + 1
+        while cursor < len(lines) and lines[cursor].strip():
+            block.append(lines[cursor].split())
+            cursor += 1
+        found.append(block)
+    return found
+
+
+def test_표_그리기가_열_수를_강제한다():
+    """**머리글과 값을 따로 쓰다가 이름표가 두 칸 밀린 채 실측을 냈다** (D-0092)."""
+    from hathor.interfaces.cli.main import render_table
+
+    with pytest.raises(ValueError, match="열 수가 머리글과 다르다"):
+        render_table((("가", "<6"), ("나", ">6.2f")), [("하나", 1.0, 2.0)])
+
+
+def test_표_그리기가_머리글을_같은_폭으로_낸다():
+    from hathor.interfaces.cli.main import render_table
+
+    lines = render_table((("가", "<6"), ("나", ">8.2f")), [("하나", 1.0)])
+    assert len(lines) == 3
+    assert lines[0].startswith("가")
+    assert lines[2].strip().endswith("1.00")
+
+
+@pytest.mark.parametrize("command", ["degree-restriction", "chromatic-origin"])
+def test_리포트_표의_이름표와_값이_안_어긋난다(tmp_path, capsys, command):
+    """**이름표 수와 값 수가 같아야 한다.** 하나만 고치면 조용히 어긋난다."""
+    path = write_keys(tmp_path / "keys.jsonl", count=60)
+    extra = ["--pairs", "20"] if command == "degree-restriction" else []
+    assert main(["eval", command, "--priors", str(path), *extra]) == 0
+    tables = _tables(capsys.readouterr().out)
+    assert tables, "표를 못 찾았다"
+    for block in tables:
+        header, rows = block[0], block[1:]
+        assert rows, f"{command}: 값이 없는 표가 있다"
+        for row in rows:
+            assert len(row) == len(header), (
+                f"{command}: 값 {len(row)}개 대 이름표 {len(header)}개 — {header} / {row}"
+            )
+
+
+def test_삼총사_칸을_리포트에_적는다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", count=60)
+    assert main(["eval", "chromatic-origin", "--priors", str(path)]) == 0
+    assert "단조 차용 삼총사: 3, 8, 10" in capsys.readouterr().out
+
+
+def test_열_이름에_공백을_금지한다():
+    """**공백이 들어가면 표를 다시 읽을 수 없다** (D-0092)."""
+    from hathor.interfaces.cli.main import render_table
+
+    with pytest.raises(ValueError, match="공백"):
+        render_table((("가 나", "<6"),), [("하나",)])
