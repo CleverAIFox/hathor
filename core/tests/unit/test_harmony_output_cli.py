@@ -555,3 +555,50 @@ def test_그_스템이_없는_폴더는_건너뛴다(tmp_path):
     write_series(root / "keys-20260823T000000Z.series", ["곡.flac"])
     assert find_series_root(tmp_path, "other") is not None
     assert find_series_root(tmp_path, "bass") is None
+
+
+def test_배열_판정을_낸다(tmp_path, capsys):
+    """`eval harmony-order` 배선 (O-32 · D-0112)."""
+    path = write_keys(tmp_path / "keys.jsonl", count=12)
+    names = [f"아티스트{index % 7}-곡{index:03d}.flac" for index in range(12)]
+    write_series(tmp_path / "keys-20260823T000000Z.series", names)
+    assert (
+        main(
+            [
+                "eval",
+                "harmony-order",
+                "--priors",
+                str(path),
+                "--series",
+                str(tmp_path / "keys-20260823T000000Z.series"),
+                "--seeds",
+                "20",
+                "--bars",
+                "32",
+            ]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "전이 없음" in out and "전이 있음" in out
+    assert "other-self" in out and "판정" in out
+
+
+def test_전이_사전이_없으면_비정상_종료한다(tmp_path, capsys):
+    path = write_keys(tmp_path / "keys.jsonl", count=12)
+    empty = tmp_path / "keys-20260823T000000Z.series"
+    empty.mkdir(parents=True)
+    assert main(["eval", "harmony-order", "--priors", str(path), "--series", str(empty)]) == 1
+    assert "둘 다 있는 곡이 0개다" in capsys.readouterr().err
+
+
+def test_빈_전이_사전은_뺀다(tmp_path):
+    """**없는 것을 조건으로 쓰지 않는다** (D-0107)."""
+    from hathor.interfaces.cli.main import load_transition_priors
+
+    root = tmp_path / "series"
+    root.mkdir()
+    stamp = __import__("hashlib").sha1("한도수곡.flac".encode()).hexdigest()[:16]
+    flat = np.tile(np.eye(DEGREES)[0], (8, 1))
+    np.savez_compressed(root / f"{stamp}-other.npz", series=flat, source_key="한도수곡.flac")
+    assert load_transition_priors(root, "other", ["한도수곡.flac"]) == {}

@@ -521,6 +521,18 @@ def build_parser() -> argparse.ArgumentParser:
     drift.add_argument("--right", default="bass", help="둘째 관측. mix면 전체 믹스 크로마")
     drift.add_argument("--seed", type=int, default=20260822, help="귀무선·부트스트랩 시드")
 
+    order = eval_sub.add_parser(
+        "harmony-order", help="출력의 배열이 그 참조곡을 닮았는가 (O-32 · D-0112)"
+    )
+    order.add_argument("--priors", type=resolve_path, default=None, help="keys.jsonl")
+    order.add_argument("--series", type=resolve_path, default=None, help="시계열 폴더")
+    order.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="사전 출처")
+    order.add_argument("--songs", type=int, default=200, help="참조곡 수")
+    order.add_argument("--seeds", type=int, default=200, help="시드 수")
+    order.add_argument("--bars", type=int, default=64, help="마디 수")
+    order.add_argument("--key", default="C major", help="출력 조성. 고정한다")
+    order.add_argument("--seed", type=int, default=20260822, help="추첨 시드")
+
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
         "--root",
@@ -725,6 +737,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_chromatic_origin(args)
         if args.eval_command == "time-drift":
             return _run_eval_time_drift(args)
+        if args.eval_command == "harmony-order":
+            return _run_eval_harmony_order(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "keys":
@@ -3509,6 +3523,123 @@ def load_drift_observations(path: Path, left_set: str, right_set: str) -> list[D
                 )
             found.append(DriftObservation(str(name), rotated["left"], rotated["right"]))
     return found
+
+
+def load_transition_priors(
+    root: Path, stem_set: str, source_keys: Sequence[str]
+) -> dict[str, tuple[tuple[float, ...], ...]]:
+    """곡별 전이 사전을 시계열 폴더에서 읽는다 (O-32 · D-0112).
+
+    **빈 사전은 뺀다** (D-0107). 창이 둘 미만이거나 한 도수만 나온 곡이며,
+    **없는 것을 조건으로 쓰지 않는다.**
+    """
+    import hashlib
+
+    import numpy as np
+
+    from hathor.domain.services.transition_prior import is_empty, transition_prior
+
+    found: dict[str, tuple[tuple[float, ...], ...]] = {}
+    for source_key in source_keys:
+        stamp = hashlib.sha1(source_key.encode("utf-8")).hexdigest()[:16]
+        path = root / f"{stamp}-{stem_set}.npz"
+        if not path.exists():
+            continue
+        with np.load(path, allow_pickle=False) as bundle:
+            series = np.asarray(bundle["series"], dtype=np.float64)
+        matrix = transition_prior(series)
+        if not is_empty(matrix):
+            found[source_key] = tuple(tuple(float(v) for v in row) for row in matrix)
+    return found
+
+
+def _run_eval_harmony_order(args: argparse.Namespace) -> int:
+    """출력의 배열이 **그 참조곡의** 배열을 닮았는지 잰다 (O-32 · D-0112).
+
+    **쌍 거리로는 안 된다.** 전이 사전을 주기만 하면 두 출력이 순서에서 달라진다 —
+    곡 짝을 뒤섞은 사전을 줘도 그렇다. **"쓰이고 있다"와 "맞는 것을 쓴다"는 다르다.**
+    """
+    from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
+    from hathor.application.evaluate_order_conditioning import (
+        EvaluateOrderConditioning,
+        references_from,
+    )
+    from hathor.shared.config.paths import repo_root as _root
+
+    store = args.priors
+    if store is None:
+        store = find_stem_prior_store(_root(), args.stem_set)
+    series_root = args.series
+    if series_root is None:
+        series_root = find_series_root(_root(), args.stem_set)
+    if store is None or not store.exists() or series_root is None:
+        print("사전 또는 시계열 산출물을 찾지 못했다.", file=sys.stderr)
+        return 1
+
+    table = load_degree_priors(store, args.stem_set)
+    names = sorted(table)[: args.songs]
+    priors = [ReferencePrior(name, table[name]) for name in names]
+    transitions = load_transition_priors(series_root, args.stem_set, names)
+    references = references_from(priors, transitions)
+    if len(references) < 2:
+        print(
+            f"도수 사전과 전이 사전이 둘 다 있는 곡이 {len(references)}개다.",
+            file=sys.stderr,
+        )
+        return 1
+
+    condition = OutputCondition(
+        seed_count=args.seeds,
+        bar_count=args.bars,
+        key=_parse_key(args.key),
+        seed=args.seed,
+    )
+    harness = EvaluateOrderConditioning(condition)
+    print(
+        f"곡 {len(references)}개 · 시드 {condition.seed_count} · {condition.bar_count}마디"
+        f" · {condition.key} · 출처 {args.stem_set}\n"
+        f"사전: {store.name} · 시계열: {series_root.name}\n"
+    )
+    rows: list[tuple[object, ...]] = []
+    reports = {}
+    for label, use in (("전이 없음", False), ("전이 있음", True)):
+        report = harness.run(references, use_transition=use)
+        reports[label] = report
+        rows.append(
+            (
+                label,
+                report.mean_self,
+                report.mean_other,
+                report.gap,
+                report.standard_error,
+                report.t_statistic,
+                report.win_rate,
+            )
+        )
+    for text in render_table(
+        (
+            ("선", "<10"),
+            ("self", ">9.4f"),
+            ("other", ">9.4f"),
+            ("other-self", ">12.4f"),
+            ("표준오차", ">10.4f"),
+            ("t", ">8.2f"),
+            ("곡승률", ">9.1%"),
+        ),
+        rows,
+    ):
+        print(text)
+    verdict = reports["전이 있음"].carries_reference_order
+    print(f"\n판정: **{'출력이 참조곡의 배열을 담는다' if verdict else '안 담는다'}**\n")
+    print("--- 읽는 법 ---")
+    print("**쌍 거리로는 안 된다.** 전이 사전을 주기만 하면 두 출력이 순서에서 달라진다 —")
+    print('곡 짝을 뒤섞은 사전을 줘도 그렇다. **"쓰이고 있다"와 "맞는 것을 쓴다"는 다르다**')
+    print("(어휘를 넓히기만 해도 거리가 +0.054 공짜로 오른 D-0094와 같은 함정이다).")
+    print("**`self`는 출력의 전이와 그 곡의 전이 사전의 거리**이고 `other`는 다른 곡의 것이다.")
+    print("D-0062가 화성 어휘에서 쓴 구조를 그대로 쓴다.")
+    print("**`전이 없음` 줄이 음성 대조다** — 순서를 시드가 정하면 둘이 같아야 한다.")
+    print("**문턱이 t > 3이다.** 이 판정이 O-32를 닫으므로 승인 문턱이다 (D-0098).")
+    return 0
 
 
 def _run_eval_time_drift(args: argparse.Namespace) -> int:

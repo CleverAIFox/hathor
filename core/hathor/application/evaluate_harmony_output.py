@@ -82,6 +82,15 @@ from hathor.engines.compose.harmony_generator import (
 )
 
 Histogram = np.ndarray[tuple[int], np.dtype[np.float64]]
+"""창 하나의 12칸 또는 도수 히스토그램. **1차원이다.**"""
+
+Grid = np.ndarray[tuple[int, int], np.dtype[np.float64]]
+"""전이 행렬 같은 2차원.
+
+**1차원 별칭을 2차원에 쓰다가 `make check`가 리전에서만 빨갛게 뜬 적이 있다**
+(D-0108). 기기마다 넘파이 판이 달라 한쪽에서만 통과한다 — **이름이 맞으면 판이
+관대하든 아니든 잡는다.**
+"""
 
 DEFAULT_SEED_COUNT = 1000
 DEFAULT_BAR_COUNT = 8
@@ -171,7 +180,7 @@ def bigram_matrix(
     vocabulary: Vocabulary = Vocabulary.BASE,
     *,
     drop_diagonal: bool = False,
-) -> Histogram:
+) -> Grid:
     """이웃한 두 마디의 도수 쌍 분포 (O-32 · D-0102).
 
     **도수 히스토그램은 순서에 눈이 없다** — `I V vi IV`와 `IV vi V I`의 거리가 0이다.
@@ -187,11 +196,11 @@ def bigram_matrix(
         # 유지하는지는 자르는 방식이 정하고, 그것이 대각선을 통째로 부풀린다.
         np.fill_diagonal(matrix, 0.0)
     total = float(matrix.sum())
-    result: Histogram = matrix / total if total > 0 else matrix
+    result: Grid = matrix / total if total > 0 else matrix
     return result
 
 
-def total_variation(left: Histogram, right: Histogram) -> float:
+def total_variation(left: Histogram | Grid, right: Histogram | Grid) -> float:
     """전변동 거리. 0~1이며 **`TV * 마디 수`가 옮겨야 하는 마디 수다.**"""
     return 0.5 * float(np.abs(left - right).sum())
 
