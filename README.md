@@ -27,7 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **O-32 게이트 실측 (D-0098).** 순서 조건화는 시계열 재추출이 필요한데 **스템 캐시가 없어 Demucs를 처음부터 다시 돈다.** 게이트 없이 전량을 도는 것은 D-0058 계열이므로 **표본 200곡으로 먼저 묻는다** — `ingest keys --halves --separate --limit 200` → `eval time-drift` |
+| **다음 작업** | **O-32 게이트 재실측 (D-0099).** 첫 실측이 t=13.64로 통과했으나 **못 읽는다** — `mix`와 `other`가 오디오를 공유해 상관이 부풀려진다. **한계를 미리 적어 둔 덕에 전량 재추출을 승인하지 않았다.** `bass`를 낱개로 더했고 `other` 대 `bass`로 표본을 다시 뽑는다 |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -259,8 +259,12 @@ uv run python -m hathor.cli eval degree-restriction --key "A minor"
 ```bash
 cd core
 uv run python -m hathor.cli ingest keys --halves --separate --limit 200
-uv run python -m hathor.cli eval time-drift
+uv run python -m hathor.cli eval time-drift --left other --right bass
 ```
+
+**두 관측이 겹치면 안 된다** (D-0099). `mix`와 `other`는 오디오를 공유해 잡음도 함께
+움직이고 상관이 부풀려진다 — 첫 실측 0.5572가 **그 겹침만으로 설명 가능한 값이었다.**
+`stems_overlap`이 겹치는 쌍을 거부한다.
 
 **두 독립 관측이 같은 방향을 가리키는가**를 본다. 전체 믹스와 스템은 같은 곡의 두
 관측이고, 추정 잡음은 갈리지만 진짜 시간 변화는 둘 다에 나타난다. 귀무선은 **곡 짝을

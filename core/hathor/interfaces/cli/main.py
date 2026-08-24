@@ -9,7 +9,7 @@ import time
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from hathor.application.evaluate_fusion import EvaluateFusion
 from hathor.application.evaluate_retrieval import (
@@ -64,8 +64,13 @@ STEM_SETS: dict[str, tuple[str, ...]] = {
     "other": ("other",),
     "other+bass": ("other", "bass"),
     "other+bass+vocals": ("other", "bass", "vocals"),
+    "bass": ("bass",),
+    "vocals": ("vocals",),
 }
 """분리 후 재 볼 스템 조합 (O-27 (a) · D-0073).
+
+**앞 셋은 드럼을 뺀 것이 공통점이다.** `bass`와 `vocals`는 D-0099가 **겹치지 않는
+두 관측**을 만들려고 더한 것이며 화성 사전으로 쓰라고 둔 것이 아니다.
 
 **드럼을 뺀 것이 공통점이다.** 타악은 음정이 없어 12칸에 고르게 퍼진 에너지를 내고,
 그것이 크로마 대비를 K-K 프로파일의 30%로 누른다는 것이 (a)의 가설이다.
@@ -492,7 +497,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="`ingest keys --halves --separate`가 만든 keys.jsonl",
     )
-    drift.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="둘째 관측으로 쓸 스템")
+    drift.add_argument(
+        "--left", default="other", help="첫째 관측. **둘째와 겹치면 안 된다** (D-0099)"
+    )
+    drift.add_argument("--right", default="bass", help="둘째 관측. mix면 전체 믹스 크로마")
     drift.add_argument("--seed", type=int, default=20260822, help="귀무선·부트스트랩 시드")
 
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
@@ -3235,13 +3243,40 @@ def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[obj
     return lines
 
 
-def load_drift_observations(path: Path, stem_set: str) -> list[DriftObservation]:
-    """반쪽 크로마 둘을 **같은 회전으로** 읽어 변화 벡터를 만든다 (D-0098).
+def stem_parts(name: str) -> frozenset[str]:
+    """그 이름이 어떤 원천 스템을 담는가. `mix`는 전부다."""
+    if name == MIX_SOURCE:
+        return frozenset({"other", "bass", "vocals", "drums"})
+    return frozenset(STEM_SETS.get(name, ()))
+
+
+def stems_overlap(left: str, right: str) -> bool:
+    """두 관측이 오디오를 공유하는가 (D-0099).
+
+    **겹치면 잡음도 함께 움직여 상관이 부풀려진다.** `mix`와 `other`가 그랬고
+    실측 0.5572가 그 겹침만으로 설명 가능한 값이었다 — **통과를 못 읽었다.**
+    """
+    return bool(stem_parts(left) & stem_parts(right))
+
+
+def _halves(row: dict[str, object], name: str) -> tuple[object, object]:
+    """그 출처의 앞뒤 반쪽 크로마. 없으면 `(None, None)`."""
+    if name == MIX_SOURCE:
+        return row.get("chroma_head"), row.get("chroma_tail")
+    bundle = row.get("stems")
+    found = bundle.get(name) if isinstance(bundle, dict) else None
+    if not isinstance(found, dict):
+        return None, None
+    return found.get("head"), found.get("tail")
+
+
+def load_drift_observations(path: Path, left_set: str, right_set: str) -> list[DriftObservation]:
+    """반쪽 크로마 둘을 **같은 회전으로** 읽어 변화 벡터를 만든다 (D-0098 · D-0099).
 
     **으뜸음은 앞반쪽 추정을 쓴다** — 곡 전체에서 추정하면 뒷반쪽이 회전 정렬에
-    관여한다 (D-0062). 두 출처가 같은 회전을 써야 비교가 성립한다.
+    관여한다 (D-0062). 두 관측이 같은 회전을 써야 비교가 성립한다.
     """
-    from hathor.application.evaluate_time_drift import DriftObservation, drift_vector
+    from hathor.application.evaluate_time_drift import drift_vector
     from hathor.domain.services.harmony_prior import merge_degree_priors
     from hathor.domain.value_objects.key import PITCH_CLASSES
 
@@ -3254,11 +3289,7 @@ def load_drift_observations(path: Path, stem_set: str) -> list[DriftObservation]
                 row = json.loads(line)
             except ValueError:
                 continue
-            stems = ((row.get("stems") or {}).get(stem_set)) or {}
-            parts = {
-                "mix": (row.get("chroma_head"), row.get("chroma_tail")),
-                "stem": (stems.get("head"), stems.get("tail")),
-            }
+            parts = {"left": _halves(row, left_set), "right": _halves(row, right_set)}
             key_text = row.get("key_head") or row.get("key")
             name = row.get("source_key")
             if name is None or key_text is None:
@@ -3270,8 +3301,9 @@ def load_drift_observations(path: Path, stem_set: str) -> list[DriftObservation]
                 continue
             index = PITCH_CLASSES.index(tonic)
             rotated: dict[str, tuple[float, ...]] = {}
-            for side, (head, tail) in parts.items():
-                assert head is not None and tail is not None
+            for side, (raw_head, raw_tail) in parts.items():
+                head = cast("Sequence[float]", raw_head)
+                tail = cast("Sequence[float]", raw_tail)
                 rotated[side] = drift_vector(
                     tuple(
                         float(v)
@@ -3282,7 +3314,7 @@ def load_drift_observations(path: Path, stem_set: str) -> list[DriftObservation]
                         for v in merge_degree_priors([(tuple(float(x) for x in tail), index)])
                     ),
                 )
-            found.append(DriftObservation(str(name), rotated["mix"], rotated["stem"]))
+            found.append(DriftObservation(str(name), rotated["left"], rotated["right"]))
     return found
 
 
@@ -3295,24 +3327,33 @@ def _run_eval_time_drift(args: argparse.Namespace) -> int:
     from hathor.application.evaluate_time_drift import GATE_T, EvaluateTimeDrift
     from hathor.shared.config.paths import repo_root as _root
 
+    if stems_overlap(args.left, args.right):
+        print(
+            f"`{args.left}`과 `{args.right}`이 오디오를 공유한다. "
+            "**겹치는 두 관측은 잡음도 함께 움직여 상관이 부풀려진다** (D-0099).",
+            file=sys.stderr,
+        )
+        return 2
+
     store = args.priors
     if store is None:
-        store = find_stem_prior_store(_root(), args.stem_set)
+        store = find_stem_prior_store(_root(), args.left)
     if store is None or not store.exists():
         print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
         return 1
 
-    observations = load_drift_observations(store, args.stem_set)
+    observations = load_drift_observations(store, args.left, args.right)
     if len(observations) < 10:
         print(
             f"반쪽 크로마가 두 출처에 다 있는 곡이 {len(observations)}개다. "
-            f"`ingest keys --halves --separate --limit 200`으로 표본을 먼저 뽑는다.",
+            f"`ingest keys --halves --separate --limit 200`으로 표본을 먼저 뽑는다. "
+            f"`{args.left}`과 `{args.right}`이 둘 다 있어야 한다.",
             file=sys.stderr,
         )
         return 1
 
-    report = EvaluateTimeDrift(seed=args.seed).run(observations, args.stem_set)
-    print(f"곡 {report.song_count}개 · 출처 mix 대 {args.stem_set}\n사전: {store.name}\n")
+    report = EvaluateTimeDrift(seed=args.seed).run(observations, args.left)
+    print(f"곡 {report.song_count}개 · 출처 {args.left} 대 {args.right}\n사전: {store.name}\n")
     for text in render_table(
         (
             ("실측", ">10.4f"),
@@ -3347,8 +3388,11 @@ def _run_eval_time_drift(args: argparse.Namespace) -> int:
     print("**문턱이 t > 3으로 높다.** 이 게이트가 통과하면 전량 재추출과 시계열 파이프라인을")
     print("승인한다 — **승인 문턱은 관측 문턱보다 높아야 한다** (D-0095에서 51%를 통과로")
     print("읽을 뻔한 뒤 정한 규율이다).")
-    print("**못 가르는 것**: 두 출처가 같은 오디오를 공유한다. 뒷반쪽이 그냥 더 시끄러운 식의")
-    print("곡별 인공물이 있으면 둘 다에 나타나며 그것은 화성이 아니다.")
+    print("**두 관측이 겹치면 안 된다** (D-0099). `mix`와 `other`는 오디오를 공유해 잡음도")
+    print("함께 움직이고 상관이 부풀려진다 — 실측 0.5572가 그 겹침만으로 설명 가능했다.")
+    print("기본값 `other` 대 `bass`는 서로 다른 악기이고 오디오가 겹치지 않는다.")
+    print("**그래도 못 가르는 것**: 뒷반쪽이 그냥 더 시끄러운 식의 곡별 인공물은 두 스템에")
+    print("함께 나타날 수 있고 그것은 화성이 아니다.")
     return 0
 
 

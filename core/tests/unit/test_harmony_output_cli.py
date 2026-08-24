@@ -418,11 +418,12 @@ def write_halves(path, *, count=40, seed=13):
                 "chroma_head": [round(float(v), 6) for v in base],
                 "chroma_tail": [round(float(v), 6) for v in base * step],
                 "stems": {
-                    "other": {
+                    name: {
                         "full": [round(float(v), 6) for v in base],
                         "head": [round(float(v), 6) for v in base],
                         "tail": [round(float(v), 6) for v in base * step],
                     }
+                    for name in ("other", "bass")
                 },
             }
             stream.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -449,7 +450,23 @@ def test_반쪽_로더가_두_출처를_같은_회전으로_읽는다(tmp_path):
     from hathor.interfaces.cli.main import load_drift_observations
 
     path = write_halves(tmp_path / "keys.jsonl", count=12)
-    found = load_drift_observations(path, "other")
+    found = load_drift_observations(path, "other", "bass")
     assert len(found) == 12
     for item in found:
         assert item.left == pytest.approx(item.right, abs=1e-9)
+
+
+def test_겹치는_두_관측을_거부한다(tmp_path, capsys):
+    """**`mix`와 `other`는 오디오를 공유한다** (D-0099). 상관이 부풀려진다."""
+    path = write_halves(tmp_path / "keys.jsonl")
+    assert main(["eval", "time-drift", "--priors", str(path), "--left", "mix"]) == 2
+    assert "오디오를 공유한다" in capsys.readouterr().err
+
+
+def test_겹침_판정이_중첩_조합도_잡는다():
+    from hathor.interfaces.cli.main import stems_overlap
+
+    assert stems_overlap("other", "other+bass")
+    assert stems_overlap("mix", "bass")
+    assert not stems_overlap("other", "bass")
+    assert not stems_overlap("other", "vocals")
