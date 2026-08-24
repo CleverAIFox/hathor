@@ -166,7 +166,11 @@ def degree_histogram(
 
 
 def bigram_matrix(
-    progression: Progression, mode: Mode, vocabulary: Vocabulary = Vocabulary.BASE
+    progression: Progression,
+    mode: Mode,
+    vocabulary: Vocabulary = Vocabulary.BASE,
+    *,
+    drop_diagonal: bool = False,
 ) -> Histogram:
     """이웃한 두 마디의 도수 쌍 분포 (O-32 · D-0102).
 
@@ -178,6 +182,10 @@ def bigram_matrix(
     matrix = np.zeros((len(pool), len(pool)), dtype=np.float64)
     for left, right in pairwise(progression):
         matrix[index[left], index[right]] += 1.0
+    if drop_diagonal:
+        # **자기 전이를 빼면 구간 길이에 불변이다** (D-0103). 같은 화음을 몇 구간
+        # 유지하는지는 자르는 방식이 정하고, 그것이 대각선을 통째로 부풀린다.
+        np.fill_diagonal(matrix, 0.0)
     total = float(matrix.sum())
     result: Histogram = matrix / total if total > 0 else matrix
     return result
@@ -217,7 +225,15 @@ class OutputLine:
     limits: tuple[float, ...]
     """쌍마다 사전 가중치 거리. 무한 마디 극한이다."""
     transitions: tuple[float, ...] = ()
-    """쌍마다 시드 평균 전이 행렬 거리 (O-32 · D-0102)."""
+    """쌍마다 시드 평균 전이 행렬 거리 (O-32 · D-0102). **대각선을 뺀 값이다** (D-0103).
+
+    자기 전이를 넣으면 **구간을 어떻게 자르느냐가 값을 정한다** — 잘게 자르면
+    대각선이 부풀고 크게 자르면 화음이 섞인다. 합성에서 구간당 화음을 1에서 8로
+    바꾸자 전체 거리가 0.6122에서 0.2855로 반토막 났고, **대각선을 뺀 값은 0.6063으로
+    한 자리도 안 움직였다.**
+
+    그래서 **재료를 마디에 맞출 필요가 없다** — 박자 추정을 안 해도 된다.
+    """
     transition_nulls: tuple[float, ...] = ()
     """**같은 치환을 두 진행에 적용한** 귀무선.
 
@@ -497,8 +513,18 @@ class EvaluateHarmonyOutput:
                         np.mean(
                             [
                                 total_variation(
-                                    bigram_matrix(a, settings.key.mode, settings.vocabulary),
-                                    bigram_matrix(b, settings.key.mode, settings.vocabulary),
+                                    bigram_matrix(
+                                        a,
+                                        settings.key.mode,
+                                        settings.vocabulary,
+                                        drop_diagonal=True,
+                                    ),
+                                    bigram_matrix(
+                                        b,
+                                        settings.key.mode,
+                                        settings.vocabulary,
+                                        drop_diagonal=True,
+                                    ),
                                 )
                                 for a, b in zip(first, second, strict=True)
                             ]
@@ -514,11 +540,13 @@ class EvaluateHarmonyOutput:
                                         tuple(a[i] for i in order),
                                         settings.key.mode,
                                         settings.vocabulary,
+                                        drop_diagonal=True,
                                     ),
                                     bigram_matrix(
                                         tuple(b[i] for i in order),
                                         settings.key.mode,
                                         settings.vocabulary,
+                                        drop_diagonal=True,
                                     ),
                                 )
                                 for (a, b), order in zip(

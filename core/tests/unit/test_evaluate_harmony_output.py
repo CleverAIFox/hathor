@@ -416,3 +416,26 @@ def test_같은_치환_귀무선이라야_커플링이_산다():
 def test_같은_사전_두_번은_전이도_0이다():
     report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
     assert report.line("identical").mean_transition == 0.0
+
+
+def test_대각선을_빼면_구간_길이에_불변이다():
+    """**재료를 마디에 맞출 필요가 없다** (D-0103).
+
+    같은 화음을 몇 구간 유지하는지는 **자르는 방식이 정한다.** 그것이 대각선을
+    통째로 부풀리고, 대각선을 빼면 사라진다.
+    """
+    from hathor.application.evaluate_harmony_output import bigram_matrix
+
+    quick = ("I", "V", "vi", "IV")
+    held = tuple(name for name in quick for _ in range(3))
+    assert total_variation(
+        bigram_matrix(quick, Mode.MAJOR, drop_diagonal=True),
+        bigram_matrix(held, Mode.MAJOR, drop_diagonal=True),
+    ) == pytest.approx(0.0, abs=1e-9)
+    assert total_variation(bigram_matrix(quick, Mode.MAJOR), bigram_matrix(held, Mode.MAJOR)) > 0.3
+
+
+def test_대각선을_빼도_음성_대조가_선다():
+    """구간 길이 불변을 얻으면서 눈을 잃지 않았는지 본다."""
+    report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
+    assert not report.line("paired").carries_order
