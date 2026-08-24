@@ -57,7 +57,7 @@ TransitionMatrix = np.ndarray[tuple[int, int], np.dtype[np.float64]]
 
 
 def transition_prior(
-    series: Sequence[Sequence[float]], *, drop_diagonal: bool = True
+    series: Sequence[Sequence[float]] | TransitionMatrix, *, drop_diagonal: bool = True
 ) -> TransitionMatrix:
     """창별 크로마 시계열을 12x12 전이 사전으로 (D-0107).
 

@@ -48,12 +48,14 @@ def render(
     key: Key = DEFAULT_KEY,
     tempo_bpm: int = DEFAULT_TEMPO_BPM,
     harmony_prior: Sequence[float] | None = None,
+    transition_prior: Sequence[Sequence[float]] | None = None,
 ) -> tuple[bytes, dict[str, Any]]:
     """참조곡 구조를 조건으로 MIDI 바이트를 만든다 (D-0052).
 
     **처음으로 소리가 나는 경로다.** 지금까지 산출물은 지표 JSON과 검색 CLI뿐이었다.
 
-    `harmony_prior`를 주면 화성 **어휘**도 참조곡을 따른다 (O-21 · D-0063).
+    `harmony_prior`를 주면 화성 **어휘**가 참조곡을 따르고 (O-21 · D-0063),
+    `transition_prior`를 주면 **배열**도 따른다 (O-32 · D-0109).
     주지 않으면 이전과 같다 — 구조만 조건화되고 화성은 시드가 정한다.
 
     구조 → 화성 → 배치 → SMF. 시드가 같고 참조가 같으면 바이트가 같다.
@@ -61,7 +63,13 @@ def render(
     각 단계를 갈아 끼우기만 하면 된다** (GR-6.2).
     """
     pattern = generate_pattern(job.seed, references)
-    progression = generate_harmony(job.seed, key, bar_count=DEFAULT_BARS, prior=harmony_prior)
+    progression = generate_harmony(
+        job.seed,
+        key,
+        bar_count=DEFAULT_BARS,
+        prior=harmony_prior,
+        transition=transition_prior,
+    )
     notes = arrange(pattern, progression)
     data = render_smf(notes, tempo_bpm=tempo_bpm)
     summary: dict[str, Any] = {

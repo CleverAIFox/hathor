@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 
@@ -470,3 +471,87 @@ def test_겹침_판정이_중첩_조합도_잡는다():
     assert stems_overlap("mix", "bass")
     assert not stems_overlap("other", "bass")
     assert not stems_overlap("other", "vocals")
+
+
+# ------------------------------------------------------------------ 배열 배선 (O-32 · D-0110)
+
+
+def write_series(root, names, *, seed=17):
+    """곡별 시계열 npz. **이름은 `source_key`의 해시다** (D-0105)."""
+    import hashlib
+
+    root.mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(seed)
+    for name in names:
+        stamp = hashlib.sha1(name.encode("utf-8")).hexdigest()[:16]
+        order = [0, 7, 5, 9] * 12
+        series = []
+        for cell in order:
+            vector = np.full(DEGREES, 1.0)
+            vector[cell] = 60.0
+            vector = vector * rng.lognormal(0.0, 0.05, DEGREES)
+            series.append(vector / vector.sum())
+        np.savez_compressed(
+            root / f"{stamp}-other.npz",
+            series=np.asarray(series, dtype=np.float32),
+            source_key=name,
+        )
+    return root
+
+
+def test_배열_사전을_읽어_생성에_건다(tmp_path, capsys):
+    """**어휘만 걸리고 배열이 안 걸린 것을 모르면** "참조곡 반영"을 보고 둘 다 걸렸다고
+
+    읽는다 (D-0110). 리포트가 배열 출처를 따로 찍는다.
+    """
+    from hathor.domain.services.transition_prior import is_empty
+    from hathor.interfaces.cli.main import _resolve_transition_prior
+
+    names = ["아티스트-곡000.flac", "아티스트-곡001.flac"]
+    root = write_series(tmp_path / "keys-20260823T000000Z.series", names)
+    args = argparse.Namespace(transitions=True, series=root, stem_set="other")
+    matrix, source = _resolve_transition_prior(args, names)
+    assert matrix is not None and not is_empty(matrix)
+    assert "2곡" in source
+    # `I`(0) 다음에 `V`(7)가 오는 진행을 넣었다
+    assert matrix[0][7] == max(matrix[0])
+
+
+def test_배열_조건화를_안_켜면_없음이다(tmp_path):
+    from hathor.interfaces.cli.main import _resolve_transition_prior
+
+    args = argparse.Namespace(transitions=False, series=None, stem_set="other")
+    matrix, source = _resolve_transition_prior(args, ["곡.flac"])
+    assert matrix is None
+    assert source == "없음"
+
+
+def test_참조곡이_시계열에_없으면_물러난다(tmp_path, capsys):
+    """**조건화가 조용히 반쯤 걸리는 것보다 아예 안 걸리는 편이 낫다** (D-0063)."""
+    from hathor.interfaces.cli.main import _resolve_transition_prior
+
+    root = write_series(tmp_path / "keys-20260823T000000Z.series", ["있는곡.flac"])
+    args = argparse.Namespace(transitions=True, series=root, stem_set="other")
+    matrix, source = _resolve_transition_prior(args, ["없는곡.flac"])
+    assert matrix is None and source == "없음"
+    assert "시계열 저장분에 없다" in capsys.readouterr().err
+
+
+def test_일부만_있으면_알린다(tmp_path, capsys):
+    from hathor.interfaces.cli.main import _resolve_transition_prior
+
+    root = write_series(tmp_path / "keys-20260823T000000Z.series", ["있는곡.flac"])
+    args = argparse.Namespace(transitions=True, series=root, stem_set="other")
+    matrix, _ = _resolve_transition_prior(args, ["있는곡.flac", "없는곡.flac"])
+    assert matrix is not None
+    assert "2곡 중 1곡만" in capsys.readouterr().err
+
+
+def test_그_스템이_없는_폴더는_건너뛴다(tmp_path):
+    """**`other`로 뽑은 폴더에 `bass`를 찾으러 가면 0곡이 된다** (D-0100의 부류)."""
+    from hathor.interfaces.cli.main import find_series_root
+
+    root = tmp_path / "var" / "ingest"
+    write_series(root / "keys-20260823T000000Z.series", ["곡.flac"])
+    assert find_series_root(tmp_path, "other") is not None
+    assert find_series_root(tmp_path, "bass") is None

@@ -155,6 +155,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="화성 사전에 쓸 스템 조합. mix면 전체 믹스를 쓴다 (D-0074)",
     )
     gen.add_argument(
+        "--transitions",
+        action="store_true",
+        help="배열도 참조곡을 따른다 (O-32 · D-0110). 시계열 산출물이 있어야 한다",
+    )
+    gen.add_argument(
+        "--series",
+        type=resolve_path,
+        default=None,
+        help="시계열 폴더. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    gen.add_argument(
         "--priors",
         type=resolve_path,
         default=None,
@@ -1465,6 +1476,73 @@ def _resolve_harmony_prior(
     return _harmony_prior(estimates), "전체 믹스"
 
 
+def find_series_root(root: Path, stem_set: str) -> Path | None:
+    """가장 최근 시계열 폴더 (O-32 · D-0110).
+
+    `keys-*.series` 안에 `<해시>-<스템>.npz`가 있다. 그 스템이 하나도 없으면 건너뛴다 —
+    **`other`로 뽑은 폴더에 `bass`를 찾으러 가면 0곡이 된다** (D-0100이 겪은 부류다).
+    """
+    ingest = root / "var" / "ingest"
+    if not ingest.is_dir():
+        return None
+    for path in sorted(ingest.glob("keys-*.series"), reverse=True):
+        if any(path.glob(f"*-{stem_set}.npz")):
+            return path
+    return None
+
+
+def _resolve_transition_prior(
+    args: argparse.Namespace, source_keys: list[str]
+) -> tuple[tuple[tuple[float, ...], ...] | None, str]:
+    """배열 사전을 고른다 (O-32 · D-0110).
+
+    **참조곡이 여럿이면 전이 행렬을 더한다.** 도수 사전을 회전 뒤 평균하는 것과
+    같은 구조다 (D-0063) — 이미 으뜸음 기준이므로 그대로 더하면 된다.
+
+    **없으면 `None`이고 순서는 이전처럼 시드만 따른다.** 조건화가 조용히 반쯤
+    걸리는 것보다 아예 안 걸리는 편이 낫다 (D-0063과 같은 규율).
+    """
+    import hashlib
+
+    import numpy as np
+
+    from hathor.domain.services.transition_prior import is_empty, transition_prior
+    from hathor.shared.config.paths import repo_root as _root
+
+    if not args.transitions:
+        return None, "없음"
+    root = args.series if args.series else find_series_root(_root(), args.stem_set)
+    if root is None or not root.is_dir():
+        print("시계열 산출물을 찾지 못했다. 배열 조건화를 건너뛴다.", file=sys.stderr)
+        return None, "없음"
+
+    from hathor.domain.services.harmony_prior import DEGREE_COUNT
+
+    total = np.zeros((DEGREE_COUNT, DEGREE_COUNT), dtype=np.float64)
+    found = 0
+    for source_key in source_keys:
+        stamp = hashlib.sha1(source_key.encode("utf-8")).hexdigest()[:16]
+        path = root / f"{stamp}-{args.stem_set}.npz"
+        if not path.exists():
+            continue
+        with np.load(path, allow_pickle=False) as bundle:
+            series = np.asarray(bundle["series"], dtype=np.float64)
+        matrix = transition_prior(series)
+        if not is_empty(matrix):
+            total += matrix
+            found += 1
+    if found == 0:
+        print(f"참조곡이 시계열 저장분에 없다: {root.name}", file=sys.stderr)
+        return None, "없음"
+    if found < len(source_keys):
+        print(
+            f"참조곡 {len(source_keys)}곡 중 {found}곡만 시계열 저장분에 있다.",
+            file=sys.stderr,
+        )
+    total /= total.sum()
+    return tuple(tuple(float(v) for v in row) for row in total), f"{root.name} ({found}곡)"
+
+
 def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | None:
     """참조곡들의 크로마를 도수 사전 하나로 합친다 (O-21 · D-0063).
 
@@ -1995,6 +2073,7 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
     harmony_prior, prior_source = _resolve_harmony_prior(
         args, [song[0] for song in chosen], estimates
     )
+    transition, transition_source = _resolve_transition_prior(args, [song[0] for song in chosen])
     job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
     data, summary = render(
         job,
@@ -2002,6 +2081,7 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
         key=output_key,
         tempo_bpm=args.tempo,
         harmony_prior=harmony_prior,
+        transition_prior=transition,
     )
 
     args.midi.parent.mkdir(parents=True, exist_ok=True)
@@ -2016,6 +2096,9 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
             tag = f"  [{estimate.key}{flag}]"
         print(f"  {pattern.as_text():<20} {source_key[:52]}{tag}")
     conditioned = f"참조곡 반영 · {prior_source}" if summary["harmony_conditioned"] else "시드만"
+    # **배열 조건화 여부를 함께 찍는다** (D-0110). 어휘만 걸리고 배열이 안 걸린 것을
+    # 모르면 "참조곡 반영"을 보고 둘 다 걸렸다고 읽는다.
+    conditioned += f" · 배열 {transition_source}"
     print(
         f"\n구조 {summary['structure']} / 화성 {' '.join(summary['harmony'])} ({conditioned}) / "
         f"{summary['key']} {summary['tempo_bpm']}BPM"
