@@ -150,3 +150,37 @@ def test_행이_비어도_자기_자신으로_안_돌아온다():
     matrix = _transition({(0, 7): 1.0, (2, 7): 1.0, (4, 7): 1.0})
     degrees = generate_harmony(9, MAJOR, 12, prior=prior, transition=matrix).degrees
     assert all(left != right for left, right in pairwise(degrees))
+
+
+def test_자기_전이_기본값은_산출물을_안_바꾼다():
+    """**진단 손잡이가 제품 경로를 건드리면 안 된다** (O-38).
+
+    D-0109가 `transition` 기본값에 대해 건 것과 같은 검사다. 기본값에서는 아예
+    다른 갈래를 지나므로 되튐 하나 없이 같아야 한다.
+    """
+    prior = [0.2, 0.05, 0.15, 0.05, 0.1, 0.12, 0.03, 0.14, 0.04, 0.06, 0.03, 0.03]
+    matrix = _transition({(a, b): float(a + b + 1) for a in range(12) for b in range(12) if a != b})
+    assert (
+        generate_harmony(3, MAJOR, 32, prior=prior, transition=matrix, self_transition=0.0).degrees
+        == generate_harmony(3, MAJOR, 32, prior=prior, transition=matrix).degrees
+    )
+
+
+def test_자기_전이가_실제로_결과를_바꾼다():
+    """**새 인자가 결과를 바꾸는지 고정한다** (O-25 · D-0064).
+
+    `chroma(harmonic=...)`가 조용히 무시되고 있던 자리가 정확히 이것이다.
+    """
+    prior = [1.0] * 12
+    matrix = _transition({(a, b): 1.0 for a in range(12) for b in range(12) if a != b})
+    kept = generate_harmony(3, MAJOR, 64, prior=prior, transition=matrix, self_transition=0.8)
+    assert any(left == right for left, right in pairwise(kept.degrees))
+
+
+def test_자기_전이가_1_이상이면_거부한다():
+    """1.0이면 첫 마디에 갇힌다. **바꿀 수 없는 진행은 진행이 아니다.**"""
+    prior = [1.0] * 12
+    matrix = _transition({(a, b): 1.0 for a in range(12) for b in range(12) if a != b})
+    for bad in (1.0, -0.1):
+        with pytest.raises(ValueError, match=r"\[0, 1\)"):
+            generate_harmony(3, MAJOR, 8, prior=prior, transition=matrix, self_transition=bad)

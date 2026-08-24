@@ -142,7 +142,11 @@ class EvaluateOrderConditioning:
         self._condition = condition if condition is not None else OutputCondition()
 
     def run(
-        self, references: Sequence[OrderReference], *, use_transition: bool = True
+        self,
+        references: Sequence[OrderReference],
+        *,
+        use_transition: bool = True,
+        self_transition: float = 0.0,
     ) -> OrderReport:
         settings = self._condition
         if len(references) < 2:
@@ -174,6 +178,7 @@ class EvaluateOrderConditioning:
                     prior=item.prior,
                     vocabulary=settings.vocabulary,
                     transition=item.transition if use_transition else None,
+                    self_transition=self_transition,
                 ).degrees
                 observed = bigram_matrix(
                     degrees, settings.key.mode, settings.vocabulary, drop_diagonal=True
@@ -191,6 +196,51 @@ class EvaluateOrderConditioning:
             self_distances=tuple(mine),
             other_distances=tuple(theirs),
         )
+
+
+def sweep_self_transition(
+    references: Sequence[OrderReference],
+    probabilities: Sequence[float],
+    bar_counts: Sequence[int],
+    condition: OutputCondition | None = None,
+) -> tuple[tuple[float, int, float, float, float], ...]:
+    """자기 전이 확률과 마디 수를 함께 훑는다 (O-38).
+
+    `(자기 전이, 마디, other - self, t, 곡 승률)`을 낸다.
+
+    ### 무엇을 재는가 — O-25 다섯 줄
+
+    1. **비교선**: 같은 참조곡·같은 시드에서 `self_transition`만 바꾼 줄들.
+       `0.0`이 현행이며 다른 줄은 그것과만 견준다.
+    2. **질 수 있는가**: 있다. 짐작이 틀렸으면 `p`를 올려도 짧은 마디의 값이
+       안 움직인다.
+    3. **상한**: 같은 조건의 64마디 값. 짧은 구간이 거기로 다가가면 되튐이다.
+    4. **귀무 자료**: `use_transition=False`로 같은 훑기를 돌린다. 전이 사전이
+       없으면 `p`가 값을 못 바꿔야 한다 — 바꾸면 손잡이가 지표를 직접 밀고 있다는
+       뜻이고 그때는 이 훑기 자체를 못 읽는다.
+    5. **구조 재현**: 합성이 아니라 **실측 사전으로 돌린다.** 합성 전이는 실측보다
+       훨씬 뾰족해 D-0112에서 t를 101까지 냈다.
+
+    ### 무엇이 짐작을 죽이는가
+
+    O-38의 짐작은 **"매 마디 바꾸는 제약이 짧은 구간에서 관측 거리를 누른다"**이다.
+    참이면 짧은 마디에서 `p`가 오를수록 `other - self`가 **오른다.** 안 움직이면
+    짐작이 틀린 것이고 **O-38은 다른 원인을 찾아야 한다.**
+
+    **어느 쪽이든 `p`를 제품에 박지 않는다.** 이 훑기는 설명을 얻으려는 것이지
+    값을 고르려는 것이 아니다 — 값을 고르면 그것이 D-0058이다.
+    """
+    from dataclasses import replace
+
+    settings = condition if condition is not None else OutputCondition()
+    rows: list[tuple[float, int, float, float, float]] = []
+    for probability in probabilities:
+        for bars in bar_counts:
+            report = EvaluateOrderConditioning(replace(settings, bar_count=bars)).run(
+                references, self_transition=probability
+            )
+            rows.append((probability, bars, report.gap, report.t_statistic, report.win_rate))
+    return tuple(rows)
 
 
 def references_from(

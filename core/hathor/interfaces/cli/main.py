@@ -532,6 +532,18 @@ def build_parser() -> argparse.ArgumentParser:
     order.add_argument("--bars", type=int, default=64, help="마디 수")
     order.add_argument("--key", default="C major", help="출력 조성. 고정한다")
     order.add_argument("--seed", type=int, default=20260822, help="추첨 시드")
+    order.add_argument(
+        "--self-transition-sweep",
+        default=None,
+        metavar="0,0.1,0.2,0.4",
+        help="자기 전이 확률을 훑는다 (O-38). **진단 전용이며 제품 경로는 0.0만 쓴다**",
+    )
+    order.add_argument(
+        "--sweep-bars",
+        default="8,16,64",
+        metavar="8,16,64",
+        help="자기 전이 훑기에서 함께 볼 마디 수. 짧은 구간과 64마디를 나란히 본다",
+    )
 
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
@@ -3563,6 +3575,7 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
     from hathor.application.evaluate_order_conditioning import (
         EvaluateOrderConditioning,
         references_from,
+        sweep_self_transition,
     )
     from hathor.shared.config.paths import repo_root as _root
 
@@ -3631,6 +3644,14 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
         print(text)
     verdict = reports["전이 있음"].carries_reference_order
     print(f"\n판정: **{'출력이 참조곡의 배열을 담는다' if verdict else '안 담는다'}**\n")
+    if args.self_transition_sweep is not None:
+        probabilities = tuple(
+            float(token) for token in args.self_transition_sweep.split(",") if token.strip()
+        )
+        bars = tuple(int(token) for token in args.sweep_bars.split(",") if token.strip())
+        _report_self_transition_sweep(
+            args, sweep_self_transition(references, probabilities, bars, condition)
+        )
     print("--- 읽는 법 ---")
     print("**쌍 거리로는 안 된다.** 전이 사전을 주기만 하면 두 출력이 순서에서 달라진다 —")
     print('곡 짝을 뒤섞은 사전을 줘도 그렇다. **"쓰이고 있다"와 "맞는 것을 쓴다"는 다르다**')
@@ -3640,6 +3661,33 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
     print("**`전이 없음` 줄이 음성 대조다** — 순서를 시드가 정하면 둘이 같아야 한다.")
     print("**문턱이 t > 3이다.** 이 판정이 O-32를 닫으므로 승인 문턱이다 (D-0098).")
     return 0
+
+
+def _report_self_transition_sweep(
+    args: argparse.Namespace, rows: Sequence[tuple[float, int, float, float, float]]
+) -> None:
+    """O-38 훑기를 찍는다. **짐작을 죽일 수 있는 표로 낸다.**
+
+    `p`를 올려도 짧은 마디의 값이 안 움직이면 **O-38의 짐작이 틀린 것**이다.
+    """
+    print("--- 자기 전이 훑기 (O-38) ---")
+    print("**진단 전용이다.** 이 값을 골라 제품에 박으면 그것이 D-0058이다.")
+    for text in render_table(
+        (
+            ("자기전이", ">9.2f"),
+            ("마디", ">6d"),
+            ("other-self", ">12.4f"),
+            ("t", ">8.2f"),
+            ("곡승률", ">9.1%"),
+        ),
+        [tuple(row) for row in rows],
+    ):
+        print(text)
+    print("")
+    print("**짐작**: 매 마디 바꾸는 제약이 짧은 구간에서 관측 거리를 누른다 (D-0109).")
+    print("참이면 짧은 마디에서 `자기전이`가 오를수록 `other-self`가 **오른다.**")
+    print("안 움직이면 짐작이 틀렸고 **O-38은 다른 원인을 찾아야 한다.**")
+    print(f"귀무 대조: 같은 훑기를 `--stem-set {args.stem_set}`에서 전이 없이 돌린다.")
 
 
 def _run_eval_time_drift(args: argparse.Namespace) -> int:

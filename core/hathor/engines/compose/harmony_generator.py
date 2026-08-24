@@ -139,6 +139,7 @@ def generate_harmony(
     prior: Sequence[float] | None = None,
     vocabulary: Vocabulary = Vocabulary.BASE,
     transition: Sequence[Sequence[float]] | None = None,
+    self_transition: float = 0.0,
 ) -> ChordProgression:
     """시드와 조성이 같으면 항상 같은 진행을 반환한다.
 
@@ -188,12 +189,20 @@ def generate_harmony(
     **손잡이가 하나 늘고 그것을 실험으로 고르면 D-0058이라 기각했다.** 화음을 얼마나
     오래 끄는가는 O-37이다.
 
+    `self_transition`은 **그 기각을 뒤집는 것이 아니다.** O-38의 짐작 — "매 마디 바꾸는
+    제약이 짧은 구간에서 관측 거리를 누른다" — 을 재보려면 그 제약을 끌 수 있어야 한다.
+    **진단 전용이며 제품 경로는 기본값 `0.0`만 쓴다.** 0.0에서는 아래 갈래가 그대로
+    돌아 산출물이 한 비트도 안 바뀐다 (검사로 고정했다). **이 값을 실험으로 골라
+    제품에 박는 순간 그것이 D-0058이다.**
+
     **첫 마디는 `prior`가 정한다.** 전이 사전에는 시작이 없다.
 
     P4에서 A* 탐색 기반 화성 생성으로 교체된다.
     """
     if bar_count < 1:
         raise ValueError("마디 수는 1 이상이어야 한다")
+    if not 0.0 <= self_transition < 1.0:
+        raise ValueError(f"자기 전이 확률은 [0, 1)이어야 한다: {self_transition}")
     rng = random.Random(seed ^ key.tonic_pitch_class)
     pool = vocabulary_degrees(key.mode, vocabulary)
     if prior is None:
@@ -212,6 +221,22 @@ def generate_harmony(
             row[picked[-1]] = 0.0
             if sum(row) <= 0.0:
                 row = [0.0 if index == picked[-1] else 1.0 for index in range(len(pool))]
+            if self_transition > 0.0:
+                row = _with_self(row, picked[-1], self_transition)
             picked.append(rng.choices(range(len(pool)), weights=row, k=1)[0])
         degrees = tuple(pool[index] for index in picked)
     return ChordProgression(key=key, degrees=degrees)
+
+
+def _with_self(row: list[float], here: int, probability: float) -> list[float]:
+    """바꾸는 몫을 `1 - probability`로 줄이고 그만큼 자기 자리에 준다. **진단 전용.**
+
+    `probability = 0.0`에서 호출되지 않으므로 **기본 경로는 이 함수를 안 지난다** —
+    되튐 하나 없이 예전 산출물과 같아야 하기 때문이다 (D-0109가 검사로 고정한 것).
+    """
+    total = sum(row)
+    if total <= 0.0:
+        return row
+    scaled = [value * (1.0 - probability) / total for value in row]
+    scaled[here] = probability
+    return scaled
