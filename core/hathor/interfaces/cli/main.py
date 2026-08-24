@@ -3071,6 +3071,22 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
             f" · 쌍 단위 승률 {share:.1%}\n"
             f"판정: **{verdict}**\n"
         )
+        from hathor.application.evaluate_harmony_output import cell_spread
+        from hathor.engines.compose.harmony_generator import (
+            BORROWED_ROOT_SEMITONES,
+            CONTROL_ROOT_SEMITONES,
+        )
+
+        mode = condition.key.mode
+        picked = references(target)
+        print(
+            f"칸별 곡 간 로그 표준편차 — 차용 칸 "
+            f"{cell_spread(picked, BORROWED_ROOT_SEMITONES[mode]):.4f}"
+            f" · 대조 칸 {cell_spread(picked, CONTROL_ROOT_SEMITONES[mode]):.4f}\n"
+        )
+        print("**D-0093이 잰 것과 여기서 필요한 것이 다른 양이다** (D-0095). 거기서는 세 칸이")
+        print("**함께 오르는가**(상관)를 쟀고, 히스토그램 거리를 만드는 것은 **얼마나")
+        print("흔들리는가**(분산)다. 위 두 표준편차가 비슷하면 어휘를 넓혀도 이득이 없다.\n")
         print("**`control`을 안 빼면 아무것도 못 읽는다.** 도수를 6에서 9로 늘리는 것만으로")
         print("두 진행이 겹칠 확률이 낮아져 거리가 오른다 — 합성에서 차용이 전혀 없어도")
         print("0.2155에서 0.2696으로 올랐다. `control`은 **뭉치지 않는 세 칸**(♭2·♯4·이끔음)을")

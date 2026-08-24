@@ -424,7 +424,11 @@ class EvaluateHarmonyOutput:
                 ]
                 distances.append(float(np.mean(per_seed)))
                 mismatches.append(float(np.mean(mismatch)))
-                limits.append(weight_distance(table[left], table[right], settings.key.mode))
+                limits.append(
+                    weight_distance(
+                        table[left], table[right], settings.key.mode, settings.vocabulary
+                    )
+                )
             return OutputLine(
                 name=name,
                 distances=tuple(distances),
@@ -475,6 +479,21 @@ class EvaluateHarmonyOutput:
         if not picked:
             raise ValueError("참조곡 쌍을 만들 수 없다")
         return tuple(picked)
+
+
+def cell_spread(references: Sequence[ReferencePrior], cells: Sequence[int]) -> float:
+    """지정한 칸들의 **곡 간 로그 표준편차** 평균 (D-0095).
+
+    D-0093은 칸들이 **함께 오르는가**(상관)를 쟀다. 출력 히스토그램 거리를 만드는
+    것은 **얼마나 흔들리는가**(분산)다. **둘은 다른 양이며**, 상관이 커도 분산이
+    비슷하면 어휘를 넓혀도 출력이 더 갈리지 않는다.
+
+    합성에서 확인했다 — 칸별 분산을 맞추고 뭉침만 바꾸면 거리가 0.3526에서
+    0.3553으로 거의 안 움직인다. **"뭉치면 중복이라 손해"라는 가설은 기각됐다.**
+    """
+    stacked = np.asarray([item.prior for item in references], dtype=np.float64)
+    logged = np.log(np.maximum(stacked[:, list(cells)], 1e-12))
+    return float(np.mean(logged.std(axis=0, ddof=1)))
 
 
 def sweep_bar_counts(

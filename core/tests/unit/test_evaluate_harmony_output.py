@@ -330,3 +330,32 @@ def test_단조에는_차용_어휘가_없다():
     assert vocabulary_roots(Mode.MINOR, Vocabulary.MIXTURE) == vocabulary_roots(
         Mode.MINOR, Vocabulary.BASE
     )
+
+
+def test_극한이_어휘마다_다르다():
+    """**`--vocabulary`가 극한 계산에 안 걸려 세 어휘가 전부 같은 값을 냈다** (D-0095).
+
+    문자열 치환 하나가 조용히 안 먹은 것이고, 이 검사가 그 부류를 막는다.
+    """
+    from dataclasses import replace
+
+    from hathor.engines.compose.harmony_generator import Vocabulary
+
+    made = _references(30, contrast=0.9)
+    limits = {
+        vocabulary: EvaluateHarmonyOutput(replace(FAST, vocabulary=vocabulary))
+        .run(made, vocabulary.value)
+        .line("paired")
+        .mean_limit
+        for vocabulary in Vocabulary
+    }
+    assert len(set(limits.values())) == len(Vocabulary), f"극한이 겹친다: {limits}"
+
+
+def test_칸_흔들림을_잰다():
+    """**상관과 분산은 다른 양이다** (D-0095)."""
+    from hathor.application.evaluate_harmony_output import cell_spread
+
+    flat = _references(40, contrast=0.05)
+    peaky = _references(40, contrast=0.95)
+    assert cell_spread(peaky, (3, 8, 10)) > cell_spread(flat, (3, 8, 10))
