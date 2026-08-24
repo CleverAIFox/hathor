@@ -25,6 +25,7 @@ from hathor.application.evaluate_retrieval import (
     TrackRecord,
     ViewSpec,
 )
+from hathor.application.evaluate_time_drift import DriftObservation
 from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
 from hathor.application.orchestrator.generation_pipeline import run_dry
 from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
@@ -482,6 +483,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="조성 추정 신뢰도 상·하위 절반을 따로 낸다. **역인과가 있어 보조 시야다**",
     )
 
+    drift = eval_sub.add_parser(
+        "time-drift", help="곡마다 다른 시간 변화가 실재하는가 (O-32 게이트 · D-0098)"
+    )
+    drift.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys --halves --separate`가 만든 keys.jsonl",
+    )
+    drift.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="둘째 관측으로 쓸 스템")
+    drift.add_argument("--seed", type=int, default=20260822, help="귀무선·부트스트랩 시드")
+
     mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
     mfcc.add_argument(
         "--root",
@@ -684,6 +697,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_degree_restriction(args)
         if args.eval_command == "chromatic-origin":
             return _run_eval_chromatic_origin(args)
+        if args.eval_command == "time-drift":
+            return _run_eval_time_drift(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "keys":
@@ -3218,6 +3233,123 @@ def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[obj
             "".join(f"{value:{spec}}" for value, (_, spec) in zip(row, columns, strict=True))
         )
     return lines
+
+
+def load_drift_observations(path: Path, stem_set: str) -> list[DriftObservation]:
+    """반쪽 크로마 둘을 **같은 회전으로** 읽어 변화 벡터를 만든다 (D-0098).
+
+    **으뜸음은 앞반쪽 추정을 쓴다** — 곡 전체에서 추정하면 뒷반쪽이 회전 정렬에
+    관여한다 (D-0062). 두 출처가 같은 회전을 써야 비교가 성립한다.
+    """
+    from hathor.application.evaluate_time_drift import DriftObservation, drift_vector
+    from hathor.domain.services.harmony_prior import merge_degree_priors
+    from hathor.domain.value_objects.key import PITCH_CLASSES
+
+    found: list[DriftObservation] = []
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            stems = ((row.get("stems") or {}).get(stem_set)) or {}
+            parts = {
+                "mix": (row.get("chroma_head"), row.get("chroma_tail")),
+                "stem": (stems.get("head"), stems.get("tail")),
+            }
+            key_text = row.get("key_head") or row.get("key")
+            name = row.get("source_key")
+            if name is None or key_text is None:
+                continue
+            if any(value is None for pair in parts.values() for value in pair):
+                continue
+            tonic = str(key_text).rsplit(" ", 1)[0]
+            if tonic not in PITCH_CLASSES:
+                continue
+            index = PITCH_CLASSES.index(tonic)
+            rotated: dict[str, tuple[float, ...]] = {}
+            for side, (head, tail) in parts.items():
+                assert head is not None and tail is not None
+                rotated[side] = drift_vector(
+                    tuple(
+                        float(v)
+                        for v in merge_degree_priors([(tuple(float(x) for x in head), index)])
+                    ),
+                    tuple(
+                        float(v)
+                        for v in merge_degree_priors([(tuple(float(x) for x in tail), index)])
+                    ),
+                )
+            found.append(DriftObservation(str(name), rotated["mix"], rotated["stem"]))
+    return found
+
+
+def _run_eval_time_drift(args: argparse.Namespace) -> int:
+    """곡마다 다른 시간 변화가 실재하는지 잰다 (O-32 게이트 · D-0098).
+
+    **이 게이트가 통과해야 전량 재추출을 한다.** 스템 캐시가 없어 Demucs를 처음부터
+    다시 도는 작업이며, 게이트 없이 그것을 하는 것은 D-0058 계열의 형태다.
+    """
+    from hathor.application.evaluate_time_drift import GATE_T, EvaluateTimeDrift
+    from hathor.shared.config.paths import repo_root as _root
+
+    store = args.priors
+    if store is None:
+        store = find_stem_prior_store(_root(), args.stem_set)
+    if store is None or not store.exists():
+        print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
+        return 1
+
+    observations = load_drift_observations(store, args.stem_set)
+    if len(observations) < 10:
+        print(
+            f"반쪽 크로마가 두 출처에 다 있는 곡이 {len(observations)}개다. "
+            f"`ingest keys --halves --separate --limit 200`으로 표본을 먼저 뽑는다.",
+            file=sys.stderr,
+        )
+        return 1
+
+    report = EvaluateTimeDrift(seed=args.seed).run(observations, args.stem_set)
+    print(f"곡 {report.song_count}개 · 출처 mix 대 {args.stem_set}\n사전: {store.name}\n")
+    for text in render_table(
+        (
+            ("실측", ">10.4f"),
+            ("귀무", ">10.4f"),
+            ("초과", ">10.4f"),
+            ("표준오차", ">10.4f"),
+            ("t", ">8.2f"),
+            ("칸비율", ">9.0%"),
+        ),
+        [
+            (
+                report.observed,
+                report.null,
+                report.excess,
+                report.standard_error,
+                report.t_statistic,
+                report.cell_share,
+            )
+        ],
+    ):
+        print(text)
+    passed = report.time_drift_is_song_specific
+    print(
+        f"\n판정: **{'곡마다 다른 시간 변화가 있다' if passed else '게이트를 못 넘는다'}**"
+        f"  (문턱 t > {GATE_T:g} · 칸 과반)\n"
+    )
+    print("--- 읽는 법 ---")
+    print("**두 독립 관측이 같은 방향을 가리키는가**를 본다. 전체 믹스와 스템은 같은 곡의")
+    print("두 관측이고, 크로마 추정 잡음은 두 출처에서 갈리지만 **진짜 시간 변화는 둘 다에**")
+    print("나타난다. 귀무선은 **곡 짝을 뒤섞은 것**이라 잡음 구조와 코퍼스 공통 변화를")
+    print("그대로 갖고 있다 — **초과분만 곡 고유한 시간 변화다.**")
+    print("**문턱이 t > 3으로 높다.** 이 게이트가 통과하면 전량 재추출과 시계열 파이프라인을")
+    print("승인한다 — **승인 문턱은 관측 문턱보다 높아야 한다** (D-0095에서 51%를 통과로")
+    print("읽을 뻔한 뒤 정한 규율이다).")
+    print("**못 가르는 것**: 두 출처가 같은 오디오를 공유한다. 뒷반쪽이 그냥 더 시끄러운 식의")
+    print("곡별 인공물이 있으면 둘 다에 나타나며 그것은 화성이 아니다.")
+    return 0
 
 
 def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:

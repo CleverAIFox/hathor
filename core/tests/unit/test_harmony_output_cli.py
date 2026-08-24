@@ -395,3 +395,61 @@ def test_어휘_비교와_마디_훑기를_함께_낸다(tmp_path, capsys):
     assert "극한 차이 (mixture - control)" in out
     assert "극한대비" in out
     assert "마디 수 훑기 (실측이 극한으로 내려가는가)" not in out, "훑기가 두 번 돈다"
+
+
+# ------------------------------------------------------------------ O-32 게이트 (D-0098)
+
+
+def write_halves(path, *, count=40, seed=13):
+    """반쪽 크로마를 두 출처에 담는다. **곡마다 다른 시간 변화를 넣는다.**"""
+    rng = np.random.default_rng(seed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as stream:
+        for index in range(count):
+            tonic = int(rng.integers(0, DEGREES))
+            base = rng.dirichlet(np.full(DEGREES, 3.0))
+            step = np.exp(rng.normal(0.0, 0.3, DEGREES))
+            row = {
+                "source_key": f"곡{index:03d}.flac",
+                "key": f"{PITCHES[tonic]} major",
+                "key_head": f"{PITCHES[tonic]} major",
+                "halves": True,
+                "separated": True,
+                "chroma_head": [round(float(v), 6) for v in base],
+                "chroma_tail": [round(float(v), 6) for v in base * step],
+                "stems": {
+                    "other": {
+                        "full": [round(float(v), 6) for v in base],
+                        "head": [round(float(v), 6) for v in base],
+                        "tail": [round(float(v), 6) for v in base * step],
+                    }
+                },
+            }
+            stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return path
+
+
+def test_시간_변화_게이트를_낸다(tmp_path, capsys):
+    path = write_halves(tmp_path / "keys.jsonl")
+    assert main(["eval", "time-drift", "--priors", str(path)]) == 0
+    out = capsys.readouterr().out
+    assert "칸비율" in out and "판정" in out
+    assert "문턱 t > 3" in out
+
+
+def test_반쪽이_없으면_비정상_종료한다(tmp_path, capsys):
+    """**전량 재추출 전에 표본부터**라는 안내가 나와야 한다."""
+    path = write_keys(tmp_path / "keys.jsonl")
+    assert main(["eval", "time-drift", "--priors", str(path)]) == 1
+    assert "--halves --separate --limit 200" in capsys.readouterr().err
+
+
+def test_반쪽_로더가_두_출처를_같은_회전으로_읽는다(tmp_path):
+    """**으뜸음은 앞반쪽 추정을 쓴다** (D-0062)."""
+    from hathor.interfaces.cli.main import load_drift_observations
+
+    path = write_halves(tmp_path / "keys.jsonl", count=12)
+    found = load_drift_observations(path, "other")
+    assert len(found) == 12
+    for item in found:
+        assert item.left == pytest.approx(item.right, abs=1e-9)
