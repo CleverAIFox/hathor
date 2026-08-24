@@ -12,7 +12,6 @@ from hathor.application.evaluate_order_conditioning import (
     references_from,
     restrict_transition,
     sweep_self_transition,
-    sweep_self_transition,
 )
 from hathor.domain.value_objects.key import Mode
 from hathor.engines.compose.harmony_generator import vocabulary_roots
@@ -164,31 +163,6 @@ def test_곡_승률이_곡_단위다():
         if theirs > mine
     )
     assert report.win_rate == pytest.approx(wins / len(made))
-
-
-# ------------------------------------------------- 자기 전이 훑기 (O-38)
-
-
-def test_훑기가_모든_칸을_낸다():
-    made = _references(12)
-    rows = sweep_self_transition(made, (0.0, 0.3), (8, 16), FAST)
-    assert [(row[0], row[1]) for row in rows] == [(0.0, 8), (0.0, 16), (0.3, 8), (0.3, 16)]
-
-
-def test_훑기의_0_0_칸은_현행과_같다():
-    """**비교선이 현행이어야 읽을 수 있다** (O-25 (1))."""
-    made = _references(12)
-    from dataclasses import replace
-
-    expected = EvaluateOrderConditioning(replace(FAST, bar_count=8)).run(made)
-    assert sweep_self_transition(made, (0.0,), (8,), FAST)[0][2] == expected.gap
-
-
-def test_자기_전이가_판정을_움직인다():
-    """**손잡이가 지표에 닿는지부터 본다** (D-0064). 방향은 실측이 정한다."""
-    made = _references(12)
-    rows = sweep_self_transition(made, (0.0, 0.6), (8,), FAST)
-    assert rows[0][2] != rows[1][2]
 
 
 # ------------------------------------------------- 자기 전이 훑기 (O-38)
