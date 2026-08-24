@@ -55,8 +55,27 @@ V화음을 쓰기 때문이다. **첨가다.**
 낸다 — **뚜렷한 음수면 오차가 지배한다**는 강한 결론이고, 그렇지 않으면
 **오차로 설명되지 않는다**는 약한 결론이다.
 
-**약한 쪽은 "음악이다"의 증명이 아니다.** 크로마 누설은 이웃 반음으로 번지므로
-**첨가의 모양을 흉내 낸다.** 이 도구는 그것을 못 가른다.
+**약한 쪽은 "음악이다"의 증명이 아니다.** 크로마 누설도 첨가의 모양을 흉내 낸다.
+그것은 아래 **뭉침 대비**가 가른다.
+
+### 차용은 뭉치고 누설은 고르게 번진다 (D-0091)
+
+단조 차용은 화음 단위로 온다. `♭III`(♭3·5·♭7) · `iv`(4·♭6·1) · `♭VI`(♭6·1·♭3) ·
+`♭VII`(♭7·2·4)가 **함께** 쓰이므로 **♭3·♭6·♭7이 한 곡에서 같이 오른다.**
+
+크로마 누설은 다르다. 배음·비브라토는 이웃 반음으로 번지고 곡마다 그 양이 다르므로
+**반음계 다섯 칸이 고르게 함께 오른다.** 특정 셋만 뭉치지 않는다.
+
+그래서 **삼총사 세 쌍의 상관에서 나머지 일곱 쌍의 상관을 뺀다.**
+
+| 차용 | 누설 | 대비 - 귀무 |
+|---|---|---|
+| 없음 | 없음 | -0.002 |
+| 없음 | 있음 | **-0.032 ~ -0.016** |
+| 있음 | 없음 | **+0.79 ~ +1.00** |
+| 있음 | 있음 | **+0.50 ~ +0.96** |
+
+**누설로는 안 나오는 값이다.** 차용이 있으면 두 자릿수 배로 벌어진다.
 
 ### 눈금은 자료에서 만든다
 
@@ -72,7 +91,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from hathor.application.evaluate_degree_restriction import NULL_REPEATS, off_scale_indices
+from hathor.application.evaluate_degree_restriction import (
+    NULL_REPEATS,
+    chromatic_indices,
+    off_scale_indices,
+)
 from hathor.application.evaluate_harmony_output import Histogram, ReferencePrior
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.domain.value_objects.key import Mode
@@ -85,6 +108,16 @@ SUBSTITUTION_PAIRS: dict[Mode, tuple[tuple[int, int], ...]] = {
 
 장조는 ♭2←2 · ♭3←3 · ♯4←4 · ♭6←6 · ♭7←이끔음이다. **음악적 변화 관계이자 조성
 오차의 치환 관계**이며, 위 표에서 두 관계가 같은 짝을 가리킨다.
+"""
+
+MODAL_MIXTURE: dict[Mode, tuple[int, ...]] = {
+    Mode.MAJOR: (3, 8, 10),
+    Mode.MINOR: (4, 9, 11),
+}
+"""단조 차용 삼총사 (D-0091).
+
+장조에서 ♭3·♭6·♭7이다. `♭III` · `iv` · `♭VI` · `♭VII`가 함께 쓰이므로 **한 곡에서
+같이 오른다.** 단조에서는 반대로 장조 차용(피카르디 3도 계열)의 3·6·이끔음이다.
 """
 
 ROTATION_ERRORS = (7, 5, 2, 9)
@@ -140,6 +173,44 @@ def substitution_correlation(priors: Sequence[Histogram], mode: Mode) -> float:
     return float(np.mean(found)) if found else 0.0
 
 
+def _pair_correlation(deviation: Histogram, pairs: Sequence[tuple[int, int]]) -> float:
+    found: list[float] = []
+    for left, right in pairs:
+        if deviation[:, left].std() == 0.0 or deviation[:, right].std() == 0.0:
+            continue
+        found.append(float(np.corrcoef(deviation[:, left], deviation[:, right])[0, 1]))
+    return float(np.mean(found)) if found else 0.0
+
+
+def mixture_pairs(mode: Mode) -> tuple[tuple[int, int], ...]:
+    """삼총사 세 쌍."""
+    cells = MODAL_MIXTURE[mode]
+    return tuple((cells[i], cells[j]) for i in range(len(cells)) for j in range(i + 1, len(cells)))
+
+
+def other_chromatic_pairs(mode: Mode) -> tuple[tuple[int, int], ...]:
+    """반음계 칸의 나머지 쌍. **삼총사 쌍과 겹치지 않는다** — 겹치면 대비가 희석된다.
+
+    **온음계인데 버려지는 칸(장조 이끔음)은 뺀다** — 반음계가 아니다 (D-0085).
+    """
+    cells = chromatic_indices(mode)
+    mixture = set(mixture_pairs(mode))
+    return tuple(
+        (cells[i], cells[j])
+        for i in range(len(cells))
+        for j in range(i + 1, len(cells))
+        if (cells[i], cells[j]) not in mixture
+    )
+
+
+def mixture_contrast(priors: Sequence[Histogram], mode: Mode) -> float:
+    """삼총사 뭉침에서 나머지 반음계 뭉침을 뺀다. **차용에서만 크게 양수다.**"""
+    deviation = _deviations(priors)
+    return _pair_correlation(deviation, mixture_pairs(mode)) - _pair_correlation(
+        deviation, other_chromatic_pairs(mode)
+    )
+
+
 def _within_shuffled(
     priors: Sequence[Histogram], mode: Mode, generator: np.random.Generator
 ) -> list[Histogram]:
@@ -179,6 +250,10 @@ class OriginReport:
     rotated_null: float
     standard_error: float
     scale_mass: float
+    mixture: float = 0.0
+    """삼총사 대비 실측 (D-0091)."""
+    mixture_null: float = 0.0
+    mixture_standard_error: float = 0.0
 
     @property
     def excess(self) -> float:
@@ -193,6 +268,32 @@ class OriginReport:
     @property
     def t_statistic(self) -> float:
         return self.excess / self.standard_error if self.standard_error > 0 else 0.0
+
+    @property
+    def mixture_excess(self) -> float:
+        """삼총사 대비에서 귀무선을 뺀 값 (D-0091)."""
+        return self.mixture - self.mixture_null
+
+    @property
+    def mixture_t(self) -> float:
+        if self.mixture_standard_error <= 0:
+            return 0.0
+        return self.mixture_excess / self.mixture_standard_error
+
+    @property
+    def modal_mixture_present(self) -> bool:
+        """**사전 등록한 판정 규칙이다** (D-0091 · GR-6.5). 결과를 보고 고치지 않는다.
+
+        1. 삼총사 대비 초과분이 양수다.
+        2. `t`가 2보다 크다.
+
+        둘 다 넘으면 **♭3·♭6·♭7이 한 곡에서 함께 오른다** — 화음 단위로 오는 단조
+        차용의 모양이며 **크로마 누설로는 만들어지지 않는다.** 합성에서 누설만
+        있을 때 -0.032에서 -0.002 사이였고 차용이 있으면 +0.50을 넘었다.
+
+        **질 수 있다.** 차용을 끄면 부호가 0 아래로 내려간다.
+        """
+        return self.mixture_excess > 0.0 and self.mixture_t > 2.0
 
     @property
     def chromatic_is_substitution(self) -> bool:
@@ -241,12 +342,21 @@ class EvaluateChromaticOrigin:
         scale = [index for index in range(DEGREE_COUNT) if index not in off_scale_indices(mode)]
         scale = sorted({*scale, *(pair[1] for pair in SUBSTITUTION_PAIRS[mode])})
 
+        def mixture_null_of(table: Sequence[Histogram], line: int) -> float:
+            drawn = [
+                mixture_contrast(_within_shuffled(table, mode, stream(line, index)), mode)
+                for index in range(settings.null_repeats)
+            ]
+            return float(np.mean(drawn))
+
         resample = np.random.default_rng([settings.seed, 9])
         spread: list[float] = []
+        mixture_spread: list[float] = []
         for _ in range(settings.bootstrap):
             picked = resample.integers(0, len(priors), len(priors))
             sample = [priors[int(index)] for index in picked]
             spread.append(substitution_correlation(sample, mode) - null_of(sample, 4))
+            mixture_spread.append(mixture_contrast(sample, mode) - mixture_null_of(sample, 5))
 
         return OriginReport(
             label=label,
@@ -258,4 +368,9 @@ class EvaluateChromaticOrigin:
             rotated_null=null_of(rotated, 2),
             standard_error=float(np.std(spread, ddof=1)) if len(spread) > 1 else 0.0,
             scale_mass=float(np.mean([vector[scale].sum() for vector in priors])),
+            mixture=mixture_contrast(priors, mode),
+            mixture_null=mixture_null_of(priors, 6),
+            mixture_standard_error=(
+                float(np.std(mixture_spread, ddof=1)) if len(mixture_spread) > 1 else 0.0
+            ),
         )

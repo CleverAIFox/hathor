@@ -11,10 +11,13 @@ import numpy as np
 import pytest
 
 from hathor.application.evaluate_chromatic_origin import (
+    MODAL_MIXTURE,
     ROTATION_ERRORS,
     SUBSTITUTION_PAIRS,
     EvaluateChromaticOrigin,
     OriginCondition,
+    mixture_pairs,
+    other_chromatic_pairs,
     substitution_correlation,
 )
 from hathor.application.evaluate_harmony_output import ReferencePrior
@@ -146,3 +149,72 @@ def test_참조곡이_셋_미만이면_거부한다():
 def test_온음계_질량을_함께_낸다():
     report = EvaluateChromaticOrigin(FAST).run(_corpus(300, borrow=0.0, error=0.0), "test")
     assert 0.5 < report.scale_mass < 1.0
+
+
+# ------------------------------------------------------------------ 뭉침 대비 (D-0091)
+
+
+def _mixed_corpus(count: int, *, mixture: float, leak: float, seed: int = 11):
+    """`mixture`=단조 차용(♭3♭6♭7 동시), `leak`=이웃 반음 번짐. **따로 돌린다.**"""
+    rng = np.random.default_rng(seed)
+    shape = KRUMHANSL / KRUMHANSL.sum()
+    made: list[ReferencePrior] = []
+    for index in range(count):
+        vector = shape * rng.lognormal(0.0, 0.25, DEGREES)
+        if mixture > 0:
+            vector[list(MODAL_MIXTURE[Mode.MAJOR])] *= 1 + mixture * rng.lognormal(0.0, 1.0)
+        if leak > 0:
+            amount = leak * rng.lognormal(0.0, 1.0)
+            source = vector.copy()
+            for cell in range(DEGREES):
+                vector[cell] += (
+                    amount * 0.5 * (source[(cell - 1) % DEGREES] + source[(cell + 1) % DEGREES])
+                )
+        made.append(
+            ReferencePrior(f"곡{index:04d}.flac", tuple(float(v) for v in vector / vector.sum()))
+        )
+    return made
+
+
+@pytest.mark.parametrize("mode", [Mode.MAJOR, Mode.MINOR])
+def test_삼총사_쌍과_나머지_쌍은_겹치지_않는다(mode):
+    """겹치면 대비가 희석된다."""
+    assert len(mixture_pairs(mode)) == 3
+    assert len(other_chromatic_pairs(mode)) == 7
+    assert not set(mixture_pairs(mode)) & set(other_chromatic_pairs(mode))
+
+
+def test_온음계인데_버려지는_칸은_반음계_쌍에서_뺀다():
+    """장조 이끔음은 반음계가 아니다 (D-0085)."""
+    cells = {cell for pair in other_chromatic_pairs(Mode.MAJOR) for cell in pair}
+    assert 11 not in cells
+
+
+def test_단조_차용이_있으면_뭉친다():
+    report = EvaluateChromaticOrigin(FAST).run(_mixed_corpus(600, mixture=1.0, leak=0.0), "test")
+    assert report.mixture_excess > 0.3
+    assert report.modal_mixture_present
+
+
+def test_누설만_있으면_안_뭉친다():
+    """**음성 대조.** 누설은 반음계 다섯 칸을 고르게 올린다."""
+    report = EvaluateChromaticOrigin(FAST).run(_mixed_corpus(600, mixture=0.0, leak=0.8), "test")
+    assert report.mixture_excess < 0.1
+    assert not report.modal_mixture_present
+
+
+def test_누설이_있어도_차용이_있으면_뭉친다():
+    """**누설이 차용을 가리지 못한다.** 그것이 이 통계를 쓰는 이유다."""
+    report = EvaluateChromaticOrigin(FAST).run(_mixed_corpus(600, mixture=1.0, leak=0.8), "test")
+    assert report.modal_mixture_present
+
+
+def test_차용도_누설도_없으면_안_뭉친다():
+    assert (
+        abs(
+            EvaluateChromaticOrigin(FAST)
+            .run(_mixed_corpus(600, mixture=0.0, leak=0.0), "test")
+            .mixture_excess
+        )
+        < 0.1
+    )

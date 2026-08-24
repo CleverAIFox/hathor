@@ -3103,9 +3103,10 @@ def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
         report = harness.run(subset, name)
         results.append((name, report))
         print(
-            f"{name:<12}{report.reference_count:>6}{report.excess:>10.4f}"
-            f"{report.standard_error:>10.4f}{report.t_statistic:>8.2f}"
-            f"{report.rotated_excess:>10.4f}{report.scale_mass:>12.4f}"
+            f"{name:<12}{report.reference_count:>6}{report.excess:>11.4f}"
+            f"{report.t_statistic:>8.2f}{report.rotated_excess:>10.4f}"
+            f"{report.mixture_excess:>11.4f}{report.mixture_t:>8.2f}"
+            f"{report.scale_mass:>12.4f}"
         )
     whole = results[0][1]
     verdict = (
@@ -3113,7 +3114,10 @@ def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
         if whole.chromatic_is_substitution
         else "오차로 설명되지 않는다"
     )
-    print(f"\n판정: {verdict}\n")
+    mixture_verdict = (
+        "**단조 차용이 있다**" if whole.modal_mixture_present else "삼총사가 안 뭉친다"
+    )
+    print(f"\n치환 판정: {verdict}\n뭉침 판정: {mixture_verdict}\n")
     print("--- 읽는 법 ---")
     print("**오차는 치환이고 차용은 첨가다.** 조성 추정이 5도 틀리면 ♭7이 오르면서")
     print("이끔음이 **사라진다.** 진짜 믹솔리디안 차용은 ♭7이 오르되 이끔음이 남는다 —")
@@ -3125,7 +3129,10 @@ def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
     print("있으면 값이 어디까지 내려가는지 자료로 보여 준다.")
     print("**검출력이 한쪽만 강하다.** 합성에서 오차는 t=-8로 잡히고 차용은 t=+1.4로 겨우")
     print('보인다. 그러니 **뚜렷한 음수만 강한 결론이고**, 아닌 쪽은 "오차로 설명 안 됨"까지다.')
-    print("**크로마 누설은 이웃 반음으로 번져 첨가를 흉내 낸다 — 이 도구는 못 가른다.**")
+    print("**`뭉침 대비`가 누설과 차용을 가른다** (D-0091). 단조 차용은 화음 단위로 오므로")
+    print("♭3·♭6·♭7이 한 곡에서 **같이** 오른다. 누설은 곡마다 양이 다를 뿐 반음계 다섯 칸을")
+    print("**고르게** 올리므로 특정 셋만 뭉치지 않는다. 삼총사 세 쌍에서 나머지 일곱 쌍을 뺀다.")
+    print("합성에서 누설만 있을 때 -0.03~0.00이었고 차용이 있으면 +0.50을 넘었다.")
     if args.margin_split:
         print("**`추정 확실`은 보조 시야다.** 차용화음이 많으면 조성 추정도 어려워지므로")
         print("역인과가 있다. 상위 묶음에서도 음수가 아니면 오차로 설명되지 않는다는 쪽이 는다.")
