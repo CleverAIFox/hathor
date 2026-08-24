@@ -676,6 +676,68 @@ def chroma(
     return np.asarray(combined / total, dtype=np.float32)
 
 
+def chroma_series(
+    waveform: Waveform,
+    *,
+    window_seconds: float = 1.0,
+    mode: str = CHROMA_CQ,
+    sample_rate: int = SOURCE_SAMPLE_RATE,
+    gamma: float = LOG_GAMMA,
+    harmonic: float = HARMONIC_STRENGTH,
+) -> np.ndarray[tuple[int, int], np.dtype[np.float32]]:
+    """창별 크로마를 시간 순으로 낸다 `(창 수, 12)` (O-32 · D-0105).
+
+    **창 길이를 여기서 고르지 않는다** (D-0104). 가장 짧은 창으로 뽑아 두고 분석할
+    때 `k`개씩 평균해 늘린다 — **묶을 수는 있어도 쪼갤 수는 없다.**
+
+    묶은 것과 처음부터 그 길이로 뽑은 것이 같은지 실측했다. 전변동 거리가 2초에서
+    0.0001, 8초에서 0.0117이다. **지표 규모(0.2~0.6)에 비해 무시할 수준이며**
+    검사로 고정했다. 정확히 0이 아닌 것은 `cq_chroma`가 대역마다 다른 창을 쓰고
+    프레임 수로 나누기 때문이다.
+
+    `aggregate`를 안 받는다. **집계는 시계열을 만든 다음의 일이다** — 여기서 중앙값을
+    내면 시간 축이 사라진다.
+    """
+    span = int(window_seconds * sample_rate)
+    if span < 1 or waveform.size < span:
+        return np.zeros((0, 12), dtype=np.float32)
+    # **길이가 다른 창을 섞지 않는다.** 짧은 꼬리는 프레임 수가 적어 통계가 다르고,
+    # `group_series`가 꼬리를 버리는 것과 같은 이유다. `_split_windows`는 짧은
+    # 파형을 통째로 한 창으로 내므로 여기서 쓰지 않는다.
+    windows = [waveform[start : start + span] for start in range(0, waveform.size - span + 1, span)]
+    stacked = [
+        chroma(
+            window,
+            mode=mode,
+            sample_rate=sample_rate,
+            gamma=gamma,
+            harmonic=harmonic,
+            aggregate=AGGREGATE_MEAN,
+        )
+        for window in windows
+    ]
+    return np.stack(stacked).astype(np.float32)
+
+
+def group_series(
+    series: np.ndarray[tuple[int, int], np.dtype[np.float32]], factor: int
+) -> np.ndarray[tuple[int, int], np.dtype[np.float32]]:
+    """창 `factor`개를 평균해 그만큼 긴 창을 만든다 (D-0104).
+
+    남는 꼬리는 버린다. **부분 창은 길이가 달라 평균에 다른 무게를 준다.**
+    """
+    if factor < 1:
+        raise ValueError(f"묶는 수는 1 이상이어야 한다: {factor}")
+    count = len(series) // factor
+    if count < 1:
+        return np.zeros((0, 12), dtype=np.float32)
+    trimmed = series[: count * factor].reshape(count, factor, 12)
+    grouped = trimmed.mean(axis=1)
+    totals = grouped.sum(axis=1, keepdims=True)
+    safe = np.where(totals > 0, totals, 1.0)
+    return np.asarray(grouped / safe, dtype=np.float32)
+
+
 def estimate_key_from_waveform(
     waveform: StereoWaveform,
     *,

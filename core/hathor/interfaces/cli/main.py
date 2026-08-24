@@ -220,6 +220,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="배음 강도 0~1을 한 번에 훑어 표로 낸다 (D-0060). --replay와 함께 쓴다",
     )
     keys.add_argument(
+        "--series",
+        type=float,
+        default=None,
+        metavar="초",
+        help="크로마 시계열을 이 창 길이로 함께 뽑아 npz에 저장한다 (O-32 · D-0105)",
+    )
+    keys.add_argument(
         "--halves",
         action="store_true",
         help="앞뒤 반쪽 크로마도 뽑는다 (D-0062). `eval harmony-prior`가 이것을 요구한다",
@@ -948,6 +955,29 @@ KEYS_SETTING_FIELDS = (
 """
 
 
+def _write_series(root: Path, source_key: str, stem: str, series: object) -> None:
+    """곡·스템 하나의 크로마 시계열을 `npz`로 쓴다 (O-32 · D-0105).
+
+    **곡마다 파일을 나눈다.** 하나로 모으면 이어받기 중간에 죽었을 때 통째로
+    날아가고, 그것이 D-0075가 이어받기를 만든 이유였다. 파일이 있으면 건너뛰므로
+    이어받기와 자연히 맞는다.
+
+    이름은 `source_key`의 해시다. **파일 이름에 곡 제목을 쓰지 않는다** — 슬래시와
+    유니코드가 섞여 있고 기기마다 다르게 정규화된다 (D-0043 계열).
+    """
+    import hashlib
+
+    import numpy as np
+
+    root.mkdir(parents=True, exist_ok=True)
+    stamp = hashlib.sha1(source_key.encode("utf-8")).hexdigest()[:16]
+    np.savez_compressed(
+        root / f"{stamp}-{stem}.npz",
+        series=np.asarray(series, dtype=np.float32),
+        source_key=source_key,
+    )
+
+
 def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
     """행에 적히는 조건 묶음. 이어받기 판정과 기록이 같은 값을 쓴다."""
     return {
@@ -966,6 +996,9 @@ def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
         # 실제로 D-0099가 `bass`를 더한 뒤 그 일이 났다 — **새 스템이 없는 파일에
         # 이어붙으려 했고, 없는 것을 찾다가 0곡이 됐다.**
         "stem_sets": sorted(STEM_SETS) if args.separate else [],
+        # **시계열 창 길이도 조건이다** (D-0100). 다른 창으로 뽑은 산출물에
+        # 이어붙으면 창 길이가 섞이고, 섞인 시계열은 무엇을 잰 것인지 알 수 없다.
+        "series_seconds": args.series,
     }
 
 
@@ -1549,6 +1582,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
 
     from hathor.domain.services.key_estimation import (
         BLACK_KEYS,
+        chroma_series,
         estimate_key,
         estimate_tuning_cents,
         random_baseline,
@@ -1614,6 +1648,9 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             )
             return 1
         saved, done, broken = _resume_target(out_root, settings)
+        # **시계열은 산출물 이름을 따라간다** (D-0105). 이어받기가 정한 파일과 짝이
+        # 안 맞으면 어느 jsonl의 시계열인지 알 수 없다.
+        series_root = out_root / saved.name.replace(".keys.jsonl", ".series")
         if broken > max(1, int(len(done) * BROKEN_LINE_TOLERANCE)):
             lock.release()
             print(
@@ -1681,6 +1718,21 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                     aggregate=args.aggregate,
                     window_seconds=args.window_seconds,
                 )
+                if args.series is not None:
+                    # **같은 디코드·같은 분리를 쓴다.** 시계열 전용 배치를 따로 만들면
+                    # 이어받기·잠금·진행 표시를 복사해야 하고, 그러면 한쪽만 고쳐진다.
+                    _write_series(
+                        series_root,
+                        track.source_key,
+                        "mix",
+                        chroma_series(
+                            to_mono(waveform),
+                            window_seconds=args.series,
+                            mode=args.chroma,
+                            gamma=args.gamma,
+                            harmonic=args.harmonic,
+                        ),
+                    )
                 estimate = estimate_key(extracted, profile=args.profile)
                 cents = (
                     estimate_tuning_cents(to_mono(waveform))
@@ -1717,6 +1769,19 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                     middle = mixed.size // 2
                     # **`full`은 생성 경로가, `head`/`tail`은 판정이 쓴다** (D-0074).
                     # 반쪽은 홀드아웃 전용이라 전량 배치에서는 굳이 뽑지 않아도 된다.
+                    if args.series is not None:
+                        _write_series(
+                            series_root,
+                            track.source_key,
+                            name,
+                            chroma_series(
+                                mixed,
+                                window_seconds=args.series,
+                                mode=args.chroma,
+                                gamma=args.gamma,
+                                harmonic=args.harmonic,
+                            ),
+                        )
                     segments = [("full", mixed)]
                     if args.halves:
                         segments += [("head", mixed[:middle]), ("tail", mixed[middle:])]

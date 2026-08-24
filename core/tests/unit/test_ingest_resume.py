@@ -22,6 +22,7 @@ def settings(**overrides):
         "aggregate": "mean",
         "separate": True,
         "halves": False,
+        "series": None,
     }
     base.update(overrides)
     return _keys_settings(argparse.Namespace(**base))
@@ -245,3 +246,19 @@ def test_이어받지_않는_이유를_알린다(tmp_path, capsys):
     error = capsys.readouterr().err
     assert "이어받지 않는다" in error
     assert "halves" in error
+
+
+def test_시계열_창_길이가_조건에_들어간다():
+    """**다른 창으로 뽑은 산출물에 이어붙으면 창 길이가 섞인다** (D-0105).
+
+    섞인 시계열은 무엇을 잰 것인지 알 수 없다 — D-0073이 조건을 적기로 한 이유다.
+    """
+    assert settings()["series_seconds"] is None
+    assert settings(series=1.0)["series_seconds"] == 1.0
+
+
+def test_시계열_창_길이가_다르면_새_파일이다(tmp_path):
+    write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(settings(series=1.0), 5))
+    target, done, _ = _resume_target(tmp_path, settings(series=2.0))
+    assert target.name != "keys-20260821T100000Z.keys.jsonl"
+    assert done == set()
