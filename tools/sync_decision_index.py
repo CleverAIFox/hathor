@@ -71,7 +71,41 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DECISIONS = ROOT / "docs" / "DECISIONS.md"
+DECISIONS_DIR = ROOT / "docs" / "decisions"
 DESIGN = ROOT / "docs" / "DESIGN.md"
+
+PART_NAME = "D-{low:04d}-{high:04d}.md"
+PART_FILE = re.compile(r"^D-(\d{4})-(\d{4})\.md$")
+
+
+def part_path(name: str) -> Path:
+    return DECISIONS_DIR / name
+
+
+def merge_parts(parts: list[tuple[str, str]]) -> str:
+    """조각을 번호 순으로 잇는다. **각 조각의 머리말은 버린다.**
+
+    안 버리면 앞 조각 마지막 기록의 본문에 다음 조각의 머리말이 딸려 들어가고,
+    본문을 보는 검사(절·갱신·참조)가 그것을 기록의 일부로 읽는다.
+    """
+    bodies: list[str] = []
+    for _, text in parts:
+        first = HEADING.search(text)
+        bodies.append(text[first.start() :] if first else "")
+    return "\n---\n\n".join(body for body in bodies if body)
+
+
+def load_parts() -> list[tuple[str, str]]:
+    """검사 대상 결정 기록을 (이름, 본문)으로 낸다. **번호 순서다.**
+
+    조각이 있으면 조각만 읽는다. 없으면 `DECISIONS.md` 한 장을 읽는다 —
+    **분할 전후 어느 쪽에서도 검사가 돌아야 한다.**
+    """
+    if DECISIONS_DIR.is_dir():
+        parts = sorted(DECISIONS_DIR.glob("D-*.md"))
+        if parts:
+            return [(path.stem, path.read_text(encoding="utf-8")) for path in parts]
+    return [("DECISIONS", DECISIONS.read_text(encoding="utf-8"))]
 
 HEADING = re.compile(r"^## (D-\d{4})\. (.+?)\s*$", re.MULTILINE)
 REFERENCE = re.compile(r"D-(\d{4})")
@@ -101,6 +135,24 @@ FORMAT_ENFORCED_FROM = 80
 
 **이 숫자는 자의적이 아니다** — D-0080이 검사를 넣은 기록이므로 그 뒤부터다.
 옮기면 여기서 드러난다.
+"""
+
+SPLIT_LINE_LIMIT = 6000
+SPLIT_RECORD_LIMIT = 100
+"""한 조각의 상한. **O-30이 정한 숫자를 그대로 옮긴 것이다** (D-0080).
+
+조건을 문서에만 적어 두고 **검사를 안 걸었다.** 발동한 뒤로도 한참을 그냥 지났고
+`DECISIONS.md`는 112건 7579줄까지 갔다 — 조건의 26% 초과다. GR-0.8이 "검사할 수
+없는 규약은 잊힌다"고 적어 놓고 **정작 자기 파일 크기만 안 보고 있었다.**
+
+**여기서 건다. 넘으면 `make split`이다.**
+"""
+
+RECORDS_PER_PART = 50
+"""한 조각에 담는 건수. `SPLIT_RECORD_LIMIT`의 절반이다.
+
+**상한에 딱 맞춰 나누면 다음 기록 하나에 바로 다시 빨개진다.** 절반으로 나누면
+조각당 50건 · 최근 평균 88.3줄 기준 약 4400줄로 두 상한 모두에 여유가 남는다.
 """
 
 LINE_LIMIT = 100
@@ -153,12 +205,26 @@ def check_numbering(records: list[Record]) -> list[str]:
         seen.add(record.number)
     if not seen:
         return problems
-    for number in sorted(set(range(1, max(seen) + 1)) - seen):
+    # **이어진 결번은 한 줄로 묶는다.** 오타 하나로 `D-0999`가 들어오면 낱개로는
+    # 887줄이 쏟아진다. 검사가 옳아도 **읽을 수 없으면 안 잡은 것과 같다.**
+    for low, high in _gaps(sorted(set(range(1, max(seen) + 1)) - seen)):
+        span = f"D-{low:04d}" if low == high else f"D-{low:04d}~D-{high:04d} ({high - low + 1}건)"
         problems.append(
-            f"D-{number:04d}가 비어 있다. "
-            f"내용이 유실됐으면 `## D-{number:04d}. {BLANK_RECORD} …` 표제를 남긴다"
+            f"{span}가 비어 있다. "
+            f"내용이 유실됐으면 `## D-{low:04d}. {BLANK_RECORD} …` 표제를 남긴다"
         )
     return problems
+
+
+def _gaps(numbers: list[int]) -> list[tuple[int, int]]:
+    """이어진 정수를 (처음, 끝)으로 묶는다."""
+    ranges: list[tuple[int, int]] = []
+    for number in numbers:
+        if ranges and number == ranges[-1][1] + 1:
+            ranges[-1] = (ranges[-1][0], number)
+        else:
+            ranges.append((number, number))
+    return ranges
 
 
 def check_references(records: list[Record]) -> list[str]:
@@ -200,7 +266,7 @@ def check_sections(records: list[Record]) -> list[str]:
     return problems
 
 
-def check_layout(records: list[Record], decisions_text: str) -> list[str]:
+def check_layout(parts: list[tuple[str, str]]) -> list[str]:
     """표기 규약. **전 기록에 건다** (D-0081).
 
     표기는 고쳐도 그때의 판단이 바뀌지 않으므로 소급 정규화했고, 정규화만 하고
@@ -208,17 +274,50 @@ def check_layout(records: list[Record], decisions_text: str) -> list[str]:
     줄인 것이 49대 31로 섞여 있었다.
     """
     problems: list[str] = []
-    lines = decisions_text.split("\n")
-    for index, line in enumerate(lines):
-        if not line.startswith("## D-"):
+    for name, text in parts:
+        lines = text.split("\n")
+        for index, line in enumerate(lines):
+            if not line.startswith("## D-"):
+                continue
+            if index >= 2 and not (lines[index - 1] == "" and lines[index - 2].strip() == "---"):
+                problems.append(f"{name} {index + 1}행: 표제 앞이 `---` + 빈 줄이 아니다")
+            if index + 1 < len(lines) and lines[index + 1] != "":
+                problems.append(f"{name} {index + 1}행: 표제 뒤에 빈 줄이 없다")
+        for record in scan_records(text):
+            if not record.title.strip():
+                problems.append(f"{record.identifier}에 제목이 없다")
+    return problems
+
+
+def check_split(parts: list[tuple[str, str]]) -> list[str]:
+    """조각이 상한 안에 있고 이름이 범위를 정확히 덮는가 (O-30 · D-0080).
+
+    **이름이 범위다.** `D-0051-0100.md`에 `D-0101`이 들어 있으면 `grep` 없이 파일을
+    고를 수 없고, 그 순간 조각 나누기는 아무것도 벌어 주지 않는다.
+    """
+    problems: list[str] = []
+    seen: set[int] = set()
+    for name, text in parts:
+        records = scan_records(text)
+        lines = text.count("\n") + 1
+        if lines > SPLIT_LINE_LIMIT:
+            problems.append(
+                f"{name}: {lines}줄로 상한 {SPLIT_LINE_LIMIT}줄을 넘는다. make split"
+            )
+        if len(records) > SPLIT_RECORD_LIMIT:
+            problems.append(
+                f"{name}: {len(records)}건으로 상한 {SPLIT_RECORD_LIMIT}건을 넘는다. make split"
+            )
+        match = PART_FILE.match(f"{name}.md")
+        if match is None:
             continue
-        if index >= 2 and not (lines[index - 1] == "" and lines[index - 2].strip() == "---"):
-            problems.append(f"DECISIONS {index + 1}행: 표제 앞이 `---` + 빈 줄이 아니다")
-        if index + 1 < len(lines) and lines[index + 1] != "":
-            problems.append(f"DECISIONS {index + 1}행: 표제 뒤에 빈 줄이 없다")
-    for record in records:
-        if not record.title.strip():
-            problems.append(f"{record.identifier}에 제목이 없다")
+        low, high = int(match.group(1)), int(match.group(2))
+        for record in records:
+            if not low <= record.number <= high:
+                problems.append(f"{name}: {record.identifier}이 이름의 범위 밖이다")
+            if record.number in seen:
+                problems.append(f"{name}: {record.identifier}이 다른 조각에도 있다")
+            seen.add(record.number)
     return problems
 
 
@@ -342,16 +441,20 @@ def build_index(decisions_text: str) -> str:
     )
 
 
-def run_checks(decisions_text: str, design_text: str) -> list[str]:
+def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
     """전부 돌리고 문제를 모아 낸다. **첫 문제에서 멈추지 않는다** — 한 번에 다
     보여야 고치러 여러 번 오지 않는다.
+
+    **번호·참조·갱신은 합쳐서 본다.** 조각을 갈랐다고 `D-0113`이 `D-0086`을 참조하지
+    못하게 되면 나눈 대가로 검사를 잃는 것이다.
     """
-    records = scan_records(decisions_text)
+    records = scan_records(merge_parts(parts))
     documents = {
-        "DECISIONS": decisions_text,
         "DESIGN": design_text,
         "CONTRIBUTING": (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"),
         "README": (ROOT / "README.md").read_text(encoding="utf-8"),
+        "DECISIONS": DECISIONS.read_text(encoding="utf-8"),
+        **dict(parts),
     }
     return [
         *check_numbering(records),
@@ -359,7 +462,7 @@ def run_checks(decisions_text: str, design_text: str) -> list[str]:
         *check_sections(records),
         *check_supersession(records),
         *check_open_issues(design_text),
-        *check_layout(records, decisions_text),
+        *check_layout(parts),
         *check_text_style(documents),
     ]
 
@@ -374,8 +477,9 @@ def main() -> int:
         print(f"{DESIGN}에 {BEGIN} ... {END} 표식이 없다", file=sys.stderr)
         return 2
 
-    decisions_text = DECISIONS.read_text(encoding="utf-8")
-    problems = run_checks(decisions_text, plan_text)
+    parts = load_parts()
+    decisions_text = merge_parts(parts)
+    problems = run_checks(parts, plan_text)
     if problems:
         print(f"결정 기록·미해결표에 문제가 {len(problems)}건 있다.", file=sys.stderr)
         for problem in problems:

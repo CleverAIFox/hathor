@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs clean clean-all setup env doctor apply
+.PHONY: up down logs ps check lint type arch test cov docs split clean clean-all setup env doctor apply
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -15,6 +15,9 @@ check: docs lint type arch test  ## CI와 동일한 검사를 로컬에서 수�
 
 docs:          ## 부록 A 색인이 결정 기록과 일치하는지 (D-0042)
 	python3 tools/sync_decision_index.py --check
+
+split:         ## 결정 기록을 번호대별로 다시 나눈다. make docs가 빨개지면 (O-30)
+	python3 tools/split_decisions.py
 lint:
 	cd core && uv run ruff check . && uv run ruff format --check .
 type:
@@ -22,7 +25,7 @@ type:
 arch:
 	cd core && uv run lint-imports
 test:
-	cd core && uv run pytest --cov=hathor --cov-fail-under=75 -q
+	cd core && uv run pytest --cov=hathor --cov-fail-under=83 -q
 
 setup:         ## 기기를 탐지해 .env를 쓴다. 새 기기에서 한 번 (D-0068)
 	cd core && uv run python -m hathor.cli setup
