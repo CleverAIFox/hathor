@@ -3027,6 +3027,8 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     if args.compare_vocabulary:
         from dataclasses import replace
 
+        from hathor.application.evaluate_harmony_output import OutputLine
+
         print("어휘 비교 (같은 쌍·같은 시드) — O-36 · D-0094")
         columns = (
             ("어휘", "<10"),
@@ -3087,12 +3089,66 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
         print("**D-0093이 잰 것과 여기서 필요한 것이 다른 양이다** (D-0095). 거기서는 세 칸이")
         print("**함께 오르는가**(상관)를 쟀고, 히스토그램 거리를 만드는 것은 **얼마나")
         print("흔들리는가**(분산)다. 위 두 표준편차가 비슷하면 어휘를 넓혀도 이득이 없다.\n")
+        if args.bar_sweep:
+            counts = tuple(int(token) for token in args.bar_sweep.split(",") if token.strip())
+            limit_gain = (
+                measured["mixture"].line("paired").mean_limit
+                - measured["control"].line("paired").mean_limit
+            )
+            print(
+                "마디 수 훑기 — **8마디 되튐이 어휘 이득을 덮는가** (D-0096)\n"
+                f"극한 차이 (mixture - control) = {limit_gain:+.4f}\n"
+            )
+            sweep_columns = (
+                ("마디", ">6"),
+                ("mixture", ">10.4f"),
+                ("control", ">10.4f"),
+                ("차이", ">10.4f"),
+                ("극한대비", ">10.1%"),
+                ("승률", ">8.1%"),
+            )
+            sweep_rows: list[tuple[object, ...]] = []
+            for bars in counts:
+                swept: dict[str, OutputLine] = {}
+                for name in ("control", "mixture"):
+                    chosen = replace(condition, vocabulary=Vocabulary(name), bar_count=bars)
+                    swept[name] = (
+                        EvaluateHarmonyOutput(chosen).run(references(target), name).line("paired")
+                    )
+                step = swept["mixture"].mean_distance - swept["control"].mean_distance
+                won = sum(
+                    1
+                    for left, right in zip(
+                        swept["mixture"].distances, swept["control"].distances, strict=True
+                    )
+                    if left > right
+                )
+                sweep_rows.append(
+                    (
+                        bars,
+                        swept["mixture"].mean_distance,
+                        swept["control"].mean_distance,
+                        step,
+                        step / limit_gain if limit_gain != 0 else 0.0,
+                        won / max(len(swept["mixture"].distances), 1),
+                    )
+                )
+            for text in render_table(sweep_columns, sweep_rows):
+                print(text)
+            print(
+                "\n**8마디에서 안 보인다고 없는 것이 아니다.** 되튐은 마디 수가 늘면 줄고"
+                "\n극한 차이는 안 줄므로, 마디를 늘리면 어휘 이득이 드러난다. 합성에서"
+                "\n8마디가 극한 차이의 44.7%, 256마디가 101.4%였다 (D-0096)."
+                "\n**`승률`이 60%를 못 넘는 줄은 읽지 않는다** — 쌍 100개에서 동전과 구분되지"
+                "\n않는다 (D-0095에서 51%를 통과로 읽을 뻔했다).\n"
+            )
+
         print("**`control`을 안 빼면 아무것도 못 읽는다.** 도수를 6에서 9로 늘리는 것만으로")
         print("두 진행이 겹칠 확률이 낮아져 거리가 오른다 — 합성에서 차용이 전혀 없어도")
         print("0.2155에서 0.2696으로 올랐다. `control`은 **뭉치지 않는 세 칸**(♭2·♯4·이끔음)을")
         print("같은 개수로 넣은 선이며, 거기서 오르는 몫은 전부 칸이 늘어서다 (D-0094).\n")
 
-    if args.bar_sweep:
+    if args.bar_sweep and not args.compare_vocabulary:
         counts = tuple(int(token) for token in args.bar_sweep.split(",") if token.strip())
         print("마디 수 훑기 (실측이 극한으로 내려가는가)")
         for bars, observed, limit in sweep_bar_counts(references(target), counts, condition):

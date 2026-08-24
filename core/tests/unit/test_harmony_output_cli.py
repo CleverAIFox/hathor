@@ -369,3 +369,29 @@ def test_어휘_인자가_실제로_걸린다(tmp_path, capsys):
         assert main([*command, "--vocabulary", vocabulary, *FAST]) == 0
         outputs.append(capsys.readouterr().out)
     assert outputs[0] != outputs[1]
+
+
+def test_어휘_비교와_마디_훑기를_함께_낸다(tmp_path, capsys):
+    """**8마디 되튐이 어휘 이득을 덮는다** (D-0096). 마디를 늘려야 드러난다."""
+    path = write_keys(tmp_path / "keys.jsonl")
+    assert (
+        main(
+            [
+                "eval",
+                "harmony-output",
+                "--priors",
+                str(path),
+                "--against",
+                "none",
+                "--compare-vocabulary",
+                "--bar-sweep",
+                "8,32",
+                *FAST,
+            ]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "극한 차이 (mixture - control)" in out
+    assert "극한대비" in out
+    assert "마디 수 훑기 (실측이 극한으로 내려가는가)" not in out, "훑기가 두 번 돈다"
