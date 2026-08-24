@@ -206,3 +206,42 @@ def test_잘린_한_줄은_손상으로_보지_않는다(tmp_path):
     _, done, broken = _resume_target(tmp_path, config)
     assert len(done) == 30
     assert broken == 1
+
+
+def test_스템_조합이_조건에_들어간다():
+    """**`separated`만으로는 모자란다** (D-0100).
+
+    `STEM_SETS`에 조합을 하나 더해도 조건이 같아 보이면 **새 스템이 없는 파일에
+    이어붙는다.** D-0099가 `bass`를 더한 뒤 실제로 그 일이 났다.
+    """
+    from hathor.interfaces.cli.main import STEM_SETS
+
+    assert settings()["stem_sets"] == sorted(STEM_SETS)
+    assert settings(separate=False)["stem_sets"] == []
+
+
+def test_스템_조합이_늘면_새_파일이다(tmp_path):
+    old = settings()
+    old["stem_sets"] = ["other"]
+    write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(old, 5))
+    target, done, _ = _resume_target(tmp_path, settings())
+    assert target.name != "keys-20260821T100000Z.keys.jsonl"
+    assert done == set()
+
+
+def test_스템_조합이_안_적힌_옛_산출물은_이어받지_않는다(tmp_path):
+    """부재는 불일치다. **없는 스템을 찾다가 0곡이 되는 것보다 다시 뽑는 편이 낫다.**"""
+    old = settings()
+    del old["stem_sets"]
+    write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(old, 5))
+    target, _, _ = _resume_target(tmp_path, settings())
+    assert target.name != "keys-20260821T100000Z.keys.jsonl"
+
+
+def test_이어받지_않는_이유를_알린다(tmp_path, capsys):
+    """**조용히 새 파일을 열지 않는다** (D-0100). 모르면 한 시간 반을 다시 쓴다."""
+    write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(settings(), 5))
+    _resume_target(tmp_path, settings(halves=True))
+    error = capsys.readouterr().err
+    assert "이어받지 않는다" in error
+    assert "halves" in error

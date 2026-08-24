@@ -961,6 +961,11 @@ def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
         "aggregate": args.aggregate,
         "separated": bool(args.separate),
         "halves": bool(args.halves),
+        # **어떤 스템 조합을 뽑았는지가 조건이다** (D-0100). 예전에는 `separated`만
+        # 있어서, `STEM_SETS`에 조합을 하나 더해도 "이미 전부 처리했다"로 건너뛰었다.
+        # 실제로 D-0099가 `bass`를 더한 뒤 그 일이 났다 — **새 스템이 없는 파일에
+        # 이어붙으려 했고, 없는 것을 찾다가 0곡이 됐다.**
+        "stem_sets": sorted(STEM_SETS) if args.separate else [],
     }
 
 
@@ -1065,7 +1070,17 @@ def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, s
                             broken += 1
                             continue  # 잘린 마지막 줄이면 정상, 많으면 손상이다
                         if not matched:
-                            if any(row.get(k) != v for k, v in settings.items()):
+                            differing = [
+                                key for key, value in settings.items() if row.get(key) != value
+                            ]
+                            if differing:
+                                # **조용히 새 파일을 열지 않는다** (D-0100). 이어받기가
+                                # 안 걸린 것을 모르면 한 시간 반을 다시 쓴다.
+                                print(
+                                    f"이어받지 않는다: {path.name} · 조건이 다르다 "
+                                    f"({', '.join(differing)})",
+                                    file=sys.stderr,
+                                )
                                 break
                             matched = True
                         source = row.get("source_key")
