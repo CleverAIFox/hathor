@@ -1085,6 +1085,9 @@ def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, s
     import json
     from datetime import UTC, datetime
 
+    # **후보가 열 개면 열 줄이 나온다** (D-0106). 가장 조건이 적게 다른 하나만 찍는다 —
+    # 그것이 "무엇을 바꾸면 이어받는가"에 가장 가까운 답이다.
+    skipped: list[tuple[str, list[str]]] = []
     if out_root.is_dir():
         for path in sorted(out_root.glob("keys-*.keys.jsonl"), reverse=True):
             done: set[str] = set()
@@ -1109,11 +1112,7 @@ def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, s
                             if differing:
                                 # **조용히 새 파일을 열지 않는다** (D-0100). 이어받기가
                                 # 안 걸린 것을 모르면 한 시간 반을 다시 쓴다.
-                                print(
-                                    f"이어받지 않는다: {path.name} · 조건이 다르다 "
-                                    f"({', '.join(differing)})",
-                                    file=sys.stderr,
-                                )
+                                skipped.append((path.name, differing))
                                 break
                             matched = True
                         source = row.get("source_key")
@@ -1124,6 +1123,13 @@ def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, s
             if matched:
                 return path, done, broken
 
+    if skipped:
+        name, differing = min(skipped, key=lambda entry: len(entry[1]))
+        extra = f" (다른 후보 {len(skipped) - 1}개)" if len(skipped) > 1 else ""
+        print(
+            f"이어받지 않는다: {name} · 조건이 다르다 ({', '.join(differing)}){extra}",
+            file=sys.stderr,
+        )
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     return out_root / f"keys-{stamp}.keys.jsonl", set(), 0
 
@@ -1769,7 +1775,11 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                     middle = mixed.size // 2
                     # **`full`은 생성 경로가, `head`/`tail`은 판정이 쓴다** (D-0074).
                     # 반쪽은 홀드아웃 전용이라 전량 배치에서는 굳이 뽑지 않아도 된다.
-                    if args.series is not None:
+                    if args.series is not None and len(parts) == 1:
+                        # **조합은 시계열로 안 뽑는다** (D-0106). `other+bass`류는 화성
+                        # 사전을 고르려고 만든 것이고(D-0073), 순서 작업이 쓰는 것은
+                        # `other`(화음)와 `bass`(독립 관측)다. 시계열 한 번이 전곡
+                        # 크로마 한 번과 같은 비용이라 조합 둘이 곡당 1.7초를 버린다.
                         _write_series(
                             series_root,
                             track.source_key,

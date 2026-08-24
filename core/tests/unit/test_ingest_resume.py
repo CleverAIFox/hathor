@@ -262,3 +262,33 @@ def test_시계열_창_길이가_다르면_새_파일이다(tmp_path):
     target, done, _ = _resume_target(tmp_path, settings(series=2.0))
     assert target.name != "keys-20260821T100000Z.keys.jsonl"
     assert done == set()
+
+
+def test_이어받지_않는_이유를_한_줄로_찍는다(tmp_path, capsys):
+    """**후보가 열 개면 열 줄이 나왔다** (D-0106).
+
+    조건이 가장 적게 다른 하나만 찍는다 — 그것이 "무엇을 바꾸면 이어받는가"에
+    가장 가까운 답이다.
+    """
+    write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(settings(), 5))
+    write(
+        tmp_path / "keys-20260820T100000Z.keys.jsonl",
+        rows_for(settings(profile="temperley", separate=False), 5),
+    )
+    _resume_target(tmp_path, settings(halves=True))
+    lines = [line for line in capsys.readouterr().err.splitlines() if line.strip()]
+    assert len(lines) == 1, lines
+    assert "halves" in lines[0]
+    assert "다른 후보 1개" in lines[0]
+
+
+def test_시계열은_낱개_스템만_뽑는다():
+    """**조합은 아무도 안 쓴다** (D-0106).
+
+    `other+bass`류는 화성 사전을 고르려고 만든 것이고(D-0073), 순서 작업이 쓰는
+    것은 `other`와 `bass`다. 시계열 한 번이 전곡 크로마 한 번과 같은 비용이다.
+    """
+    from hathor.interfaces.cli.main import STEM_SETS
+
+    singles = [name for name, parts in STEM_SETS.items() if len(parts) == 1]
+    assert set(singles) == {"other", "bass", "vocals"}
