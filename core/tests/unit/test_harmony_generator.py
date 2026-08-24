@@ -1,8 +1,13 @@
 """화성 생성기 단위 테스트."""
 
+from itertools import pairwise
+
 import pytest
 
+from hathor.domain.value_objects.key import Key, Mode
 from hathor.engines.compose.harmony_generator import generate_harmony
+
+MAJOR = Key(tonic="C", mode=Mode.MAJOR)
 
 # ------------------------------------------------- 참조곡 조건화 (O-21 · D-0063)
 
@@ -29,32 +34,24 @@ def test_사전을_주지_않으면_이전과_완전히_같다():
 
 
 def test_사전이_치우치면_그_도수가_많이_뽑힌다():
-    from hathor.domain.value_objects.key import Key, Mode
-
-    key = Key(tonic="C", mode=Mode.MAJOR)
     # V의 근음은 으뜸음 위 7반음이다.
-    dominant = generate_harmony(1, key, bar_count=64, prior=_prior({7: 200.0}))
+    dominant = generate_harmony(1, MAJOR, bar_count=64, prior=_prior({7: 200.0}))
     assert dominant.degrees.count("V") > 50
 
 
 def test_다른_사전은_다른_진행을_낸다():
     """같은 시드에서도 참조곡이 다르면 갈려야 한다 — O-21의 본문이다."""
-    from hathor.domain.value_objects.key import Key, Mode
-
-    key = Key(tonic="C", mode=Mode.MAJOR)
-    first = generate_harmony(7, key, bar_count=16, prior=_prior({0: 60.0}))
-    second = generate_harmony(7, key, bar_count=16, prior=_prior({9: 60.0}))
+    first = generate_harmony(7, MAJOR, bar_count=16, prior=_prior({0: 60.0}))
+    second = generate_harmony(7, MAJOR, bar_count=16, prior=_prior({9: 60.0}))
     assert first.degrees != second.degrees
 
 
 def test_같은_사전은_같은_진행을_낸다():
-    from hathor.domain.value_objects.key import Key, Mode
-
-    key = Key(tonic="A", mode=Mode.MINOR)
+    minor = Key(tonic="A", mode=Mode.MINOR)
     prior = _prior({3: 20.0, 7: 8.0})
     assert (
-        generate_harmony(3, key, bar_count=12, prior=prior).degrees
-        == generate_harmony(3, key, bar_count=12, prior=prior).degrees
+        generate_harmony(3, minor, bar_count=12, prior=prior).degrees
+        == generate_harmony(3, minor, bar_count=12, prior=prior).degrees
     )
 
 
@@ -84,3 +81,72 @@ def test_사전이_12차원이_아니면_거부한다():
 
     with pytest.raises(ValueError, match="12차원"):
         degree_weights([0.1] * 11, Mode.MAJOR)
+
+
+# ------------------------------------------------------------------ 배열 조건화 (O-32 · D-0109)
+
+
+def _transition(pairs: dict[tuple[int, int], float]) -> list[list[float]]:
+    matrix = [[0.0] * 12 for _ in range(12)]
+    for (left, right), weight in pairs.items():
+        matrix[left][right] = weight
+    return matrix
+
+
+def test_전이_사전이_다음_마디를_정한다():
+    """**그때까지 순서는 시드만 정했다** (D-0062)."""
+    prior = [1.0] + [0.0] * 11  # 첫 마디는 I
+    matrix = _transition({(0, 7): 1.0, (7, 5): 1.0, (5, 0): 1.0})
+    degrees = generate_harmony(7, MAJOR, 6, prior=prior, transition=matrix).degrees
+    assert degrees == ("I", "V", "IV", "I", "V", "IV")
+
+
+def test_마디마다_반드시_바뀐다():
+    """**전이 사전은 대각선을 버렸다** (D-0103). 안 바꿀 확률이 거기 없다.
+
+    화음을 얼마나 오래 끄는가는 O-37이다. 고정 확률로 유지하는 안은 **손잡이가 하나
+    늘고 그것을 실험으로 고르면 D-0058이라** 기각했다.
+    """
+    prior = [1.0] * 12
+    matrix = _transition({(a, b): 1.0 for a in range(12) for b in range(12) if a != b})
+    degrees = generate_harmony(3, MAJOR, 32, prior=prior, transition=matrix).degrees
+    assert all(left != right for left, right in pairwise(degrees))
+
+
+def test_전이가_없으면_기존_동작이다():
+    """**기존 산출물이 안 바뀐다.**"""
+    prior = [0.2, 0.05, 0.15, 0.05, 0.1, 0.12, 0.03, 0.14, 0.04, 0.06, 0.03, 0.03]
+    assert (
+        generate_harmony(11, MAJOR, 8, prior=prior).degrees
+        == generate_harmony(11, MAJOR, 8, prior=prior, transition=None).degrees
+    )
+
+
+def test_빈_전이_사전이면_물러난다():
+    """창이 둘 미만이거나 한 도수만 나온 곡이 그렇다 (D-0107).
+
+    **없는 것을 조건으로 쓰지 않는다** — 균등으로 되돌리면 사전이 있는 척이 된다.
+    """
+    prior = [0.2, 0.05, 0.15, 0.05, 0.1, 0.12, 0.03, 0.14, 0.04, 0.06, 0.03, 0.03]
+    empty = [[0.0] * 12 for _ in range(12)]
+    assert (
+        generate_harmony(11, MAJOR, 8, prior=prior, transition=empty).degrees
+        == generate_harmony(11, MAJOR, 8, prior=prior).degrees
+    )
+
+
+def test_첫_마디는_사전이_정한다():
+    """**전이 사전에는 시작이 없다.**"""
+    matrix = _transition({(a, b): 1.0 for a in range(12) for b in range(12) if a != b})
+    only_five = [0.0] * 12
+    only_five[7] = 1.0
+    assert generate_harmony(5, MAJOR, 4, prior=only_five, transition=matrix).degrees[0] == "V"
+
+
+def test_행이_비어도_자기_자신으로_안_돌아온다():
+    """행이 비면 열 합으로 되돌아오는데 **거기 자기 자신이 들어 있다** (D-0107)."""
+    prior = [1.0] * 12
+    # `V`(7)에서 나가는 행이 비어 있다
+    matrix = _transition({(0, 7): 1.0, (2, 7): 1.0, (4, 7): 1.0})
+    degrees = generate_harmony(9, MAJOR, 12, prior=prior, transition=matrix).degrees
+    assert all(left != right for left, right in pairwise(degrees))

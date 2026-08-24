@@ -9,6 +9,7 @@ from enum import StrEnum
 import numpy as np
 
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
+from hathor.domain.services.transition_prior import is_empty, transition_row
 from hathor.domain.value_objects.chord_progression import ChordProgression
 from hathor.domain.value_objects.key import Key, Mode
 
@@ -137,6 +138,7 @@ def generate_harmony(
     *,
     prior: Sequence[float] | None = None,
     vocabulary: Vocabulary = Vocabulary.BASE,
+    transition: Sequence[Sequence[float]] | None = None,
 ) -> ChordProgression:
     """시드와 조성이 같으면 항상 같은 진행을 반환한다.
 
@@ -176,6 +178,18 @@ def generate_harmony(
     0.2696으로 올랐다. **`Vocabulary.CONTROL`과 견주지 않은 `MIXTURE` 값은 읽으면
     안 된다** (D-0094).
 
+    ### 배열 조건화 (O-32 · D-0109)
+
+    `transition`은 참조곡의 12x12 전이 사전이다 (D-0107). 주면 **다음 마디를 지금
+    마디에 따라** 뽑는다 — 그때까지 순서는 시드만 정했다 (D-0062).
+
+    **마디마다 반드시 바뀐다.** 전이 사전은 대각선을 버렸으므로 (D-0103) 답하는 것이
+    **"바뀐다면 어디로"**뿐이고, 안 바꿀 확률은 여기 없다. 고정 확률로 유지하는 안은
+    **손잡이가 하나 늘고 그것을 실험으로 고르면 D-0058이라 기각했다.** 화음을 얼마나
+    오래 끄는가는 O-37이다.
+
+    **첫 마디는 `prior`가 정한다.** 전이 사전에는 시작이 없다.
+
     P4에서 A* 탐색 기반 화성 생성으로 교체된다.
     """
     if bar_count < 1:
@@ -184,7 +198,20 @@ def generate_harmony(
     pool = vocabulary_degrees(key.mode, vocabulary)
     if prior is None:
         degrees = tuple(rng.choice(pool) for _ in range(bar_count))
-    else:
+    elif transition is None or is_empty(transition):
         weights = degree_weights(prior, key.mode, vocabulary)
         degrees = tuple(rng.choices(pool, weights=weights, k=1)[0] for _ in range(bar_count))
+    else:
+        roots = vocabulary_roots(key.mode, vocabulary)
+        weights = degree_weights(prior, key.mode, vocabulary)
+        picked = [rng.choices(range(len(pool)), weights=list(weights), k=1)[0]]
+        for _ in range(bar_count - 1):
+            row = list(transition_row(transition, roots[picked[-1]], roots))
+            # **자기 자리를 지운다.** 사전이 대각선을 버렸어도 행이 비어 열 합으로
+            # 되돌아오면 자기 자신이 다시 들어온다 (D-0107).
+            row[picked[-1]] = 0.0
+            if sum(row) <= 0.0:
+                row = [0.0 if index == picked[-1] else 1.0 for index in range(len(pool))]
+            picked.append(rng.choices(range(len(pool)), weights=row, k=1)[0])
+        degrees = tuple(pool[index] for index in picked)
     return ChordProgression(key=key, degrees=degrees)

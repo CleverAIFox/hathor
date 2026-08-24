@@ -82,22 +82,25 @@ def transition_prior(
     return matrix / total if total > 0 else matrix
 
 
-def is_empty(matrix: TransitionMatrix) -> bool:
+def is_empty(matrix: Sequence[Sequence[float]] | TransitionMatrix) -> bool:
     """전이가 없는 사전인가. **없는 것을 조건으로 쓰지 않는다.**"""
     return float(np.asarray(matrix).sum()) <= 0.0
 
 
 def transition_row(
-    matrix: TransitionMatrix, current: int, roots: Sequence[int]
+    matrix: Sequence[Sequence[float]] | TransitionMatrix,
+    current: int,
+    roots: Sequence[int],
 ) -> tuple[float, ...]:
     """지금 도수에서 다음으로 갈 무게. **코드 풀의 근음만 남긴다.**
 
     행이 비면 **열 합**으로 되돌린다 — 그 도수가 참조곡에 안 나왔다는 뜻이므로
     곡 전체의 도착 빈도를 쓴다. 그것도 비면 균등이다.
     """
-    picked = np.maximum(np.asarray(matrix)[current, list(roots)], 0.0)
+    stacked = np.asarray(matrix, dtype=np.float64)
+    picked = np.maximum(stacked[current, list(roots)], 0.0)
     if picked.sum() <= 0.0:
-        picked = np.maximum(np.asarray(matrix)[:, list(roots)].sum(axis=0), 0.0)
+        picked = np.maximum(stacked[:, list(roots)].sum(axis=0), 0.0)
     total = float(picked.sum())
     if total <= 0.0:
         return tuple([1.0 / len(roots)] * len(roots))
