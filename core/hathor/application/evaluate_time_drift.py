@@ -54,8 +54,15 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from hathor.application.evaluate_harmony_output import Histogram
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
+
+DriftTable = np.ndarray[tuple[int, int], np.dtype[np.float64]]
+"""`(곡 수, 12)` 변화 벡터 묶음 (D-0108).
+
+**1차원 별칭을 쓰다가 `make check`가 빨갛게 떴다.** 이 파일이 다루는 것은 곡마다
+한 벡터이므로 2차원이고, `Histogram`은 창 하나를 가리키는 1차원이다. 이름이 맞으면
+`mypy`가 잡는다 — **기기마다 넘파이 판이 달라 한쪽에서만 통과하는 자리다.**
+"""
 
 DEFAULT_NULL_REPEATS = 20
 DEFAULT_BOOTSTRAP = 40
@@ -89,7 +96,7 @@ def drift_vector(head: Sequence[float], tail: Sequence[float]) -> tuple[float, .
     return tuple(float(value) for value in changed - changed.mean())
 
 
-def _cell_correlation(left: Histogram, right: Histogram) -> float:
+def _cell_correlation(left: DriftTable, right: DriftTable) -> float:
     """칸별 곡 간 상관의 평균. 흔들리지 않는 칸은 뺀다."""
     found: list[float] = []
     for cell in range(DEGREE_COUNT):
@@ -100,7 +107,7 @@ def _cell_correlation(left: Histogram, right: Histogram) -> float:
     return float(np.mean(found)) if found else 0.0
 
 
-def _positive_cells(left: Histogram, right: Histogram, null: float) -> float:
+def _positive_cells(left: DriftTable, right: DriftTable, null: float) -> float:
     """칸 몇 개에서 귀무선을 넘는가. **평균 한 점의 우연이 아님을 본다.**"""
     wins = 0
     total = 0
@@ -163,14 +170,14 @@ class EvaluateTimeDrift:
     def run(self, observations: Sequence[DriftObservation], label: str) -> DriftReport:
         if len(observations) < 10:
             raise ValueError(f"곡이 10개 이상 필요하다: {len(observations)}")
-        left = np.asarray([item.left for item in observations], dtype=np.float64)
-        right = np.asarray([item.right for item in observations], dtype=np.float64)
+        left: DriftTable = np.asarray([item.left for item in observations], dtype=np.float64)
+        right: DriftTable = np.asarray([item.right for item in observations], dtype=np.float64)
 
         def stream(line: int, repeat: int = 0) -> np.random.Generator:
             """**선마다 흐름이 따로다** (D-0087)."""
             return np.random.default_rng([self._seed, line, repeat])
 
-        def null_of(a: Histogram, b: Histogram, line: int) -> float:
+        def null_of(a: DriftTable, b: DriftTable, line: int) -> float:
             drawn = []
             for index in range(self._null_repeats):
                 order = stream(line, index).permutation(len(a))
