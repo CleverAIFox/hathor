@@ -45,11 +45,11 @@ doctor:        ## 기록된 규약과 기기 상태가 맞는지 검사한다 (D
 artifacts:     ## 교두보와 저장소에 무엇이 있는지 (D-0118)
 	python3 tools/sync_artifacts.py status
 
-artifacts-push:  ## 산출물을 SSD 교두보로 보낸다. 덮어쓰지 않는다
-	python3 tools/sync_artifacts.py push
+artifacts-push:  ## 교두보로 보낸다. ONLY=keys 로 O-37 세트만 (D-0119)
+	python3 tools/sync_artifacts.py push $(if $(ONLY),--only $(ONLY),)
 
-artifacts-pull:  ## 교두보에서 가져온다. 이미 있는 것은 건너뛴다
-	python3 tools/sync_artifacts.py pull
+artifacts-pull:  ## 교두보에서 가져온다. ONLY=keys 로 74MB만 (D-0119)
+	python3 tools/sync_artifacts.py pull $(if $(ONLY),--only $(ONLY),)
 
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [NOCOMMIT=1] (D-0070)
 	@bash tools/apply_patch.sh $(PATCH)

@@ -131,6 +131,14 @@ make artifacts-pull     # 광인사에서: SSD -> var/ingest
 양쪽 어느 방향으로도 안전하다 — 산출물 이름에 스탬프가 박혀 있어 서로 다른 실행이
 같은 이름을 낼 수 없다. **정말 갈아치우려면 손으로 지운다.**
 
+**필요한 것만 옮긴다** (D-0119). 실측 산출물이 1.7GB · 17192개인데 화성 작업이 읽는
+것은 `keys-*` 74MB뿐이다. **DrvFs에서는 크기보다 개수가 아프다.**
+
+```bash
+make artifacts-push ONLY=keys    # keys-*.keys.jsonl + keys-*.series (74MB)
+make artifacts-pull  ONLY=keys
+```
+
 `doctor`가 스템 사전이 없다고 하면 **재추출 전에 `make artifacts-pull`을 먼저 본다.**
 수십 초와 1시간 40분의 차이다.
 

@@ -69,6 +69,29 @@ def store_root() -> Path | None:
     return Path(value).expanduser() if value else None
 
 
+ATTACHED = "붙어 있다"
+EMPTY = "아직 비었다"
+MISSING = "안 붙었다"
+
+
+def probe(store: Path | None) -> tuple[str, str]:
+    """교두보가 **어느 상태인지** 가른다 (D-0119).
+
+    D-0118은 이 셋을 한 메시지로 뭉쳐 `!! 없다. SSD가 안 붙었거나 경로가 틀렸다`를
+    냈다. **처음이라 비어 있을 때도 그렇게 말해서** 붙어 있는 SSD를 안 붙었다고
+    읽게 만들었다. **가장 흔한 경우가 가장 무서운 문구를 받고 있었다.**
+    """
+    if store is None:
+        return MISSING, f"{STORE_ENV} 미설정. `.env`에 한 줄 적는다"
+    if not store.is_dir():
+        return MISSING, f"{store} 가 없다. SSD가 안 붙었거나 경로가 틀렸다"
+    if not os.access(store, os.W_OK):
+        return MISSING, f"{store} 에 쓸 수 없다. 마운트 권한을 본다"
+    if not (store / SUBTREE).is_dir():
+        return EMPTY, f"{store}  (아직 비었다. 첫 push가 만든다)"
+    return ATTACHED, str(store)
+
+
 def walk(base: Path) -> dict[str, int]:
     """`상대경로 → 바이트`. **경로 구분자는 항상 `/`다** (D-0009)."""
     if not base.is_dir():
@@ -97,10 +120,28 @@ def copy_one(source: Path, target: Path) -> None:
     staging.replace(target)
 
 
-def transfer(source_base: Path, target_base: Path, label: str, dry_run: bool) -> int:
-    have = walk(source_base)
+def keep(names: dict[str, int], only: list[str] | None) -> dict[str, int]:
+    """접두어로 거른다. **없으면 전부다** (D-0119).
+
+    실측에서 산출물이 1.7GB · 17192개였다 (D-0118은 "수십 MB"라 적었고 30배 틀렸다).
+    그중 O-37이 읽는 것은 `keys-*` 74MB뿐이다. **DrvFs에서는 크기보다 개수가 아프다.**
+    """
+    if not only:
+        return names
+    return {name: size for name, size in names.items() if name.startswith(tuple(only))}
+
+
+def transfer(
+    source_base: Path,
+    target_base: Path,
+    label: str,
+    dry_run: bool,
+    only: list[str] | None = None,
+) -> int:
+    have = keep(walk(source_base), only)
     if not have:
-        print(f"{source_base}에 옮길 것이 없다", file=sys.stderr)
+        where = f"{source_base}에 옮길 것이 없다"
+        print(f"{where} (--only {' '.join(only)})" if only else where, file=sys.stderr)
         return 1
     already = walk(target_base)
 
@@ -122,60 +163,87 @@ def transfer(source_base: Path, target_base: Path, label: str, dry_run: bool) ->
         print("  전부 있다. 아무것도 하지 않았다 (멱등)")
         return 0
 
+    done = 0
     for name in todo:
-        copy_one(source_base / name, target_base / name)
-    print(f"  완료. {len(todo)}개 ({human(volume)})")
+        try:
+            copy_one(source_base / name, target_base / name)
+        except OSError as failure:
+            # **역추적을 뿜지 않는다** (D-0119). 이 저장소의 다른 도구는 전부
+            # `실패: ` 한 줄이며, 스택 4겹은 무엇을 해야 하는지 알려주지 않는다.
+            print(f"\n실패: {name} 에서 멈췄다 — {failure.strerror or failure}", file=sys.stderr)
+            print(f"  {done}개는 옮겼다. 고치고 다시 돌리면 이어받는다.", file=sys.stderr)
+            return 1
+        done += 1
+    print(f"  완료. {done}개 ({human(volume)})")
     return 0
 
 
-def status(local: Path, remote: Path | None) -> int:
+def status(local: Path, store: Path | None) -> int:
+    """양쪽에 무엇이 있는지. **비었다고 실패로 치지 않는다** (D-0119)."""
     here = walk(local)
     print(f"저장소  {local}")
     print(f"  {len(here)}개 · {human(sum(here.values()))}")
-    if remote is None:
-        print(f"\n{STORE_ENV}가 없다. `.env`에 한 줄 적는다:")
-        print(f"  {STORE_ENV}=/mnt/e/hathor-artifacts   # SSD 마운트 지점")
+
+    state, note = probe(store)
+    print(f"\n교두보  {note}")
+    if state == MISSING:
+        if store is None:
+            print(f"  {STORE_ENV}=/mnt/f/hathor-artifacts   # 기기마다 드라이브가 다르다")
         return 1
-    there = walk(remote)
-    print(f"\n교두보  {remote}")
-    if not remote.is_dir():
-        print("  !! 없다. SSD가 안 붙었거나 경로가 틀렸다")
-        return 1
-    print(f"  {len(there)}개 · {human(sum(there.values()))}")
-    print(f"\n  교두보에만 {len(set(there) - set(here))}개 · 여기에만 {len(set(here) - set(there))}개")
-    if set(there) - set(here):
-        print("  가져오려면: make artifacts-pull")
-    if set(here) - set(there):
+    if state == EMPTY:
         print("  보내려면:   make artifacts-push")
+        return 0
+
+    assert store is not None
+    there = walk(store / SUBTREE)
+    print(f"  {len(there)}개 · {human(sum(there.values()))}")
+    incoming, outgoing = set(there) - set(here), set(here) - set(there)
+    print(f"\n  교두보에만 {len(incoming)}개 · 여기에만 {len(outgoing)}개")
+    if incoming:
+        print("  가져오려면: make artifacts-pull")
+    if outgoing:
+        print("  보내려면:   make artifacts-push")
+    if not incoming and not outgoing:
+        print("  양쪽이 같다.")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="산출물 교두보 동기화 (D-0118)")
+    parser = argparse.ArgumentParser(description="산출물 교두보 동기화 (D-0118 · D-0119)")
     parser.add_argument("action", choices=("push", "pull", "status"))
     parser.add_argument("--store", type=Path, default=None, help=f"교두보 경로. 없으면 {STORE_ENV}")
     parser.add_argument("--dry-run", action="store_true", help="쓰지 않고 무엇이 갈지만 본다")
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=None,
+        metavar="접두어",
+        help="이 접두어로 시작하는 것만. 여러 번 줄 수 있다 (예: --only keys)",
+    )
     args = parser.parse_args()
 
     local = ROOT / SUBTREE
-    remote_root = args.store if args.store else store_root()
+    store = args.store if args.store else store_root()
 
     if args.action == "status":
-        return status(local, remote_root / SUBTREE if remote_root else None)
+        return status(local, store)
 
-    if remote_root is None:
-        print(f"{STORE_ENV}가 없다. `.env`에 적거나 --store로 준다.", file=sys.stderr)
-        print(f"  {STORE_ENV}=/mnt/e/hathor-artifacts", file=sys.stderr)
+    # **파일을 하나도 쓰기 전에 교두보를 본다** (D-0119). D-0118은 17192개 목록을
+    # 다 찍은 뒤 첫 복사에서 죽었다.
+    state, note = probe(store)
+    if state == MISSING:
+        print(f"실패: 교두보를 쓸 수 없다 — {note}", file=sys.stderr)
         return 2
-    remote = remote_root / SUBTREE
+    assert store is not None
+    remote = store / SUBTREE
 
     if args.action == "push":
-        return transfer(local, remote, "보냄", args.dry_run)
-    if not remote.is_dir():
-        print(f"교두보에 산출물이 없다: {remote}", file=sys.stderr)
-        print("  SSD가 붙어 있는지, 리전에서 push했는지 본다.", file=sys.stderr)
+        return transfer(local, remote, "보냄", args.dry_run, args.only)
+    if state == EMPTY:
+        print(f"실패: 교두보가 비었다 — {store}", file=sys.stderr)
+        print("  리전에서 make artifacts-push를 먼저 돌린다.", file=sys.stderr)
         return 1
-    return transfer(remote, local, "가져옴", args.dry_run)
+    return transfer(remote, local, "가져옴", args.dry_run, args.only)
 
 
 if __name__ == "__main__":
