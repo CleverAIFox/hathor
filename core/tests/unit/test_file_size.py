@@ -122,6 +122,38 @@ def test_경로는_항상_슬래시다():
     assert all("\\" not in name for name in tool.EXCEPTIONS)
 
 
+def test_말없이_예외값을_올릴_수_없다(pinned, tmp_path, monkeypatch, capsys):
+    """**막지 않으면 래칫이 아니다** (D-0118).
+
+    "늘었다"가 떠도 `make resize` 한 번이면 사라진다면 상한만 있는 것과 같다.
+    """
+    scratch = tmp_path / "check_file_size.py"
+    scratch.write_text(tool.SELF.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(tool, "SELF", scratch)
+    monkeypatch.setattr(tool, "measure", lambda: {"core/hathor/x.py": 900})
+    pinned["core/hathor/x.py"] = 800
+    before = scratch.read_text(encoding="utf-8")
+
+    assert tool.update(allow_growth=False) == 1
+    assert scratch.read_text(encoding="utf-8") == before
+    assert "래칫은 기본으로 이것을 막는다" in capsys.readouterr().err
+
+    assert tool.update(allow_growth=True) == 0
+    assert '"core/hathor/x.py": 900' in scratch.read_text(encoding="utf-8")
+
+
+def test_줄어든_것은_말없이_내린다(pinned, tmp_path, monkeypatch):
+    """내리는 방향은 막지 않는다. **톱니가 내려가는 것이 목적이다.**"""
+    scratch = tmp_path / "check_file_size.py"
+    scratch.write_text(tool.SELF.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(tool, "SELF", scratch)
+    monkeypatch.setattr(tool, "measure", lambda: {"core/hathor/x.py": 700})
+    pinned["core/hathor/x.py"] = 800
+
+    assert tool.update(allow_growth=False) == 0
+    assert '"core/hathor/x.py": 700' in scratch.read_text(encoding="utf-8")
+
+
 def test_예외표_표식이_살아_있다():
     """`--update`가 표를 못 찾으면 조용히 아무것도 안 한다."""
     assert tool.BLOCK.search(tool.SELF.read_text(encoding="utf-8")) is not None

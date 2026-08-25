@@ -35,6 +35,7 @@ REPO_MARKERS = ("CONTRIBUTING.md", "core", "docs")
 
 LIBRARY_ROOT_ENV = "HATHOR_LIBRARY_ROOT"
 PATCH_DIR_ENV = "HATHOR_PATCH_DIR"
+ARTIFACT_STORE_ENV = "HATHOR_ARTIFACT_STORE"
 
 
 @lru_cache(maxsize=1)
@@ -141,6 +142,30 @@ def patch_dir() -> Path | None:
     """패치를 받아 두는 폴더. 보통 윈도우 다운로드다."""
     value = os.environ.get(PATCH_DIR_ENV)
     return Path(value).expanduser() if value else None
+
+
+def artifact_store() -> Path | None:
+    """산출물 교두보. 외장 SSD의 마운트 지점이다 (D-0118).
+
+    **`var/`는 커밋하지 않으므로 기기 간 이동 경로가 여기뿐이다.** 없으면 `None`이고
+    그때는 산출물을 다시 뽑는 수밖에 없다.
+    """
+    value = os.environ.get(ARTIFACT_STORE_ENV)
+    return Path(value).expanduser() if value else None
+
+
+def artifact_store_files() -> int | None:
+    """교두보에 있는 산출물 파일 수. **안 붙었으면 `None`이다** (D-0118).
+
+    경로 미설정과 구분하지 않는다 — 부르는 쪽이 `artifact_store()`로 이미 안다.
+    """
+    root = artifact_store()
+    if root is None:
+        return None
+    ingest = root / "var" / "ingest"
+    if not ingest.is_dir():
+        return None
+    return sum(1 for path in ingest.rglob("*") if path.is_file())
 
 
 # --------------------------------------------------------------- 기기 탐지 (D-0068)

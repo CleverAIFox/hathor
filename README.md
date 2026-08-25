@@ -112,6 +112,28 @@ uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10  
 uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 (M4)
 ```
 
+### 산출물을 옮긴다 (D-0118)
+
+**`var/`는 커밋하지 않는다.** 리전이 GPU로 뽑은 것을 광인사가 쓰려면 외장 SSD를
+교두보로 쓴다. `.env`에 마운트 지점을 적는다.
+
+```bash
+HATHOR_ARTIFACT_STORE=/mnt/e/hathor-artifacts   # 기기마다 다르다
+```
+
+```bash
+make artifacts          # 양쪽에 무엇이 있는지
+make artifacts-push     # 리전에서: var/ingest -> SSD
+make artifacts-pull     # 광인사에서: SSD -> var/ingest
+```
+
+**덮어쓰지 않는다.** 목적지에 같은 이름이 있으면 건너뛰므로 몇 번을 돌려도 같고,
+양쪽 어느 방향으로도 안전하다 — 산출물 이름에 스탬프가 박혀 있어 서로 다른 실행이
+같은 이름을 낼 수 없다. **정말 갈아치우려면 손으로 지운다.**
+
+`doctor`가 스템 사전이 없다고 하면 **재추출 전에 `make artifacts-pull`을 먼저 본다.**
+수십 초와 1시간 40분의 차이다.
+
 ### 기기를 옮겼다면 (D-0066)
 
 **저장소는 양쪽 기기에서 `~/projects/hathor`다.** 윈도우 드라이브(`/mnt/c`)에 두지 않는다 —
@@ -426,6 +448,7 @@ docker/             mlflow 이미지
 docs/DECISIONS.md   결정 기록 (GR-0.2)
 tools/step0_check.py  환경·라이브러리 실측 스크립트
 tools/check_file_size.py  파일 길이 래칫 · 양방향 (D-0117)
+tools/sync_artifacts.py   산출물 교두보 동기화 · 추가 전용 (D-0118)
 tools/sync_decision_index.py  부록 A 색인 생성·검증 (D-0042)
 tools/lyrics_language_profile.py  가사 언어 구성 실측 (D-0044)
 tools/lyrics_exclusion_probe.py   가사 제외 곡 원인 진단 (D-0048)

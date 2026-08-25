@@ -64,7 +64,10 @@ from hathor.infrastructure.musicbrainz_lookup import (
 )
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
 from hathor.shared.config.paths import (
+    ARTIFACT_STORE_ENV,
     LIBRARY_ROOT_ENV,
+    artifact_store,
+    artifact_store_files,
     load_dotenv,
     repo_root,
     resolve_path,
@@ -1284,9 +1287,19 @@ def _run_doctor(args: argparse.Namespace) -> int:
     store = find_keys_store(root, DEFAULT_STEM_SET)
     if store is None:
         print(f"    !! {DEFAULT_STEM_SET} 스템 사전이 없다. 생성이 전체 믹스로 물러난다 (D-0074)")
-        print("       리전에서: ingest keys --separate  (GPU 필요)")
+        # **다시 뽑기 전에 교두보를 먼저 본다** (D-0118). 리전에서 1시간 40분 걸린
+        # 것을 광인사가 30초에 가져올 수 있는데 재추출을 시키고 있었다.
+        print("       먼저:   make artifacts-pull   (SSD 교두보에 있으면 수십 초)")
+        print("       없으면: 리전에서 ingest keys --separate  (GPU · 약 1시간 40분)")
     else:
         print(f"    {DEFAULT_STEM_SET} 스템 사전  {store.name}")
+    store_root = artifact_store()
+    if store_root is None:
+        print(f"    !! 교두보 {ARTIFACT_STORE_ENV} 미설정. .env에 적는다 (D-0118)")
+    else:
+        found = artifact_store_files()
+        state = f"{found}개" if found is not None else "!! 안 붙었다"
+        print(f"    교두보  {store_root}  {state}")
     stale = root / "core" / "var"
     if stale.exists():
         check(False, "산출물 위치", str(stale), "루트로 옮긴다: mv core/var var (D-0066)")

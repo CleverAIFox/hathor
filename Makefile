@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs size resize split clean clean-all setup env doctor apply
+.PHONY: up down logs ps check lint type arch test cov docs size resize split clean clean-all setup env doctor apply artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -19,8 +19,8 @@ docs:          ## 부록 A 색인이 결정 기록과 일치하는지 (D-0042)
 size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)
 	python3 tools/check_file_size.py
 
-resize:        ## 래칫을 현재 값으로 내린다. make size가 "줄었다"고 하면
-	python3 tools/check_file_size.py --update
+resize:        ## 래칫을 내린다. 올리려면 GROW=1 + 결정 기록 (D-0118)
+	python3 tools/check_file_size.py --update $(if $(GROW),--allow-growth,)
 
 split:         ## 결정 기록을 번호대별로 다시 나눈다. make docs가 빨개지면 (O-30)
 	python3 tools/split_decisions.py
@@ -41,6 +41,15 @@ env:           ## 해석된 경로와 설정을 찍는다 (D-0066)
 
 doctor:        ## 기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)
 	cd core && uv run python -m hathor.cli doctor
+
+artifacts:     ## 교두보와 저장소에 무엇이 있는지 (D-0118)
+	python3 tools/sync_artifacts.py status
+
+artifacts-push:  ## 산출물을 SSD 교두보로 보낸다. 덮어쓰지 않는다
+	python3 tools/sync_artifacts.py push
+
+artifacts-pull:  ## 교두보에서 가져온다. 이미 있는 것은 건너뛴다
+	python3 tools/sync_artifacts.py pull
 
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [NOCOMMIT=1] (D-0070)
 	@bash tools/apply_patch.sh $(PATCH)

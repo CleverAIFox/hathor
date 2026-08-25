@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from hathor.shared.config.paths import (
+    ARTIFACT_STORE_ENV,
     LIBRARY_ROOT_ENV,
     PATCH_DIR_ENV,
     library_root,
@@ -137,6 +138,8 @@ def test_doctor는_설정이_다_있으면_0이다(tmp_path, monkeypatch, capsys
     monkeypatch.setattr(paths, "repo_root", lambda: fake)
     monkeypatch.setenv(LIBRARY_ROOT_ENV, str(tmp_path))
     monkeypatch.setenv(PATCH_DIR_ENV, str(tmp_path))
+    # 교두보도 기기 계약에 들어왔다 (D-0118). "설정이 다 있으면"에 포함된다.
+    monkeypatch.setenv(ARTIFACT_STORE_ENV, str(tmp_path))
     main(["doctor"])
     out = capsys.readouterr().out
     # 설치본은 진짜 저장소를 가리키므로 여기서는 어긋난다. 설정 쪽만 본다.

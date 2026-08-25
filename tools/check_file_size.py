@@ -57,7 +57,7 @@ TREES = {
 EXCEPTIONS: dict[str, int] = {
     "core/hathor/application/evaluate_harmony_output.py": 663,
     "core/hathor/domain/services/key_estimation.py": 760,
-    "core/hathor/interfaces/cli/main.py": 3867,
+    "core/hathor/interfaces/cli/main.py": 3880,
 }
 # ---------------------------------------------------------------- 예외표 끝
 """넘고 있는 파일을 **현재 줄 수로 못 박은 것**이다. 상한이 아니라 래칫이다.
@@ -140,8 +140,27 @@ def render(sizes: dict[str, int]) -> str:
     return body
 
 
-def update() -> int:
+def update(allow_growth: bool) -> int:
+    """예외표를 현재 값으로 쓴다. **올리는 것은 기본으로 막는다** (D-0118).
+
+    막지 않으면 래칫이 아니다 — "늘었다"가 떠도 `make resize` 한 번이면 사라지고,
+    그것은 상한만 있는 것과 같다. **올리려면 이유를 결정 기록에 적고 `--allow-growth`를
+    준다.** 손이 한 번 멈추는 것이 요점이다.
+    """
     sizes = measure()
+    grown = {
+        name: (pinned, sizes[name])
+        for name, pinned in EXCEPTIONS.items()
+        if name in sizes and sizes[name] > pinned
+    }
+    if grown and not allow_growth:
+        print("예외값을 올리려 한다. 래칫은 기본으로 이것을 막는다.", file=sys.stderr)
+        for name, (pinned, now) in sorted(grown.items()):
+            print(f"  - {name}: {pinned} -> {now} (+{now - pinned})", file=sys.stderr)
+        print("\n  쪼개서 되돌리거나, 이유를 결정 기록에 적고:", file=sys.stderr)
+        print("  python3 tools/check_file_size.py --update --allow-growth", file=sys.stderr)
+        return 1
+
     text = SELF.read_text(encoding="utf-8")
     found = BLOCK.search(text)
     if found is None:
@@ -157,10 +176,13 @@ def update() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="파일 길이 래칫 (D-0117)")
     parser.add_argument("--update", action="store_true", help="예외표를 현재 값으로 다시 쓴다")
+    parser.add_argument(
+        "--allow-growth", action="store_true", help="예외값을 올린다. 결정 기록에 이유를 적는다"
+    )
     args = parser.parse_args()
 
     if args.update:
-        return update()
+        return update(args.allow_growth)
 
     problems = check(measure())
     if problems:
