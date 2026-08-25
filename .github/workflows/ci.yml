@@ -29,6 +29,10 @@ jobs:
         working-directory: .
         run: python3 tools/sync_decision_index.py --check
 
+      - name: File size ratchet
+        working-directory: .
+        run: python3 tools/check_file_size.py
+
       - name: Lint & format
         run: |
           uv run ruff check .
@@ -41,7 +45,7 @@ jobs:
         run: uv run lint-imports
 
       - name: Test
-        run: uv run pytest --cov=hathor --cov-fail-under=75 -q
+        run: uv run pytest --cov=hathor --cov-fail-under=83 -q
 
       - name: Dependency vulnerabilities
         run: uv run pip-audit --strict || true

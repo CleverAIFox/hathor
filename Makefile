@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs split clean clean-all setup env doctor apply
+.PHONY: up down logs ps check lint type arch test cov docs size resize split clean clean-all setup env doctor apply
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -11,10 +11,16 @@ logs:
 ps:
 	docker compose ps
 
-check: docs lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
+check: docs size lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
 
 docs:          ## 부록 A 색인이 결정 기록과 일치하는지 (D-0042)
 	python3 tools/sync_decision_index.py --check
+
+size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)
+	python3 tools/check_file_size.py
+
+resize:        ## 래칫을 현재 값으로 내린다. make size가 "줄었다"고 하면
+	python3 tools/check_file_size.py --update
 
 split:         ## 결정 기록을 번호대별로 다시 나눈다. make docs가 빨개지면 (O-30)
 	python3 tools/split_decisions.py

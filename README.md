@@ -425,6 +425,7 @@ infra/              postgres init · prometheus 설정
 docker/             mlflow 이미지
 docs/DECISIONS.md   결정 기록 (GR-0.2)
 tools/step0_check.py  환경·라이브러리 실측 스크립트
+tools/check_file_size.py  파일 길이 래칫 · 양방향 (D-0117)
 tools/sync_decision_index.py  부록 A 색인 생성·검증 (D-0042)
 tools/lyrics_language_profile.py  가사 언어 구성 실측 (D-0044)
 tools/lyrics_exclusion_probe.py   가사 제외 곡 원인 진단 (D-0048)
