@@ -11,6 +11,7 @@ D-0118은 합성 자료로 왕복만 확인하고 냈다. **왕복은 전부 통
 
 from __future__ import annotations
 
+import pathlib
 import sys
 from pathlib import Path
 
@@ -48,10 +49,21 @@ def test_없는_경로는_안_붙은_것이다(tmp_path):
 
 def test_못_쓰는_곳은_안_붙은_것이다(store, monkeypatch):
     """root로 돌면 권한 검사가 통과하므로 여기서 강제한다."""
-    monkeypatch.setattr(tool.os, "access", lambda *a: False)
+
+    def 막힌다(*_args, **_kwargs):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(pathlib.Path, "write_bytes", 막힌다)
     state, note = tool.probe(store)
     assert state == tool.MISSING
     assert "쓸 수 없다" in note
+    assert "Operation not permitted" in note
+
+
+def test_쓰기_확인은_진짜로_써_본다(store):
+    """`os.access`는 DrvFs에서 참을 내고도 쓰기가 막힐 수 있다 (D-0120)."""
+    assert tool.can_write(store) == (True, "")
+    assert not list(store.glob(".hathor-probe*")), "확인용 파일을 남기지 않는다"
 
 
 def test_폴더는_있고_산출물만_없으면_비었다다(tmp_path):
@@ -146,6 +158,28 @@ def test_이미_있으면_건너뛴다(tmp_path):
     (source / "a.npz").write_bytes(b"second")
     assert tool.transfer(source, target, "보냄", dry_run=False) == 0
     assert (target / "a.npz").read_bytes() == b"first"
+
+
+def test_chmod가_막혀도_복사된다(tmp_path, monkeypatch):
+    """**DrvFs가 `chmod`를 못 한다** (D-0120).
+
+    `copy2`는 내용을 옮긴 뒤 권한까지 옮기려다 `Operation not permitted`로 죽었다.
+    **권한도 시각도 쓰지 않는데** 그것 때문에 6036개가 한 개도 못 갔다.
+    """
+
+    def 막힌다(*_args, **_kwargs):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(tool.os, "chmod", 막힌다)
+    monkeypatch.setattr(tool.shutil, "copystat", 막힌다)
+
+    source, target = tmp_path / "여기" / "a.npz", tmp_path / "저기" / "a.npz"
+    source.parent.mkdir()
+    source.write_bytes(b"payload")
+
+    tool.copy_one(source, target)
+    assert target.read_bytes() == b"payload"
+    assert not list(target.parent.glob("*" + tool.PART))
 
 
 def test_part_는_목록에_안_들어간다(tmp_path):

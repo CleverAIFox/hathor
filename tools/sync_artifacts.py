@@ -74,6 +74,25 @@ EMPTY = "아직 비었다"
 MISSING = "안 붙었다"
 
 
+def can_write(store: Path) -> tuple[bool, str]:
+    """**진짜로 써 본다** (D-0120).
+
+    `os.access`는 DrvFs에서 참을 내고도 실제 쓰기가 막힐 수 있다. 6036개 목록을
+    찍은 뒤 첫 파일에서 죽는 것보다 **한 바이트를 먼저 써 보는 것이 싸다.**
+
+    실제로 옮길 때와 같은 순서(쓰기 → 이름 바꾸기)를 밟는다. 순서가 다르면
+    통과하고도 본작업에서 죽는다.
+    """
+    probe_file = store / f".hathor-probe{PART}"
+    try:
+        probe_file.write_bytes(b"x")
+        probe_file.replace(store / ".hathor-probe")
+        (store / ".hathor-probe").unlink()
+    except OSError as failure:
+        return False, failure.strerror or str(failure)
+    return True, ""
+
+
 def probe(store: Path | None) -> tuple[str, str]:
     """교두보가 **어느 상태인지** 가른다 (D-0119).
 
@@ -85,8 +104,9 @@ def probe(store: Path | None) -> tuple[str, str]:
         return MISSING, f"{STORE_ENV} 미설정. `.env`에 한 줄 적는다"
     if not store.is_dir():
         return MISSING, f"{store} 가 없다. SSD가 안 붙었거나 경로가 틀렸다"
-    if not os.access(store, os.W_OK):
-        return MISSING, f"{store} 에 쓸 수 없다. 마운트 권한을 본다"
+    writable, why = can_write(store)
+    if not writable:
+        return MISSING, f"{store} 에 쓸 수 없다 — {why}"
     if not (store / SUBTREE).is_dir():
         return EMPTY, f"{store}  (아직 비었다. 첫 push가 만든다)"
     return ATTACHED, str(store)
@@ -113,10 +133,18 @@ def human(size: int) -> str:
 
 
 def copy_one(source: Path, target: Path) -> None:
-    """`.part`로 받고 다 받으면 이름을 바꾼다. **원자적으로 끝난다.**"""
+    """`.part`로 받고 다 받으면 이름을 바꾼다. **원자적으로 끝난다.**
+
+    **`copy2`가 아니라 `copyfile`이다** (D-0120). `copy2`는 내용을 옮긴 뒤 권한과
+    시각까지 옮기려고 `chmod`를 부르는데, **윈도우 드라이브 마운트(DrvFs)는
+    그것을 못 한다** — `Operation not permitted`가 나고 내용은 이미 옮겨진 뒤다.
+
+    권한도 시각도 쓰지 않는다. `walk`가 이름과 크기만 보고, 산출물 이름에는
+    스탬프나 내용 해시가 박혀 있다. **옮길 이유가 없는 것을 옮기다 죽고 있었다.**
+    """
     target.parent.mkdir(parents=True, exist_ok=True)
     staging = target.with_name(target.name + PART)
-    shutil.copy2(source, staging)
+    shutil.copyfile(source, staging)
     staging.replace(target)
 
 
