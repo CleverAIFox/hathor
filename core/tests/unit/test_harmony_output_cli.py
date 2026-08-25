@@ -15,7 +15,8 @@ import re
 import numpy as np
 import pytest
 
-from hathor.interfaces.cli.main import load_degree_priors, main
+from hathor.infrastructure.keys_jsonl_store import load_degree_priors
+from hathor.interfaces.cli.main import main
 
 DEGREES = 12
 PITCHES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
@@ -259,7 +260,7 @@ def test_반음계_정체도_사전이_없으면_비정상_종료한다(tmp_path
 
 
 def test_신뢰도를_읽는다(tmp_path):
-    from hathor.interfaces.cli.main import load_key_margins
+    from hathor.infrastructure.keys_jsonl_store import load_key_margins
 
     path = write_keys(tmp_path / "keys.jsonl", count=5)
     margins = load_key_margins(path)
@@ -448,7 +449,7 @@ def test_반쪽이_없으면_비정상_종료한다(tmp_path, capsys):
 
 def test_반쪽_로더가_두_출처를_같은_회전으로_읽는다(tmp_path):
     """**으뜸음은 앞반쪽 추정을 쓴다** (D-0062)."""
-    from hathor.interfaces.cli.main import load_drift_observations
+    from hathor.infrastructure.keys_jsonl_store import load_drift_observations
 
     path = write_halves(tmp_path / "keys.jsonl", count=12)
     found = load_drift_observations(path, "other", "bass")
@@ -465,7 +466,7 @@ def test_겹치는_두_관측을_거부한다(tmp_path, capsys):
 
 
 def test_겹침_판정이_중첩_조합도_잡는다():
-    from hathor.interfaces.cli.main import stems_overlap
+    from hathor.domain.services.stem_sets import stems_overlap
 
     assert stems_overlap("other", "other+bass")
     assert stems_overlap("mix", "bass")
@@ -549,7 +550,7 @@ def test_일부만_있으면_알린다(tmp_path, capsys):
 
 def test_그_스템이_없는_폴더는_건너뛴다(tmp_path):
     """**`other`로 뽑은 폴더에 `bass`를 찾으러 가면 0곡이 된다** (D-0100의 부류)."""
-    from hathor.interfaces.cli.main import find_series_root
+    from hathor.infrastructure.chroma_series_store import find_series_root
 
     root = tmp_path / "var" / "ingest"
     write_series(root / "keys-20260823T000000Z.series", ["곡.flac"])
@@ -594,7 +595,7 @@ def test_전이_사전이_없으면_비정상_종료한다(tmp_path, capsys):
 
 def test_빈_전이_사전은_뺀다(tmp_path):
     """**없는 것을 조건으로 쓰지 않는다** (D-0107)."""
-    from hathor.interfaces.cli.main import load_transition_priors
+    from hathor.infrastructure.chroma_series_store import load_transition_priors
 
     root = tmp_path / "series"
     root.mkdir()

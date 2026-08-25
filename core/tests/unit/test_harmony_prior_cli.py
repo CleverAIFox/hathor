@@ -9,6 +9,7 @@ import json
 import numpy as np
 import pytest
 
+from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_stem_priors
 from hathor.interfaces.cli.main import main
 
 DEGREES = 12
@@ -237,13 +238,11 @@ def prior_rows(count, *, stem_set="other", seed=11):
 
 
 def test_스템_사전을_찾고_읽는다(tmp_path):
-    from hathor.interfaces.cli.main import find_stem_prior_store, load_stem_priors
-
     ingest = tmp_path / "var" / "ingest"
     write_keys(ingest / "keys-20260101T000000Z.keys.jsonl", synth_rows(3, informative=True))
     write_keys(ingest / "keys-20260821T000000Z.keys.jsonl", prior_rows(5))
 
-    found = find_stem_prior_store(tmp_path, "other")
+    found = find_keys_store(tmp_path, "other")
     assert found is not None
     assert found.name == "keys-20260821T000000Z.keys.jsonl"
 
@@ -256,25 +255,20 @@ def test_스템_사전을_찾고_읽는다(tmp_path):
 
 def test_full이_없으면_사전으로_치지_않는다(tmp_path):
     """반쪽만 있는 판정용 산출물은 생성에 못 쓴다."""
-    from hathor.interfaces.cli.main import find_stem_prior_store
 
     ingest = tmp_path / "var" / "ingest"
     write_keys(ingest / "keys-A.keys.jsonl", stem_rows(3))
-    assert find_stem_prior_store(tmp_path, "other+bass") is None
+    assert find_keys_store(tmp_path, "other+bass") is None
 
 
 def test_다른_조합을_고르면_못_찾는다(tmp_path):
-    from hathor.interfaces.cli.main import find_stem_prior_store
-
     ingest = tmp_path / "var" / "ingest"
     write_keys(ingest / "keys-A.keys.jsonl", prior_rows(3, stem_set="other"))
-    assert find_stem_prior_store(tmp_path, "other+bass+vocals") is None
+    assert find_keys_store(tmp_path, "other+bass+vocals") is None
 
 
 def test_산출물이_없으면_None이다(tmp_path):
-    from hathor.interfaces.cli.main import find_stem_prior_store
-
-    assert find_stem_prior_store(tmp_path, "other") is None
+    assert find_keys_store(tmp_path, "other") is None
 
 
 def test_으뜸음이_다르면_도수_공간에서_합친다(tmp_path):
@@ -284,7 +278,7 @@ def test_으뜸음이_다르면_도수_공간에서_합친다(tmp_path):
     원래 모양이 살아 있어야 한다.
     """
     from hathor.domain.services.harmony_prior import merge_degree_priors
-    from hathor.interfaces.cli.main import load_stem_priors
+    from hathor.infrastructure.keys_jsonl_store import load_stem_priors
 
     shape = np.zeros(DEGREES)
     shape[0], shape[7] = 0.6, 0.4

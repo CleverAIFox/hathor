@@ -215,7 +215,7 @@ def test_스템_조합이_조건에_들어간다():
     `STEM_SETS`에 조합을 하나 더해도 조건이 같아 보이면 **새 스템이 없는 파일에
     이어붙는다.** D-0099가 `bass`를 더한 뒤 실제로 그 일이 났다.
     """
-    from hathor.interfaces.cli.main import STEM_SETS
+    from hathor.domain.services.stem_sets import STEM_SETS
 
     assert settings()["stem_sets"] == sorted(STEM_SETS)
     assert settings(separate=False)["stem_sets"] == []
@@ -288,7 +288,7 @@ def test_시계열은_낱개_스템만_뽑는다():
     `other+bass`류는 화성 사전을 고르려고 만든 것이고(D-0073), 순서 작업이 쓰는
     것은 `other`와 `bass`다. 시계열 한 번이 전곡 크로마 한 번과 같은 비용이다.
     """
-    from hathor.interfaces.cli.main import STEM_SETS
+    from hathor.domain.services.stem_sets import STEM_SETS
 
     singles = [name for name, parts in STEM_SETS.items() if len(parts) == 1]
     assert set(singles) == {"other", "bass", "vocals"}

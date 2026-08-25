@@ -9,7 +9,7 @@ import time
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from hathor.application.evaluate_fusion import EvaluateFusion
 from hathor.application.evaluate_retrieval import (
@@ -25,7 +25,6 @@ from hathor.application.evaluate_retrieval import (
     TrackRecord,
     ViewSpec,
 )
-from hathor.application.evaluate_time_drift import DriftObservation
 from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
 from hathor.application.orchestrator.generation_pipeline import run_dry
 from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
@@ -36,11 +35,29 @@ from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
 from hathor.domain.services.key_estimation import KeyEstimate
 from hathor.domain.services.seed_search import FusionMode
+from hathor.domain.services.stem_sets import (
+    DEFAULT_STEM_SET,
+    MIX_SOURCE,
+    STEM_SETS,
+    stems_overlap,
+)
 from hathor.domain.value_objects.key import Key
+from hathor.infrastructure.chroma_series_store import (
+    find_series_root,
+    load_transition_priors,
+    write_series,
+)
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
 from hathor.infrastructure.jsonl_resolution_store import JsonlResolutionStore
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
+from hathor.infrastructure.keys_jsonl_store import (
+    find_keys_store,
+    load_degree_priors,
+    load_drift_observations,
+    load_key_margins,
+    load_stem_priors,
+)
 from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzClient,
     MusicBrainzLookup,
@@ -60,31 +77,6 @@ if TYPE_CHECKING:
 
 DEFAULT_LIBRARY_ROOT_ENV = LIBRARY_ROOT_ENV
 
-STEM_SETS: dict[str, tuple[str, ...]] = {
-    "other": ("other",),
-    "other+bass": ("other", "bass"),
-    "other+bass+vocals": ("other", "bass", "vocals"),
-    "bass": ("bass",),
-    "vocals": ("vocals",),
-}
-"""분리 후 재 볼 스템 조합 (O-27 (a) · D-0073).
-
-**앞 셋은 드럼을 뺀 것이 공통점이다.** `bass`와 `vocals`는 D-0099가 **겹치지 않는
-두 관측**을 만들려고 더한 것이며 화성 사전으로 쓰라고 둔 것이 아니다.
-
-**드럼을 뺀 것이 공통점이다.** 타악은 음정이 없어 12칸에 고르게 퍼진 에너지를 내고,
-그것이 크로마 대비를 K-K 프로파일의 30%로 누른다는 것이 (a)의 가설이다.
-
-| 조합 | 근거 |
-|---|---|
-| `other` | 화성 악기만. 가장 깨끗하나 베이스 근음을 버린다 |
-| `other+bass` | 근음은 화성 판정에 크다. 유력 후보 |
-| `other+bass+vocals` | 멜로디도 화성음이다. 다만 비브라토가 번진다 |
-
-**셋을 한 번에 뽑는다.** 분리가 비싸고(GPU) 크로마는 싸므로, 조합마다 다시 분리하면
-같은 GPU 작업을 세 번 한다. 조합별 크로마를 저장해 두면 판정은 재분리 없이 돈다 —
-D-0059가 크로마를 저장한 것과 같은 이유다.
-"""
 DEFAULT_OUTPUT_ROOT = "var/ingest"
 """산출물 기본 위치. **문자열이어야 한다** (D-0069).
 
@@ -992,29 +984,6 @@ KEYS_SETTING_FIELDS = (
 """
 
 
-def _write_series(root: Path, source_key: str, stem: str, series: object) -> None:
-    """곡·스템 하나의 크로마 시계열을 `npz`로 쓴다 (O-32 · D-0105).
-
-    **곡마다 파일을 나눈다.** 하나로 모으면 이어받기 중간에 죽었을 때 통째로
-    날아가고, 그것이 D-0075가 이어받기를 만든 이유였다. 파일이 있으면 건너뛰므로
-    이어받기와 자연히 맞는다.
-
-    이름은 `source_key`의 해시다. **파일 이름에 곡 제목을 쓰지 않는다** — 슬래시와
-    유니코드가 섞여 있고 기기마다 다르게 정규화된다 (D-0043 계열).
-    """
-    import hashlib
-
-    import numpy as np
-
-    root.mkdir(parents=True, exist_ok=True)
-    stamp = hashlib.sha1(source_key.encode("utf-8")).hexdigest()[:16]
-    np.savez_compressed(
-        root / f"{stamp}-{stem}.npz",
-        series=np.asarray(series, dtype=np.float32),
-        source_key=source_key,
-    )
-
-
 def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
     """행에 적히는 조건 묶음. 이어받기 판정과 기록이 같은 값을 쓴다."""
     return {
@@ -1312,7 +1281,7 @@ def _run_doctor(args: argparse.Namespace) -> int:
     print(f"    스캔 {len(scans)}건 · 조성 {len(keys)}건")
     for path in keys[-6:]:
         print(f"      {path.name}  {_describe_keys(path)}")
-    store = find_stem_prior_store(root, DEFAULT_STEM_SET)
+    store = find_keys_store(root, DEFAULT_STEM_SET)
     if store is None:
         print(f"    !! {DEFAULT_STEM_SET} 스템 사전이 없다. 생성이 전체 믹스로 물러난다 (D-0074)")
         print("       리전에서: ingest keys --separate  (GPU 필요)")
@@ -1382,18 +1351,6 @@ def _parse_key(text: str) -> Key:
     return Key(tonic=parts[0], mode=mode)
 
 
-DEFAULT_STEM_SET = "other"
-"""생성에 쓰는 스템 조합. **실측이 고른 값이다** (D-0074).
-
-달성 가능 폭이 `other` 0.0534 · `other+bass` 0.0497 · `other+bass+vocals` 0.0373이었다.
-넣을수록 나빠진다 — 저역은 CQ 격자에서 반음이 뭉개지고(D-0056) 보컬은 비브라토로
-칸 사이를 번져, 둘 다 균등 성분을 도로 넣는다.
-"""
-
-
-MIX_SOURCE = "mix"
-"""전체 믹스 크로마를 가리키는 출처 이름. 스템 조합 이름과 같은 자리에 쓴다."""
-
 DEFAULT_OUTPUT_SEEDS = 1000
 DEFAULT_OUTPUT_BARS = 8
 DEFAULT_OUTPUT_PAIRS = 100
@@ -1402,66 +1359,6 @@ DEFAULT_OUTPUT_PAIRS = 100
 100쌍 곱하기 1000시드가 CPU로 약 16초다. D-0078에 "수 초"라고 적었으나 실측은 그보다
 느리다 — 음원도 GPU도 안 쓰는 것은 맞다.
 """
-
-
-def find_stem_prior_store(root: Path, stem_set: str) -> Path | None:
-    """스템 크로마가 있는 가장 최근 산출물을 찾는다 (D-0074).
-
-    **생성할 때 Demucs를 돌리지 않기 위한 것이다.** 돌리면 GPU 없는 기기에서 생성이
-    안 된다. 참조곡은 코퍼스에서 고르므로 미리 뽑아 두면 조회로 끝나고, 디코딩조차
-    사라져 지금보다 빨라진다.
-    """
-    import json
-
-    ingest = root / "var" / "ingest"
-    if not ingest.is_dir():
-        return None
-    for path in sorted(ingest.glob("*.keys.jsonl"), reverse=True):
-        try:
-            with path.open(encoding="utf-8") as stream:
-                for line in stream:
-                    if not line.strip():
-                        continue
-                    row = json.loads(line)
-                    break
-                else:
-                    continue
-        except (OSError, ValueError):
-            continue
-        if "full" in ((row.get("stems") or {}).get(stem_set) or {}):
-            return path
-    return None
-
-
-def load_stem_priors(path: Path, stem_set: str) -> dict[str, tuple[tuple[float, ...], int]]:
-    """`source_key → (스템 크로마, 으뜸음)` (D-0074).
-
-    **으뜸음은 전체 믹스 추정을 쓴다.** 스템에서 다시 추정하면 조합마다 회전 기준이
-    달라져 판정 때와 다른 것을 재게 된다 (D-0073과 같은 이유).
-    """
-    import json
-
-    from hathor.domain.value_objects.key import PITCH_CLASSES
-
-    found: dict[str, tuple[tuple[float, ...], int]] = {}
-    with path.open(encoding="utf-8") as stream:
-        for line in stream:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            vector = ((row.get("stems") or {}).get(stem_set) or {}).get("full")
-            key_text = row.get("key")
-            source = row.get("source_key")
-            if vector is None or key_text is None or source is None:
-                continue
-            tonic = str(key_text).rsplit(" ", 1)[0]
-            if tonic not in PITCH_CLASSES:
-                continue
-            found[str(source)] = (
-                tuple(float(value) for value in vector),
-                PITCH_CLASSES.index(tonic),
-            )
-    return found
 
 
 def _resolve_harmony_prior(
@@ -1481,7 +1378,7 @@ def _resolve_harmony_prior(
     if args.stem_set == "mix":
         return _harmony_prior(estimates), "전체 믹스"
 
-    store = args.priors if args.priors else find_stem_prior_store(_root(), args.stem_set)
+    store = args.priors if args.priors else find_keys_store(_root(), args.stem_set)
     if store is not None and store.exists():
         table = load_stem_priors(store, args.stem_set)
         picked = [table[key] for key in source_keys if key in table]
@@ -1502,21 +1399,6 @@ def _resolve_harmony_prior(
     return _harmony_prior(estimates), "전체 믹스"
 
 
-def find_series_root(root: Path, stem_set: str) -> Path | None:
-    """가장 최근 시계열 폴더 (O-32 · D-0110).
-
-    `keys-*.series` 안에 `<해시>-<스템>.npz`가 있다. 그 스템이 하나도 없으면 건너뛴다 —
-    **`other`로 뽑은 폴더에 `bass`를 찾으러 가면 0곡이 된다** (D-0100이 겪은 부류다).
-    """
-    ingest = root / "var" / "ingest"
-    if not ingest.is_dir():
-        return None
-    for path in sorted(ingest.glob("keys-*.series"), reverse=True):
-        if any(path.glob(f"*-{stem_set}.npz")):
-            return path
-    return None
-
-
 def _resolve_transition_prior(
     args: argparse.Namespace, source_keys: list[str]
 ) -> tuple[tuple[tuple[float, ...], ...] | None, str]:
@@ -1528,11 +1410,9 @@ def _resolve_transition_prior(
     **없으면 `None`이고 순서는 이전처럼 시드만 따른다.** 조건화가 조용히 반쯤
     걸리는 것보다 아예 안 걸리는 편이 낫다 (D-0063과 같은 규율).
     """
-    import hashlib
-
     import numpy as np
 
-    from hathor.domain.services.transition_prior import is_empty, transition_prior
+    from hathor.domain.services.harmony_prior import DEGREE_COUNT
     from hathor.shared.config.paths import repo_root as _root
 
     if not args.transitions:
@@ -1542,21 +1422,11 @@ def _resolve_transition_prior(
         print("시계열 산출물을 찾지 못했다. 배열 조건화를 건너뛴다.", file=sys.stderr)
         return None, "없음"
 
-    from hathor.domain.services.harmony_prior import DEGREE_COUNT
-
+    table = load_transition_priors(root, args.stem_set, source_keys)
     total = np.zeros((DEGREE_COUNT, DEGREE_COUNT), dtype=np.float64)
-    found = 0
-    for source_key in source_keys:
-        stamp = hashlib.sha1(source_key.encode("utf-8")).hexdigest()[:16]
-        path = root / f"{stamp}-{args.stem_set}.npz"
-        if not path.exists():
-            continue
-        with np.load(path, allow_pickle=False) as bundle:
-            series = np.asarray(bundle["series"], dtype=np.float64)
-        matrix = transition_prior(series)
-        if not is_empty(matrix):
-            total += matrix
-            found += 1
+    for matrix in table.values():
+        total += np.asarray(matrix, dtype=np.float64)
+    found = len(table)
     if found == 0:
         print(f"참조곡이 시계열 저장분에 없다: {root.name}", file=sys.stderr)
         return None, "없음"
@@ -1831,7 +1701,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                 if args.series is not None:
                     # **같은 디코드·같은 분리를 쓴다.** 시계열 전용 배치를 따로 만들면
                     # 이어받기·잠금·진행 표시를 복사해야 하고, 그러면 한쪽만 고쳐진다.
-                    _write_series(
+                    write_series(
                         series_root,
                         track.source_key,
                         "mix",
@@ -1884,7 +1754,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
                         # 사전을 고르려고 만든 것이고(D-0073), 순서 작업이 쓰는 것은
                         # `other`(화음)와 `bass`(독립 관측)다. 시계열 한 번이 전곡
                         # 크로마 한 번과 같은 비용이라 조합 둘이 곡당 1.7초를 버린다.
-                        _write_series(
+                        write_series(
                             series_root,
                             track.source_key,
                             name,
@@ -3097,49 +2967,6 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
     return 0
 
 
-def load_degree_priors(path: Path, source: str) -> dict[str, tuple[float, ...]]:
-    """`source_key → 으뜸음으로 회전된 12차원 도수 사전` (O-29).
-
-    `source`가 `mix`면 전체 믹스 크로마를, 아니면 그 스템 조합의 `full`을 읽는다.
-    **한 함수가 둘을 다 읽는다** — 경로를 나누면 전체 믹스 쪽만 회전을 빠뜨리는
-    식으로 어긋나고, 그것이 D-0034 계열이 열한 번 태어난 형태다.
-
-    **으뜸음은 어느 출처든 전체 믹스 추정(`key`)을 쓴다.** 스템에서 다시 추정하면
-    출처마다 회전 기준이 달라져 비교가 성립하지 않는다 (D-0073).
-    """
-    import json
-
-    from hathor.domain.services.harmony_prior import merge_degree_priors
-    from hathor.domain.value_objects.key import PITCH_CLASSES
-
-    found: dict[str, tuple[float, ...]] = {}
-    with path.open(encoding="utf-8") as stream:
-        for line in stream:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except ValueError:
-                # 끊긴 배치의 마지막 줄은 잘려 있는 것이 정상이다 (D-0075).
-                continue
-            vector = (
-                row.get("chroma")
-                if source == MIX_SOURCE
-                else ((row.get("stems") or {}).get(source) or {}).get("full")
-            )
-            key_text, name = row.get("key"), row.get("source_key")
-            if vector is None or key_text is None or name is None:
-                continue
-            tonic = str(key_text).rsplit(" ", 1)[0]
-            if tonic not in PITCH_CLASSES:
-                continue
-            merged = merge_degree_priors(
-                [(tuple(float(value) for value in vector), PITCH_CLASSES.index(tonic))]
-            )
-            found[str(name)] = tuple(float(value) for value in merged)
-    return found
-
-
 def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     """참조곡을 바꾸면 출력이 얼마나 갈리는지 잰다 (O-29 · D-0078).
 
@@ -3164,7 +2991,7 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     baseline = None if args.against.lower() == "none" else args.against
     store = args.priors
     if store is None:
-        store = find_stem_prior_store(_root(), target if target != MIX_SOURCE else "other")
+        store = find_keys_store(_root(), target if target != MIX_SOURCE else "other")
     if store is None or not store.exists():
         print(
             "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "
@@ -3413,25 +3240,6 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     return 0
 
 
-def load_key_margins(path: Path) -> dict[str, float]:
-    """`source_key → margin`. 조성 추정의 1위-2위 상관 차다 (D-0089)."""
-    import json
-
-    found: dict[str, float] = {}
-    with path.open(encoding="utf-8") as stream:
-        for line in stream:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            name, margin = row.get("source_key"), row.get("margin")
-            if name is not None and margin is not None:
-                found[str(name)] = float(margin)
-    return found
-
-
 def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[object]]) -> list[str]:
     """머리글과 값을 **같은 열 명세 하나에서** 그린다 (D-0092).
 
@@ -3465,109 +3273,6 @@ def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[obj
     return lines
 
 
-def stem_parts(name: str) -> frozenset[str]:
-    """그 이름이 어떤 원천 스템을 담는가. `mix`는 전부다."""
-    if name == MIX_SOURCE:
-        return frozenset({"other", "bass", "vocals", "drums"})
-    return frozenset(STEM_SETS.get(name, ()))
-
-
-def stems_overlap(left: str, right: str) -> bool:
-    """두 관측이 오디오를 공유하는가 (D-0099).
-
-    **겹치면 잡음도 함께 움직여 상관이 부풀려진다.** `mix`와 `other`가 그랬고
-    실측 0.5572가 그 겹침만으로 설명 가능한 값이었다 — **통과를 못 읽었다.**
-    """
-    return bool(stem_parts(left) & stem_parts(right))
-
-
-def _halves(row: dict[str, object], name: str) -> tuple[object, object]:
-    """그 출처의 앞뒤 반쪽 크로마. 없으면 `(None, None)`."""
-    if name == MIX_SOURCE:
-        return row.get("chroma_head"), row.get("chroma_tail")
-    bundle = row.get("stems")
-    found = bundle.get(name) if isinstance(bundle, dict) else None
-    if not isinstance(found, dict):
-        return None, None
-    return found.get("head"), found.get("tail")
-
-
-def load_drift_observations(path: Path, left_set: str, right_set: str) -> list[DriftObservation]:
-    """반쪽 크로마 둘을 **같은 회전으로** 읽어 변화 벡터를 만든다 (D-0098 · D-0099).
-
-    **으뜸음은 앞반쪽 추정을 쓴다** — 곡 전체에서 추정하면 뒷반쪽이 회전 정렬에
-    관여한다 (D-0062). 두 관측이 같은 회전을 써야 비교가 성립한다.
-    """
-    from hathor.application.evaluate_time_drift import drift_vector
-    from hathor.domain.services.harmony_prior import merge_degree_priors
-    from hathor.domain.value_objects.key import PITCH_CLASSES
-
-    found: list[DriftObservation] = []
-    with path.open(encoding="utf-8") as stream:
-        for line in stream:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            parts = {"left": _halves(row, left_set), "right": _halves(row, right_set)}
-            key_text = row.get("key_head") or row.get("key")
-            name = row.get("source_key")
-            if name is None or key_text is None:
-                continue
-            if any(value is None for pair in parts.values() for value in pair):
-                continue
-            tonic = str(key_text).rsplit(" ", 1)[0]
-            if tonic not in PITCH_CLASSES:
-                continue
-            index = PITCH_CLASSES.index(tonic)
-            rotated: dict[str, tuple[float, ...]] = {}
-            for side, (raw_head, raw_tail) in parts.items():
-                head = cast("Sequence[float]", raw_head)
-                tail = cast("Sequence[float]", raw_tail)
-                rotated[side] = drift_vector(
-                    tuple(
-                        float(v)
-                        for v in merge_degree_priors([(tuple(float(x) for x in head), index)])
-                    ),
-                    tuple(
-                        float(v)
-                        for v in merge_degree_priors([(tuple(float(x) for x in tail), index)])
-                    ),
-                )
-            found.append(DriftObservation(str(name), rotated["left"], rotated["right"]))
-    return found
-
-
-def load_transition_priors(
-    root: Path, stem_set: str, source_keys: Sequence[str]
-) -> dict[str, tuple[tuple[float, ...], ...]]:
-    """곡별 전이 사전을 시계열 폴더에서 읽는다 (O-32 · D-0112).
-
-    **빈 사전은 뺀다** (D-0107). 창이 둘 미만이거나 한 도수만 나온 곡이며,
-    **없는 것을 조건으로 쓰지 않는다.**
-    """
-    import hashlib
-
-    import numpy as np
-
-    from hathor.domain.services.transition_prior import is_empty, transition_prior
-
-    found: dict[str, tuple[tuple[float, ...], ...]] = {}
-    for source_key in source_keys:
-        stamp = hashlib.sha1(source_key.encode("utf-8")).hexdigest()[:16]
-        path = root / f"{stamp}-{stem_set}.npz"
-        if not path.exists():
-            continue
-        with np.load(path, allow_pickle=False) as bundle:
-            series = np.asarray(bundle["series"], dtype=np.float64)
-        matrix = transition_prior(series)
-        if not is_empty(matrix):
-            found[source_key] = tuple(tuple(float(v) for v in row) for row in matrix)
-    return found
-
-
 def _run_eval_harmony_order(args: argparse.Namespace) -> int:
     """출력의 배열이 **그 참조곡의** 배열을 닮았는지 잰다 (O-32 · D-0112).
 
@@ -3584,7 +3289,7 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
 
     store = args.priors
     if store is None:
-        store = find_stem_prior_store(_root(), args.stem_set)
+        store = find_keys_store(_root(), args.stem_set)
     series_root = args.series
     if series_root is None:
         series_root = find_series_root(_root(), args.stem_set)
@@ -3712,7 +3417,7 @@ def _run_eval_time_drift(args: argparse.Namespace) -> int:
 
     store = args.priors
     if store is None:
-        store = find_stem_prior_store(_root(), args.left)
+        store = find_keys_store(_root(), args.left)
     if store is None or not store.exists():
         print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
         return 1
@@ -3789,7 +3494,7 @@ def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
     source = args.stem_set
     store = args.priors
     if store is None:
-        store = find_stem_prior_store(_root(), source if source != MIX_SOURCE else "other")
+        store = find_keys_store(_root(), source if source != MIX_SOURCE else "other")
     if store is None or not store.exists():
         print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
         return 1
@@ -3902,7 +3607,7 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
     source = args.stem_set
     store = args.priors
     if store is None:
-        store = find_stem_prior_store(_root(), source if source != MIX_SOURCE else "other")
+        store = find_keys_store(_root(), source if source != MIX_SOURCE else "other")
     if store is None or not store.exists():
         print(
             "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "

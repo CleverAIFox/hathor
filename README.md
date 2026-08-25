@@ -433,6 +433,16 @@ tools/lyrics_exclusion_probe.py   가사 제외 곡 원인 진단 (D-0048)
 `hathor/cli.py`는 문서 §5.3.3의 `python -m hathor.cli` 명령을 유지하기 위한 진입 모듈이며,
 실제 구현은 `hathor/interfaces/cli/main.py`에 있다 (GR-2.2: interfaces에 로직 금지).
 
+**산출물을 읽고 쓰는 것은 인프라에 있다** (D-0116). `main.py`는 그것을 부를 뿐이다.
+
+| 모듈 | 무엇을 읽는가 |
+|---|---|
+| `infrastructure/keys_jsonl_store.py` | `*.keys.jsonl` — 크로마·조성·margin. 회전(D-0073)이 여기 한 곳에 |
+| `infrastructure/chroma_series_store.py` | `keys-*.series/*.npz` — 시계열. `series_path`가 이름 짓기의 단일 자리 |
+| `domain/services/stem_sets.py` | 스템 조합 어휘와 겹침 판정 (D-0099) |
+
+**`main.py`는 아직 3866줄이고 그 자체가 미해결이다** (D-0116). 저장소 로더까지만 내렸다.
+
 ## P0에서 구현된 것과 아닌 것
 
 `engines/compose`의 구조·화성 생성기는 **결정성만 보장하는 스텁**이다. 음악적 타당성은 없다.
