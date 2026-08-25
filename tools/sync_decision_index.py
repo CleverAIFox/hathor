@@ -441,6 +441,51 @@ def build_index(decisions_text: str) -> str:
     )
 
 
+def check_stray_records(documents: dict[str, str]) -> list[str]:
+    """조각 파일 **밖에** 결정 기록 표제가 있는가 (D-0115).
+
+    **D-0114가 `DECISIONS.md`에 통째로 들어앉아 있었고 아무 검사도 못 봤다.**
+    `load_parts`가 조각이 있으면 조각만 읽으므로, 조각 아닌 곳에 쓴 기록은
+    번호에도 참조에도 색인에도 안 잡힌다 — **있는데 없는 것으로 세어진다.**
+
+    D-0080이 잡은 것과 같은 부류다. 그때는 표제가 **없는** 것이었고 이번은 표제가
+    **엉뚱한 파일에 있는** 것이다. 둘 다 "표제를 긁는 검사는 긁는 자리만 본다"에서 온다.
+    """
+    problems: list[str] = []
+    for name in ("DECISIONS", "DESIGN", "CONTRIBUTING", "README"):
+        found = HEADING.findall(documents.get(name, ""))
+        for identifier, _ in found:
+            problems.append(
+                f"{name}.md에 {identifier} 표제가 있다. 본문은 docs/decisions/ 조각에만 둔다"
+            )
+    return problems
+
+
+def check_issue_references(design_text: str, records: list[Record]) -> list[str]:
+    """미해결표가 가리키는 결정 번호가 실재하는가 (D-0115).
+
+    `check_references`는 **기록 본문 안**만 본다. 미해결표는 DESIGN에 있어 그 밖이고,
+    `O-38 ... 닫힘 (D-0114)`가 없는 기록을 가리키는 채로 통과했다.
+    **닫혔다고 적힌 항목의 근거가 사라진 것이 조용히 넘어가면 안 된다.**
+    """
+    known = {record.number for record in records}
+    problems: list[str] = []
+    for label, begin, end in (("활성", OPEN_BEGIN, OPEN_END), ("닫힘", CLOSED_BEGIN, CLOSED_END)):
+        block = _section(design_text, begin, end)
+        if block is None:
+            continue
+        for row in block.splitlines():
+            if not row.startswith("| O-"):
+                continue
+            for raw in sorted({int(value) for value in REFERENCE.findall(row)}):
+                if raw not in known:
+                    name = ISSUE_ROW.findall(row + chr(10))
+                    problems.append(
+                        f"{label} 미해결표의 {name}이 없는 기록을 가리킨다: D-{raw:04d}"
+                    )
+    return problems
+
+
 def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
     """전부 돌리고 문제를 모아 낸다. **첫 문제에서 멈추지 않는다** — 한 번에 다
     보여야 고치러 여러 번 오지 않는다.
@@ -462,6 +507,8 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_sections(records),
         *check_supersession(records),
         *check_open_issues(design_text),
+        *check_issue_references(design_text, records),
+        *check_stray_records(documents),
         *check_split(parts),
         *check_layout(parts),
         *check_text_style(documents),
