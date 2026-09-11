@@ -350,3 +350,47 @@ def test_실제_저장소의_색인이_일치한다():
     design_text = tool.DESIGN.read_text(encoding="utf-8")
     index = tool.build_index(tool.merge_parts(tool.load_parts()))
     assert tool.BLOCK.sub(lambda _: index, design_text, count=1) == design_text
+
+
+# --------------------------------------------------------------- 배선
+
+
+def _recipes(makefile: str) -> dict[str, tuple[list[str], list[str]]]:
+    """Makefile을 `타깃 -> (선행, 레시피)`로 읽는다. **탭이 레시피다.**"""
+    targets: dict[str, tuple[list[str], list[str]]] = {}
+    current: str | None = None
+    for line in makefile.split("\n"):
+        if line.startswith("\t"):
+            if current is not None:
+                targets[current][1].append(line.strip())
+            continue
+        head, sep, rest = line.partition(":")
+        if not sep or head.startswith((".", "#", " ")) or "=" in head:
+            current = None
+            continue
+        current = head.strip()
+        prerequisites = rest.split("##")[0].split()
+        targets[current] = (prerequisites, [])
+    return targets
+
+
+def test_check가_있는_도구는_전부_check_사슬에서_불린다():
+    """**도구에 `--check`를 다는 것과 그것이 도는 것은 다르다** (D-0121).
+
+    `split_decisions.py --check`는 D-0080부터 있었고 조각 표가 낡은 것을 정확히
+    잡았는데, `make check`가 부르지 않아 일곱 세션을 그냥 지났다.
+    """
+    root = repo_root()
+    targets = _recipes((root / "Makefile").read_text(encoding="utf-8"))
+    assert "check" in targets, "Makefile에 check 타깃이 없다"
+
+    reachable = [line for name in targets["check"][0] for line in targets.get(name, ([], []))[1]]
+    chain = "\n".join(reachable)
+
+    for path in sorted((root / "tools").glob("*.py")):
+        if '"--check"' not in path.read_text(encoding="utf-8"):
+            continue
+        assert f"tools/{path.name}" in chain, (
+            f"{path.name}에 --check가 있는데 make check 사슬이 부르지 않는다. "
+            "Makefile의 docs 타깃에 한 줄 더한다"
+        )

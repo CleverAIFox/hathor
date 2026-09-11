@@ -13,8 +13,9 @@ ps:
 
 check: docs size lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
 
-docs:          ## 부록 A 색인이 결정 기록과 일치하는지 (D-0042)
+docs:          ## 부록 A 색인 · 조각 표가 결정 기록과 일치하는지 (D-0042 · D-0121)
 	python3 tools/sync_decision_index.py --check
+	python3 tools/split_decisions.py --check
 
 size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)
 	python3 tools/check_file_size.py

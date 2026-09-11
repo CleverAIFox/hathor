@@ -29,6 +29,10 @@ jobs:
         working-directory: .
         run: python3 tools/sync_decision_index.py --check
 
+      - name: Decision parts
+        working-directory: .
+        run: python3 tools/split_decisions.py --check
+
       - name: File size ratchet
         working-directory: .
         run: python3 tools/check_file_size.py
