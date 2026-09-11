@@ -27,8 +27,7 @@
 | 단계 | 상태 |
 |---|---|
 | P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
-| **다음 작업** | **교두보를 리전에서 한 번 통과시킨다** (D-0120 · D-0121). `make artifacts-push ONLY=keys`가 **아직 한 파일도 안 옮겼다** — 세 번 깨졌고 마지막 수정은 미검증이다 |
-| 그다음 | **O-37 화성 리듬.** O-32와 O-38이 닫혔다 — 출력이 참조곡의 배열을 담고(other-self +0.4983), 8마디 부호 뒤집힘은 **표본 부족**으로 판정됐다(`0.5853 - 0.688/sqrt(n)`, 잔차 0.0064). 지금은 **매 마디 바뀐다**. **`keys-*`가 광인사에 있어야 시작된다** |
+| **다음 작업** | **O-37 화성 리듬.** O-32와 O-38이 닫혔다 — 출력이 참조곡의 배열을 담고(other-self +0.4983), 8마디 부호 뒤집힘은 **표본 부족**으로 판정됐다(`0.5853 - 0.688/sqrt(n)`, 잔차 0.0064). 지금은 **매 마디 바뀐다** — 어색하면 O-37이다. 재료(`keys-*.series` 6024개)는 확보돼 있다 |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
 실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
@@ -115,8 +114,8 @@ uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 
 
 ### 산출물을 옮긴다 (D-0118)
 
-**`var/`는 커밋하지 않는다.** 리전이 GPU로 뽑은 것을 광인사가 쓰려면 외장 SSD를
-교두보로 쓴다. `.env`에 마운트 지점을 적는다.
+**`var/`는 커밋하지 않는다.** 외장 SSD가 유일한 사본이다 — **기기가 하나이므로
+교두보가 아니라 백업이다** (D-0122). `.env`에 마운트 지점을 적는다.
 
 ```bash
 HATHOR_ARTIFACT_STORE=/mnt/e/hathor-artifacts   # 기기마다 다르다
@@ -124,9 +123,12 @@ HATHOR_ARTIFACT_STORE=/mnt/e/hathor-artifacts   # 기기마다 다르다
 
 ```bash
 make artifacts          # 양쪽에 무엇이 있는지
-make artifacts-push     # 리전에서: var/ingest -> SSD
-make artifacts-pull     # 광인사에서: SSD -> var/ingest
+make artifacts-push     # 백업:  var/ingest -> SSD
+make artifacts-pull     # 복원:  SSD -> var/ingest
 ```
+
+**복원은 17192개에 4분 12초다** (D-0122 실측). 재추출은 GPU로 1시간 40분이므로
+`doctor`가 사전이 없다고 하면 **재추출 전에 `make artifacts-pull`을 먼저 본다.**
 
 **덮어쓰지 않는다.** 목적지에 같은 이름이 있으면 건너뛰므로 몇 번을 돌려도 같고,
 양쪽 어느 방향으로도 안전하다 — 산출물 이름에 스탬프가 박혀 있어 서로 다른 실행이
