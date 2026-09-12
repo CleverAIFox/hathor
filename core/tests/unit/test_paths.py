@@ -123,7 +123,29 @@ def test_해석된_경로는_항상_절대_경로다(name):
 # ---------------------------------------------------- doctor (D-0067)
 
 
-def test_doctor는_설정이_다_있으면_0이다(tmp_path, monkeypatch, capsys):
+@pytest.fixture
+def hooks(tmp_path_factory, monkeypatch):
+    """훅이 걸린 기기인 척한다 (D-0128).
+
+    **기기 계약이지 저장소 설정이 아니다.** 훅 검사가 다른 검사의 표를 흐리지 않게
+    여기서 고정하고, 훅 자체는 전용 검사에서 본다.
+    """
+    from hathor.interfaces.cli import doctor as module
+
+    folder = tmp_path_factory.mktemp("githooks")
+    for name in module.HOOKS:
+        hook = folder / name
+        hook.write_text("#!/bin/sh\n", encoding="utf-8")
+        hook.chmod(0o755)
+    monkeypatch.setattr(
+        module,
+        "_git",
+        lambda root, *args: str(folder) if args[:2] == ("config", "--get") else None,
+    )
+    return folder
+
+
+def test_doctor는_설정이_다_있으면_0이다(hooks, tmp_path, monkeypatch, capsys):
     """`.env`가 있고 음원 루트가 실재하면 통과한다."""
     from hathor.interfaces.cli.main import main
     from hathor.shared.config import paths
@@ -134,7 +156,7 @@ def test_doctor는_설정이_다_있으면_0이다(tmp_path, monkeypatch, capsys
     (fake / "CONTRIBUTING.md").write_text("x", encoding="utf-8")
     (fake / ".env").write_text("", encoding="utf-8")
 
-    monkeypatch.setattr("hathor.interfaces.cli.main.repo_root", lambda: fake)
+    monkeypatch.setattr("hathor.interfaces.cli.doctor.repo_root", lambda: fake)
     monkeypatch.setattr(paths, "repo_root", lambda: fake)
     monkeypatch.setenv(LIBRARY_ROOT_ENV, str(tmp_path))
     monkeypatch.setenv(PATCH_DIR_ENV, str(tmp_path))
@@ -172,13 +194,13 @@ def test_doctor는_설치본이_같은_저장소인지_본다(capsys, monkeypatc
     assert "설치본" in capsys.readouterr().out
 
 
-def test_doctor는_윈도우_드라이브를_경고한다(monkeypatch, capsys):
+def test_doctor는_윈도우_드라이브를_경고한다(hooks, monkeypatch, capsys):
     from hathor.interfaces.cli.main import main
     from hathor.shared.config import paths
 
     monkeypatch.setattr(paths.repo_root, "__wrapped__", lambda: Path("/mnt/c/x/hathor"))
     paths.repo_root.cache_clear()
-    monkeypatch.setattr("hathor.interfaces.cli.main.repo_root", lambda: Path("/mnt/c/x/hathor"))
+    monkeypatch.setattr("hathor.interfaces.cli.doctor.repo_root", lambda: Path("/mnt/c/x/hathor"))
     monkeypatch.setenv(LIBRARY_ROOT_ENV, "/tmp")
     monkeypatch.setenv(PATCH_DIR_ENV, "/tmp")
     assert main(["doctor"]) == 1

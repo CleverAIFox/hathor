@@ -257,7 +257,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | 2 | **Fail Fast** | 입력 검증을 진입점에서. 예외를 삼키지 않는다. 재시도 가능한 오류만 명시적 재시도 |
 | 3 | **Idempotency** | 동일 요청 반복 시 상태 동일. 모든 워커에 멱등 키 필수 |
 | 4 | **Deterministic** | 동일 입력 → 동일 출력. **시드 명시 고정.** 재현성 계층은 `docs/DESIGN.md`에 있고 CI가 검사한다 |
-| 5 | **Secrets 분리** | 코드에 비밀정보 금지. `.env` + 환경 변수. CI가 시크릿 스캔을 돌린다 |
+| 5 | **Secrets 분리** | 코드에 비밀정보 금지. `.env` + 환경 변수. `make docs`와 CI가 `check_secrets.py`를 돌리고, 기기 훅은 `doctor`가 본다 (D-0128) |
 | 6 | **DRY** | 동일 로직 **3회 반복 시** 공통화. 2회까지는 중복 허용 (성급한 추상화 방지) |
 | 7 | **Single Responsibility** | 함수·클래스·모듈은 하나의 책임. 계층 간 전달은 DTO로 |
 | 8 | **No Hard Coding** | 반복 값은 상수·enum·설정으로. 임계값은 주입 |

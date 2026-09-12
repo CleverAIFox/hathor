@@ -13,10 +13,11 @@ ps:
 
 check: docs size lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
 
-docs:          ## 부록 A 색인 · 조각 표 · 닫힌 질문 표기 (D-0042 · D-0121 · D-0126)
+docs:          ## 색인 · 조각 표 · 닫힌 질문 표기 · 비밀정보 (D-0121 · D-0126 · D-0128)
 	python3 tools/sync_decision_index.py --check
 	python3 tools/split_decisions.py --check
 	python3 tools/check_issue_mentions.py --check
+	python3 tools/check_secrets.py --check
 
 size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)
 	python3 tools/check_file_size.py

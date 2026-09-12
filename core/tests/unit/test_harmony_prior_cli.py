@@ -190,7 +190,7 @@ def test_doctor가_산출물_조건을_요약한다(tmp_path, monkeypatch, capsy
 
     ingest = tmp_path / "var" / "ingest"
     write_keys(ingest / "keys-A.keys.jsonl", stem_rows(3))
-    monkeypatch.setattr("hathor.interfaces.cli.main.repo_root", lambda: tmp_path)
+    monkeypatch.setattr("hathor.interfaces.cli.doctor.repo_root", lambda: tmp_path)
     monkeypatch.setenv(LIBRARY_ROOT_ENV, "/tmp")
     monkeypatch.setenv(PATCH_DIR_ENV, "/tmp")
     cli(["doctor"])
@@ -206,7 +206,7 @@ def test_조건이_없는_옛_산출물도_다룬다(tmp_path, monkeypatch, caps
 
     ingest = tmp_path / "var" / "ingest"
     write_keys(ingest / "keys-old.keys.jsonl", synth_rows(2, informative=True))
-    monkeypatch.setattr("hathor.interfaces.cli.main.repo_root", lambda: tmp_path)
+    monkeypatch.setattr("hathor.interfaces.cli.doctor.repo_root", lambda: tmp_path)
     monkeypatch.setenv(LIBRARY_ROOT_ENV, "/tmp")
     monkeypatch.setenv(PATCH_DIR_ENV, "/tmp")
     cli(["doctor"])
