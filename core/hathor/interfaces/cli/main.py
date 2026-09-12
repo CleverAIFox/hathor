@@ -37,7 +37,6 @@ from hathor.domain.services.key_estimation import KeyEstimate
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
-    MIX_SOURCE,
     STEM_SETS,
     stems_overlap,
 )
@@ -53,9 +52,7 @@ from hathor.infrastructure.jsonl_resolution_store import JsonlResolutionStore
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
 from hathor.infrastructure.keys_jsonl_store import (
     find_keys_store,
-    load_degree_priors,
     load_drift_observations,
-    load_key_margins,
     load_stem_priors,
 )
 from hathor.infrastructure.musicbrainz_lookup import (
@@ -65,6 +62,11 @@ from hathor.infrastructure.musicbrainz_lookup import (
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
 from hathor.interfaces.cli.doctor import run_doctor
 from hathor.interfaces.cli.eval_order import run_eval_harmony_order
+from hathor.interfaces.cli.eval_output import report_harmonic_sweep, run_eval_harmony_output
+from hathor.interfaces.cli.eval_vocabulary import (
+    run_eval_chromatic_origin,
+    run_eval_degree_restriction,
+)
 from hathor.interfaces.cli.tables import parse_key, render_table
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
@@ -742,11 +744,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.eval_command == "harmony-prior":
             return _run_eval_harmony_prior(args)
         if args.eval_command == "harmony-output":
-            return _run_eval_harmony_output(args)
+            return run_eval_harmony_output(args)
         if args.eval_command == "degree-restriction":
-            return _run_eval_degree_restriction(args)
+            return run_eval_degree_restriction(args)
         if args.eval_command == "chromatic-origin":
-            return _run_eval_chromatic_origin(args)
+            return run_eval_chromatic_origin(args)
         if args.eval_command == "time-drift":
             return _run_eval_time_drift(args)
         if args.eval_command == "harmony-order":
@@ -1242,91 +1244,6 @@ def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | Non
     return tuple(float(value) for value in merge_degree_priors(usable))
 
 
-def _report_harmonic_sweep(rows: list[dict[str, object]], profile: str) -> int:
-    """배음 감산 강도를 훑어 한 표로 낸다 (D-0060).
-
-    셸 반복문으로 다섯 번 돌리고 눈으로 비교하던 것을 도구로 옮긴다.
-    **베이스라인도 강도마다 다시 잰다** — 코퍼스만 감산하고 하한을 고정하면
-    판별력이 낮게 보고된다.
-    """
-    import numpy as np
-
-    from hathor.domain.services.key_estimation import (
-        BLACK_KEYS,
-        estimate_key,
-        random_baseline,
-        relative_key,
-        subtract_harmonics,
-    )
-    from hathor.domain.value_objects.key import Key, Mode
-
-    saved = [row.get("chroma") for row in rows]
-    if any(item is None for item in saved):
-        print("저장된 크로마가 없다. 먼저 크로마를 포함해 추출한다.", file=sys.stderr)
-        return 1
-
-    def parse(text: str) -> Key:
-        tonic, mode = str(text).rsplit(" ", 1)
-        return Key(tonic=tonic, mode=Mode(mode))
-
-    print(f"곡 {len(rows)}개 · 프로파일 {profile}\n")
-    header = (
-        f"{'강도':>5}{'상관차':>10}{'격차차':>10}{'애매차':>10}"
-        f"{'검은건반':>10}{'장조':>8}{'애매내 나란한조':>17}"
-    )
-    print(header)
-    print("-" * len(header))
-
-    for strength in (0.0, 0.3, 0.5, 0.7, 1.0):
-        estimates = []
-        for item in saved:
-            vector = subtract_harmonics(np.asarray(item, dtype=np.float64), strength)
-            total = float(vector.sum())
-            if total <= 0:
-                continue
-            estimates.append(
-                estimate_key(np.asarray(vector / total, dtype=np.float32), profile=profile)
-            )
-        if not estimates:
-            continue
-
-        correlations = np.asarray([item.correlation for item in estimates])
-        margins = np.asarray([item.margin for item in estimates])
-        base_correlation, base_margin = random_baseline(profile=profile, harmonic=strength)
-
-        total_songs = len(estimates)
-        black = sum(1 for item in estimates if item.key.tonic in BLACK_KEYS)
-        major = sum(1 for item in estimates if item.key.mode is Mode.MAJOR)
-        ambiguous = [item for item in estimates if item.margin < KEY_MARGIN_FLOOR]
-        relative_in_ambiguous = sum(
-            1 for item in ambiguous if relative_key(item.key) == item.runner_up
-        )
-        ambiguous_gap = (
-            len(ambiguous) / total_songs - float((base_margin < KEY_MARGIN_FLOOR).mean())
-        ) * 100
-        if ambiguous:
-            share = relative_in_ambiguous / len(ambiguous)
-            relative_ratio = f"{share:.1%} ({relative_in_ambiguous}/{len(ambiguous)})"
-        else:
-            relative_ratio = "-"
-        print(
-            f"{strength:>5.1f}"
-            f"{float(np.median(correlations)) - float(np.median(base_correlation)):>+10.4f}"
-            f"{float(np.median(margins)) - float(np.median(base_margin)):>+10.4f}"
-            f"{ambiguous_gap:>+9.1f}p"
-            f"{black / total_songs:>10.1%}"
-            f"{major / total_songs:>8.1%}"
-            f"{relative_ratio:>17}"
-        )
-
-    print("\n--- 읽는 법 ---")
-    print("**검은건반이 핵심이다** (O-23 · D-0061). 33.5%가 실제 대중가요보다 명백히 높다.")
-    print("줄지 않으면 배음도 원인이 아니며 O-23의 후보가 전부 소진된다 (D-0061).")
-    print("애매차는 무작위 대비다. 음수가 클수록 판정이 결정적이다.")
-    print("애매내 나란한조가 오르면 남은 애매함이 원리적 한계 쪽으로 이동한 것이다.")
-    return 0
-
-
 def _run_ingest_keys(args: argparse.Namespace) -> int:
     """코퍼스 조성 분포를 실측한다 (O-22).
 
@@ -1609,7 +1526,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         return 1
 
     if args.harmonic_sweep:
-        return _report_harmonic_sweep(rows, args.profile)
+        return report_harmonic_sweep(rows, args.profile)
 
     total = len(rows)
     correlations = np.asarray([float(str(row["correlation"])) for row in rows])
@@ -2748,279 +2665,6 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_eval_harmony_output(args: argparse.Namespace) -> int:
-    """참조곡을 바꾸면 출력이 얼마나 갈리는지 잰다 (O-29 · D-0078).
-
-    **8마디 한 번을 세는 것으로는 아무것도 판정할 수 없다.** `rng.choices`는
-    가중치에 비례하는 것이 아니라 **가중치가 뽑힌 난수를 넘어설 때만** 바뀌는
-    문턱이다. 시드 1000개로 늘리고 비교선 일곱을 함께 낸다.
-
-    저장된 크로마만 읽으므로 **음원도 GPU도 필요 없다.**
-    """
-    from hathor.application.evaluate_harmony_output import (
-        EvaluateHarmonyOutput,
-        OutputCondition,
-        OutputReport,
-        ReferencePrior,
-        SourceComparison,
-        sweep_bar_counts,
-    )
-    from hathor.engines.compose.harmony_generator import vocabulary_roots
-    from hathor.shared.config.paths import repo_root as _root
-
-    target = args.stem_set
-    baseline = None if args.against.lower() == "none" else args.against
-    store = args.priors
-    if store is None:
-        store = find_keys_store(_root(), target if target != MIX_SOURCE else "other")
-    if store is None or not store.exists():
-        print(
-            "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "
-            "--priors로 경로를 준다.",
-            file=sys.stderr,
-        )
-        return 1
-
-    tables = {name: load_degree_priors(store, name) for name in {target, baseline} if name}
-    for name, table in tables.items():
-        if len(table) < 2:
-            print(
-                f"출처 `{name}`의 사전이 {len(table)}개다. {store.name}에 그 출처가 없다.",
-                file=sys.stderr,
-            )
-            return 1
-
-    # **두 출처가 같은 곡 집합을 써야 짝지은 비교가 된다.** 곡이 다르면 쌍 추첨이
-    # 서로 다른 곡을 가리켜 출처 차이인지 쌍 차이인지 갈리지 않는다 (D-0033).
-    shared = sorted(set.intersection(*(set(table) for table in tables.values())))
-    if len(shared) < 2:
-        print(f"두 출처에 공통인 곡이 {len(shared)}개다.", file=sys.stderr)
-        return 1
-
-    from hathor.engines.compose.harmony_generator import Vocabulary
-
-    condition = OutputCondition(
-        seed_count=args.seeds,
-        bar_count=args.bars,
-        pair_count=args.pairs,
-        key=parse_key(args.key),
-        seed=args.seed,
-        vocabulary=Vocabulary(args.vocabulary),
-    )
-    harness = EvaluateHarmonyOutput(condition)
-
-    def references(name: str) -> list[ReferencePrior]:
-        return [ReferencePrior(source_key=key, prior=tables[name][key]) for key in shared]
-
-    reports: dict[str, OutputReport] = {
-        name: harness.run(references(name), name) for name in tables
-    }
-    result = reports[target]
-
-    print(
-        f"곡 {len(shared)}개 · 쌍 {result.line('paired').pair_count}"
-        f" · 시드 {condition.seed_count} · {condition.bar_count}마디"
-        f" · {condition.key} · 출처 {target}"
-        f"{f' (기준 {baseline})' if baseline else ''}\n"
-        f"사전: {store.name}\n"
-    )
-
-    for name, report in reports.items():
-        print(f"[{name}]")
-        for text in render_table(
-            (
-                ("선", "<10"),
-                ("도수거리", ">12.4f"),
-                ("표준오차", ">10.4f"),
-                ("마디환산", ">11.2f"),
-                ("극한", ">10.4f"),
-                ("마디불일치", ">13.4f"),
-                ("전이초과", ">11.4f"),
-                ("t", ">7.2f"),
-            ),
-            [
-                (
-                    item.name,
-                    item.mean_distance,
-                    item.standard_error,
-                    item.mean_distance * condition.bar_count,
-                    item.mean_limit,
-                    item.mean_mismatch,
-                    item.order_excess,
-                    item.order_t,
-                )
-                for item in report.lines
-            ],
-        ):
-            print(text)
-        verdict = "정보 있음" if report.is_output_conditioned else "정보 없음"
-        sound = "건전" if report.is_harness_sound else "**고장**"
-        order = "**있음**" if report.line("paired").carries_order else "없음"
-        print(f"하네스 {sound} · 어휘 판정: **{verdict}** · 순서 판정: {order}\n")
-
-    if baseline:
-        comparison = SourceComparison(baseline=reports[baseline], target=result)
-        moved = comparison.gain * condition.bar_count
-        print(
-            f"짝지은 비교 ({baseline} → {target})\n"
-            f"  출력 차이 이득 {comparison.gain:+.4f}  (마디 환산 {moved:+.2f})\n"
-            f"  사전 극한 이득 {comparison.limit_gain:+.4f}\n"
-            f"  쌍 단위 승률  {comparison.win_rate:.1%}\n"
-            f"  전달: **{'그렇다' if comparison.transmits_prior_contrast else '아니다'}**\n"
-        )
-
-    if args.compare_vocabulary:
-        from dataclasses import replace
-
-        from hathor.application.evaluate_harmony_output import OutputLine
-
-        print("어휘 비교 (같은 쌍·같은 시드) — O-36 · D-0094")
-        columns = (
-            ("어휘", "<10"),
-            ("칸", ">5"),
-            ("paired", ">10.4f"),
-            ("극한", ">10.4f"),
-            ("마디환산", ">11.2f"),
-        )
-        measured: dict[str, OutputReport] = {}
-        rows: list[tuple[object, ...]] = []
-        for name in ("base", "control", "mixture"):
-            chosen = replace(condition, vocabulary=Vocabulary(name))
-            report = EvaluateHarmonyOutput(chosen).run(references(target), name)
-            measured[name] = report
-            line = report.line("paired")
-            rows.append(
-                (
-                    name,
-                    len(vocabulary_roots(condition.key.mode, Vocabulary(name))),
-                    line.mean_distance,
-                    line.mean_limit,
-                    line.mean_distance * condition.bar_count,
-                )
-            )
-        for text in render_table(columns, rows):
-            print(text)
-        mixture_line = measured["mixture"].line("paired")
-        control_line = measured["control"].line("paired")
-        gain = mixture_line.mean_distance - control_line.mean_distance
-        wins = sum(
-            1
-            for left, right in zip(mixture_line.distances, control_line.distances, strict=True)
-            if left > right
-        )
-        share = wins / max(len(mixture_line.distances), 1)
-        free = control_line.mean_distance - measured["base"].line("paired").mean_distance
-        beats = gain > 0 and share > 0.5
-        verdict = "차용 어휘가 출력을 더 가른다" if beats else "대조군을 못 넘는다"
-        print(
-            f"\n칸이 늘어 공짜로 오른 몫 (control - base) = {free:+.4f}\n"
-            f"차용이 번 몫 (mixture - control) = {gain:+.4f}"
-            f" · 쌍 단위 승률 {share:.1%}\n"
-            f"판정: **{verdict}**\n"
-        )
-        from hathor.application.evaluate_harmony_output import cell_spread
-        from hathor.engines.compose.harmony_generator import (
-            BORROWED_ROOT_SEMITONES,
-            CONTROL_ROOT_SEMITONES,
-        )
-
-        mode = condition.key.mode
-        picked = references(target)
-        print(
-            f"칸별 곡 간 로그 표준편차 — 차용 칸 "
-            f"{cell_spread(picked, BORROWED_ROOT_SEMITONES[mode]):.4f}"
-            f" · 대조 칸 {cell_spread(picked, CONTROL_ROOT_SEMITONES[mode]):.4f}\n"
-        )
-        print("**D-0093이 잰 것과 여기서 필요한 것이 다른 양이다** (D-0095). 거기서는 세 칸이")
-        print("**함께 오르는가**(상관)를 쟀고, 히스토그램 거리를 만드는 것은 **얼마나")
-        print("흔들리는가**(분산)다. 위 두 표준편차가 비슷하면 어휘를 넓혀도 이득이 없다.\n")
-        if args.bar_sweep:
-            counts = tuple(int(token) for token in args.bar_sweep.split(",") if token.strip())
-            limit_gain = (
-                measured["mixture"].line("paired").mean_limit
-                - measured["control"].line("paired").mean_limit
-            )
-            print(
-                "마디 수 훑기 — **8마디 되튐이 어휘 이득을 덮는가** (D-0096)\n"
-                f"극한 차이 (mixture - control) = {limit_gain:+.4f}\n"
-            )
-            sweep_columns = (
-                ("마디", ">6"),
-                ("mixture", ">10.4f"),
-                ("control", ">10.4f"),
-                ("차이", ">10.4f"),
-                ("극한대비", ">10.1%"),
-                ("승률", ">8.1%"),
-            )
-            sweep_rows: list[tuple[object, ...]] = []
-            for bars in counts:
-                swept: dict[str, OutputLine] = {}
-                for name in ("control", "mixture"):
-                    chosen = replace(condition, vocabulary=Vocabulary(name), bar_count=bars)
-                    swept[name] = (
-                        EvaluateHarmonyOutput(chosen).run(references(target), name).line("paired")
-                    )
-                step = swept["mixture"].mean_distance - swept["control"].mean_distance
-                won = sum(
-                    1
-                    for left, right in zip(
-                        swept["mixture"].distances, swept["control"].distances, strict=True
-                    )
-                    if left > right
-                )
-                sweep_rows.append(
-                    (
-                        bars,
-                        swept["mixture"].mean_distance,
-                        swept["control"].mean_distance,
-                        step,
-                        step / limit_gain if limit_gain != 0 else 0.0,
-                        won / max(len(swept["mixture"].distances), 1),
-                    )
-                )
-            for text in render_table(sweep_columns, sweep_rows):
-                print(text)
-            print(
-                "\n**8마디에서 안 보인다고 없는 것이 아니다.** 되튐은 마디 수가 늘면 줄고"
-                "\n극한 차이는 안 줄므로, 마디를 늘리면 어휘 이득이 드러난다. 합성에서"
-                "\n8마디가 극한 차이의 44.7%, 256마디가 101.4%였다 (D-0096)."
-                "\n**`승률`이 60%를 못 넘는 줄은 읽지 않는다** — 쌍 100개에서 동전과 구분되지"
-                "\n않는다 (D-0095에서 51%를 통과로 읽을 뻔했다).\n"
-            )
-
-        print("**`control`을 안 빼면 아무것도 못 읽는다.** 도수를 6에서 9로 늘리는 것만으로")
-        print("두 진행이 겹칠 확률이 낮아져 거리가 오른다 — 합성에서 차용이 전혀 없어도")
-        print("0.2155에서 0.2696으로 올랐다. `control`은 **뭉치지 않는 세 칸**(♭2·♯4·이끔음)을")
-        print("같은 개수로 넣은 선이며, 거기서 오르는 몫은 전부 칸이 늘어서다 (D-0094).\n")
-
-    if args.bar_sweep and not args.compare_vocabulary:
-        counts = tuple(int(token) for token in args.bar_sweep.split(",") if token.strip())
-        print("마디 수 훑기 (실측이 극한으로 내려가는가)")
-        for bars, observed, limit in sweep_bar_counts(references(target), counts, condition):
-            print(f"  {bars:>5}마디  {observed:.4f}  (극한 {limit:.4f})")
-        print()
-
-    print("--- 읽는 법 ---")
-    print("**도수 히스토그램 거리가 지표다.** 마디별 일치율이 아니다 — 같은 어휘를 다른")
-    print("순서로 뽑은 것과 다른 어휘를 뽑은 것은 다르다. `마디 환산`은 거리에 마디 수를")
-    print("곱한 값이며 지난 세션이 센 `다른 마디 수`와 같은 단위다.")
-    print("**`극한`이 상한이다** (O-25 (3)). 사전 가중치 벡터 자체의 거리이며 마디 수를")
-    print("늘리면 실측이 거기로 내려간다. 실측이 극한보다 큰 것은 정상이고, 그 초과분은")
-    print("**전달된 정보가 아니라 8마디의 되튐이다.** `--bar-sweep`으로 확인한다.")
-    print("**`전이초과`는 진단이지 판정이 아니다** (D-0114). **짧은 마디에서 부호가 뒤집힌다** —")
-    print("8마디에서 -0.0133이 나온다. 표본 부족이며(4마디는 전이 표본이 3개다) 판정은")
-    print("`eval harmony-order`가 self/other로 한다. 그쪽은 4마디에서도 +0.2357이다.")
-    print("**`전이초과`가 순서 지표다** (O-32 · D-0102). 도수 히스토그램은 순서에 눈이 없어")
-    print("`I V vi IV`와 `IV vi V I`의 거리가 0이다. 전이 행렬은 이웃 관계를 본다.")
-    print("귀무선은 **같은 치환을 두 진행에 적용한 것**이다 — 각자 뒤섞으면 시드 짝짓기까지")
-    print("깨져 초과가 -0.25로 나온다. **지금은 0이어야 한다** — 순서를 시드가 정하므로")
-    print("(D-0062). **이 값이 양수가 되는 날이 O-32가 풀린 날이다.**")
-    print("`identical`은 0, `onehot`은 1.0이어야 한다. 아니면 하네스가 고장이므로 나머지")
-    print("숫자를 읽지 않는다. `random`은 아무 사전 둘이라 느슨하고, `shuffled`가 뾰족함을")
-    print("맞춘 귀무선이다 — 실측이 그보다 작으면 곡들이 화성 어휘를 공유한다는 뜻이다.")
-    return 0
-
-
 def _run_eval_time_drift(args: argparse.Namespace) -> int:
     """곡마다 다른 시간 변화가 실재하는지 잰다 (O-32 게이트 · D-0098).
 
@@ -3096,234 +2740,6 @@ def _run_eval_time_drift(args: argparse.Namespace) -> int:
     print("기본값 `other` 대 `bass`는 서로 다른 악기이고 오디오가 겹치지 않는다.")
     print("**그래도 못 가르는 것**: 뒷반쪽이 그냥 더 시끄러운 식의 곡별 인공물은 두 스템에")
     print("함께 나타날 수 있고 그것은 화성이 아니다.")
-    return 0
-
-
-def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
-    """반음계 질량이 **치환(조성 오차)인지 첨가(차용화음)인지** 잰다 (O-33 · D-0089).
-
-    사전 벡터만 읽는다. 생성도 음원도 GPU도 필요 없다.
-    """
-    from hathor.application.evaluate_chromatic_origin import (
-        MODAL_MIXTURE,
-        SUBSTITUTION_PAIRS,
-        EvaluateChromaticOrigin,
-        OriginCondition,
-        OriginReport,
-    )
-    from hathor.application.evaluate_harmony_output import ReferencePrior
-    from hathor.shared.config.paths import repo_root as _root
-
-    source = args.stem_set
-    store = args.priors
-    if store is None:
-        store = find_keys_store(_root(), source if source != MIX_SOURCE else "other")
-    if store is None or not store.exists():
-        print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
-        return 1
-
-    table = load_degree_priors(store, source)
-    if len(table) < 3:
-        print(f"출처 `{source}`의 사전이 {len(table)}개다.", file=sys.stderr)
-        return 1
-
-    key = parse_key(args.key)
-    condition = OriginCondition(key_mode=key.mode, seed=args.seed, rotated_share=args.rotated_share)
-    harness = EvaluateChromaticOrigin(condition)
-    names = sorted(table)
-    everything = [ReferencePrior(name, table[name]) for name in names]
-
-    groups: list[tuple[str, list[ReferencePrior]]] = [("전체", everything)]
-    if args.margin_split:
-        margins = load_key_margins(store)
-        ranked = sorted((margins.get(name, 0.0), name) for name in names)
-        half = len(ranked) // 2
-        groups.append(("추정 확실", [ReferencePrior(n, table[n]) for _, n in ranked[half:]]))
-        groups.append(("추정 불확실", [ReferencePrior(n, table[n]) for _, n in ranked[:half]]))
-
-    pairs = ", ".join(f"{chromatic}<-{scale}" for chromatic, scale in SUBSTITUTION_PAIRS[key.mode])
-    mixture_cells = ", ".join(str(cell) for cell in MODAL_MIXTURE[key.mode])
-    print(
-        f"곡 {len(everything)}개 · {key} · 출처 {source}\n사전: {store.name}\n"
-        f"치환 짝 (반음계<-온음계): {pairs}\n"
-    )
-    print(f"단조 차용 삼총사: {mixture_cells} (D-0091)\n")
-    columns = (
-        ("묶음", "<12"),
-        ("곡", ">6"),
-        ("치환초과", ">11.4f"),
-        ("t", ">8.2f"),
-        ("눈금선", ">10.4f"),
-        ("뭉침대비", ">11.4f"),
-        ("t", ">8.2f"),
-        ("온음계질량", ">12.4f"),
-    )
-    results: list[tuple[str, OriginReport]] = []
-    rows: list[tuple[object, ...]] = []
-    for name, subset in groups:
-        report = harness.run(subset, name)
-        results.append((name, report))
-        rows.append(
-            (
-                name,
-                report.reference_count,
-                report.excess,
-                report.t_statistic,
-                report.rotated_excess,
-                report.mixture_excess,
-                report.mixture_t,
-                report.scale_mass,
-            )
-        )
-    for line in render_table(columns, rows):
-        print(line)
-    whole = results[0][1]
-    verdict = (
-        "**조성 추정 오차가 지배한다**"
-        if whole.chromatic_is_substitution
-        else "오차로 설명되지 않는다"
-    )
-    mixture_verdict = (
-        "**단조 차용이 있다**" if whole.modal_mixture_present else "삼총사가 안 뭉친다"
-    )
-    print(
-        f"\n치환 판정: {verdict}"
-        f"\n뭉침 판정: {mixture_verdict}"
-        f"  (대비 {whole.mixture_excess:+.4f} ±{whole.mixture_standard_error:.4f},"
-        f" t = {whole.mixture_t:.2f})\n"
-    )
-    print("--- 읽는 법 ---")
-    print("**오차는 치환이고 차용은 첨가다.** 조성 추정이 5도 틀리면 ♭7이 오르면서")
-    print("이끔음이 **사라진다.** 진짜 믹솔리디안 차용은 ♭7이 오르되 이끔음이 남는다 —")
-    print("곡의 다른 곳에서 V화음을 쓰기 때문이다.")
-    print("`초과`는 반음계 칸과 그 짝 온음계 칸의 곡 간 상관에서 조 내 치환 귀무선을 뺀 값이다.")
-    print("**음수면 대체, 양수면 첨가다.** 합이 1인 자료라 아무 상관이나 음수로 치우치므로")
-    print("귀무선을 빼야 한다.")
-    print("**`눈금선`은 실제 곡의 일부를 일부러 잘못 회전시킨 값이다** — 오차가 그만큼")
-    print("있으면 값이 어디까지 내려가는지 자료로 보여 준다.")
-    print("**검출력이 한쪽만 강하다.** 합성에서 오차는 t=-8로 잡히고 차용은 t=+1.4로 겨우")
-    print('보인다. 그러니 **뚜렷한 음수만 강한 결론이고**, 아닌 쪽은 "오차로 설명 안 됨"까지다.')
-    print("**`뭉침 대비`가 누설과 차용을 가른다** (D-0091). 단조 차용은 화음 단위로 오므로")
-    print("♭3·♭6·♭7이 한 곡에서 **같이** 오른다. 누설은 곡마다 양이 다를 뿐 반음계 다섯 칸을")
-    print("**고르게** 올리므로 특정 셋만 뭉치지 않는다. 삼총사 세 쌍에서 나머지 일곱 쌍을 뺀다.")
-    print("합성에서 누설만 있을 때 -0.03~0.00이었고 차용이 있으면 +0.50을 넘었다.")
-    if args.margin_split:
-        print("**`추정 확실`은 보조 시야다.** 차용화음이 많으면 조성 추정도 어려워지므로")
-        print("역인과가 있다. 상위 묶음에서도 음수가 아니면 오차로 설명되지 않는다는 쪽이 는다.")
-    return 0
-
-
-def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
-    """다이어토닉 제한이 버리는 몫을 잰다 (O-31 · D-0083).
-
-    **사전 벡터만 읽는다** — 생성도 음원도 GPU도 필요 없다. 1초 이내다.
-    """
-    from hathor.application.evaluate_degree_restriction import (
-        EvaluateDegreeRestriction,
-        chromatic_indices,
-        off_scale_indices,
-        scale_but_discarded,
-    )
-    from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
-    from hathor.shared.config.paths import repo_root as _root
-
-    source = args.stem_set
-    store = args.priors
-    if store is None:
-        store = find_keys_store(_root(), source if source != MIX_SOURCE else "other")
-    if store is None or not store.exists():
-        print(
-            "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "
-            "--priors로 경로를 준다.",
-            file=sys.stderr,
-        )
-        return 1
-
-    table = load_degree_priors(store, source)
-    if len(table) < 2:
-        print(f"출처 `{source}`의 사전이 {len(table)}개다.", file=sys.stderr)
-        return 1
-
-    condition = OutputCondition(pair_count=args.pairs, key=parse_key(args.key), seed=args.seed)
-    references = [ReferencePrior(key, table[key]) for key in sorted(table)]
-    report = EvaluateDegreeRestriction(condition).run(references, source)
-    observed = report.line("observed")
-    off = off_scale_indices(condition.key.mode)
-    scale_cells = scale_but_discarded(condition.key.mode)
-    chromatic_cells = chromatic_indices(condition.key.mode)
-
-    print(
-        f"곡 {len(references)}개 · 쌍 {len(observed.shares)} · {condition.key}"
-        f" · 출처 {source}\n사전: {store.name}\n"
-        f"버리는 칸 {len(off)}개 (반음 {', '.join(str(value) for value in off)})\n"
-        f"  그중 온음계 음 {scale_cells} — **반음계음이 아니다.** 화음 근음에서만 빠졌다\n"
-        f"  진짜 반음계 음 {chromatic_cells}\n"
-    )
-    columns = (
-        ("선", "<10"),
-        ("비음계몫", ">12.4f"),
-        ("표준오차", ">10.4f"),
-        ("질량", ">10.4f"),
-        ("몫/질량", ">11.4f"),
-        ("제한후/전", ">12.4f"),
-        ("순위상관", ">10.3f"),
-    )
-    for line in render_table(
-        columns,
-        [
-            (
-                item.name,
-                item.mean_share,
-                item.standard_error,
-                item.mean_mass,
-                item.share_per_mass,
-                item.survival,
-                item.rank_agreement,
-            )
-            for item in report.lines
-        ],
-    ):
-        print(line)
-    print("\n(버리는 칸을 쪼갠다 · D-0085)")
-    for line in render_table(
-        (("선", "<10"), ("온음계몫", ">12.4f"), ("반음계몫", ">12.4f")),
-        [(item.name, item.mean_scale_share, item.mean_chromatic_share) for item in report.lines],
-    ):
-        print(line)
-    verdict = (
-        "**버리는 칸이 다이어토닉보다 더 곡 고유하다**"
-        if report.off_scale_exceeds_matched
-        else "버리는 칸이 다이어토닉보다 **덜하거나 같다**"
-    )
-    from hathor.application.evaluate_degree_restriction import NULL_REPEATS
-
-    print(
-        f"\n등가선 대비 = {report.specificity_gap:+.4f}"
-        f" ±{report.specificity_standard_error:.4f} (짝지은 표준오차)"
-        f" · 쌍 단위 승률 {report.specificity_win_rate:.1%}\n"
-        f"판정: {verdict}\n"
-        f"\n[참고] 조 내 치환 대비 = {report.mass_matched_gap:+.4f}"
-        f" · 승률 {report.mass_matched_win_rate:.1%}"
-        f" · 전체 치환 대비 = {report.gap:+.4f}\n"
-        f"       **둘 다 0점이 0이 아니라 단독으로 읽지 않는다** (D-0084 · D-0086).\n"
-        f"\n귀무선은 {NULL_REPEATS}회 뽑아 쌍별로 평균했다. 선마다 난수 흐름이 따로다 (D-0087).\n"
-    )
-    print("--- 읽는 법 ---")
-    print("**전변동은 칸별 절댓값의 합이라 다이어토닉과 비음계로 정확히 쪼개진다.** 모형이")
-    print("필요 없다. `비음계 몫`은 두 사전의 거리 중 버려지는 칸이 낸 비율이다.")
-    print("**칸 수 비율(6/12)은 기준선이 아니다.** 사전 질량이 다이어토닉에 몰려 있으면 몫도")
-    print("자연히 낮아진다. 그래서 귀무선이 필요한데, **`shuffled`(12칸 전체 치환)는 질량까지")
-    print("바꾼다** — 그것이 D-0083의 결함이었다 (D-0084).")
-    print("**`within`도 0점이 0이 아니다** — 온음계 칸에는 코퍼스가 공유하는 조성 모양이 있어")
-    print("자리를 뒤섞으면 기여가 크게 늘고, 비음계 칸은 평평해 조금만 는다. 그 비대칭만으로")
-    print("부호가 양수가 된다 (D-0086).")
-    print("**`matched`가 눈금이다.** 온음계 칸의 곡별 편차를 비음계 칸에 이식해 **두 조가")
-    print("똑같이 곡 고유한** 사전을 만든다. 조별 질량과 코퍼스 모양은 그대로다. 실측이")
-    print("`matched`보다 **크면** 버리는 칸이 더, **작으면** 덜 곡 고유하다.")
-    print("**`순위상관`은 진단이다.** 탐색에서 곡 고유 성분이 없을 때도 0.54였다 — 갈리지 않는")
-    print("지표는 판정에 쓰지 않는다 (O-25 (2)).")
-    print("**쌍 단위 승률이 60%를 못 넘으면 동전 던지기와 구분되지 않는다** — 쌍 100개에서")
-    print("57%의 단측 확률이 0.10이다 (D-0087).")
     return 0
 
 

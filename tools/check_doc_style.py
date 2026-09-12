@@ -59,7 +59,7 @@ DOCUMENTS = (
     "docs/DECISIONS.md",
 )
 DOCUMENT_TREES = ("docs/decisions",)
-"""`docs/archive`는 안 본다. **폐기 문서이며 고칠 것이 아니다** (D-0042)."""
+"""훑을 하위 나무. `docs/`에는 축 셋과 조각뿐이다 (D-0130 · D-0133)."""
 
 WIDTH = 100
 """본문 줄 상한. 실측 중앙 48 · 90% 62 · 최대 103이라 **거의 지켜지고 있던 값이다.**"""
@@ -305,9 +305,11 @@ ENFORCER_FROM = 1
 AXES = ("PLAN.md", "DESIGN.md", "DECISIONS.md")
 """`docs/` 바로 아래에 허용되는 문서. **미래·현재·과거 세 시제가 다 찼다** (D-0130)."""
 
-ALLOWED_TREES = ("decisions", "archive")
-"""하위 폴더. `decisions/`는 조각(O-30 · D-0080)이고 `archive/`는 폐기 문서다 (D-0042).
-**`archive/`는 PLAN §3이 든 빚이다** — 지우면 이 목록에서도 뺀다."""
+ALLOWED_TREES = ("decisions",)
+"""하위 폴더. `decisions/`는 조각이다 (O-30 · D-0080).
+
+**`archive/`를 뺐다** (D-0133). 폐기 문서를 저장소에 두는 이유는 이력인데 **git이
+이미 그 일을 한다.** 읽지 말라는 표지를 붙인 4302줄이 저장소 최대 파일이었다."""
 
 
 def check_sixth_document() -> list[str]:

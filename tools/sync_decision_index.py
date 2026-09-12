@@ -524,18 +524,18 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="결정 기록 검사 및 부록 A 색인 동기화")
+    parser = argparse.ArgumentParser(description="결정 기록 검사 및 색인 동기화 (D-0042 · D-0133)")
     parser.add_argument("--check", action="store_true", help="쓰지 않고 어긋남만 검사한다")
     args = parser.parse_args()
 
-    plan_text = DESIGN.read_text(encoding="utf-8")
-    if not BLOCK.search(plan_text):
-        print(f"{DESIGN}에 {BEGIN} ... {END} 표식이 없다", file=sys.stderr)
+    index_text = DECISIONS.read_text(encoding="utf-8")
+    if not BLOCK.search(index_text):
+        print(f"{DECISIONS}에 {BEGIN} ... {END} 표식이 없다", file=sys.stderr)
         return 2
 
     parts = load_parts()
     decisions_text = merge_parts(parts)
-    problems = run_checks(parts, plan_text)
+    problems = run_checks(parts, DESIGN.read_text(encoding="utf-8"))
     if problems:
         print(f"결정 기록·미해결표에 문제가 {len(problems)}건 있다.", file=sys.stderr)
         for problem in problems:
@@ -543,19 +543,19 @@ def main() -> int:
         return 1
 
     index = build_index(decisions_text)
-    updated = BLOCK.sub(lambda _: index, plan_text, count=1)
+    updated = BLOCK.sub(lambda _: index, index_text, count=1)
 
-    if updated == plan_text:
-        print(f"결정 기록 검사 통과 · 부록 A 색인 일치 ({index.count('| D-')}건)")
+    if updated == index_text:
+        print(f"결정 기록 검사 통과 · 색인 일치 ({index.count('| D-')}건)")
         return 0
 
     if args.check:
-        print("부록 A 색인이 결정 기록과 어긋난다.", file=sys.stderr)
+        print("색인이 결정 기록과 어긋난다.", file=sys.stderr)
         print("  python tools/sync_decision_index.py 로 다시 쓴다.", file=sys.stderr)
         return 1
 
-    DESIGN.write_text(updated, encoding="utf-8")
-    print(f"부록 A 색인 갱신 ({index.count('| D-')}건)")
+    DECISIONS.write_text(updated, encoding="utf-8")
+    print(f"색인 갱신 ({index.count('| D-')}건)")
     return 0
 
 

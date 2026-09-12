@@ -56,7 +56,7 @@ HEADER = """# 결정 기록 {first} ~ {last} (GR-0.2)
 
 형식: 배경 / 후보 / 선택 / 근거 / 결과
 
-<!-- 이 파일은 tools/split_decisions.py가 나눈 조각이다. 전체 색인은 부록 A. -->
+<!-- 이 파일은 tools/split_decisions.py가 나눈 조각이다. 전체 색인은 DECISIONS.md. -->
 """
 
 STUB = """# 결정 기록 (GR-0.2)
@@ -68,14 +68,19 @@ STUB = """# 결정 기록 (GR-0.2)
 형식: 배경 / 후보 / 선택 / 근거 / 결과
 
 **본문은 번호대별 조각에 있다** (O-30 · D-0080). 한 파일이 6000줄 또는 100건을
-넘으면 `make split`이 다시 나눈다. **전체 색인은 `docs/DESIGN.md` 부록 A**이며
-`tools/sync_decision_index.py`가 조각 전부를 긁어 생성한다.
+넘으면 `make split`이 다시 나눈다. **전체 색인은 이 문서 아래**에 있으며
+`tools/sync_decision_index.py`가 조각 전부를 긁어 생성한다 (D-0133).
 
 <!-- 이 목록은 tools/split_decisions.py가 생성한다. 손으로 고치지 않는다. -->
 
 | 조각 | 범위 | 건수 |
 |---|---|---|
 {rows}
+
+## 색인
+
+<!-- decision-index:begin -->
+<!-- decision-index:end -->
 
 찾기:
 
@@ -131,8 +136,28 @@ def render() -> dict[str, str]:
         span = f"{chunk[0].identifier}~{chunk[-1].identifier}"
         rows.append(f"| [`{name}`](decisions/{name}) | {span} | {len(chunk)}건 |")
 
-    planned["__stub__"] = STUB.format(rows="\n".join(rows))
+    planned["__stub__"] = _keep_index(STUB.format(rows="\n".join(rows)))
     return planned
+
+
+def _keep_index(stub: str) -> str:
+    """이미 쓰인 색인 블록을 그대로 옮겨 담는다 (D-0133).
+
+    **생성기 둘이 같은 파일의 다른 구역을 쓴다.** `split_decisions`는 조각 표를,
+    `sync_decision_index`는 색인을 쓴다. 서식만 보고 덮으면 색인이 매번 비워지고
+    두 검사가 번갈아 빨개진다.
+    """
+    import re
+
+    begin, end = "<!-- decision-index:begin -->", "<!-- decision-index:end -->"
+    if not DECISIONS.exists():
+        return stub
+    current = DECISIONS.read_text(encoding="utf-8")
+    if begin not in current or end not in current:
+        return stub
+    block = current[current.index(begin) : current.index(end) + len(end)]
+    pattern = re.escape(begin) + r".*?" + re.escape(end)
+    return re.sub(pattern, lambda _: block, stub, count=1, flags=re.S)
 
 
 def main() -> int:

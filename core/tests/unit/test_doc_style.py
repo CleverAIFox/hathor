@@ -149,9 +149,10 @@ def test_세_축을_다_본다(name):
     assert name in CHECKER.DOCUMENTS
 
 
-def test_폐기_문서는_안_본다():
-    """`docs/archive`는 **고칠 것이 아니다** (D-0042)."""
-    assert not any("archive" in path.as_posix() for path in CHECKER.targets())
+def test_폐기_보관소가_없다():
+    """**git이 이력을 든다** (D-0133). `docs/`에는 축 셋과 조각뿐이다."""
+    assert not (ROOT / "docs" / "archive").exists()
+    assert CHECKER.ALLOWED_TREES == ("decisions",)
 
 
 def test_백틱_안의_예시는_경어체가_아니다():
@@ -187,8 +188,8 @@ def test_하위_폴더까지_본다(tmp_path, monkeypatch):
     assert CHECKER.check_sixth_document()
 
 
-def test_조각과_폐기는_통과한다(tmp_path, monkeypatch):
-    for name in ("decisions/D-0001-0050.md", "archive/MASTER-draft.md"):
+def test_조각은_통과한다(tmp_path, monkeypatch):
+    for name in ("decisions/D-0001-0050.md",):
         path = tmp_path / "docs" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# x\n", encoding="utf-8")
