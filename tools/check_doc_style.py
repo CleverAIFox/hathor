@@ -26,10 +26,12 @@
 1. 행끝 공백 금지
 2. 본문 줄 100자 이하 (표·코드·제목·인용은 안 본다)
 3. 표가 산문이나 빈 줄로 끊기지 않을 것
-4. 경어체 금지 — `-ㅂ니다` · `-습니다` · `해요` · `했어요`
+4. 경어체·명령형 금지. 의도한 인용은 줄 끝에 `<!--voice-ok-->`
 5. 제목 계층 건너뛰기 금지 (`##` 다음에 `####`)
 6. 결정 기록에 `- **배경**`
-7. **여섯 번째 문서 금지** — `docs/`에 축 셋 말고 다른 문서가 생기지 않는가
+7. 살아 있는 문서 하위 절의 `**강조**`가 열여섯을 넘지 않을 것
+8. 결정 기록에 `강제자` (D-0131 이후분)
+9. **여섯 번째 문서 금지** — `docs/`에 축 셋 말고 다른 문서가 생기지 않는가
 
 **넷은 이미 위반 0이었다.** 규칙을 새로 만든 것이 아니라 **지켜지고 있던 것을
 적어 둔 것이다** — 그래서 다음 세션이 어길 때만 빨개진다.
@@ -62,6 +64,37 @@ DOCUMENT_TREES = ("docs/decisions",)
 WIDTH = 100
 """본문 줄 상한. 실측 중앙 48 · 90% 62 · 최대 103이라 **거의 지켜지고 있던 값이다.**"""
 
+ALLOW = "<!--voice-ok-->"
+"""문체 검사 탈출구 (D-0131).
+
+**인용을 위반으로 세면 회고를 쓸 수 없다.** 기획서는 사용자의 말을, 결정 기록은
+폐기한 문언을 그대로 적어야 한다. 막으면 사람이 검사를 끈다.
+
+특수 사례로 때우지 않는다 — D-0129는 인라인 코드만 예외로 뒀고, 그래서 백틱 밖에서
+인용해야 하는 자리가 나오자 막혔다. **일반 표지가 맞다.**"""
+
+IMPERATIVE = (
+    r"(?:[가-힣]지\s*(?:마라|말라)|해라|하라|봐라|보라|써라|쳐라|둬라|들어라|물어라"
+    r"|적어라|지워라|옮겨라|받아라|만들어라|정해라|고쳐라|넣어라|빼라|걸어라|돌려라)"
+    r"(?![가-힣])"
+)
+"""명령형. 실측 5건이며 **전부 인용문 안이라 표지를 달았다.**
+
+`~라` 종결만 본다. 청유형(`~하자`)은 연결어미(`추가하자 잡혔다`)와 구분이 안 돼
+오탐이 크다 — **검사가 시끄러우면 끈다.**"""
+
+BOLD_LIMIT = 16
+"""살아 있는 문서 하위 절 하나가 가질 수 있는 `**강조**` 수 (D-0131).
+
+실측 56절 중앙 3 · 90% 9 · 그다음 15 · **최대 33.** 16은 그 틈이다.
+
+**넘으면 강조가 과한 것이 아니라 절이 너무 큰 것이다.** 강조를 지우지 말고 절을
+쪼갠다. **결정 기록에는 안 건다** — 덧붙이기만 하는 문서라 못 고친다 (D-0081).
+
+이 규칙은 D-0129가 *"굵게 밀도는 없는 문제"*라며 기각했던 것을 되살린 것이다.
+그때는 **저자 간 드리프트**로 봤고 7% 차이라 근거가 없었다. 여기서는 **절 크기의
+냄새**로 쓴다 — 용도가 다르고 실측이 뒷받침한다."""
+
 POLITE = ("해요", "했어요")
 """경어체 낱말. **`하세요`는 뺐다** — 사용자 발화 인용 안에 있고, 인용까지 막으면
 기획서가 사용자의 말을 못 적는다."""
@@ -79,9 +112,24 @@ INLINE_CODE = re.compile(r"`[^`]*`")
 `합니다`·`입니다`를 예로 드는데, 그것까지 막으면 규칙을 적을 수가 없다."""
 
 
-def _polite(line: str) -> bool:
-    """경어체가 있는가. **인라인 코드는 빼고 본다.**"""
+def _voice(line: str) -> str | None:
+    """문체 위반이 있으면 종류를, 없으면 `None`.
+
+    안 보는 것 셋이다 — 인라인 코드 · 탈출구 표지 · **4칸 들여쓴 블록.**
+
+    **들여쓴 블록은 산문이 아니다.** 결정 기록은 폐기한 문언을 증거로 인용하고
+    이 기록 자신이 그렇게 적혔다. **인용을 위반으로 세면 회고를 쓸 수 없다.**
+    """
+    if ALLOW in line or line.startswith("    "):
+        return None
     line = INLINE_CODE.sub("", line)
+    if re.search(IMPERATIVE, line):
+        return "명령형"
+    return "경어체" if _polite(line) else None
+
+
+def _polite(line: str) -> bool:
+    """경어체가 있는가."""
     if any(word in line for word in POLITE):
         return True
     for index in range(1, len(line) - 1):
@@ -148,21 +196,86 @@ def check_layout(name: str, text: str) -> list[str]:
         elif line.strip() and not line.startswith((">", "    ")) and len(line) > WIDTH:
             problems.append(f"{name}:{number}: 본문이 {len(line)}자다. {WIDTH}자 이하로 접는다")
 
-        if _polite(line):
-            problems.append(f"{name}:{number}: 경어체가 있다. 평서체로 쓴다")
+        if kind := _voice(line):
+            problems.append(
+                f"{name}:{number}: {kind} 표현이 있다. 평서체 3인칭으로 쓴다. "
+                f"의도한 인용이면 줄 끝에 {ALLOW}"
+            )
+    return problems
+
+
+BOLD = re.compile(r"\*\*[^*]+\*\*")
+SECTION = ("## ", "### ", "#### ")
+
+
+def check_bold_density(name: str, text: str) -> list[str]:
+    """하위 절 하나가 강조를 몇 개 다는가 (D-0131).
+
+    **세는 단위는 하위 절이다.** 상위 절에서 세면 절 크기가 아니라 하위 절 개수를
+    재게 된다. 표 줄은 안 센다 — 표의 강조는 행의 강조이지 절의 강조가 아니다.
+    """
+    problems: list[str] = []
+    heading, count, size, line_number = None, 0, 0, 0
+    fenced = False
+
+    def close() -> None:
+        if heading and size > 200 and count > BOLD_LIMIT:
+            problems.append(
+                f"{name}:{line_number}: 하위 절의 강조가 {count}개다. "
+                f"{BOLD_LIMIT}을 넘으면 절이 너무 큰 것이니 쪼갠다"
+            )
+
+    for number, line in enumerate(text.splitlines(), 1):
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        if line.startswith(SECTION):
+            close()
+            heading, count, size, line_number = line, 0, 0, number
+            continue
+        if line.startswith("|"):
+            continue
+        count += len(BOLD.findall(line))
+        size += len(line)
+    close()
     return problems
 
 
 def check_records(name: str, text: str) -> list[str]:
-    """결정 기록의 필수 절. **`- **결과**`는 안 본다** — 30건이 없고 못 고친다 (D-0081)."""
+    """결정 기록의 필수 절.
+
+    `강제자`는 **D-0131 이후분에만 요구한다.** 앞의 130건을 고치는 것은 소급 수정이며
+    D-0081이 막는다. **무엇을 요구하는지는 지금 정하고, 적용은 앞으로부터다.**
+ **`- **결과**`는 안 본다** — 30건이 없고 못 고친다 (D-0081)."""
     problems: list[str] = []
     parts = RECORD.split(text)
     for index in range(1, len(parts), 2):
         number, body = parts[index], parts[index + 1]
         if "- **배경**" not in body:
             problems.append(f"{name}: {number}에 `- **배경**`이 없다")
+        if int(number[2:]) >= ENFORCER_FROM and "강제자" not in body:
+            problems.append(
+                f"{name}: {number}에 `강제자` 기술이 없다. "
+                "`강제자  tools/xxx.py` 또는 `강제자 없음 — 사유: …`"
+            )
     return problems
 
+
+ENFORCER_FROM = 131
+"""`강제자` 기술을 요구하기 시작하는 결정 번호 (D-0131).
+
+**"누가 이것을 지키는가"를 적는 칸이다.** 이 저장소가 반복해 맞은 사고가 한 형태다 —
+규약은 문서나 주석에 있고 강제하는 검사가 없다. D-0121 · D-0126 · D-0128이 전부
+그것이었고 **한 세션에 셋을 맞았다.**
+
+형식은 둘이다.
+
+    강제자  tools/check_doc_style.py · core/tests/unit/test_doc_style.py
+    강제자 없음 — 사유: 자료만으로 닫는다. 고정할 동작이 없다
+
+**없다는 사실 자체가 기록이어야 한다.** 비워 두면 보이지 않는다."""
 
 AXES = ("PLAN.md", "DESIGN.md", "DECISIONS.md")
 """`docs/` 바로 아래에 허용되는 문서. **미래·현재·과거 세 시제가 다 찼다** (D-0130)."""
@@ -206,6 +319,8 @@ def check() -> list[str]:
         name = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
         problems.extend(check_layout(name, text))
+        if not name.startswith("docs/decisions/"):
+            problems.extend(check_bold_density(name, text))
         if name.startswith("docs/decisions/"):
             problems.extend(check_records(name, text))
     return problems

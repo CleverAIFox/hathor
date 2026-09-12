@@ -205,3 +205,68 @@ def test_저장소에_여섯_번째가_없다():
 def test_미래_축을_검사한다():
     """PLAN이 검사 대상에 있어야 **새 축만 규약 밖에서 자라는 일**이 없다."""
     assert "docs/PLAN.md" in CHECKER.DOCUMENTS
+
+
+# ------------------------------------------------------------------ 문체·강조 (D-0131)
+
+
+@pytest.mark.parametrize("text", ["그렇게 하라.", "여기서 멈춰라 지워라", "그러지 마라."])
+def test_명령형을_잡는다(text):
+    problems = _layout(text + "\n")
+    assert problems and "명령형" in problems[0]
+
+
+@pytest.mark.parametrize("text", ["추가하자 잡혔다.", "말라는 말이 아니다.", "마라고 적었다."])
+def test_청유형과_연결어미는_안_잡는다(text):
+    """**검사가 시끄러우면 끈다.** `~하자`는 연결어미와 구분이 안 된다."""
+    assert _layout(text + "\n") == []
+
+
+@pytest.mark.parametrize("text", ["이렇게 합니다.", "그렇게 하라."])
+def test_탈출구가_있는_줄은_안_본다(text):
+    """**인용을 위반으로 세면 회고를 쓸 수 없다.**"""
+    assert _layout(f"{text} {CHECKER.ALLOW}\n") == []
+
+
+def test_강조가_많으면_절을_쪼개라고_한다():
+    text = "### 큰 절\n\n" + ("**강조** 가나다라마바사아자차카타파하" * 3 + "\n") * 8
+    problems = CHECKER.check_bold_density("x.md", text)
+    assert problems and "쪼갠다" in problems[0]
+
+
+def test_표의_강조는_절의_강조가_아니다():
+    """표의 강조는 **행의 강조**다. 절을 쪼개라는 신호로 쓸 수 없다."""
+    rows = "".join("| **가** | **나** | **다** |\n" for _ in range(20))
+    text = "### 표만 있는 절\n\n" + rows + "가" * 300 + "\n"
+    assert CHECKER.check_bold_density("x.md", text) == []
+
+
+def test_결정_기록에는_강조_밀도를_안_건다():
+    """**덧붙이기만 하는 문서라 못 고친다** (D-0081)."""
+    assert CHECKER.check() == []
+
+
+def test_강제자_없는_새_기록을_잡는다():
+    number = f"D-{CHECKER.ENFORCER_FROM:04d}"
+    body = f"## {number}. 제목\n\n- **배경**: 있다.\n- **결과**: 했다.\n"
+    problems = CHECKER.check_records("d.md", body)
+    assert problems and "강제자" in problems[0]
+
+
+def test_옛_기록에는_강제자를_안_요구한다():
+    """앞의 기록을 고치는 것은 **소급 수정**이다 (D-0081)."""
+    number = f"D-{CHECKER.ENFORCER_FROM - 1:04d}"
+    body = f"## {number}. 제목\n\n- **배경**: 있다.\n"
+    assert CHECKER.check_records("d.md", body) == []
+
+
+def test_강제자_없음도_기술이다():
+    """**없다는 사실 자체가 기록이어야 한다.**"""
+    number = f"D-{CHECKER.ENFORCER_FROM:04d}"
+    body = f"## {number}. 제목\n\n- **배경**: 있다.\n\n강제자 없음 — 사유: 자료만으로 닫는다.\n"
+    assert CHECKER.check_records("d.md", body) == []
+
+
+def test_들여쓴_인용_블록은_산문이_아니다():
+    """**결정 기록은 폐기한 문언을 증거로 인용한다.**"""
+    assert _layout('    "이런 느낌으로 생성하라"는 사례다.\n') == []
