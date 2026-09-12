@@ -538,7 +538,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--self-transition-sweep",
         default=None,
         metavar="0,0.1,0.2,0.4",
-        help="자기 전이 확률을 훑는다 (O-38). **진단 전용이며 제품 경로는 0.0만 쓴다**",
+        help="자기 전이 확률을 훑는다 (O-38 닫힘 · D-0114). **진단 전용이며 제품은 0.0만 쓴다**",
     )
     order.add_argument(
         "--sweep-bars",
@@ -3396,8 +3396,8 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
     print("**문턱이 t > 3이다.** 이 판정이 O-32를 닫으므로 승인 문턱이다 (D-0098).")
     if args.use_hold:
         print("**`전이+유지`는 곡마다 그 곡의 유지 확률을 건 선이다** (O-37 · D-0123).")
-        print("`전이 있음`이 그 음성 대조이며 같은 참조곡·같은 시드다. 값이 내려가면")
-        print("**O-38의 짐작(매 마디 바꾸는 제약이 거리를 누른다)이 틀린 것이고 그것도 답이다.**")
+        print("`전이 있음`이 그 음성 대조이며 같은 참조곡·같은 시드다. **내려간다** (D-0125) —")
+        print("감소분 전체가 유효 마디 수이고 **이 지표는 유지를 원리적으로 못 잰다** (O-26).")
         print("**유지 확률을 고르지 않았다** — 곡의 시계열이 낸 값이라 손잡이가 아니다.")
     return 0
 
@@ -3462,11 +3462,11 @@ def _report_hold(
 def _report_self_transition_sweep(
     args: argparse.Namespace, rows: Sequence[tuple[float, int, float, float, float]]
 ) -> None:
-    """O-38 훑기를 찍는다. **짐작을 죽일 수 있는 표로 낸다.**
+    """자기 전이 훑기를 찍는다 (O-38 닫힘 · D-0114).
 
-    `p`를 올려도 짧은 마디의 값이 안 움직이면 **O-38의 짐작이 틀린 것**이다.
+    **짐작은 이미 죽었다** — `p`를 올리자 값이 내려갔다. 이 표는 재현용이다.
     """
-    print("--- 자기 전이 훑기 (O-38) ---")
+    print("--- 자기 전이 훑기 (O-38 닫힘 · D-0114) ---")
     print("**진단 전용이다.** 이 값을 골라 제품에 박으면 그것이 D-0058이다.")
     for text in render_table(
         (
@@ -3482,7 +3482,7 @@ def _report_self_transition_sweep(
     print("")
     print("**짐작**: 매 마디 바꾸는 제약이 짧은 구간에서 관측 거리를 누른다 (D-0109).")
     print("참이면 짧은 마디에서 `자기전이`가 오를수록 `other-self`가 **오른다.**")
-    print("안 움직이면 짐작이 틀렸고 **O-38은 다른 원인을 찾아야 한다.**")
+    print("**D-0114가 이 표로 짐작을 기각했다.** 표본 부족이며 재현용으로 남긴다.")
     print(f"귀무 대조: 같은 훑기를 `--stem-set {args.stem_set}`에서 전이 없이 돌린다.")
 
 
