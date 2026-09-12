@@ -1,0 +1,4 @@
+# .park — 푸시로 안 지켜지는 것
+.env
+var/ingest/
+var/out/
