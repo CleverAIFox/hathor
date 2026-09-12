@@ -246,18 +246,35 @@ def test_결정_기록에는_강조_밀도를_안_건다():
     assert CHECKER.check() == []
 
 
-def test_강제자_없는_새_기록을_잡는다():
+def test_강제자_없는_기록을_잡는다():
     number = f"D-{CHECKER.ENFORCER_FROM:04d}"
     body = f"## {number}. 제목\n\n- **배경**: 있다.\n- **결과**: 했다.\n"
     problems = CHECKER.check_records("d.md", body)
     assert problems and "강제자" in problems[0]
 
 
-def test_옛_기록에는_강제자를_안_요구한다():
-    """앞의 기록을 고치는 것은 **소급 수정**이다 (D-0081)."""
-    number = f"D-{CHECKER.ENFORCER_FROM - 1:04d}"
-    body = f"## {number}. 제목\n\n- **배경**: 있다.\n"
+def test_옛_기록에도_강제자를_요구한다():
+    """**표기는 전수 소급한다** (D-0081). `강제자`는 그때의 판단을 안 바꾼다."""
+    assert CHECKER.ENFORCER_FROM == 1
+    body = "## D-0001. 제목\n\n- **배경**: 있다.\n"
+    assert CHECKER.check_records("d.md", body)
+
+
+def test_없는_강제자를_잡는다():
+    """**칸을 채우는 것과 그 칸이 참인 것은 다르다.** 도구를 지우면 포인터가 낡는다."""
+    body = "## D-0001. 제목\n\n- **배경**: 있다.\n\n강제자  `tools/없다.py`\n"
+    problems = CHECKER.check_records("d.md", body)
+    assert problems and "없다" in problems[0]
+
+
+def test_본문의_경로는_안_본다():
+    """`강제자` 줄만 본다. 본문은 폐기한 파일을 과거형으로 적는 것이 정상이다."""
+    body = "## D-0001. 제목\n\n- **배경**: `tools/옛날.py`를 지웠다.\n\n강제자 없음 — 사유: x\n"
     assert CHECKER.check_records("d.md", body) == []
+
+
+def test_기록_131건이_전부_칸을_갖는다():
+    assert CHECKER.check() == []
 
 
 def test_강제자_없음도_기술이다():

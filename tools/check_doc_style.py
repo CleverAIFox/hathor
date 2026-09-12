@@ -243,6 +243,11 @@ def check_bold_density(name: str, text: str) -> list[str]:
     return problems
 
 
+def _enforcer_line(body: str) -> str:
+    """`강제자`로 시작하는 줄만. **본문의 다른 경로를 검사하지 않는다.**"""
+    return "\n".join(line for line in body.splitlines() if line.startswith("강제자"))
+
+
 def check_records(name: str, text: str) -> list[str]:
     """결정 기록의 필수 절.
 
@@ -260,11 +265,31 @@ def check_records(name: str, text: str) -> list[str]:
                 f"{name}: {number}에 `강제자` 기술이 없다. "
                 "`강제자  tools/xxx.py` 또는 `강제자 없음 — 사유: …`"
             )
+        for raw in ENFORCER_PATH.findall(_enforcer_line(body)):
+            if not (ROOT / raw).exists():
+                problems.append(
+                    f"{name}: {number}의 강제자 `{raw}`가 없다. "
+                    "지웠거나 옮겼으면 이 줄을 고친다"
+                )
     return problems
 
 
-ENFORCER_FROM = 131
-"""`강제자` 기술을 요구하기 시작하는 결정 번호 (D-0131).
+ENFORCER_PATH = re.compile(r"`([\w./-]+\.(?:py|sh|toml|yml))`")
+"""`강제자` 줄이 가리키는 경로. **실재해야 한다** (D-0132).
+
+칸을 채우는 것과 그 칸이 참인 것은 다르다. 도구를 지우거나 옮기면 **포인터가 조용히
+낡는다** — 이 저장소가 O-28로 등재한 부류다. 채우기가 전수 적재라면 이 검사가 그
+뒤를 잇는다."""
+
+ENFORCER_FROM = 1
+"""`강제자` 기술을 요구하는 첫 결정 번호 (D-0131 · D-0132).
+
+**D-0131은 131로 뒀다가 D-0132가 1로 내렸다.** D-0081이 이미 가른 자리를 다시
+뭉뚱그렸기 때문이다 — `강제자`는 **그때의 판단을 안 바꾸므로 표기 쪽이고, 표기는
+전수 소급한다.**
+
+그리고 이 칸의 값은 **옛 기록에서 가장 크다.** 규칙을 세운 것은 대부분 옛 기록이고,
+검사가 없는 자리를 찾는 것이 이 칸의 용도다. 신규에만 걸면 **찾으려던 것을 안 본다.**
 
 **"누가 이것을 지키는가"를 적는 칸이다.** 이 저장소가 반복해 맞은 사고가 한 형태다 —
 규약은 문서나 주석에 있고 강제하는 검사가 없다. D-0121 · D-0126 · D-0128이 전부
