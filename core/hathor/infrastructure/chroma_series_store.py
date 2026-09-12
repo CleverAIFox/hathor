@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from hathor.domain.services.chord_rhythm import hold_probability
 from hathor.domain.services.transition_prior import is_empty, transition_prior
 
 if TYPE_CHECKING:
@@ -77,4 +78,30 @@ def load_transition_priors(
         matrix = transition_prior(series)
         if not is_empty(matrix):
             found[source_key] = tuple(tuple(float(v) for v in row) for row in matrix)
+    return found
+
+
+def load_hold_probabilities(
+    root: Path, stem_set: str, source_keys: Sequence[str]
+) -> dict[str, float]:
+    """곡별 화음 유지 확률을 시계열 폴더에서 읽는다 (O-37 · D-0123).
+
+    **전이 사전과 같은 파일에서 나온다** — 같은 곡의 같은 크로마 시계열이다.
+    그래서 `prior`·`transition`과 같은 부류이고 **고를 값이 없다**.
+
+    반감점이 안 나오거나 뒤섞음보다 낮은 곡은 `hold_probability`가 `0.0`을 낸다
+    (실측 49곡 · 4.9%). **그 곡들은 지금까지와 똑같이 매 마디 바뀐다** — 빼지 않는
+    이유가 그것이다. 여기서 빼면 `transition`은 있는데 `hold`만 없는 곡이 생겨
+    판정 표본이 선마다 달라진다.
+
+    시계열 파일이 아예 없는 곡만 뺀다. **없는 것을 0.0이라고 말하지 않는다** (GR-0.5).
+    """
+    found: dict[str, float] = {}
+    for source_key in source_keys:
+        path = series_path(root, source_key, stem_set)
+        if not path.exists():
+            continue
+        with np.load(path, allow_pickle=False) as bundle:
+            series = np.asarray(bundle["series"], dtype=np.float64)
+        found[source_key] = hold_probability(series)
     return found

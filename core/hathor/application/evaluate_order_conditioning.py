@@ -40,7 +40,7 @@ D-0062가 화성 어휘에서 쓴 구조를 그대로 쓴다.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -130,6 +130,20 @@ class OrderReport:
         if not self.self_distances:
             return 0.0
         return float(np.mean(np.asarray(self.other_distances) > np.asarray(self.self_distances)))
+
+    def restricted_to(self, indices: Sequence[int]) -> OrderReport:
+        """곡 일부만 남긴 같은 보고. **다시 생성하지 않는다.**
+
+        같은 출력에서 이미 잰 거리 중 일부를 고르는 것이므로 판정 규칙도 표준오차도
+        그대로 적용된다. **다시 돌리면 `other` 추첨이 달라져 두 표를 못 견준다.**
+        """
+        picked = tuple(indices)
+        return OrderReport(
+            condition=self.condition,
+            reference_count=len(picked),
+            self_distances=tuple(self.self_distances[index] for index in picked),
+            other_distances=tuple(self.other_distances[index] for index in picked),
+        )
 
     @property
     def carries_reference_order(self) -> bool:
@@ -261,15 +275,38 @@ def sweep_self_transition(
 
 
 def references_from(
-    priors: Sequence[ReferencePrior], transitions: dict[str, tuple[tuple[float, ...], ...]]
+    priors: Sequence[ReferencePrior],
+    transitions: dict[str, tuple[tuple[float, ...], ...]],
+    holds: Mapping[str, float] | None = None,
 ) -> list[OrderReference]:
-    """도수 사전과 전이 사전을 곡 단위로 맞춘다. **둘 다 있는 곡만 남긴다.**"""
+    """도수 사전과 전이 사전을 곡 단위로 맞춘다. **둘 다 있는 곡만 남긴다.**
+
+    `holds`는 곡별 화음 유지 확률이다 (O-37 · D-0123). **안 주면 전부 `0.0`이고
+    현행과 한 비트도 다르지 않다.**
+
+    **유지 확률이 곡을 거르지는 않는다.** 남는 곡은 도수 사전과 전이 사전이 정하고,
+    `holds`에 없는 곡은 `0.0`으로 들어간다 — 그 곡은 `use_hold`를 켜도 매 마디
+    바뀌므로 두 선의 표본이 같은 곡들이다. **선마다 표본이 다르면 짝지은 차이가
+    아니게 된다** (D-0113).
+    """
+    table = holds if holds is not None else {}
     return [
         OrderReference(
             source_key=item.source_key,
             prior=item.prior,
             transition=transitions[item.source_key],
+            hold=table.get(item.source_key, 0.0),
         )
         for item in priors
         if item.source_key in transitions
     ]
+
+
+def holding_indices(references: Sequence[OrderReference]) -> tuple[int, ...]:
+    """`hold > 0`인 곡의 자리 (O-37 판정용).
+
+    **D-0123이 남긴 것이다** — 실측 49곡(4.9%)이 뒤섞음보다 낮아 `p = 0`이었다.
+    그 곡들은 `use_hold`를 켜도 아무것도 안 바뀌므로 **두 선의 차이를 희석한다.**
+    전체 표와 이 부분집합을 나란히 봐야 `use_hold`가 무엇을 했는지 읽을 수 있다.
+    """
+    return tuple(index for index, item in enumerate(references) if item.hold > 0.0)

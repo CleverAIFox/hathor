@@ -9,6 +9,7 @@ from hathor.application.evaluate_harmony_output import OutputCondition, Referenc
 from hathor.application.evaluate_order_conditioning import (
     EvaluateOrderConditioning,
     OrderReference,
+    holding_indices,
     references_from,
     restrict_transition,
     sweep_self_transition,
@@ -208,6 +209,57 @@ def test_hold_기본값은_현행과_한_비트도_다르지_않다():
     held = EvaluateOrderConditioning(FAST).run(references, use_hold=True)
     assert held.self_distances == plain.self_distances
     assert held.other_distances == plain.other_distances
+
+
+def test_holds를_주면_곡마다_물린다():
+    made = _references(3)
+    priors = [ReferencePrior(item.source_key, item.prior) for item in made]
+    table = {item.source_key: item.transition for item in made}
+    holds = {made[0].source_key: 0.4, made[2].source_key: 0.7}
+    built = references_from(priors, table, holds)
+    assert [item.hold for item in built] == [0.4, 0.0, 0.7]
+
+
+def test_holds를_안_주면_전부_0이다():
+    """**기본값이 현행이다.** 이 인자가 생겨도 예전 호출이 안 바뀐다."""
+    made = _references(3)
+    priors = [ReferencePrior(item.source_key, item.prior) for item in made]
+    table = {item.source_key: item.transition for item in made}
+    assert all(item.hold == 0.0 for item in references_from(priors, table))
+
+
+def test_유지_확률이_곡을_거르지_않는다():
+    """**선마다 표본이 다르면 짝지은 차이가 아니다** (D-0113).
+
+    `holds`에 없는 곡도 남아야 두 선이 같은 곡들 위에서 비교된다.
+    """
+    made = _references(3)
+    priors = [ReferencePrior(item.source_key, item.prior) for item in made]
+    table = {item.source_key: item.transition for item in made}
+    assert len(references_from(priors, table, {made[1].source_key: 0.5})) == 3
+
+
+def test_움직이는_곡만_고른다():
+    """**D-0123이 남긴 49곡(4.9%)을 따로 보기 위한 것이다.**"""
+    assert holding_indices(_with_holds([0.0, 0.3, 0.0, 0.5])) == (1, 3)
+
+
+def test_부분집합이_같은_거리를_그대로_쓴다():
+    """**다시 돌리면 `other` 추첨이 달라져 두 표를 못 견준다.**"""
+    references = _with_holds([0.0, 0.2, 0.0, 0.4, 0.1])
+    report = EvaluateOrderConditioning(OutputCondition(seed_count=10, bar_count=32)).run(references)
+    picked = report.restricted_to((1, 3))
+    assert picked.reference_count == 2
+    assert picked.self_distances == (report.self_distances[1], report.self_distances[3])
+    assert picked.other_distances == (report.other_distances[1], report.other_distances[3])
+
+
+def test_부분집합도_같은_판정_규칙을_쓴다():
+    references = _with_holds([0.0] * 10)
+    report = EvaluateOrderConditioning(OutputCondition(seed_count=10, bar_count=32)).run(references)
+    picked = report.restricted_to(range(len(references)))
+    assert picked.gap == pytest.approx(report.gap)
+    assert picked.carries_reference_order == report.carries_reference_order
 
 
 def test_hold는_0과_1_사이여야_한다():

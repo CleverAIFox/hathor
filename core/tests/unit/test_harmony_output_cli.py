@@ -477,15 +477,19 @@ def test_겹침_판정이_중첩_조합도_잡는다():
 # ------------------------------------------------------------------ 배열 배선 (O-32 · D-0110)
 
 
-def write_series(root, names, *, seed=17):
-    """곡별 시계열 npz. **이름은 `source_key`의 해시다** (D-0105)."""
+def write_series(root, names, *, seed=17, hold_windows=1):
+    """곡별 시계열 npz. **이름은 `source_key`의 해시다** (D-0105).
+
+    `hold_windows`는 한 화음이 몇 창 이어지는가다. 기본 1은 **매 창 바뀌는 곡**이고
+    반감점이 뒤섞음보다 낮아 `p = 0`이 나온다 — 실측 49곡(4.9%)과 같은 부류다.
+    """
     import hashlib
 
     root.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(seed)
     for name in names:
         stamp = hashlib.sha1(name.encode("utf-8")).hexdigest()[:16]
-        order = [0, 7, 5, 9] * 12
+        order = [cell for cell in [0, 7, 5, 9] * 12 for _ in range(hold_windows)]
         series = []
         for cell in order:
             vector = np.full(DEGREES, 1.0)
@@ -603,3 +607,76 @@ def test_빈_전이_사전은_뺀다(tmp_path):
     flat = np.tile(np.eye(DEGREES)[0], (8, 1))
     np.savez_compressed(root / f"{stamp}-other.npz", series=flat, source_key="한도수곡.flac")
     assert load_transition_priors(root, "other", ["한도수곡.flac"]) == {}
+
+
+# ---------------------------------------------------------------- 곡별 유지 (O-37 · D-0123)
+
+
+def test_유지_확률을_시계열에서_뽑는다(tmp_path):
+    """**전이 사전과 같은 파일에서 나온다** — 같은 곡의 같은 크로마다."""
+    from hathor.infrastructure.chroma_series_store import load_hold_probabilities
+
+    root = write_series(tmp_path / "held", ["끄는곡.flac"], hold_windows=4)
+    holds = load_hold_probabilities(root, "other", ["끄는곡.flac"])
+    assert holds["끄는곡.flac"] > 0.0
+
+
+def test_매_창_바뀌는_곡은_0이다(tmp_path):
+    """**뒤섞음보다 낮으면 `p = 0`이다.** 실측 49곡(4.9%)이 그랬다."""
+    from hathor.infrastructure.chroma_series_store import load_hold_probabilities
+
+    root = write_series(tmp_path / "빠른곡", ["빠른곡.flac"])
+    assert load_hold_probabilities(root, "other", ["빠른곡.flac"]) == {"빠른곡.flac": 0.0}
+
+
+def test_시계열이_없는_곡은_뺀다(tmp_path):
+    """**없는 것을 0.0이라고 말하지 않는다** (GR-0.5)."""
+    from hathor.infrastructure.chroma_series_store import load_hold_probabilities
+
+    root = write_series(tmp_path / "일부", ["있는곡.flac"], hold_windows=4)
+    holds = load_hold_probabilities(root, "other", ["있는곡.flac", "없는곡.flac"])
+    assert set(holds) == {"있는곡.flac"}
+
+
+def _run_order(tmp_path, extra, *, hold_windows=1):
+    path = write_keys(tmp_path / "keys.jsonl", count=12)
+    names = [f"아티스트{index % 7}-곡{index:03d}.flac" for index in range(12)]
+    series = tmp_path / "keys-20260823T000000Z.series"
+    write_series(series, names, hold_windows=hold_windows)
+    code = main(
+        [
+            "eval",
+            "harmony-order",
+            "--priors",
+            str(path),
+            "--series",
+            str(series),
+            "--seeds",
+            "20",
+            "--bars",
+            "32",
+            *extra,
+        ]
+    )
+    return code
+
+
+def test_유지_확률을_판정에_건다(tmp_path, capsys):
+    """`--use-hold` 배선 (O-37). **선이 하나 늘고 음성 대조가 `전이 있음`이다.**"""
+    assert _run_order(tmp_path, ["--use-hold"], hold_windows=4) == 0
+    out = capsys.readouterr().out
+    assert "전이+유지" in out
+    assert "움직이는 곡" in out
+
+
+def test_유지를_안_켜면_선이_안_는다(tmp_path, capsys):
+    """**기본 경로가 안 바뀐다.** D-0109가 검사로 고정한 규율과 같은 자리다."""
+    assert _run_order(tmp_path, []) == 0
+    assert "전이+유지" not in capsys.readouterr().out
+
+
+def test_움직이는_곡이_없으면_표를_안_읽는다(tmp_path, capsys):
+    """매 창 바뀌는 곡들만 있으면 `p`가 전부 0이라 **판정에 닿지 않는다.**"""
+    assert _run_order(tmp_path, ["--use-hold"]) == 0
+    out = capsys.readouterr().out
+    assert "유지 확률이 판정에 닿지 않았다" in out

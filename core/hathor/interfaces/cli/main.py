@@ -44,6 +44,7 @@ from hathor.domain.services.stem_sets import (
 from hathor.domain.value_objects.key import Key
 from hathor.infrastructure.chroma_series_store import (
     find_series_root,
+    load_hold_probabilities,
     load_transition_priors,
     write_series,
 )
@@ -74,6 +75,7 @@ from hathor.shared.config.paths import (
 )
 
 if TYPE_CHECKING:
+    from hathor.application.evaluate_order_conditioning import OrderReference, OrderReport
     from hathor.domain.entities.scanned_track import ScannedTrack
     from hathor.domain.entities.track_tags import TrackTags
     from hathor.infrastructure.npz_feature_store import NpzFeatureStore
@@ -527,6 +529,11 @@ def build_parser() -> argparse.ArgumentParser:
     order.add_argument("--bars", type=int, default=64, help="마디 수")
     order.add_argument("--key", default="C major", help="출력 조성. 고정한다")
     order.add_argument("--seed", type=int, default=20260822, help="추첨 시드")
+    order.add_argument(
+        "--use-hold",
+        action="store_true",
+        help="곡별 화음 유지 확률을 시계열에서 뽑아 건다 (O-37). **선이 하나 는다**",
+    )
     order.add_argument(
         "--self-transition-sweep",
         default=None,
@@ -3314,7 +3321,8 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
     names = sorted(table)[: args.songs]
     priors = [ReferencePrior(name, table[name]) for name in names]
     transitions = load_transition_priors(series_root, args.stem_set, names)
-    references = references_from(priors, transitions)
+    holds = load_hold_probabilities(series_root, args.stem_set, names) if args.use_hold else None
+    references = references_from(priors, transitions, holds)
     if len(references) < 2:
         print(
             f"도수 사전과 전이 사전이 둘 다 있는 곡이 {len(references)}개다.",
@@ -3336,8 +3344,11 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
     )
     rows: list[tuple[object, ...]] = []
     reports = {}
-    for label, use in (("전이 없음", False), ("전이 있음", True)):
-        report = harness.run(references, use_transition=use)
+    lines = [("전이 없음", False, False), ("전이 있음", True, False)]
+    if args.use_hold:
+        lines.append(("전이+유지", True, True))
+    for label, use, hold in lines:
+        report = harness.run(references, use_transition=use, use_hold=hold)
         reports[label] = report
         rows.append(
             (
@@ -3365,6 +3376,8 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
         print(text)
     verdict = reports["전이 있음"].carries_reference_order
     print(f"\n판정: **{'출력이 참조곡의 배열을 담는다' if verdict else '안 담는다'}**\n")
+    if args.use_hold:
+        _report_hold(references, reports["전이 있음"], reports["전이+유지"])
     if args.self_transition_sweep is not None:
         probabilities = tuple(
             float(token) for token in args.self_transition_sweep.split(",") if token.strip()
@@ -3381,7 +3394,69 @@ def _run_eval_harmony_order(args: argparse.Namespace) -> int:
     print("D-0062가 화성 어휘에서 쓴 구조를 그대로 쓴다.")
     print("**`전이 없음` 줄이 음성 대조다** — 순서를 시드가 정하면 둘이 같아야 한다.")
     print("**문턱이 t > 3이다.** 이 판정이 O-32를 닫으므로 승인 문턱이다 (D-0098).")
+    if args.use_hold:
+        print("**`전이+유지`는 곡마다 그 곡의 유지 확률을 건 선이다** (O-37 · D-0123).")
+        print("`전이 있음`이 그 음성 대조이며 같은 참조곡·같은 시드다. 값이 내려가면")
+        print("**O-38의 짐작(매 마디 바꾸는 제약이 거리를 누른다)이 틀린 것이고 그것도 답이다.**")
+        print("**유지 확률을 고르지 않았다** — 곡의 시계열이 낸 값이라 손잡이가 아니다.")
     return 0
+
+
+def _report_hold(
+    references: Sequence[OrderReference], plain: OrderReport, held: OrderReport
+) -> None:
+    """`use_hold`가 판정을 어디로 옮겼는가 (O-37).
+
+    **음성 대조는 `전이 있음` 선이다** — 같은 참조곡·같은 시드에서 `hold`만 0.0으로
+    둔 줄이며, 검사가 그 둘이 한 비트도 다르지 않음을 고정했다.
+
+    `p = 0`인 곡을 따로 낸다. **D-0123이 남긴 것이다** — 실측 49곡(4.9%)이 뒤섞음보다
+    낮았고 그 곡들은 `use_hold`를 켜도 안 움직여 **차이를 희석한다.**
+    """
+    from statistics import median
+
+    from hathor.application.evaluate_order_conditioning import holding_indices
+
+    moving = holding_indices(references)
+    values = [item.hold for item in references]
+    print("--- 곡별 유지 확률 (O-37) ---")
+    print(
+        f"움직이는 곡 {len(moving)} / {len(values)} · p=0 {len(values) - len(moving)}곡"
+        f" · 중앙 {median(values):.4f} · 최대 {max(values):.4f}"
+    )
+    print("**`p=0`인 곡은 매 마디 바뀐다.** 두 선에 같은 곡들이 들어가 있고 그 곡들만")
+    print("아무것도 안 바뀌므로 전체 표의 차이는 **희석된 값이다.**\n")
+    if not moving:
+        print("움직이는 곡이 없다. **유지 확률이 판정에 닿지 않았다** — 표를 읽지 않는다.\n")
+        return
+    for text in render_table(
+        (
+            ("선", "<12"),
+            ("곡", ">5d"),
+            ("self", ">9.4f"),
+            ("other", ">9.4f"),
+            ("other-self", ">12.4f"),
+            ("t", ">8.2f"),
+            ("곡승률", ">9.1%"),
+        ),
+        [
+            (
+                label,
+                item.reference_count,
+                item.mean_self,
+                item.mean_other,
+                item.gap,
+                item.t_statistic,
+                item.win_rate,
+            )
+            for label, item in (
+                ("전이 있음", plain.restricted_to(moving)),
+                ("전이+유지", held.restricted_to(moving)),
+            )
+        ],
+    ):
+        print(text)
+    print()
 
 
 def _report_self_transition_sweep(
