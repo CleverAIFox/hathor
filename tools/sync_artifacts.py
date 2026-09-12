@@ -152,7 +152,7 @@ def keep(names: dict[str, int], only: list[str] | None) -> dict[str, int]:
     """접두어로 거른다. **없으면 전부다** (D-0119).
 
     실측에서 산출물이 1.7GB · 17192개였다 (D-0118은 "수십 MB"라 적었고 30배 틀렸다).
-    그중 O-37이 읽는 것은 `keys-*` 74MB뿐이다. **DrvFs에서는 크기보다 개수가 아프다.**
+    그중 O-37(D-0123)이 읽는 것은 `keys-*` 74MB뿐이다. **DrvFs에서는 크기보다 개수가 아프다.**
     """
     if not only:
         return names

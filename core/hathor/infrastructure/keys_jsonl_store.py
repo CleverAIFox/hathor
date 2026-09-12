@@ -124,7 +124,7 @@ def load_stem_priors(path: Path, stem_set: str) -> dict[str, tuple[tuple[float, 
 
 
 def load_degree_priors(path: Path, source: str) -> dict[str, tuple[float, ...]]:
-    """`source_key → 으뜸음으로 회전된 12차원 도수 사전` (O-29)."""
+    """`source_key → 으뜸음으로 회전된 12차원 도수 사전` (O-29 · D-0082)."""
     found: dict[str, tuple[float, ...]] = {}
     for row in iter_rows(path):
         vector = chroma_of(row, source)

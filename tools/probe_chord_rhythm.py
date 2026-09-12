@@ -242,7 +242,7 @@ def report(folder: Path, stem_set: str, window_seconds: float, seed: int) -> int
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="화성 리듬 탐침 (O-37)")
+    parser = argparse.ArgumentParser(description="화성 리듬 탐침 (O-37 · D-0123)")
     parser.add_argument("--stem-set", default="other", help="기본 other (D-0074)")
     parser.add_argument("--window-seconds", type=float, default=1.0, help="창 길이 (D-0104)")
     parser.add_argument("--self-test", action="store_true", help="합성 회수 검사")

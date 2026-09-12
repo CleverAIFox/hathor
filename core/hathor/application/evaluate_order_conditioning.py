@@ -67,7 +67,7 @@ class OrderReference:
     prior: tuple[float, ...]
     transition: tuple[tuple[float, ...], ...]
     hold: float = 0.0
-    """그 곡의 화음 유지 확률 (O-37). `chord_rhythm.hold_probability`가 낸다.
+    """그 곡의 화음 유지 확률 (O-37 · D-0123). `chord_rhythm.hold_probability`가 낸다.
 
     **곡마다 다르다.** 코퍼스 전체에 하나를 고르는 것이 아니므로 D-0109가 기각한
     손잡이가 아니다 — `prior`·`transition`과 같이 **참조곡에서 나온 조건**이다.
@@ -172,7 +172,7 @@ class EvaluateOrderConditioning:
         self_transition: float = 0.0,
         use_hold: bool = False,
     ) -> OrderReport:
-        """`use_hold`를 켜면 **곡마다 그 곡의 `hold`를 쓴다** (O-37).
+        """`use_hold`를 켜면 **곡마다 그 곡의 `hold`를 쓴다** (O-37 · D-0124).
 
         `self_transition`은 그대로 두면 D-0114가 쓴 진단 훑기다. 둘은 배타적이다 —
         섞으면 어느 쪽이 값을 움직였는지 못 가린다.
@@ -254,7 +254,7 @@ def sweep_self_transition(
 
     ### 짐작은 이미 죽었다 (D-0114)
 
-    O-38의 짐작은 **"매 마디 바꾸는 제약이 짧은 구간에서 관측 거리를 누른다"**였다.
+    O-38(닫힘 D-0114)의 짐작은 **"매 마디 바꾸는 제약이 짧은 구간에서 관측 거리를 누른다"**였다.
     참이면 짧은 마디에서 `p`가 오를수록 `other - self`가 올라야 한다. **내려갔다.**
     D-0114가 그것으로 O-38을 닫았고 `other-self`가 `0.5853 - 0.688/sqrt(n)`에 맞는
     **표본 부족**임을 보였다. D-0125가 새 마디 네 점에서 그 곡선을 다시 확인했다.
@@ -306,7 +306,7 @@ def references_from(
 
 
 def holding_indices(references: Sequence[OrderReference]) -> tuple[int, ...]:
-    """`hold > 0`인 곡의 자리 (O-37 판정용).
+    """`hold > 0`인 곡의 자리 (O-37 · D-0125 판정용).
 
     **D-0123이 남긴 것이다** — 실측 49곡(4.9%)이 뒤섞음보다 낮아 `p = 0`이었다.
     그 곡들은 `use_hold`를 켜도 아무것도 안 바뀌므로 **두 선의 차이를 희석한다.**

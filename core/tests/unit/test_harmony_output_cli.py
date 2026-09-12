@@ -289,14 +289,14 @@ def _tables(out: str) -> list[list[list[str]]]:
 
 def test_표_그리기가_열_수를_강제한다():
     """**머리글과 값을 따로 쓰다가 이름표가 두 칸 밀린 채 실측을 냈다** (D-0092)."""
-    from hathor.interfaces.cli.main import render_table
+    from hathor.interfaces.cli.tables import render_table
 
     with pytest.raises(ValueError, match="열 수가 머리글과 다르다"):
         render_table((("가", "<6"), ("나", ">6.2f")), [("하나", 1.0, 2.0)])
 
 
 def test_표_그리기가_머리글을_같은_폭으로_낸다():
-    from hathor.interfaces.cli.main import render_table
+    from hathor.interfaces.cli.tables import render_table
 
     lines = render_table((("가", "<6"), ("나", ">8.2f")), [("하나", 1.0)])
     assert len(lines) == 3
@@ -329,7 +329,7 @@ def test_삼총사_칸을_리포트에_적는다(tmp_path, capsys):
 
 def test_열_이름에_공백을_금지한다():
     """**공백이 들어가면 표를 다시 읽을 수 없다** (D-0092)."""
-    from hathor.interfaces.cli.main import render_table
+    from hathor.interfaces.cli.tables import render_table
 
     with pytest.raises(ValueError, match="공백"):
         render_table((("가 나", "<6"),), [("하나",)])

@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -44,7 +44,6 @@ from hathor.domain.services.stem_sets import (
 from hathor.domain.value_objects.key import Key
 from hathor.infrastructure.chroma_series_store import (
     find_series_root,
-    load_hold_probabilities,
     load_transition_priors,
     write_series,
 )
@@ -64,6 +63,8 @@ from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzLookup,
 )
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
+from hathor.interfaces.cli.eval_order import run_eval_harmony_order
+from hathor.interfaces.cli.tables import parse_key, render_table
 from hathor.shared.config.paths import (
     ARTIFACT_STORE_ENV,
     LIBRARY_ROOT_ENV,
@@ -75,7 +76,6 @@ from hathor.shared.config.paths import (
 )
 
 if TYPE_CHECKING:
-    from hathor.application.evaluate_order_conditioning import OrderReference, OrderReport
     from hathor.domain.entities.scanned_track import ScannedTrack
     from hathor.domain.entities.track_tags import TrackTags
     from hathor.infrastructure.npz_feature_store import NpzFeatureStore
@@ -248,7 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--aggregate",
         choices=("mean", "median"),
         default="mean",
-        help="전곡을 한 번에 변환할지(mean) 창별 중앙값을 낼지(median). O-27 후보 (b)",
+        help="전곡을 한 번에 변환할지(mean) 창별 중앙값을 낼지(median). O-27 후보 (b) · D-0065",
     )
     keys.add_argument(
         "--window-seconds",
@@ -532,7 +532,7 @@ def build_parser() -> argparse.ArgumentParser:
     order.add_argument(
         "--use-hold",
         action="store_true",
-        help="곡별 화음 유지 확률을 시계열에서 뽑아 건다 (O-37). **선이 하나 는다**",
+        help="곡별 화음 유지 확률을 시계열에서 뽑아 건다 (O-37 · D-0124). **선이 하나 는다**",
     )
     order.add_argument(
         "--self-transition-sweep",
@@ -752,7 +752,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.eval_command == "time-drift":
             return _run_eval_time_drift(args)
         if args.eval_command == "harmony-order":
-            return _run_eval_harmony_order(args)
+            return run_eval_harmony_order(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
         if args.ingest_command == "keys":
@@ -1357,20 +1357,6 @@ def _run_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
-def _parse_key(text: str) -> Key:
-    """`"C major"` 같은 문자열을 조성으로 바꾼다."""
-    from hathor.domain.value_objects.key import PITCH_CLASSES, Key, Mode
-
-    parts = text.strip().rsplit(" ", 1)
-    if len(parts) != 2 or parts[0] not in PITCH_CLASSES:
-        raise SystemExit(f'--key는 "C major" 형식이어야 한다: {text}')
-    try:
-        mode = Mode(parts[1].lower())
-    except ValueError:
-        raise SystemExit(f"--key의 선법은 major 또는 minor여야 한다: {parts[1]}") from None
-    return Key(tonic=parts[0], mode=mode)
-
-
 DEFAULT_OUTPUT_SEEDS = 1000
 DEFAULT_OUTPUT_BARS = 8
 DEFAULT_OUTPUT_PAIRS = 100
@@ -1559,8 +1545,8 @@ def _report_harmonic_sweep(rows: list[dict[str, object]], profile: str) -> int:
         )
 
     print("\n--- 읽는 법 ---")
-    print("**검은건반이 핵심이다** (O-23). 33.5%가 실제 대중가요보다 명백히 높다.")
-    print("줄지 않으면 배음도 원인이 아니며 O-23의 후보가 전부 소진된다.")
+    print("**검은건반이 핵심이다** (O-23 · D-0061). 33.5%가 실제 대중가요보다 명백히 높다.")
+    print("줄지 않으면 배음도 원인이 아니며 O-23의 후보가 전부 소진된다 (D-0061).")
     print("애매차는 무작위 대비다. 음수가 클수록 판정이 결정적이다.")
     print("애매내 나란한조가 오르면 남은 애매함이 원리적 한계 쪽으로 이동한 것이다.")
     return 0
@@ -1878,7 +1864,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         print(f"  {mode:<6} {count:5d}  {count / total:6.1%}")
 
     black = sum(1 for key in keys if key.tonic in BLACK_KEYS)
-    print(f"  검은건반 으뜸음  {black:5d}  {black / total:6.1%}   ← O-23 핵심 지표")
+    print(f"  검은건반 으뜸음  {black:5d}  {black / total:6.1%}   ← O-23 지표 (D-0061)")
 
     print("\n조성 교차표 (으뜸음 / 선법)")
     print(f"  {'':<4}{'major':>7}{'minor':>7}{'합계':>7}")
@@ -1985,7 +1971,7 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
 
     references = [extract_pattern(segments) for _, segments in chosen]
     estimated_key, estimates = _estimate_key(args, [song[0] for song in chosen])
-    output_key = _parse_key(args.key) if args.key else estimated_key
+    output_key = parse_key(args.key) if args.key else estimated_key
     harmony_prior, prior_source = _resolve_harmony_prior(
         args, [song[0] for song in chosen], estimates
     )
@@ -2975,7 +2961,7 @@ def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
     print(f"판정: **{verdict}**")
 
     print("\n--- 읽는 법 ---")
-    print("λ*가 판정이다. 0이면 참조곡이 코퍼스 평균에 보탤 것이 없고 O-21의 크로마")
+    print("λ*가 판정이다. 0이면 참조곡이 코퍼스 평균에 보탤 것이 없고 O-21(D-0082)의 크로마")
     print("접근을 기각한다. 0보다 크면 그 값이 곧 생성기의 혼합 계수다.")
     print("**귀무 λ*가 0이 아닌 것 자체는 이상이 아니다** (D-0065). 곡끼리 독립인 합성")
     print("자료에서도 0.1이 나온다. 볼 것은 위치가 아니라 낙폭이며, 자기선의 낙폭에 비해")
@@ -3042,7 +3028,7 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
         seed_count=args.seeds,
         bar_count=args.bars,
         pair_count=args.pairs,
-        key=_parse_key(args.key),
+        key=parse_key(args.key),
         seed=args.seed,
         vocabulary=Vocabulary(args.vocabulary),
     )
@@ -3260,232 +3246,6 @@ def _run_eval_harmony_output(args: argparse.Namespace) -> int:
     return 0
 
 
-def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[object]]) -> list[str]:
-    """머리글과 값을 **같은 열 명세 하나에서** 그린다 (D-0092).
-
-    `columns`는 `(이름, 형식)` 목록이다. 형식은 `>10.4f` 같은 형식 명세이며 폭을
-    포함한다. 머리글은 같은 폭으로 정렬한다.
-
-    **머리글 문자열과 행 문자열을 따로 쓰다가 한쪽만 고쳐 이름표와 값이 어긋났다.**
-    실제로 `eval chromatic-origin`이 그 상태로 실측을 한 번 냈다 — 값은 옳았고
-    이름표가 두 칸 밀려 있었다. **여기서는 갈릴 수 없다.**
-    """
-    for name, _ in columns:
-        # **공백이 들어가면 표를 다시 읽을 수 없다.** 검사도 사람도 못 읽는다.
-        if any(ch.isspace() for ch in name):
-            raise ValueError(f"열 이름에 공백을 넣지 않는다: {name!r}")
-    widths: list[int] = []
-    for _, spec in columns:
-        digits = "".join(ch for ch in spec.split(".")[0] if ch.isdigit())
-        widths.append(int(digits) if digits else 10)
-    aligns = [spec[0] if spec[:1] in "<>^" else ">" for _, spec in columns]
-    header = "".join(
-        f"{name:{align}{width}}"
-        for (name, _), align, width in zip(columns, aligns, widths, strict=True)
-    )
-    lines = [header, "-" * len(header.encode("utf-8"))]
-    for row in rows:
-        if len(row) != len(columns):
-            raise ValueError(f"열 수가 머리글과 다르다: {len(row)} vs {len(columns)}")
-        lines.append(
-            "".join(f"{value:{spec}}" for value, (_, spec) in zip(row, columns, strict=True))
-        )
-    return lines
-
-
-def _run_eval_harmony_order(args: argparse.Namespace) -> int:
-    """출력의 배열이 **그 참조곡의** 배열을 닮았는지 잰다 (O-32 · D-0112).
-
-    **쌍 거리로는 안 된다.** 전이 사전을 주기만 하면 두 출력이 순서에서 달라진다 —
-    곡 짝을 뒤섞은 사전을 줘도 그렇다. **"쓰이고 있다"와 "맞는 것을 쓴다"는 다르다.**
-    """
-    from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
-    from hathor.application.evaluate_order_conditioning import (
-        EvaluateOrderConditioning,
-        references_from,
-        sweep_self_transition,
-    )
-    from hathor.shared.config.paths import repo_root as _root
-
-    store = args.priors
-    if store is None:
-        store = find_keys_store(_root(), args.stem_set)
-    series_root = args.series
-    if series_root is None:
-        series_root = find_series_root(_root(), args.stem_set)
-    if store is None or not store.exists() or series_root is None:
-        print("사전 또는 시계열 산출물을 찾지 못했다.", file=sys.stderr)
-        return 1
-
-    table = load_degree_priors(store, args.stem_set)
-    names = sorted(table)[: args.songs]
-    priors = [ReferencePrior(name, table[name]) for name in names]
-    transitions = load_transition_priors(series_root, args.stem_set, names)
-    holds = load_hold_probabilities(series_root, args.stem_set, names) if args.use_hold else None
-    references = references_from(priors, transitions, holds)
-    if len(references) < 2:
-        print(
-            f"도수 사전과 전이 사전이 둘 다 있는 곡이 {len(references)}개다.",
-            file=sys.stderr,
-        )
-        return 1
-
-    condition = OutputCondition(
-        seed_count=args.seeds,
-        bar_count=args.bars,
-        key=_parse_key(args.key),
-        seed=args.seed,
-    )
-    harness = EvaluateOrderConditioning(condition)
-    print(
-        f"곡 {len(references)}개 · 시드 {condition.seed_count} · {condition.bar_count}마디"
-        f" · {condition.key} · 출처 {args.stem_set}\n"
-        f"사전: {store.name} · 시계열: {series_root.name}\n"
-    )
-    rows: list[tuple[object, ...]] = []
-    reports = {}
-    lines = [("전이 없음", False, False), ("전이 있음", True, False)]
-    if args.use_hold:
-        lines.append(("전이+유지", True, True))
-    for label, use, hold in lines:
-        report = harness.run(references, use_transition=use, use_hold=hold)
-        reports[label] = report
-        rows.append(
-            (
-                label,
-                report.mean_self,
-                report.mean_other,
-                report.gap,
-                report.standard_error,
-                report.t_statistic,
-                report.win_rate,
-            )
-        )
-    for text in render_table(
-        (
-            ("선", "<10"),
-            ("self", ">9.4f"),
-            ("other", ">9.4f"),
-            ("other-self", ">12.4f"),
-            ("표준오차", ">10.4f"),
-            ("t", ">8.2f"),
-            ("곡승률", ">9.1%"),
-        ),
-        rows,
-    ):
-        print(text)
-    verdict = reports["전이 있음"].carries_reference_order
-    print(f"\n판정: **{'출력이 참조곡의 배열을 담는다' if verdict else '안 담는다'}**\n")
-    if args.use_hold:
-        _report_hold(references, reports["전이 있음"], reports["전이+유지"])
-    if args.self_transition_sweep is not None:
-        probabilities = tuple(
-            float(token) for token in args.self_transition_sweep.split(",") if token.strip()
-        )
-        bars = tuple(int(token) for token in args.sweep_bars.split(",") if token.strip())
-        _report_self_transition_sweep(
-            args, sweep_self_transition(references, probabilities, bars, condition)
-        )
-    print("--- 읽는 법 ---")
-    print("**쌍 거리로는 안 된다.** 전이 사전을 주기만 하면 두 출력이 순서에서 달라진다 —")
-    print('곡 짝을 뒤섞은 사전을 줘도 그렇다. **"쓰이고 있다"와 "맞는 것을 쓴다"는 다르다**')
-    print("(어휘를 넓히기만 해도 거리가 +0.054 공짜로 오른 D-0094와 같은 함정이다).")
-    print("**`self`는 출력의 전이와 그 곡의 전이 사전의 거리**이고 `other`는 다른 곡의 것이다.")
-    print("D-0062가 화성 어휘에서 쓴 구조를 그대로 쓴다.")
-    print("**`전이 없음` 줄이 음성 대조다** — 순서를 시드가 정하면 둘이 같아야 한다.")
-    print("**문턱이 t > 3이다.** 이 판정이 O-32를 닫으므로 승인 문턱이다 (D-0098).")
-    if args.use_hold:
-        print("**`전이+유지`는 곡마다 그 곡의 유지 확률을 건 선이다** (O-37 · D-0123).")
-        print("`전이 있음`이 그 음성 대조이며 같은 참조곡·같은 시드다. **내려간다** (D-0125) —")
-        print("감소분 전체가 유효 마디 수이고 **이 지표는 유지를 원리적으로 못 잰다** (O-26).")
-        print("**유지 확률을 고르지 않았다** — 곡의 시계열이 낸 값이라 손잡이가 아니다.")
-    return 0
-
-
-def _report_hold(
-    references: Sequence[OrderReference], plain: OrderReport, held: OrderReport
-) -> None:
-    """`use_hold`가 판정을 어디로 옮겼는가 (O-37).
-
-    **음성 대조는 `전이 있음` 선이다** — 같은 참조곡·같은 시드에서 `hold`만 0.0으로
-    둔 줄이며, 검사가 그 둘이 한 비트도 다르지 않음을 고정했다.
-
-    `p = 0`인 곡을 따로 낸다. **D-0123이 남긴 것이다** — 실측 49곡(4.9%)이 뒤섞음보다
-    낮았고 그 곡들은 `use_hold`를 켜도 안 움직여 **차이를 희석한다.**
-    """
-    from statistics import median
-
-    from hathor.application.evaluate_order_conditioning import holding_indices
-
-    moving = holding_indices(references)
-    values = [item.hold for item in references]
-    print("--- 곡별 유지 확률 (O-37) ---")
-    print(
-        f"움직이는 곡 {len(moving)} / {len(values)} · p=0 {len(values) - len(moving)}곡"
-        f" · 중앙 {median(values):.4f} · 최대 {max(values):.4f}"
-    )
-    print("**`p=0`인 곡은 매 마디 바뀐다.** 두 선에 같은 곡들이 들어가 있고 그 곡들만")
-    print("아무것도 안 바뀌므로 전체 표의 차이는 **희석된 값이다.**\n")
-    if not moving:
-        print("움직이는 곡이 없다. **유지 확률이 판정에 닿지 않았다** — 표를 읽지 않는다.\n")
-        return
-    for text in render_table(
-        (
-            ("선", "<12"),
-            ("곡", ">5d"),
-            ("self", ">9.4f"),
-            ("other", ">9.4f"),
-            ("other-self", ">12.4f"),
-            ("t", ">8.2f"),
-            ("곡승률", ">9.1%"),
-        ),
-        [
-            (
-                label,
-                item.reference_count,
-                item.mean_self,
-                item.mean_other,
-                item.gap,
-                item.t_statistic,
-                item.win_rate,
-            )
-            for label, item in (
-                ("전이 있음", plain.restricted_to(moving)),
-                ("전이+유지", held.restricted_to(moving)),
-            )
-        ],
-    ):
-        print(text)
-    print()
-
-
-def _report_self_transition_sweep(
-    args: argparse.Namespace, rows: Sequence[tuple[float, int, float, float, float]]
-) -> None:
-    """자기 전이 훑기를 찍는다 (O-38 닫힘 · D-0114).
-
-    **짐작은 이미 죽었다** — `p`를 올리자 값이 내려갔다. 이 표는 재현용이다.
-    """
-    print("--- 자기 전이 훑기 (O-38 닫힘 · D-0114) ---")
-    print("**진단 전용이다.** 이 값을 골라 제품에 박으면 그것이 D-0058이다.")
-    for text in render_table(
-        (
-            ("자기전이", ">9.2f"),
-            ("마디", ">6d"),
-            ("other-self", ">12.4f"),
-            ("t", ">8.2f"),
-            ("곡승률", ">9.1%"),
-        ),
-        [tuple(row) for row in rows],
-    ):
-        print(text)
-    print("")
-    print("**짐작**: 매 마디 바꾸는 제약이 짧은 구간에서 관측 거리를 누른다 (D-0109).")
-    print("참이면 짧은 마디에서 `자기전이`가 오를수록 `other-self`가 **오른다.**")
-    print("**D-0114가 이 표로 짐작을 기각했다.** 표본 부족이며 재현용으로 남긴다.")
-    print(f"귀무 대조: 같은 훑기를 `--stem-set {args.stem_set}`에서 전이 없이 돌린다.")
-
-
 def _run_eval_time_drift(args: argparse.Namespace) -> int:
     """곡마다 다른 시간 변화가 실재하는지 잰다 (O-32 게이트 · D-0098).
 
@@ -3592,7 +3352,7 @@ def _run_eval_chromatic_origin(args: argparse.Namespace) -> int:
         print(f"출처 `{source}`의 사전이 {len(table)}개다.", file=sys.stderr)
         return 1
 
-    key = _parse_key(args.key)
+    key = parse_key(args.key)
     condition = OriginCondition(key_mode=key.mode, seed=args.seed, rotated_share=args.rotated_share)
     harness = EvaluateChromaticOrigin(condition)
     names = sorted(table)
@@ -3709,7 +3469,7 @@ def _run_eval_degree_restriction(args: argparse.Namespace) -> int:
         print(f"출처 `{source}`의 사전이 {len(table)}개다.", file=sys.stderr)
         return 1
 
-    condition = OutputCondition(pair_count=args.pairs, key=_parse_key(args.key), seed=args.seed)
+    condition = OutputCondition(pair_count=args.pairs, key=parse_key(args.key), seed=args.seed)
     references = [ReferencePrior(key, table[key]) for key in sorted(table)]
     report = EvaluateDegreeRestriction(condition).run(references, source)
     observed = report.line("observed")

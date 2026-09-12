@@ -369,7 +369,7 @@ class OutputReport:
 
 @dataclass(frozen=True, slots=True)
 class SourceComparison:
-    """두 사전 출처를 **같은 쌍·같은 시드로** 견준다. O-29의 본문이다."""
+    """두 사전 출처를 **같은 쌍·같은 시드로** 견준다. O-29의 본문이다 (닫힘 D-0082)."""
 
     baseline: OutputReport
     target: OutputReport
@@ -412,7 +412,7 @@ class SourceComparison:
         2. **쌍 과반에서** 그렇다 — 같은 쌍·같은 시드로 짝지어 센다.
 
         둘 다 넘지 못하면 **문턱 추출이 사전 대비를 삼킨 것이며**, 사전을 더
-        뾰족하게 만드는 축(O-27)은 출력에 닿지 않는다.
+        뾰족하게 만드는 축(O-27 · D-0074)은 출력에 닿지 않는다.
         """
         return self.gain > 0.0 and self.win_rate > 0.5
 
