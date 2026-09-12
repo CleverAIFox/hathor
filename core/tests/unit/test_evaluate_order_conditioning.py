@@ -188,3 +188,53 @@ def test_자기_전이가_판정을_움직인다():
     made = _references(12)
     rows = sweep_self_transition(made, (0.0, 0.6), (8,), FAST)
     assert rows[0][2] != rows[1][2]
+
+
+# ---------------------------------------------------------------- 곡별 유지 (O-37)
+
+
+def _with_holds(holds: list[float]) -> list[OrderReference]:
+    """같은 사전·같은 전이, `hold`만 다른 참조곡들."""
+    from dataclasses import replace
+
+    base = _references(len(holds), seed=11)
+    return [replace(item, hold=value) for item, value in zip(base, holds, strict=True)]
+
+
+def test_hold_기본값은_현행과_한_비트도_다르지_않다():
+    """D-0109가 검사로 고정한 규율. 기본 경로가 안 바뀌어야 한다."""
+    references = _with_holds([0.0, 0.0, 0.0])
+    plain = EvaluateOrderConditioning(FAST).run(references)
+    held = EvaluateOrderConditioning(FAST).run(references, use_hold=True)
+    assert held.self_distances == plain.self_distances
+    assert held.other_distances == plain.other_distances
+
+
+def test_hold는_0과_1_사이여야_한다():
+    """1.0이면 첫 화음이 영원히 유지된다. 생성기가 요구하는 범위와 같다."""
+    from dataclasses import replace
+
+    with pytest.raises(ValueError):
+        replace(_references(1)[0], hold=1.0)
+    with pytest.raises(ValueError):
+        replace(_references(1)[0], hold=-0.1)
+
+
+def test_hold와_self_transition은_같이_못_쓴다():
+    """섞으면 어느 쪽이 값을 움직였는지 못 가린다."""
+    with pytest.raises(ValueError):
+        EvaluateOrderConditioning(FAST).run(
+            _with_holds([0.3, 0.3]), use_hold=True, self_transition=0.2
+        )
+
+
+def test_hold는_곡마다_다른_값이_쓰인다():
+    """**하나를 코퍼스에 고르는 것이 아니다** (O-37).
+
+    전역 손잡이라면 두 실행이 같은 결과를 낼 자리에서 갈려야 한다.
+    """
+    mixed = EvaluateOrderConditioning(FAST).run(_with_holds([0.0, 0.9, 0.0]), use_hold=True)
+    uniform = EvaluateOrderConditioning(FAST).run(_with_holds([0.0, 0.0, 0.0]), use_hold=True)
+    assert mixed.self_distances != uniform.self_distances
+    # **첫 곡은 hold가 0이라 안 움직여야 한다.** 움직이면 곡 경계가 샌 것이다
+    assert mixed.self_distances[0] == uniform.self_distances[0]

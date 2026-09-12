@@ -56,96 +56,17 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 DEGREE_COUNT = 12
 
-BUNDLES = (1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)
-"""묶음 길이(창 수). **촘촘한 격자다.**
+sys.path.insert(0, str(ROOT / "core"))
 
-`1,2,4,8`처럼 성기면 반감점이 네 값 중 하나로 뭉쳐 곡이 안 갈린다. 보간을 쓰더라도
-격자가 성기면 보간 오차가 신호보다 커진다.
-"""
-
-
-def spikiness(series: np.ndarray) -> float:
-    """창별 크로마의 **뾰족함 평균.** 균등이면 1/12, 한 음이면 1.
-
-    정규화한 크로마의 최댓값이다. 화음이 섞이면 질량이 퍼져 내려간다.
-    """
-    stacked = np.asarray(series, dtype=np.float64)
-    totals = stacked.sum(axis=1, keepdims=True)
-    safe = np.where(totals > 0.0, totals, 1.0)
-    return float((stacked / safe).max(axis=1).mean())
-
-
-def bundle(series: np.ndarray, size: int) -> np.ndarray:
-    """짧은 창 `size`개를 평균해 `size`배 긴 창으로 (D-0104).
-
-    **크로마는 시간 평균이므로 정확히 `size`배 긴 창이다.** 남는 꼬리는 버린다 —
-    길이가 다른 창을 섞으면 뾰족함이 창 길이만으로 달라진다.
-    """
-    stacked = np.asarray(series, dtype=np.float64)
-    usable = len(stacked) // size * size
-    if usable < size:
-        return stacked[:0]
-    return stacked[:usable].reshape(-1, size, stacked.shape[1]).mean(axis=1)
-
-
-def curve(series: np.ndarray, bundles: tuple[int, ...] = BUNDLES) -> list[tuple[int, float]]:
-    """묶음 길이별 뾰족함. 창이 모자라 빈 묶음은 뺀다."""
-    points: list[tuple[int, float]] = []
-    for size in bundles:
-        grouped = bundle(series, size)
-        if len(grouped) < 2:
-            break
-        points.append((size, spikiness(grouped)))
-    return points
-
-
-def limit_spikiness(series: np.ndarray) -> float:
-    """`k`를 무한히 늘렸을 때의 뾰족함. **곡 전체를 한 창으로 본 값이다.**
-
-    묶을수록 곡의 평균 크로마로 수렴하므로 이것이 바닥이고, **닫힌 꼴로 구한다.**
-
-    **격자의 마지막 점을 바닥으로 쓰면 안 된다.** 화음이 격자보다 길면 거기서
-    아직 안 내려왔고, 그러면 반감점이 눌린다 — 자기 검사에서 16창짜리가 8창보다
-    낮게 나왔다. D-0079가 "극한 열이 상한이다"라고 적은 것과 같은 자리다.
-    """
-    stacked = np.asarray(series, dtype=np.float64)
-    if stacked.size == 0:
-        return 0.0
-    return spikiness(stacked.mean(axis=0, keepdims=True))
-
-
-def half_fall(points: list[tuple[int, float]], floor: float) -> float | None:
-    """뾰족함이 **극한까지 절반 내려오는 묶음 길이.** 로그 격자에서 보간한다.
-
-    바닥은 `limit_spikiness`가 낸 `k → 무한` 값이다. 상수를 박지 않는다 (O-25).
-
-    격자 안에서 반을 안 지나면 `None`이다 — **없는 것을 있는 척하지 않는다** (GR-0.5).
-    """
-    if len(points) < 3:
-        return None
-    top = points[0][1]
-    if top - floor <= 1e-9:
-        return None
-    target = floor + (top - floor) / 2.0
-
-    for (left_k, left_v), (right_k, right_v) in pairwise(points):
-        if left_v >= target > right_v:
-            if left_v - right_v <= 1e-12:
-                return float(left_k)
-            share = (left_v - target) / (left_v - right_v)
-            span = math.log(right_k) - math.log(left_k)
-            return float(math.exp(math.log(left_k) + share * span))
-    return None
-
-
-def self_transition_rate(series: np.ndarray) -> float:
-    """`argmax` 열이 이어지는 비율. **진단이다. 판정에 쓰지 않는다** (D-0083 계열)."""
-    stacked = np.asarray(series, dtype=np.float64)
-    if len(stacked) < 2:
-        return 0.0
-    picked = np.argmax(stacked, axis=1)
-    return float((picked[:-1] == picked[1:]).mean())
-
+from hathor.domain.services.chord_rhythm import (
+    BUNDLES,
+    curve,
+    half_fall,
+    limit_spikiness,
+    measure,
+    self_transition_rate,
+    shuffled,
+)
 
 # ------------------------------------------------------------------ 합성
 
@@ -203,12 +124,11 @@ def self_test() -> int:
     # 실측이 뒤섞음보다 크면 하네스가 고장이므로 나머지 숫자를 읽지 않는다.
     print("\n\n귀무 대조 — 실측 대 창 순서 뒤섞음\n")
     print(f"{'참 길이(창)':>10} {'실측':>7} {'뒤섞음':>7} {'차이':>8} {'t':>8} {'승률':>7}")
-    rng = np.random.default_rng(0)
     for truth in (1, 2, 4, 8, 16):
         left, right = [], []
         for seed in range(40):
             series = synth(truth, 960, noise=0.25, seed=seed)
-            got, shaken = measure(series), measure(shuffled(series, rng))
+            got, shaken = measure(series), measure(shuffled(series, seed=100 + seed))
             if got is not None and shaken is not None:
                 left.append(got)
                 right.append(shaken)
@@ -251,34 +171,19 @@ def find_folder(stem_set: str) -> Path | None:
     return None
 
 
-def shuffled(series: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """창 **순서만** 뒤섞는다 (D-0099 계열).
-
-    창 하나하나는 그대로이므로 크로마 분포·잡음·곡 고유 어휘가 전부 남고
-    **시간 구조만 죽는다.** 초과분만 화음 지속이다.
-    """
-    stacked = np.asarray(series, dtype=np.float64)
-    return stacked[rng.permutation(len(stacked))]
-
-
-def measure(series: np.ndarray) -> float | None:
-    return half_fall(curve(series), limit_spikiness(series))
-
-
 def report(folder: Path, stem_set: str, window_seconds: float, seed: int) -> int:
     songs = load_series(folder, stem_set)
     if not songs:
         print(f"{folder.name}에 {stem_set} 시계열이 없다", file=sys.stderr)
         return 1
 
-    rng = np.random.default_rng(seed)
     real: list[float] = []
     null: list[float] = []
     rates: list[float] = []
     missing = 0
     for _, series in songs:
         got = measure(series)
-        shaken = measure(shuffled(series, rng))
+        shaken = measure(shuffled(series, seed))
         if got is None or shaken is None:
             missing += 1
             continue

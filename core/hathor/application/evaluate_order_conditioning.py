@@ -66,12 +66,21 @@ class OrderReference:
     source_key: str
     prior: tuple[float, ...]
     transition: tuple[tuple[float, ...], ...]
+    hold: float = 0.0
+    """그 곡의 화음 유지 확률 (O-37). `chord_rhythm.hold_probability`가 낸다.
+
+    **곡마다 다르다.** 코퍼스 전체에 하나를 고르는 것이 아니므로 D-0109가 기각한
+    손잡이가 아니다 — `prior`·`transition`과 같이 **참조곡에서 나온 조건**이다.
+    기본값 `0.0`은 현행과 완전히 같다.
+    """
 
     def __post_init__(self) -> None:
         if len(self.prior) != DEGREE_COUNT:
             raise ValueError(f"도수 사전은 12차원이어야 한다: {len(self.prior)}")
         if len(self.transition) != DEGREE_COUNT:
             raise ValueError(f"전이 사전은 12x12여야 한다: {len(self.transition)}")
+        if not 0.0 <= self.hold < 1.0:
+            raise ValueError(f"유지 확률은 [0, 1)이어야 한다: {self.hold}")
 
 
 def restrict_transition(transition: Sequence[Sequence[float]], roots: Sequence[int]) -> Grid:
@@ -147,8 +156,16 @@ class EvaluateOrderConditioning:
         *,
         use_transition: bool = True,
         self_transition: float = 0.0,
+        use_hold: bool = False,
     ) -> OrderReport:
+        """`use_hold`를 켜면 **곡마다 그 곡의 `hold`를 쓴다** (O-37).
+
+        `self_transition`은 그대로 두면 O-38의 진단 훑기다. 둘은 배타적이다 —
+        섞으면 어느 쪽이 값을 움직였는지 못 가린다.
+        """
         settings = self._condition
+        if use_hold and self_transition > 0.0:
+            raise ValueError("use_hold와 self_transition을 같이 쓰지 않는다")
         if len(references) < 2:
             raise ValueError(f"참조곡이 2개 이상 필요하다: {len(references)}")
         roots = vocabulary_roots(settings.key.mode, settings.vocabulary)
@@ -178,7 +195,7 @@ class EvaluateOrderConditioning:
                     prior=item.prior,
                     vocabulary=settings.vocabulary,
                     transition=item.transition if use_transition else None,
-                    self_transition=self_transition,
+                    self_transition=item.hold if use_hold else self_transition,
                 ).degrees
                 observed = bigram_matrix(
                     degrees, settings.key.mode, settings.vocabulary, drop_diagonal=True
