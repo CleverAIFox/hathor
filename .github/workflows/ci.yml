@@ -37,6 +37,10 @@ jobs:
         working-directory: .
         run: python3 tools/check_issue_mentions.py --check
 
+      - name: Doc layout
+        working-directory: .
+        run: python3 tools/check_doc_style.py --check
+
       - name: Secret scan
         working-directory: .
         run: python3 tools/check_secrets.py --check
