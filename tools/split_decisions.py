@@ -50,8 +50,9 @@ from sync_decision_index import (
 
 HEADER = """# 결정 기록 {first} ~ {last} (GR-0.2)
 
-> **문서 4종** (D-0043) — 규약 `CONTRIBUTING.md` · 기획 `docs/DESIGN.md` ·
-> 결정 `docs/DECISIONS.md` · 진입 `README.md`. **현재 문서: 결정.**
+> **문서 5종** (D-0043 · D-0130) — 미래 `docs/PLAN.md` · 현재 `docs/DESIGN.md` ·
+> 과거 `docs/DECISIONS.md` · 규약 `CONTRIBUTING.md` · 진입 `README.md`.
+> **현재 문서: 과거.**
 
 형식: 배경 / 후보 / 선택 / 근거 / 결과
 
@@ -60,8 +61,9 @@ HEADER = """# 결정 기록 {first} ~ {last} (GR-0.2)
 
 STUB = """# 결정 기록 (GR-0.2)
 
-> **문서 4종** (D-0043) — 규약 `CONTRIBUTING.md` · 기획 `docs/DESIGN.md` ·
-> 결정 `docs/DECISIONS.md` · 진입 `README.md`. **현재 문서: 결정.**
+> **문서 5종** (D-0043 · D-0130) — 미래 `docs/PLAN.md` · 현재 `docs/DESIGN.md` ·
+> 과거 `docs/DECISIONS.md` · 규약 `CONTRIBUTING.md` · 진입 `README.md`.
+> **현재 문서: 과거.**
 
 형식: 배경 / 후보 / 선택 / 근거 / 결과
 

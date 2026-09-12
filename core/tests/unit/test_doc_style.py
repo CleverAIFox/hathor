@@ -157,3 +157,51 @@ def test_폐기_문서는_안_본다():
 def test_백틱_안의_예시는_경어체가_아니다():
     """**이 검사를 설명하는 기록이 `합니다`를 예로 든다.**"""
     assert _layout("`합니다`·`입니다`는 잡는다.\n") == []
+
+
+# ------------------------------------------------------------------ 여섯 번째 문서 (D-0130)
+
+
+def test_축_셋만_허용한다():
+    """**미래·현재·과거 세 시제가 다 찼다.** 넷째 축은 만들지 않는다."""
+    assert set(CHECKER.AXES) == {"PLAN.md", "DESIGN.md", "DECISIONS.md"}
+
+
+def test_여섯_번째_문서를_잡는다(tmp_path, monkeypatch):
+    """새 문서를 만들면 **어느 시제인지 모르는 항목**이 생긴다."""
+    base = tmp_path / "docs"
+    base.mkdir()
+    (base / "NOTES.md").write_text("# 메모\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    problems = CHECKER.check_sixth_document()
+    assert len(problems) == 1
+    assert "여섯 번째 문서" in problems[0]
+
+
+def test_하위_폴더까지_본다(tmp_path, monkeypatch):
+    """`docs/_patch/` 같은 자리가 **두 검사 사이로 빠져나가는 것**을 막는다."""
+    nested = tmp_path / "docs" / "_patch"
+    nested.mkdir(parents=True)
+    (nested / "copy.md").write_text("# 사본\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    assert CHECKER.check_sixth_document()
+
+
+def test_조각과_폐기는_통과한다(tmp_path, monkeypatch):
+    for name in ("decisions/D-0001-0050.md", "archive/MASTER-draft.md"):
+        path = tmp_path / "docs" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# x\n", encoding="utf-8")
+    for name in CHECKER.AXES:
+        (tmp_path / "docs" / name).write_text("# x\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    assert CHECKER.check_sixth_document() == []
+
+
+def test_저장소에_여섯_번째가_없다():
+    assert CHECKER.check_sixth_document() == []
+
+
+def test_미래_축을_검사한다():
+    """PLAN이 검사 대상에 있어야 **새 축만 규약 밖에서 자라는 일**이 없다."""
+    assert "docs/PLAN.md" in CHECKER.DOCUMENTS

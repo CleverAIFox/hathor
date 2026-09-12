@@ -73,6 +73,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DECISIONS = ROOT / "docs" / "DECISIONS.md"
 DECISIONS_DIR = ROOT / "docs" / "decisions"
 DESIGN = ROOT / "docs" / "DESIGN.md"
+PLAN = ROOT / "docs" / "PLAN.md"
 
 PART_NAME = "D-{low:04d}-{high:04d}.md"
 PART_FILE = re.compile(r"^D-(\d{4})-(\d{4})\.md$")
@@ -322,7 +323,7 @@ def check_split(parts: list[tuple[str, str]]) -> list[str]:
 
 
 def check_text_style(paths: dict[str, str]) -> list[str]:
-    """줄 길이·코드 펜스 태그·표 열 수. 문서 4종 전부에 건다 (D-0081)."""
+    """줄 길이·코드 펜스 태그·표 열 수. 문서 다섯 전부에 건다 (D-0081 · D-0130)."""
     problems: list[str] = []
     for name, text in paths.items():
         lines = text.split("\n")
@@ -388,8 +389,12 @@ def _section(text: str, begin: str, end: str) -> str | None:
     return None if start < 0 or stop < start else text[start:stop]
 
 
-def check_open_issues(design_text: str) -> list[str]:
-    """미해결표가 중복 없이 정렬돼 있고 닫힌 항목이 섞여 있지 않은가 (D-0080).
+def check_open_issues(issues_text: str) -> list[str]:
+    """미해결표가 중복 없이 정렬돼 있고 닫힌 항목이 섞여 있지 않은가 (D-0080 · D-0130).
+
+    `issues_text`는 **`PLAN.md`와 `DESIGN.md`를 이어 붙인 것**이다. 열린 질문은 미래라
+    PLAN이, 닫힌 질문의 한 줄 색인은 현재 상태라 DESIGN이 든다. **두 표가 서로 다른
+    문서에 있어도 `O-32`(D-0113)처럼 양쪽에 걸치는 것을 잡아야 한다** — 실제로 걸쳐 있었다.
 
     **닫힌 항목을 지우지 않는다.** DESIGN이 "해소되면 결정 기록으로 옮기고 여기서
     지운다"고 적어 두었으나, 지우면 "이건 왜 안 하기로 했지"를 다시 묻게 된다 —
@@ -397,10 +402,10 @@ def check_open_issues(design_text: str) -> list[str]:
     남긴다.** 규약을 어기는 대신 규약을 고친다.
     """
     problems: list[str] = []
-    active = _section(design_text, OPEN_BEGIN, OPEN_END)
-    closed = _section(design_text, CLOSED_BEGIN, CLOSED_END)
+    active = _section(issues_text, OPEN_BEGIN, OPEN_END)
+    closed = _section(issues_text, CLOSED_BEGIN, CLOSED_END)
     if active is None or closed is None:
-        return [f"DESIGN에 {OPEN_BEGIN}/{CLOSED_BEGIN} 표식이 없다"]
+        return [f"PLAN에 {OPEN_BEGIN}, DESIGN에 {CLOSED_BEGIN} 표식이 있어야 한다"]
 
     for label, block in (("활성", active), ("닫힘", closed)):
         rows = ISSUE_ROW.findall(block)
@@ -414,7 +419,8 @@ def check_open_issues(design_text: str) -> list[str]:
         problems.append(f"{name}이 활성표와 닫힘표에 동시에 있다")
 
     for row in active.splitlines():
-        if row.startswith("| O-") and ("~~" in row or "**해결" in row or "**닫힘" in row):
+        title = row.split("|")[2] if row.count("|") >= 3 else ""
+        if row.startswith("| O-") and ("~~" in row or "해결" in title or "닫힘" in title):
             problems.append(
                 f"활성표의 {ISSUE_ROW.findall(row + chr(10))}이 닫힘 표시를 달고 있다. "
                 "닫힘 절로 옮긴다"
@@ -461,7 +467,7 @@ def check_stray_records(documents: dict[str, str]) -> list[str]:
     return problems
 
 
-def check_issue_references(design_text: str, records: list[Record]) -> list[str]:
+def check_issue_references(issues_text: str, records: list[Record]) -> list[str]:
     """미해결표가 가리키는 결정 번호가 실재하는가 (D-0115).
 
     `check_references`는 **기록 본문 안**만 본다. 미해결표는 DESIGN에 있어 그 밖이고,
@@ -471,7 +477,7 @@ def check_issue_references(design_text: str, records: list[Record]) -> list[str]
     known = {record.number for record in records}
     problems: list[str] = []
     for label, begin, end in (("활성", OPEN_BEGIN, OPEN_END), ("닫힘", CLOSED_BEGIN, CLOSED_END)):
-        block = _section(design_text, begin, end)
+        block = _section(issues_text, begin, end)
         if block is None:
             continue
         for row in block.splitlines():
@@ -494,8 +500,10 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
     못하게 되면 나눈 대가로 검사를 잃는 것이다.
     """
     records = scan_records(merge_parts(parts))
+    issues = PLAN.read_text(encoding="utf-8") + "\n" + design_text
     documents = {
         "DESIGN": design_text,
+        "PLAN": PLAN.read_text(encoding="utf-8"),
         "CONTRIBUTING": (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"),
         "README": (ROOT / "README.md").read_text(encoding="utf-8"),
         "DECISIONS": DECISIONS.read_text(encoding="utf-8"),
@@ -506,8 +514,8 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_references(records),
         *check_sections(records),
         *check_supersession(records),
-        *check_open_issues(design_text),
-        *check_issue_references(design_text, records),
+        *check_open_issues(issues),
+        *check_issue_references(issues, records),
         *check_stray_records(documents),
         *check_split(parts),
         *check_layout(parts),

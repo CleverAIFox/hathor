@@ -29,6 +29,7 @@
 4. 경어체 금지 — `-ㅂ니다` · `-습니다` · `해요` · `했어요`
 5. 제목 계층 건너뛰기 금지 (`##` 다음에 `####`)
 6. 결정 기록에 `- **배경**`
+7. **여섯 번째 문서 금지** — `docs/`에 축 셋 말고 다른 문서가 생기지 않는가
 
 **넷은 이미 위반 0이었다.** 규칙을 새로 만든 것이 아니라 **지켜지고 있던 것을
 적어 둔 것이다** — 그래서 다음 세션이 어길 때만 빨개진다.
@@ -48,7 +49,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-DOCUMENTS = ("README.md", "CONTRIBUTING.md", "docs/DESIGN.md", "docs/DECISIONS.md")
+DOCUMENTS = (
+    "README.md",
+    "CONTRIBUTING.md",
+    "docs/PLAN.md",
+    "docs/DESIGN.md",
+    "docs/DECISIONS.md",
+)
 DOCUMENT_TREES = ("docs/decisions",)
 """`docs/archive`는 안 본다. **폐기 문서이며 고칠 것이 아니다** (D-0042)."""
 
@@ -157,8 +164,44 @@ def check_records(name: str, text: str) -> list[str]:
     return problems
 
 
-def check() -> list[str]:
+AXES = ("PLAN.md", "DESIGN.md", "DECISIONS.md")
+"""`docs/` 바로 아래에 허용되는 문서. **미래·현재·과거 세 시제가 다 찼다** (D-0130)."""
+
+ALLOWED_TREES = ("decisions", "archive")
+"""하위 폴더. `decisions/`는 조각(O-30 · D-0080)이고 `archive/`는 폐기 문서다 (D-0042).
+**`archive/`는 PLAN §3이 든 빚이다** — 지우면 이 목록에서도 뺀다."""
+
+
+def check_sixth_document() -> list[str]:
+    """축 셋 말고 다른 문서가 `docs/`에 생겼는가 (D-0130).
+
+    **한 항목은 한 문서에만 산다.** 넷째 축을 만들면 그 순간 어느 시제인지 모르는
+    항목이 생기고, 같은 항목이 두 곳에 살기 시작한다. 새 문서를 만들고 싶으면
+    **그것은 셋 중 하나의 절이다.**
+
+    하위 폴더까지 본다. `docs/_patch/` 같은 자리가 두 검사 사이로 빠져나가는 것이
+    이 검사가 막는 일이다.
+    """
+    base = ROOT / "docs"
+    if not base.is_dir():
+        return []
     problems: list[str] = []
+    for path in sorted(base.rglob("*.md")):
+        parts = path.relative_to(base).parts
+        if len(parts) == 1 and parts[0] in AXES:
+            continue
+        if len(parts) > 1 and parts[0] in ALLOWED_TREES:
+            continue
+        name = path.relative_to(ROOT).as_posix()
+        problems.append(
+            f"{name}: 여섯 번째 문서다. 미래(PLAN) · 현재(DESIGN) · 과거(DECISIONS) 중 "
+            "어디의 절인지 정해 옮긴다"
+        )
+    return problems
+
+
+def check() -> list[str]:
+    problems: list[str] = list(check_sixth_document())
     for path in targets():
         name = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
