@@ -94,7 +94,7 @@ def envelope(samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds:
     return np.concatenate(([0.0], rising.sum(axis=1)))
 
 
-def _normalise(envelope: Sequence[float]) -> Envelope:
+def _normalise(envelope: Sequence[float] | Envelope) -> Envelope:
     values = np.asarray(envelope, dtype=np.float64)
     if values.ndim != 1:
         raise ValueError("온셋 포락선은 1차원이어야 한다")
@@ -124,7 +124,7 @@ class Beat:
         return 60.0 / self.period_seconds
 
 
-def beat_period(envelope: Sequence[float], hop_seconds: float) -> Beat | None:
+def beat_period(envelope: Sequence[float] | Envelope, hop_seconds: float) -> Beat | None:
     """박 추정. **못 고르면 `None`이다.**"""
     if hop_seconds <= 0.0:
         raise ValueError("홉 길이는 양수여야 한다")
@@ -185,7 +185,11 @@ def tempo_bpm(period_seconds: float) -> float:
 
 
 def phase_profile(
-    envelope: Sequence[float], period_seconds: float, hop_seconds: float, *, bins: int = PHASE_BINS
+    envelope: Sequence[float] | Envelope,
+    period_seconds: float,
+    hop_seconds: float,
+    *,
+    bins: int = PHASE_BINS,
 ) -> tuple[float, ...]:
     """박 안 어디에 에너지가 실리는가. 합이 1이다.
 

@@ -97,7 +97,8 @@ def main() -> int:
         print("=" * 70)
         print(key)
         print(
-            f"  문자 {facts['chars']} · 줄 {facts['lines']} · 빈줄블록 {facts['blank_line_blocks']} "
+            f"  문자 {facts['chars']} · 줄 {facts['lines']} "
+            f"· 빈줄블록 {facts['blank_line_blocks']} "
             f"· 구조표기줄 {facts['bracketed_lines']} · 최장줄 {facts['longest_line']} "
             f"· 구간 {facts['segments']} (기준 최소 {MIN_SEGMENT_CHARS}자)"
         )

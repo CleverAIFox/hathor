@@ -108,6 +108,7 @@ def load_parts() -> list[tuple[str, str]]:
             return [(path.stem, path.read_text(encoding="utf-8")) for path in parts]
     return [("DECISIONS", DECISIONS.read_text(encoding="utf-8"))]
 
+
 HEADING = re.compile(r"^## (D-\d{4})\. (.+?)\s*$", re.MULTILINE)
 REFERENCE = re.compile(r"D-(\d{4})")
 SUPERSEDES = re.compile(r"^- \*\*갱신\*\*: (D-\d{4})", re.MULTILINE)
@@ -302,9 +303,7 @@ def check_split(parts: list[tuple[str, str]]) -> list[str]:
         records = scan_records(text)
         lines = text.count("\n") + 1
         if lines > SPLIT_LINE_LIMIT:
-            problems.append(
-                f"{name}: {lines}줄로 상한 {SPLIT_LINE_LIMIT}줄을 넘는다. make split"
-            )
+            problems.append(f"{name}: {lines}줄로 상한 {SPLIT_LINE_LIMIT}줄을 넘는다. make split")
         if len(records) > SPLIT_RECORD_LIMIT:
             problems.append(
                 f"{name}: {len(records)}건으로 상한 {SPLIT_RECORD_LIMIT}건을 넘는다. make split"

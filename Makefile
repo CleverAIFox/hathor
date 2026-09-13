@@ -30,9 +30,10 @@ resize:        ## 래칫을 내린다. 올리려면 GROW=1 + 결정 기록 (D-01
 split:         ## 결정 기록을 번호대별로 다시 나눈다. make docs가 빨개지면 (O-30)
 	python3 tools/split_decisions.py
 lint:
-	cd core && uv run ruff check . && uv run ruff format --check .
+	cd core && uv run ruff check . ../tools && uv run ruff format --check . ../tools
 type:
 	cd core && uv run mypy hathor --strict
+	python3 tools/check_test_types.py --check
 arch:
 	cd core && uv run lint-imports
 test:

@@ -21,7 +21,7 @@ SEPARATORS = {
     "가운뎃점": r"·",
     "and 영문": r"(?i)\band\b",
     "와과": r"(와|과)\s",
-    "괄호": r"[(（]",
+    "괄호": r"[(（]",  # noqa: RUF001 — 전각 괄호는 한국 음원 태그에 실제로 쓰인다
     "대괄호": r"\[",
 }
 
@@ -67,7 +67,7 @@ def analyze(records: list[dict[str, object]]) -> None:
 
     print()
     print("=== 괄호 내용 표본 (최대 25) ===")
-    paren = re.compile(r"[(（]([^)）]*)[)）]")
+    paren = re.compile(r"[(（]([^)）]*)[)）]")  # noqa: RUF001 — 전각 괄호는 한국 음원 태그에 실제로 쓰인다
     contents: Counter[str] = Counter()
     for artist in artists:
         for match in paren.findall(artist):
@@ -127,7 +127,7 @@ def check_bracket_script(records: list[dict[str, object]]) -> None:
     """
     print()
     print("[괄호 표기 체계 대조]")
-    pattern = re.compile(r"^([^(（]+)[(（]([^)）]+)[)）]\s*$")
+    pattern = re.compile(r"^([^(（]+)[(（]([^)）]+)[)）]\s*$")  # noqa: RUF001 — 전각 괄호는 한국 음원 태그에 실제로 쓰인다
     seen = {str(r["tags"]["artist"]).strip() for r in records}  # type: ignore[index]
     for raw in sorted(seen):
         matched = pattern.match(raw)

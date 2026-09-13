@@ -139,6 +139,7 @@ def _polite(line: str) -> bool:
                 return True
     return False
 
+
 FENCE = re.compile(r"^\s*```")
 HEADING = re.compile(r"^(#{1,6}) ")
 RECORD = re.compile(r"^## (D-\d{4})\.", re.M)
@@ -255,9 +256,9 @@ def _field(body: str, name: str) -> str:
 def check_records(name: str, text: str) -> list[str]:
     """결정 기록의 필수 절.
 
-    `강제자`는 **D-0131 이후분에만 요구한다.** 앞의 130건을 고치는 것은 소급 수정이며
-    D-0081이 막는다. **무엇을 요구하는지는 지금 정하고, 적용은 앞으로부터다.**
- **`- **결과**`는 안 본다** — 30건이 없고 못 고친다 (D-0081)."""
+       `강제자`는 **D-0131 이후분에만 요구한다.** 앞의 130건을 고치는 것은 소급 수정이며
+       D-0081이 막는다. **무엇을 요구하는지는 지금 정하고, 적용은 앞으로부터다.**
+    **`- **결과**`는 안 본다** — 30건이 없고 못 고친다 (D-0081)."""
     problems: list[str] = []
     parts = RECORD.split(text)
     for index in range(1, len(parts), 2):
@@ -277,8 +278,7 @@ def check_records(name: str, text: str) -> list[str]:
         for raw in ENFORCER_PATH.findall(_field(body, "강제자")):
             if not (ROOT / raw).exists():
                 problems.append(
-                    f"{name}: {number}의 강제자 `{raw}`가 없다. "
-                    "지웠거나 옮겼으면 이 줄을 고친다"
+                    f"{name}: {number}의 강제자 `{raw}`가 없다. 지웠거나 옮겼으면 이 줄을 고친다"
                 )
     return problems
 

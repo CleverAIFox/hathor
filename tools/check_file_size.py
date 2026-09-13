@@ -119,13 +119,9 @@ def check(sizes: dict[str, int]) -> list[str]:
                 )
             continue
         if lines > pinned:
-            problems.append(
-                f"{name}: {lines}줄로 못 박은 {pinned}줄보다 늘었다. 되돌리거나 쪼갠다"
-            )
+            problems.append(f"{name}: {lines}줄로 못 박은 {pinned}줄보다 늘었다. 되돌리거나 쪼갠다")
         elif lines < pinned:
-            problems.append(
-                f"{name}: {lines}줄로 {pinned}줄에서 줄었다. --update로 래칫을 내린다"
-            )
+            problems.append(f"{name}: {lines}줄로 {pinned}줄에서 줄었다. --update로 래칫을 내린다")
     return problems
 
 
@@ -166,9 +162,7 @@ def update(allow_growth: bool) -> int:
     if found is None:
         print("예외표 표식을 찾지 못했다", file=sys.stderr)
         return 2
-    SELF.write_text(
-        text[: found.start(2)] + render(sizes) + text[found.end(2) :], encoding="utf-8"
-    )
+    SELF.write_text(text[: found.start(2)] + render(sizes) + text[found.end(2) :], encoding="utf-8")
     print(f"예외표 갱신 ({len(render(sizes).splitlines())}건)")
     return 0
 

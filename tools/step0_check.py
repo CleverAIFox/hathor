@@ -18,6 +18,7 @@ HATHOR — STEP 0 환경 점검
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
@@ -73,13 +74,13 @@ def check_system() -> dict:
     }
 
     try:
-        import psutil  # noqa
+        import psutil
 
         info["ram_gb"] = round(psutil.virtual_memory().total / 1024**3, 1)
     except ImportError:
         info["ram_gb"] = None
 
-    total, used, free = shutil.disk_usage(Path.home())
+    total, _used, free = shutil.disk_usage(Path.home())
     info["disk_free_gb"] = round(free / 1024**3, 1)
     info["disk_total_gb"] = round(total / 1024**3, 1)
 
@@ -101,8 +102,13 @@ def check_gpu() -> dict:
     hr("2. GPU / VRAM")
     info: dict = {"available": False, "devices": []}
 
-    out = run(["nvidia-smi", "--query-gpu=name,memory.total,driver_version",
-               "--format=csv,noheader,nounits"])
+    out = run(
+        [
+            "nvidia-smi",
+            "--query-gpu=name,memory.total,driver_version",
+            "--format=csv,noheader,nounits",
+        ]
+    )
     if not out:
         print("  NVIDIA GPU를 찾지 못했다.")
         print("  → GPU 없이도 인제스트·정규화·EDA·DB 작업은 전부 가능하다.")
@@ -159,9 +165,11 @@ def check_python_env() -> dict:
         info["torch"] = None
         print("  PyTorch     : 미설치 (지금은 필요 없다. 나중에 설치한다)")
 
-    for mod, label in [("mutagen", "mutagen (태그 읽기)"),
-                       ("numpy", "numpy"),
-                       ("psutil", "psutil")]:
+    for mod, label in [
+        ("mutagen", "mutagen (태그 읽기)"),
+        ("numpy", "numpy"),
+        ("psutil", "psutil"),
+    ]:
         try:
             __import__(mod)
             print(f"  {label:22}: 설치됨")
@@ -170,8 +178,10 @@ def check_python_env() -> dict:
             print(f"  {label:22}: 미설치")
             info[mod] = False
 
-    for tool, label in [("ffmpeg", "ffmpeg (오디오 디코딩)"),
-                        ("fpcalc", "fpcalc (Chromaprint 지문)")]:
+    for tool, label in [
+        ("ffmpeg", "ffmpeg (오디오 디코딩)"),
+        ("fpcalc", "fpcalc (Chromaprint 지문)"),
+    ]:
         found = shutil.which(tool)
         print(f"  {label:22}: {'설치됨' if found else '미설치'}")
         info[tool] = bool(found)
@@ -185,7 +195,6 @@ def scan_library(root: Path) -> dict:
 
     try:
         import mutagen
-        from mutagen.id3 import ID3
     except ImportError:
         print("  mutagen이 없어 태그를 읽을 수 없다.")
         print("  → pip install mutagen  실행 후 다시 시도한다.")
@@ -210,8 +219,8 @@ def scan_library(root: Path) -> dict:
     duration_s = 0.0
     size_bytes = 0
 
-    has_lyrics_sync = 0      # SYLT — 시간 동기 가사
-    has_lyrics_unsync = 0    # USLT / LYRICS — 텍스트 가사
+    has_lyrics_sync = 0  # SYLT — 시간 동기 가사
+    has_lyrics_unsync = 0  # USLT / LYRICS — 텍스트 가사
     has_isrc = 0
     has_title = 0
     has_artist = 0
@@ -223,10 +232,8 @@ def scan_library(root: Path) -> dict:
         if i % 200 == 0:
             print(f"    {i}/{total} …")
         fmt[path.suffix.lower()] += 1
-        try:
+        with contextlib.suppress(OSError):
             size_bytes += path.stat().st_size
-        except OSError:
-            pass
 
         try:
             audio = mutagen.File(path)
@@ -252,24 +259,25 @@ def scan_library(root: Path) -> dict:
             continue
 
         keys = set()
-        try:
-            keys = {str(k).upper() for k in tags.keys()}
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            keys = {str(k).upper() for k in tags}
 
         # 가사
         if any(k.startswith("SYLT") for k in keys):
             has_lyrics_sync += 1
-        elif any(k.startswith("USLT") for k in keys) or "LYRICS" in keys or "\xa9LYR" in keys:
-            has_lyrics_unsync += 1
-        elif "UNSYNCEDLYRICS" in keys:
+        elif (
+            any(k.startswith("USLT") for k in keys)
+            or "LYRICS" in keys
+            or "\xa9LYR" in keys
+            or "UNSYNCEDLYRICS" in keys
+        ):
             has_lyrics_unsync += 1
 
         # ISRC
         if any("ISRC" in k for k in keys):
             has_isrc += 1
 
-        def present(*names: str) -> bool:
+        def present(*names: str, keys: set[str] = keys, tags: object = tags) -> bool:
             for n in names:
                 if n in keys:
                     return True
@@ -376,8 +384,7 @@ def main() -> None:
         print('  사용법: python step0_check.py "D:/Music"')
         report["library"] = {"skipped": True}
 
-    REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
+    REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     hr("완료")
     print(f"  결과 파일: {REPORT_PATH.resolve()}")

@@ -1,4 +1,5 @@
 """일회성 조사: ID3 프레임 전수 히스토그램. 프로덕션 코드 아님."""
+
 from __future__ import annotations
 
 import os

@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
-from hathor.domain.services.artist_name_parser import parse_artist_field  # noqa: E402
+from hathor.domain.services.artist_name_parser import parse_artist_field
 
 BASE = "https://musicbrainz.org/ws/2"
 AGENT = "Hathor/0.1 ( https://github.com/CleverAIFox/hathor )"
@@ -59,12 +59,12 @@ def strip_annotations(title: str) -> str:
     buf: list[str] = []
     depth = 0
     for char in title:
-        if char in "(（":
+        if char in "(（":  # noqa: RUF001 — 전각 괄호는 한국 음원 태그에 실제로 쓰인다
             depth += 1
             if depth == 1:
                 buf = []
                 continue
-        if char in ")）" and depth > 0:
+        if char in ")）" and depth > 0:  # noqa: RUF001 — 전각 괄호는 한국 음원 태그에 실제로 쓰인다
             depth -= 1
             if depth == 0:
                 inner = "".join(buf)

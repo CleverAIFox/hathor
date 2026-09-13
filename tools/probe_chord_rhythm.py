@@ -58,7 +58,7 @@ DEGREE_COUNT = 12
 
 sys.path.insert(0, str(ROOT / "core"))
 
-from hathor.domain.services.chord_rhythm import (
+from hathor.domain.services.chord_rhythm import (  # noqa: E402 — sys.path 조작 뒤라야 한다
     BUNDLES,
     curve,
     half_fall,
