@@ -89,28 +89,31 @@ def diagnose(song: tuple[str, np.ndarray, float]) -> int:
     above = int((centred > peak * 0.3).sum())
     print(f"  최대의 30%를 넘는 칸 {above} ({above / envelope.size:.1%})")
 
-    found_peaks = peaks(envelope)
-    print("\n봉우리")
-    print(f"  {len(found_peaks)}개 ({len(found_peaks) / envelope.size:.1%})")
-    if len(found_peaks) > 1:
-        gaps = np.diff([index for index, _ in found_peaks])
-        print(
-            f"  간격(칸) 중앙 {float(np.median(gaps)):.1f}"
-            f" · 5% {float(np.quantile(gaps, 0.05)):.1f}"
-        )
-
     whole = beat_period(envelope, hop)
     if whole is not None:
         print(f"\n곡 전체 · {whole.tempo_bpm:.2f}BPM · 격차 {whole.margin:.3f}")
 
-    if whole is not None and len(found_peaks) > 1:
+    if whole is not None:
         beat_frames = whole.period_seconds / hop
-        gaps = np.diff([index for index, _ in found_peaks])
+        apart = max(1, int(beat_frames / PHASE_BINS / 2))
+        print(f"\n봉우리 · 박 하나가 {beat_frames:.1f}칸 · 한 칸 {apart}칸")
+        for label, picked in (
+            ("이웃만", peaks(envelope)),
+            ("해상도 한 칸", peaks(envelope, apart=apart)),
+        ):
+            share = len(picked) / envelope.size
+            gap = float(np.median(np.diff([i for i, _ in picked]))) if len(picked) > 1 else 0.0
+            times = beat_frames / gap if gap else 0.0
+            print(
+                f"  {label:<12}{len(picked):>6}개 ({share:5.1%})"
+                f" · 간격 중앙 {gap:5.1f}칸 · 박의 {times:5.1f}배"
+            )
+        print("  **`phase_profile`이 쓰는 것은 아래 줄이다** (D-0157)")
+        print("\n이 곡의 박 안 위상")
         print(
-            f"  박 하나가 {beat_frames:.1f}칸 · 봉우리 간격 중앙의 "
-            f"{beat_frames / max(float(np.median(gaps)), 1e-9):.1f}배"
+            "  "
+            + " · ".join(f"{v:.3f}" for v in phase_profile(envelope, whole.period_seconds, hop))
         )
-        print("  **박보다 훨씬 촘촘하면 봉우리가 발음이 아니다** (D-0156)")
 
     span = int(WINDOW_SECONDS / hop)
     found: list[float] = []
