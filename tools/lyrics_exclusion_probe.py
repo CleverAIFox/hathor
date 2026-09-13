@@ -39,6 +39,9 @@ from hathor.domain.services.lyrics_segmentation import (
 )
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
 
+ROOT = Path(__file__).resolve().parents[1]
+"""저장소 루트. 경로 인자를 여기 기준으로 푼다 (D-0069 · D-0153)."""
+
 
 def diagnose(text: str) -> dict[str, object]:
     """분할이 실패한 지점을 단계별로 짚는다. `split_segments`의 순서를 따른다."""
@@ -68,9 +71,18 @@ def verdict(facts: dict[str, object]) -> str:
     return f"원인 불명 — 줄 {lines}개인데 구간이 {facts['segments']}개다. 원문을 직접 본다"
 
 
+def _resolve(value: str) -> Path:
+    """상대 경로는 **저장소 루트 기준**이다 (D-0069)."""
+    path = Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="가사 제외 곡 진단")
-    parser.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
+    # **저장소 루트 기준으로 푼다** (D-0069 · D-0153).
+    parser.add_argument(
+        "--out", type=_resolve, default=ROOT / "var" / "ingest", help="스캔 산출물 루트"
+    )
     parser.add_argument("--show", type=int, default=300, help="원문 앞부분을 몇 자 보일지")
     args = parser.parse_args()
 

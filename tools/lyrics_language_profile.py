@@ -33,6 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 from hathor.domain.services.lyrics_segmentation import split_segments
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
 
+ROOT = Path(__file__).resolve().parents[1]
+"""저장소 루트. 경로 인자를 여기 기준으로 푼다 (D-0069 · D-0153)."""
+
 
 def classify(char: str) -> str | None:
     """표기 문자 하나를 언어 계열로 분류한다. 비표기 문자는 None."""
@@ -51,9 +54,18 @@ def classify(char: str) -> str | None:
     return "기타"
 
 
+def _resolve(value: str) -> Path:
+    """상대 경로는 **저장소 루트 기준**이다 (D-0069)."""
+    path = Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="가사 언어 구성 실측")
-    parser.add_argument("--out", default="var/ingest", help="스캔 산출물 루트")
+    # **저장소 루트 기준으로 푼다** (D-0069 · D-0153).
+    parser.add_argument(
+        "--out", type=_resolve, default=ROOT / "var" / "ingest", help="스캔 산출물 루트"
+    )
     parser.add_argument(
         "--threshold",
         type=float,

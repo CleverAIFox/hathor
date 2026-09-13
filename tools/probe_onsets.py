@@ -43,6 +43,12 @@ from hathor.domain.services.onset import (  # noqa: E402 — sys.path 조작 뒤
 from hathor.infrastructure.onset_store import SUFFIX  # noqa: E402
 
 
+def _resolve(value: str) -> Path:
+    """상대 경로는 **저장소 루트 기준**이다 (D-0069)."""
+    path = Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
 def folders(out: Path) -> list[Path]:
     """`keys-*.onsets` 전부. **홉이 다른 폴더가 섞이면 안 된다** (D-0145)."""
     return sorted(out.glob(f"keys-*{SUFFIX}"))
@@ -75,13 +81,16 @@ def quantiles(values: list[float]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="박·온셋 실측 (D-0152)")
-    parser.add_argument("--out", type=Path, default=Path("var/ingest"), help="산출물 루트")
+    # **저장소 루트 기준으로 푼다** (D-0069 · D-0153). `cd core`에서 돌리므로 현재
+    # 디렉터리 기준으로 두면 `core/var/ingest`를 찾는다 — 실제로 그렇게 틀렸다.
+    parser.add_argument("--out", type=_resolve, default=ROOT / "var" / "ingest", help="산출물 루트")
     parser.add_argument("--limit", type=int, default=None, help="곡 수 상한")
     args = parser.parse_args()
 
     picked = folders(args.out)
     if not picked:
-        print(f"{args.out}에 포락선 폴더가 없다. `ingest onsets`를 먼저 돌린다.", file=sys.stderr)
+        print(f"{args.out.resolve()}에 포락선 폴더가 없다.", file=sys.stderr)
+        print("`ingest onsets`를 먼저 돌리거나 `--out`을 확인한다 (D-0153).", file=sys.stderr)
         return 1
     folder = picked[-1]
     songs = load(folder, args.limit)
@@ -89,7 +98,7 @@ def main() -> int:
         print(f"{folder}가 비어 있다.", file=sys.stderr)
         return 1
 
-    print(f"{folder.name} · {len(songs)}곡")
+    print(f"{folder} · {len(songs)}곡")
     tempos: list[float] = []
     margins: list[float] = []
     octaves: list[float] = []

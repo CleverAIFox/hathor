@@ -108,3 +108,32 @@ def test_현재_디렉터리를_바꿔도_기본값이_같다(monkeypatch, tmp_p
     first = build_parser().parse_args(["ingest", "keys"]).out
     monkeypatch.chdir(tmp_path)
     assert build_parser().parse_args(["ingest", "keys"]).out == first
+
+
+# ------------------------------------------------------------------ 도구 (D-0153)
+
+TOOLS = Path(__file__).resolve().parents[3] / "tools"
+
+PATH_ARGUMENTS = ("--out", "--root", "--series", "--priors", "--store")
+
+
+def test_도구의_경로_인자도_저장소_루트로_풀린다():
+    """**D-0069가 CLI에만 걸려 있었다** (D-0153).
+
+    `probe_onsets`가 `cd core`에서 돌자 `core/var/ingest`를 찾았다. 산출물은
+    저장소 루트 아래에 있으므로 **현재 디렉터리 기준으로 두면 조용히 빈손이 된다.**
+
+    argparse를 실행 없이 들여다볼 수 없어 **본문에 `ROOT`가 있는지로 본다.**
+    거칠지만 이 부류를 잡는다.
+    """
+    problems = []
+    for path in sorted(TOOLS.glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        takes_path = any(f'"{name}"' in text for name in PATH_ARGUMENTS)
+        if takes_path and "ROOT" not in text:
+            problems.append(path.name)
+    assert not problems, f"경로 인자를 받는데 저장소 루트를 안 쓴다: {problems}"
+
+
+def test_경로_인자_목록이_비어_있지_않다():
+    assert PATH_ARGUMENTS
