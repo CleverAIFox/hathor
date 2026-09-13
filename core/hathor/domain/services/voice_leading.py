@@ -80,6 +80,23 @@ def lead(
     return min(found, key=lambda option: (distance(before, option), option))
 
 
+def bass(pitches: Sequence[int], *, octave_base: int) -> int:
+    """화음의 근음을 아래 옥타브에 놓는다 (D-0139).
+
+    **근음은 전위와 무관하다.** `pitches`가 어떤 전위든 그 화음의 근음은 하나이며,
+    `chord_pitches`가 근음 위치로 낸 것을 `voicings`가 회전시킨 것이므로 **가장 낮은
+    음이 아니라 음이름 집합이 근음을 정한다.** 그래서 근음을 인자로 받는다.
+
+    자리는 `octave_base` 바로 아래 옥타브다. **새 값이 아니다** — 화음이 쓰는 것을
+    한 옥타브 내린 것뿐이고, 베이스가 화음과 겹치면 베이스가 아니다.
+    """
+    if not pitches:
+        raise ValueError("빈 화음은 근음이 없다")
+    root = min(pitches) % OCTAVE
+    low = octave_base - OCTAVE
+    return low + (root - low % OCTAVE) % OCTAVE
+
+
 def parallel_fifths(before: Sequence[int], after: Sequence[int]) -> int:
     """두 성부가 5도를 유지한 채 같이 움직인 횟수 (O-42).
 

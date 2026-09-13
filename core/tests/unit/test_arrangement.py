@@ -25,15 +25,40 @@ def pattern(text: str) -> StructurePattern:
     )
 
 
-def test_every_bar_gets_a_triad():
+def test_모든_마디가_소리를_갖는다():
+    """**빈 마디가 있으면 안 된다.**
+
+    노트 수로 세던 것을 마디로 바꿨다 (D-0138 · D-0139). 같은 도수가 이어지면 하나로
+    잇고 베이스가 붙었으므로 **노트 수는 더 이상 마디 수의 배수가 아니다.** 지키려는
+    것은 마디가 빈 자리 없이 덮인다는 것이다.
+    """
     notes = arrange(pattern("URUR"), PROGRESSION)
-    assert len(notes) == 4 * BARS_PER_SECTION * 3
+    covered = set()
+    for note in notes:
+        for bar in range(note.start_tick // TICKS_PER_BAR, note.end_tick // TICKS_PER_BAR):
+            covered.add(bar)
+    assert covered == set(range(4 * BARS_PER_SECTION))
 
 
-def test_bars_are_laid_out_without_gaps():
+def test_화음마다_네_성부다():
+    """베이스 하나에 3화음 셋 (D-0139)."""
+    notes = arrange(pattern("URUR"), PROGRESSION)
+    starts = {note.start_tick for note in notes}
+    assert all(sum(1 for n in notes if n.start_tick == tick) == 4 for tick in starts)
+
+
+def test_소리가_끊기지_않는다():
+    """발음 자리가 마디 격자 위에 있고 **틈이 없다.**
+
+    마디마다 하나였던 것을 격자 위 여부로 바꿨다 (D-0138). 이어진 화음은 발음이
+    한 번이며 **그것이 이 결정이 만들려던 것이다.**
+    """
     notes = arrange(pattern("UU"), PROGRESSION)
     starts = sorted({note.start_tick for note in notes})
-    assert starts == [index * TICKS_PER_BAR for index in range(2 * BARS_PER_SECTION)]
+    assert all(tick % TICKS_PER_BAR == 0 for tick in starts)
+    assert starts[0] == 0
+    ends = {note.end_tick for note in notes}
+    assert max(ends) == 2 * BARS_PER_SECTION * TICKS_PER_BAR
 
 
 def _pitch_classes(notes, start, end=None):
@@ -89,15 +114,21 @@ def test_unique_sections_differ_from_each_other():
 
 def test_repeated_section_starts_at_progression_head():
     notes = arrange(pattern("R"), PROGRESSION)
-    first_bar = sorted(n.pitch for n in notes if n.start_tick == 0)
-    assert first_bar == sorted(chord_pitches(KEY, "I"))
+    first_bar = sorted(n.pitch % 12 for n in notes if n.start_tick == 0)
+    wanted = sorted({p % 12 for p in chord_pitches(KEY, "I")})
+    assert sorted(set(first_bar)) == wanted
 
 
 def test_progression_shorter_than_section_wraps():
-    """진행이 짧아도 마디가 비면 안 된다."""
+    """진행이 짧아도 마디가 비면 안 된다.
+
+    **한 도수짜리 진행은 이제 한 번 쳐서 구간 전체를 끈다** (D-0138). 마디가 덮이는
+    것이 지키려던 것이고, 같은 화음을 여덟 번 다시 치는 것이 아니었다.
+    """
     short = ChordProgression(key=KEY, degrees=("I",))
     notes = arrange(pattern("U"), short)
-    assert len({note.start_tick for note in notes}) == BARS_PER_SECTION
+    assert {note.start_tick for note in notes} == {0}
+    assert {note.duration_ticks for note in notes} == {TICKS_PER_BAR * BARS_PER_SECTION}
 
 
 def test_arrangement_is_deterministic():

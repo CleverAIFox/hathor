@@ -23,9 +23,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from hathor.domain.services.midi_writer import MIDDLE_C, TICKS_PER_BEAT, Note, chord_pitches
 from hathor.domain.services.song_structure import REPEATED, StructurePattern
-from hathor.domain.services.voice_leading import lead
+from hathor.domain.services.voice_leading import bass, lead
 from hathor.domain.value_objects.chord_progression import ChordProgression
 
 BEATS_PER_BAR = 4
@@ -37,6 +39,21 @@ BARS_PER_SECTION = 8
 둘 중 하나는 반드시 틀린다.**
 """
 TICKS_PER_BAR = TICKS_PER_BEAT * BEATS_PER_BAR
+
+
+def _runs(degrees: Sequence[str]) -> list[tuple[str, int]]:
+    """이어지는 같은 도수를 하나로 묶는다 (D-0138).
+
+    **진행이 이미 말하고 있던 것이다.** `I I`를 두 번 치는 것과 두 마디 끄는 것은
+    다른 소리이며, 마디마다 다시 치는 쪽을 고른 근거가 어디에도 없었다.
+    """
+    found: list[tuple[str, int]] = []
+    for degree in degrees:
+        if found and found[-1][0] == degree:
+            found[-1] = (degree, found[-1][1] + 1)
+        else:
+            found.append((degree, 1))
+    return found
 
 
 def arrange(
@@ -74,17 +91,33 @@ def arrange(
         rotation = 0 if label == REPEATED else (unique_index + 1) * stride
         if label != REPEATED:
             unique_index += 1
-        for offset in range(bars_per_section):
-            degree = progression.degrees[(rotation + offset) % progression.length]
+        # **같은 도수가 이어지면 다시 치지 않고 잇는다** (D-0138).
+        #
+        # 마디마다 다시 치던 동안 음길이도 발음 간격도 **종류가 하나**였다. 120초
+        # 동안 같은 모양이 48번 반복됐다. 진행이 이미 말하고 있던 것을 소리가 안
+        # 받고 있었을 뿐이며, **고를 값이 없다.**
+        #
+        # **구간을 넘어 잇지는 않는다.** 구간은 소리의 단위이고, 화음이 구간 경계를
+        # 물고 넘어가면 구조를 뽑아 둔 의미가 없다 (D-0111).
+        span = [
+            progression.degrees[(rotation + offset) % progression.length]
+            for offset in range(bars_per_section)
+        ]
+        for degree, repeats in _runs(span):
             start = bar_index * TICKS_PER_BAR
+            length = TICKS_PER_BAR * repeats
             # **직전 화음에서 가장 적게 움직이는 전위를 고른다** (D-0137).
             #
             # 근음 위치로만 쌓던 동안 63번 전환 중 57번이 병행 5도였다. 세 성부가
             # 통째로 평행 이동했기 때문이며, **성부 진행이라는 것이 없었다.**
-            voiced = lead(voiced, chord_pitches(progression.key, degree), octave_base=MIDDLE_C)
-            for pitch in voiced:
-                notes.append(Note(pitch=pitch, start_tick=start, duration_ticks=TICKS_PER_BAR))
-            bar_index += 1
+            rooted = chord_pitches(progression.key, degree)
+            voiced = lead(voiced, rooted, octave_base=MIDDLE_C)
+            # **베이스는 전위를 안 따른다** (D-0139). 근음은 화음의 성질이고 전위는
+            # 자리다. 실측 음역이 60~77로 한 옥타브 남짓이었고 **가장 낮은 음이
+            # 마디마다 바뀌어 바닥이 없었다.**
+            for pitch in (bass(rooted, octave_base=MIDDLE_C), *voiced):
+                notes.append(Note(pitch=pitch, start_tick=start, duration_ticks=length))
+            bar_index += repeats
 
     return notes
 

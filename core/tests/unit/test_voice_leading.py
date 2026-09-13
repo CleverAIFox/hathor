@@ -13,6 +13,7 @@ import pytest
 
 from hathor.domain.services.midi_writer import MIDDLE_C, chord_pitches
 from hathor.domain.services.voice_leading import (
+    bass,
     distance,
     lead,
     parallel_fifths,
@@ -131,3 +132,32 @@ def test_병행을_세는_것과_고르는_것은_다르다():
     path = root / "core" / "hathor" / "domain" / "services" / "voice_leading.py"
     body = path.read_text(encoding="utf-8").split("def lead(")[1].split("\ndef ")[0]
     assert "parallel_fifths" not in body
+
+
+# ------------------------------------------------------------------ 베이스 (D-0139)
+
+
+def test_베이스는_화음_아래_옥타브다():
+    """**베이스가 화음과 겹치면 베이스가 아니다.**"""
+    for degree in ("I", "ii", "iii", "IV", "V", "vi", "vii"):
+        rooted = chord_pitches(KEY, degree)
+        low = bass(rooted, octave_base=MIDDLE_C)
+        assert MIDDLE_C - 12 <= low < MIDDLE_C
+
+
+def test_베이스는_근음이다():
+    for degree in ("I", "ii", "IV", "V"):
+        rooted = chord_pitches(KEY, degree)
+        assert bass(rooted, octave_base=MIDDLE_C) % 12 == min(rooted) % 12
+
+
+def test_베이스는_전위를_안_따른다():
+    """근음은 화음의 성질이고 전위는 자리다 (D-0139)."""
+    rooted = chord_pitches(KEY, "V")
+    low = bass(rooted, octave_base=MIDDLE_C)
+    assert all(bass(rooted, octave_base=MIDDLE_C) == low for _ in range(3))
+
+
+def test_빈_화음은_근음이_없다():
+    with pytest.raises(ValueError, match="근음"):
+        bass((), octave_base=MIDDLE_C)
