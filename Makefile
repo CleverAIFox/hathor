@@ -56,6 +56,9 @@ artifacts-push:  ## 교두보로 보낸다. ONLY=keys 로 O-37 세트만 (D-0119
 artifacts-pull:  ## 교두보에서 가져온다. ONLY=keys 로 74MB만 (D-0119)
 	python3 tools/sync_artifacts.py pull $(if $(ONLY),--only $(ONLY),)
 
+ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
+	python3 tools/ship.py $(if $(PUSH),--push,) $(if $(FIX),--fix,)
+
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [NOCOMMIT=1] (D-0070)
 	@bash tools/apply_patch.sh $(PATCH)
 
