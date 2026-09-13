@@ -243,9 +243,13 @@ def check_bold_density(name: str, text: str) -> list[str]:
     return problems
 
 
-def _enforcer_line(body: str) -> str:
-    """`강제자`로 시작하는 줄만. **본문의 다른 경로를 검사하지 않는다.**"""
-    return "\n".join(line for line in body.splitlines() if line.startswith("강제자"))
+def _field(body: str, name: str) -> str:
+    """`name`으로 **줄이 시작하는** 자리만 모은다.
+
+    본문에 낱말이 나오는 것과 칸이 있는 것은 다르다. `재현`을 낱말로 찾으면
+    **`재현성`을 적은 기록 29건이 칸이 있는 것으로 세어진다** — 실측했다 (D-0136).
+    """
+    return "\n".join(line for line in body.splitlines() if line.startswith(name))
 
 
 def check_records(name: str, text: str) -> list[str]:
@@ -260,17 +264,17 @@ def check_records(name: str, text: str) -> list[str]:
         number, body = parts[index], parts[index + 1]
         if "- **배경**" not in body:
             problems.append(f"{name}: {number}에 `- **배경**`이 없다")
-        if int(number[2:]) >= ENFORCER_FROM and "강제자" not in body:
+        if int(number[2:]) >= ENFORCER_FROM and not _field(body, "강제자"):
             problems.append(
                 f"{name}: {number}에 `강제자` 기술이 없다. "
                 "`강제자  tools/xxx.py` 또는 `강제자 없음 — 사유: …`"
             )
-        if int(number[2:]) >= REPRODUCE_FROM and "재현" not in body:
+        if int(number[2:]) >= REPRODUCE_FROM and not _field(body, "재현"):
             problems.append(
                 f"{name}: {number}에 `재현` 기술이 없다. "
                 "명령을 들여쓴 블록으로 적거나 `재현 없음 — 사유: …`"
             )
-        for raw in ENFORCER_PATH.findall(_enforcer_line(body)):
+        for raw in ENFORCER_PATH.findall(_field(body, "강제자")):
             if not (ROOT / raw).exists():
                 problems.append(
                     f"{name}: {number}의 강제자 `{raw}`가 없다. "
@@ -279,22 +283,28 @@ def check_records(name: str, text: str) -> list[str]:
     return problems
 
 
-REPRODUCE_FROM = 135
-"""`재현` 기술을 요구하는 첫 결정 번호 (D-0135).
+REPRODUCE_FROM = 1
+"""`재현` 기술을 요구하는 첫 결정 번호 (D-0135 · D-0136).
 
-**D-0123이 `+1.982초 · t 21.43 · 곡 승률 95.1%`를 적고 명령을 안 적었다.** 같은
-산출물에서 다시 돌리니 `+1.992 · 21.65 · 96.5%`가 나왔고 **무엇이 달라졌는지 기록으로
-가릴 수 없다.** 승률 1.4%p는 14곡이 뒤집힌 것이다.
+**D-0135가 135로 뒀다가 D-0136이 1로 내렸다.** D-0135는 이 칸을 *"그때 친 명령"*으로
+정의했고, 그렇게 정의하면 **"모른다 → 못 채운다"가 자동으로 따라나온다.** 정의를
+그렇게 고른 순간 일이 사라진다 — 논증이 아니라 논증처럼 생긴 회피였다.
 
-형식은 둘이다.
+**옳은 정의는 "지금 이 수치를 다시 내는 명령"이다.** 현재 사실이므로 조사할 수 있고,
+조사해야 D-0123 같은 것이 또 나온다. 그것이 이 칸의 유일한 존재 이유다.
+
+값 셋이다.
 
     재현
-        uv run python -m hathor.cli eval harmony-order --songs 200 --seeds 200
-    재현 없음 — 사유: 수치가 없다. 설계 판단이다
+        python3 tools/check_file_size.py
+    재현 없음 — 사유: 수치가 없다
+    재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
 
-**소급하지 않는다.** `강제자`는 *지금* 무엇이 지키는지라 조사하면 알 수 있었다.
-**명령은 그때 무엇을 쳤는지이고 우리는 모른다** — 지어내면 GR-0.5다. 이 구분이
-D-0081의 표기와 내용을 가르는 선과 같은 자리에 있다."""
+**`불명`이 요점이다.** 모르는 것을 빈칸으로 두면 안 보이고, 적어 두면 **세어진다.**
+D-0131이 `강제자`에서 쓴 논거 그대로다 — *"없다는 사실 자체가 기록이어야 한다."*
+
+**명령을 추측해 적지는 않는다** (GR-0.5). 지어낸 명령은 빈칸보다 나쁘다 — 돌려 보고
+안 맞으면 기록이 틀린 것인지 명령이 틀린 것인지 알 수 없다."""
 
 ENFORCER_PATH = re.compile(r"`([\w./-]+\.(?:py|sh|toml|yml))`")
 """`강제자` 줄이 가리키는 경로. **실재해야 한다** (D-0132).

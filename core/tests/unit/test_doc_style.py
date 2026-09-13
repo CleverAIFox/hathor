@@ -270,7 +270,10 @@ def test_없는_강제자를_잡는다():
 
 def test_본문의_경로는_안_본다():
     """`강제자` 줄만 본다. 본문은 폐기한 파일을 과거형으로 적는 것이 정상이다."""
-    body = "## D-0001. 제목\n\n- **배경**: `tools/옛날.py`를 지웠다.\n\n강제자 없음 — 사유: x\n"
+    body = (
+        "## D-0001. 제목\n\n- **배경**: `tools/옛날.py`를 지웠다.\n\n"
+        "강제자 없음 — 사유: x\n재현 없음 — 사유: 수치가 없다\n"
+    )
     assert CHECKER.check_records("d.md", body) == []
 
 
@@ -281,7 +284,10 @@ def test_기록_131건이_전부_칸을_갖는다():
 def test_강제자_없음도_기술이다():
     """**없다는 사실 자체가 기록이어야 한다.**"""
     number = f"D-{CHECKER.ENFORCER_FROM:04d}"
-    body = f"## {number}. 제목\n\n- **배경**: 있다.\n\n강제자 없음 — 사유: 자료만으로 닫는다.\n"
+    body = (
+        f"## {number}. 제목\n\n- **배경**: 있다.\n\n"
+        "강제자 없음 — 사유: 자료만으로 닫는다.\n재현 없음 — 사유: 수치가 없다\n"
+    )
     assert CHECKER.check_records("d.md", body) == []
 
 
@@ -314,7 +320,20 @@ def test_재현_없음도_기술이다():
     assert CHECKER.check_records("d.md", body) == []
 
 
-def test_강제자와_재현은_시작이_다르다():
-    """**현재를 조사해 채울 수 있으면 표기, 과거를 추측해야 하면 내용이다** (D-0081)."""
+def test_둘_다_전수로_요구한다():
+    """**현재를 조사해 채울 수 있으면 표기이고 표기는 전수 소급한다** (D-0081 · D-0136)."""
     assert CHECKER.ENFORCER_FROM == 1
-    assert CHECKER.REPRODUCE_FROM > 1
+    assert CHECKER.REPRODUCE_FROM == 1
+
+
+def test_낱말이_아니라_칸을_본다():
+    """`재현성`을 적은 기록 **29건**이 칸이 있는 것으로 세어졌다 (D-0136)."""
+    body = "## D-0001. 제목\n\n- **배경**: 재현성이 핵심이다.\n\n강제자 없음 — 사유: x\n"
+    problems = CHECKER.check_records("d.md", body)
+    assert problems and "재현" in problems[0]
+
+
+def test_불명도_기술이다():
+    """**모르는 것을 빈칸으로 두면 안 보이고 적어 두면 세어진다.**"""
+    body = "## D-0001. 제목\n\n- **배경**: x\n\n강제자 없음 — 사유: x\n재현 불명 — 못 찾았다\n"
+    assert CHECKER.check_records("d.md", body) == []
