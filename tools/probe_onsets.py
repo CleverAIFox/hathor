@@ -139,20 +139,30 @@ def table(songs: list[tuple[str, np.ndarray, float]]) -> int:
     주기를 반으로 볼 때 또렷해지는 곡이 7 / 20이었다. **과반이 아니므로 절반 오류가
     지배적이지 않은데, 그 일곱은 나아졌다** — 곡마다 사정이 다르다는 뜻이다.
     """
-    print(f"\n{'곡':<34}{'BPM':>8}{'격차':>7}{'배수격차':>9}{'집중':>7}{'반주기':>8}  판정")
+    print(
+        f"\n{'곡':<32}{'BPM':>7}{'칸':>6}{'격차':>7}"
+        f"{'배수격차':>8}{'집중':>7}{'반주기':>7}{'배주기':>7}  판정"
+    )
     for key, envelope, hop in songs:
         beat = beat_period(envelope, hop)
         if beat is None:
-            print(f"{key[:32]:<34}{'못 고름':>8}")
+            print(f"{key[:30]:<32}{'못 고름':>7}")
             continue
         now = max(phase_profile(envelope, beat.period_seconds, hop))
         half = max(phase_profile(envelope, beat.period_seconds / 2.0, hop))
-        mark = "←반으로" if half > now else ("" if now > 1.5 / PHASE_BINS else "고름")
+        # **두 배로 잡은 곡은 주기를 두 배로 봐야 갈린다** (D-0162). D-0159가 한
+        # 방향만 쟀고, 빠르기 143~190인 아홉 곡이 전부 고르게 나온 것이 그 탓이다.
+        twice = max(phase_profile(envelope, beat.period_seconds * 2.0, hop))
+        best = max(now, half, twice)
+        mark = "" if best == now else ("←반으로" if best == half else "←두배로")
+        if best <= 1.5 / PHASE_BINS:
+            mark = "고름"
+        frames = beat.period_seconds / hop
         print(
-            f"{key[:32]:<34}{beat.tempo_bpm:>8.1f}{beat.margin:>7.3f}"
-            f"{beat.octave_margin:>9.3f}{now:>7.3f}{half:>8.3f}  {mark}"
+            f"{key[:30]:<32}{beat.tempo_bpm:>7.1f}{frames:>6.0f}{beat.margin:>7.3f}"
+            f"{beat.octave_margin:>8.3f}{now:>7.3f}{half:>7.3f}{twice:>7.3f}  {mark}"
         )
-    print("\n**배수 격차가 낮은 곡이 곧 반으로 볼 곡인지 보면 판정자가 생긴다** (D-0160)")
+    print("\n**칸이 작으면 봉우리가 다시 촘촘해진다** — 빠른 곡의 고름은 그 탓일 수 있다 (D-0162)")
     return 0
 
 
