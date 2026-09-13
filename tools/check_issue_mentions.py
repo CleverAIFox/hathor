@@ -52,8 +52,23 @@ CLOSED_END = "<!-- closed-issues:end -->"
 TREES = ("core/hathor", "tools")
 """훑을 코드 나무. **`core/tests`는 뺀다** — 검사 이름이 질문 번호를 갖는 것은 정상이다."""
 
-DOCUMENTS = ("README.md", "CONTRIBUTING.md")
-"""훑을 문서. **`docs/`는 안 본다** — 결정 기록은 그 시점을 그대로 적는다."""
+DOCUMENTS = (
+    "README.md",
+    "CONTRIBUTING.md",
+    "docs/PLAN.md",
+    "docs/DESIGN.md",
+    "docs/DECISIONS.md",
+)
+"""훑을 문서. **축 셋과 규약과 진입 전부다** (D-0145).
+
+D-0126은 `docs/`를 통째로 뺐고 사유는 *"결정 기록은 그 시점을 그대로 적는다"*였다.
+**그 사유는 `docs/decisions/`에만 맞는다** — 과거 축이라 소급 수정이 금지다 (D-0081).
+
+**`PLAN`과 `DESIGN`은 현재와 미래이며 고칠 수 있고 고쳐야 한다.** 실측하니 맨몸
+참조가 0곳이었다 — **지켜지고 있었지만 아무것도 막고 있지 않았다.**"""
+
+SKIP_TREES = ("docs/decisions/",)
+"""안 보는 나무. **과거 축은 그 시점을 적는다.**"""
 
 ISSUE = re.compile(r"O-\d+")
 DECISION = re.compile(r"D-(\d{4})")
@@ -87,7 +102,11 @@ def targets() -> list[Path]:
                 for path in sorted(base.rglob("*.py"))
                 if "__pycache__" not in path.parts
             )
-    found.extend(ROOT / name for name in DOCUMENTS if (ROOT / name).exists())
+    found.extend(
+        ROOT / name
+        for name in DOCUMENTS
+        if (ROOT / name).exists() and not name.startswith(SKIP_TREES)
+    )
     return found
 
 

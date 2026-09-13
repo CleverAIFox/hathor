@@ -67,6 +67,8 @@ from hathor.interfaces.cli.eval_vocabulary import (
     run_eval_chromatic_origin,
     run_eval_degree_restriction,
 )
+from hathor.interfaces.cli.ingest_onsets import add_parser as add_onset_parser
+from hathor.interfaces.cli.ingest_onsets import run as run_ingest_onsets
 from hathor.interfaces.cli.tables import parse_key, render_table
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
@@ -186,6 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
     ingest = sub.add_parser("ingest", help="음원 라이브러리 인제스트")
     ingest_sub = ingest.add_subparsers(dest="ingest_command", required=True)
 
+    add_onset_parser(ingest_sub)
     keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22)")
     keys.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
     keys.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
@@ -761,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_ingest_resolve(args)
         if args.ingest_command == "features":
             return _run_ingest_features(args)
+        if args.ingest_command == "onsets":
+            return run_ingest_onsets(args, _resolve_root(args.root))
         if args.ingest_command == "compact":
             return _run_ingest_compact(args)
         return _run_ingest_scan(args)

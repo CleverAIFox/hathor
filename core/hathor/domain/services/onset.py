@@ -60,7 +60,7 @@ FRAME_RATIO = 4
 정하므로 이미 밖에 있고, **창은 그것을 따라온다.**"""
 
 
-def envelope(samples: Sequence[float], sample_rate: int, hop_seconds: float) -> Envelope:
+def envelope(samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds: float) -> Envelope:
     """파형에서 온셋 포락선을 만든다 (O-46 · D-0144).
 
     **스펙트럼 선속(flux)이다** — 크기 스펙트럼이 프레임 사이에 *늘어난 몫*만 더한다.
