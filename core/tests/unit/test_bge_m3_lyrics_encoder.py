@@ -127,7 +127,9 @@ def _encoder(
     encoder._device = "cpu"
     encoder._batch_size = batch_size
     encoder._pooling = pooling
-    encoder._torch = SimpleNamespace(no_grad=_no_grad)
+    # `transformers`가 깔린 기기에서만 실제 타입이 보여 여기서 어긋난다. **기기마다
+    # 다른 오류는 래칫을 흔든다** (D-0150 · D-0151).
+    encoder._torch = SimpleNamespace(no_grad=_no_grad)  # type: ignore[assignment]
     encoder.truncated = 0
     return encoder
 
