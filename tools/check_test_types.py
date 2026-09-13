@@ -37,11 +37,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CORE = ROOT / "core"
 
-PINNED = 66
-"""지금 못 박힌 오류 수. **늘면 빨개진다.**
+PINNED = {
+    "arg-type": 19,
+    "no-untyped-def": 15,
+    "list-item": 8,
+    "index": 7,
+    "no-any-return": 6,
+    "attr-defined": 4,
+    "union-attr": 3,
+    "operator": 2,
+    "call-overload": 1,
+    "valid-type": 1,
+}
+"""**부류별로** 못을 박는다 (D-0151).
 
-이 수를 올리려면 `--update --allow-growth`와 결정 기록이 필요하다 — D-0118이 파일
-길이에서 세운 규율과 같다. **손이 한 번 멈추는 것이 요점이다.**"""
+D-0150이 합계를 박았고 다음 기기에서 `assignment`가 하나 나왔는데 **총 67이라는
+것만 알 수 있었다.** 부류별로 박으면 어긋난 순간 **어느 줄을 봐야 하는지가 나온다.**
+
+늘리려면 `--update --allow-growth`와 결정 기록이 필요하다 (D-0118).
+**손이 한 번 멈추는 것이 요점이다.**"""
+
+
+def total(counts: dict[str, int]) -> int:
+    return sum(counts.values())
+
 
 COMMAND = (
     "mypy",
@@ -96,6 +115,34 @@ def tally(text: str) -> dict[str, int]:
     return found
 
 
+def _report(counts: dict[str, int], raw: str) -> None:
+    """**어긋난 부류의 실제 줄까지 찍는다.** 부류만 보면 또 한 판 물어야 한다."""
+    codes = sorted(set(counts) | set(PINNED))
+    print(f"타입 오류가 {total(counts)}건으로 못 박은 {total(PINNED)}건과 다르다.", file=sys.stderr)
+    for code in codes:
+        now, pinned = counts.get(code, 0), PINNED.get(code, 0)
+        mark = "" if now == pinned else ("  ←늘" if now > pinned else "  ←줄")
+        print(f"  {code:<20}{now:>4} / {pinned:<4}{mark}", file=sys.stderr)
+    for code in codes:
+        if counts.get(code, 0) > PINNED.get(code, 0):
+            for line in raw.splitlines():
+                if line.rstrip().endswith(f"[{code}]"):
+                    print(f"    {line.strip()}", file=sys.stderr)
+
+
+def _rewrite(counts: dict[str, int]) -> None:
+    """못을 다시 박는다. **정렬해 쓴다** — 차례가 기기마다 달라지면 못 읽는다."""
+    path = Path(__file__)
+    text = path.read_text(encoding="utf-8")
+    head = text.index("PINNED = {")
+    tail = text.index("}", head) + 1
+    body = "\n".join(
+        f'    "{code}": {count},'
+        for code, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    )
+    path.write_text(text[:head] + "PINNED = {\n" + body + "\n}" + text[tail:], encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="검사 코드 타입 래칫 (D-0149)")
     parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
@@ -110,27 +157,22 @@ def main() -> int:
     counts = tally(raw)
     found = sum(counts.values())
 
+    grown = any(count > PINNED.get(code, 0) for code, count in counts.items())
     if args.update:
-        if found > PINNED and not args.allow_growth:
-            print(f"{found}건으로 못 박은 {PINNED}건보다 늘었다.", file=sys.stderr)
+        if grown and not args.allow_growth:
+            _report(counts, raw)
             print("줄이거나 `--allow-growth`와 결정 기록을 함께 낸다 (D-0118).", file=sys.stderr)
             return 1
-        path = Path(__file__)
-        text = path.read_text(encoding="utf-8")
-        fixed = text.replace(f"PINNED = {PINNED}", f"PINNED = {found}", 1)
-        path.write_text(fixed, encoding="utf-8")
-        print(f"못을 {PINNED} → {found}로 다시 박았다.")
+        _rewrite(counts)
+        print(f"못을 {total(PINNED)} → {found}로 다시 박았다.")
         return 0
 
-    if found != PINNED:
-        direction = "늘었다" if found > PINNED else "줄었다"
-        print(f"타입 오류가 {found}건으로 못 박은 {PINNED}건보다 {direction}.", file=sys.stderr)
-        for code, count in sorted(counts.items(), key=lambda item: -item[1]):
-            print(f"  {code:<20}{count:>4}", file=sys.stderr)
-        hint = (
-            "새로 쓴 검사의 타입을 맞춘다." if found > PINNED else "`--update`로 못을 내려 박는다."
+    if counts != PINNED:
+        _report(counts, raw)
+        print(
+            "새로 쓴 검사의 타입을 맞춘다." if grown else "`--update`로 못을 내려 박는다.",
+            file=sys.stderr,
         )
-        print(hint, file=sys.stderr)
         return 1
     print(f"검사 코드 타입 래칫 통과 · {found}건")
     return 0

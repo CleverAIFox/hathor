@@ -31,8 +31,10 @@ def test_주석을_요구하지_않는다():
     assert "--allow-untyped-calls" in RATCHET.COMMAND
 
 
-def test_못이_박혀_있다():
-    assert RATCHET.PINNED > 0
+def test_부류별로_못이_박혀_있다():
+    """**합계만 박으면 어느 부류가 달라졌는지 모른다** (D-0151)."""
+    assert isinstance(RATCHET.PINNED, dict)
+    assert RATCHET.total(RATCHET.PINNED) > 0
 
 
 def test_못_재면_0으로_안_넘긴다(monkeypatch):
@@ -103,5 +105,34 @@ def test_부류별로_센다():
 def test_어긋나면_어디가_다른지_찍는다():
     """**다음 어긋남을 한 번에 가리게 한다.** 수만 보면 또 추측한다."""
     source = (ROOT / "tools" / "check_test_types.py").read_text(encoding="utf-8")
-    body = source.split("if found != PINNED:")[1].split("return 1")[0]
-    assert "counts.items()" in body
+    body = source.split("if counts != PINNED:")[1].split("return 1")[0]
+    assert "_report(" in body
+
+
+# ------------------------------------------------------------------ 부류별 못 (D-0151)
+
+
+def test_어긋난_부류의_줄을_찍는다(capsys):
+    """**부류만 보면 또 한 판 물어야 한다.**
+
+    D-0150이 부류 표를 찍게 했더니 `assignment` 하나가 다른 것이 보였다. 그런데
+    **어느 줄인지는 여전히 몰랐다.**
+    """
+    counts = dict(RATCHET.PINNED)
+    counts["assignment"] = 1
+    raw = "tests/unit/test_x.py:10: error: 대입 형이 안 맞는다  [assignment]\n"
+    RATCHET._report(counts, raw)
+    text = capsys.readouterr().err
+    assert "assignment" in text
+    assert "test_x.py:10" in text
+
+
+def test_안_달라진_부류는_표시가_없다(capsys):
+    RATCHET._report(dict(RATCHET.PINNED), "")
+    assert "←" not in capsys.readouterr().err
+
+
+def test_못을_정렬해_쓴다():
+    """**차례가 기기마다 달라지면 못 읽는다.**"""
+    source = (ROOT / "tools" / "check_test_types.py").read_text(encoding="utf-8")
+    assert "sorted(counts.items()" in source
