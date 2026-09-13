@@ -68,6 +68,48 @@ def load(folder: Path, limit: int | None) -> list[tuple[str, np.ndarray, float]]
     return found
 
 
+WINDOW_SECONDS = 30.0
+"""구간별로 다시 재는 창. **드리프트를 가르는 자다** (D-0154).
+
+곡 전체로 한 번 재면 빠르기 변화와 추정 오차가 섞인다. **구간마다 따로 재서 값이
+고르면 추정은 되는데 위상만 밀리는 것이고, 들쭉날쭉하면 포락선이 나쁜 것이다.**"""
+
+
+def diagnose(song: tuple[str, np.ndarray, float]) -> int:
+    """곡 하나를 뜯는다. **포락선이 나쁜가 추정이 나쁜가를 가른다.**"""
+    key, envelope, hop = song
+    print(f"\n곡 · {key}")
+    print(f"  길이 {envelope.size * hop:.1f}초 · 칸 {envelope.size}")
+
+    centred = envelope - envelope.mean()
+    peak = float(np.abs(centred).max())
+    print("\n포락선 선명도")
+    print(f"  최대/중앙 {peak / max(float(np.median(np.abs(centred))), 1e-9):.1f}배")
+    above = int((centred > peak * 0.3).sum())
+    print(f"  최대의 30%를 넘는 칸 {above} ({above / envelope.size:.1%})")
+
+    whole = beat_period(envelope, hop)
+    if whole is not None:
+        print(f"\n곡 전체 · {whole.tempo_bpm:.2f}BPM · 격차 {whole.margin:.3f}")
+
+    span = int(WINDOW_SECONDS / hop)
+    found: list[float] = []
+    for start in range(0, envelope.size - span, span):
+        piece = beat_period(envelope[start : start + span], hop)
+        if piece is not None:
+            found.append(piece.tempo_bpm)
+    if found:
+        print(f"\n{WINDOW_SECONDS:g}초 구간별 · {len(found)}구간")
+        print(f"  {quantiles(found)}")
+        spread = statistics.pstdev(found) if len(found) > 1 else 0.0
+        print(f"  표준편차 {spread:.2f}BPM")
+        print(
+            "  **구간이 고르면 추정은 되고 위상만 밀린 것이다.** "
+            "들쭉날쭉하면 포락선이 나쁘다 (D-0154)"
+        )
+    return 0
+
+
 def quantiles(values: list[float]) -> str:
     ordered = sorted(values)
     if len(ordered) < 4:
@@ -85,6 +127,7 @@ def main() -> int:
     # 디렉터리 기준으로 두면 `core/var/ingest`를 찾는다 — 실제로 그렇게 틀렸다.
     parser.add_argument("--out", type=_resolve, default=ROOT / "var" / "ingest", help="산출물 루트")
     parser.add_argument("--limit", type=int, default=None, help="곡 수 상한")
+    parser.add_argument("--diagnose", type=int, default=None, help="곡 하나를 뜯는다 (0부터)")
     args = parser.parse_args()
 
     picked = folders(args.out)
@@ -99,6 +142,8 @@ def main() -> int:
         return 1
 
     print(f"{folder} · {len(songs)}곡")
+    if args.diagnose is not None:
+        return diagnose(songs[args.diagnose])
     tempos: list[float] = []
     margins: list[float] = []
     octaves: list[float] = []
