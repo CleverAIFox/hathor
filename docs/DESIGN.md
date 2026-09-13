@@ -718,7 +718,7 @@ HATHOR
 
 | ID | 요구사항 | 기준 |
 |---|---|---|
-| NFR-MNT-001 | 계층 경계 | import-linter 계약 4종 전부 KEPT |
+| NFR-MNT-001 | 계층 경계 | import-linter 계약 5종 전부 KEPT |
 | NFR-MNT-002 | 타입 검사 | mypy --strict 통과 |
 | NFR-MNT-003 | 테스트 커버리지 | 75% 이상. **현재 실측 85%** |
 | NFR-MNT-004 | 결정 기록 | 설계 판단은 DECISIONS.md에 배경·후보·선택·근거·결과·한계 형식으로 기록 |
@@ -827,11 +827,14 @@ HATHOR
 | `interfaces` | CLI·REST·워커 진입점. 비즈니스 로직 없음 | → application |
 | `shared` | 설정·텔레메트리 | 없음 |
 
-**계약 4종**
+**계약 5종**
 1. 도메인은 외부를 모른다 — `domain`이 다른 계층을 import하지 않는다
 2. 애플리케이션은 구현체를 모른다 — `application`이 `infrastructure`를 import하지 않는다
 3. 엔진 간 직접 호출 금지 — 엔진끼리 서로 import하지 않는다. 조합은 `application`이 한다
 4. 계층 순서 — 위 의존 방향을 역행하지 않는다
+5. **송신부는 오디오를 모른다** — 망을 타는 모듈이 디코더·분리기·특징 추출기·파형
+   타입을 import하지 않는다. D-0015의 *"타입 수준의 불가능"*을 서버 없이 구현한
+   형태다 (D-0134)
 
 **엔진 vs 배관의 구분 기준**: 엔진은 무거운 AI 연산이다. 인제스트는 파일을 읽고 표를 만드는 배관이므로 엔진이 아니며 `application` +
 `infrastructure`에 배치한다.
