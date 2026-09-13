@@ -62,8 +62,8 @@ def render(
     주지 않으면 이전과 같다 — 구조만 조건화되고 화성은 시드가 정한다.
 
     구조 → 화성 → 배치 → SMF. 시드가 같고 참조가 같으면 바이트가 같다.
-    가락도 리듬도 없고 3화음을 마디마다 울릴 뿐이나, **관통이 서면 그 뒤로는
-    각 단계를 갈아 끼우기만 하면 된다** (GR-6.2).
+    가락은 박 격자에서 화음 구성음을 짚는다 (D-0141). **반주는 아직 마디 첫 박에만
+    떨어진다** — 온셋 자료가 없어 리듬을 참조곡에서 못 뽑는다 (O-46).
     """
     pattern = generate_pattern(job.seed, references)
     progression = generate_harmony(
@@ -73,7 +73,15 @@ def render(
         prior=harmony_prior,
         transition=transition_prior,
     )
-    notes = arrange(pattern, progression)
+    # **가락도 같은 자료를 쓴다** (D-0141 · D-0142). 화음이 쓰는 사전과 전이를
+    # 그대로 넘긴다 — 가락 전용 자료를 새로 만들지 않는다.
+    notes = arrange(
+        pattern,
+        progression,
+        seed=job.seed,
+        prior=harmony_prior,
+        transition=transition_prior,
+    )
     data = render_smf(notes, tempo_bpm=tempo_bpm)
     summary: dict[str, Any] = {
         "seed": job.seed,
