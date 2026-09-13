@@ -23,8 +23,9 @@
 
 from __future__ import annotations
 
-from hathor.domain.services.midi_writer import TICKS_PER_BEAT, Note, chord_pitches
+from hathor.domain.services.midi_writer import MIDDLE_C, TICKS_PER_BEAT, Note, chord_pitches
 from hathor.domain.services.song_structure import REPEATED, StructurePattern
+from hathor.domain.services.voice_leading import lead
 from hathor.domain.value_objects.chord_progression import ChordProgression
 
 BEATS_PER_BAR = 4
@@ -55,6 +56,7 @@ def arrange(
     notes: list[Note] = []
     unique_index = 0
     bar_index = 0
+    voiced: tuple[int, ...] | None = None
 
     # **진행이 충분히 길면 섹션마다 겹치지 않는 블록을 읽는다** (D-0111).
     #
@@ -75,7 +77,12 @@ def arrange(
         for offset in range(bars_per_section):
             degree = progression.degrees[(rotation + offset) % progression.length]
             start = bar_index * TICKS_PER_BAR
-            for pitch in chord_pitches(progression.key, degree):
+            # **직전 화음에서 가장 적게 움직이는 전위를 고른다** (D-0137).
+            #
+            # 근음 위치로만 쌓던 동안 63번 전환 중 57번이 병행 5도였다. 세 성부가
+            # 통째로 평행 이동했기 때문이며, **성부 진행이라는 것이 없었다.**
+            voiced = lead(voiced, chord_pitches(progression.key, degree), octave_base=MIDDLE_C)
+            for pitch in voiced:
                 notes.append(Note(pitch=pitch, start_tick=start, duration_ticks=TICKS_PER_BAR))
             bar_index += 1
 

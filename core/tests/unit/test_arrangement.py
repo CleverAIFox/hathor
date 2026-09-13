@@ -36,17 +36,41 @@ def test_bars_are_laid_out_without_gaps():
     assert starts == [index * TICKS_PER_BAR for index in range(2 * BARS_PER_SECTION)]
 
 
+def _pitch_classes(notes, start, end=None):
+    """마디별 음이름 집합. **틱 안의 순서는 안 본다** — 전위가 바뀌면 낮은 음이 바뀐다."""
+    picked = [n for n in notes if start <= n.start_tick and (end is None or n.start_tick < end)]
+    bars: dict[int, set[int]] = {}
+    for note in picked:
+        bars.setdefault(note.start_tick - start, set()).add(note.pitch % 12)
+    return [bars[tick] for tick in sorted(bars)]
+
+
 def test_repeated_sections_share_the_same_harmony():
     """구조 추출을 소리에 실제로 연결하는 지점이다.
 
     `R` 구간이 서로 다른 화성을 쓰면 구조를 뽑아 둔 의미가 없다 — 지표를
     만들어두고 보지 않는 것과 같다.
+
+    **음높이가 아니라 음이름으로 본다** (D-0137). 성부 진행이 붙은 뒤로 전위는
+    직전 화음이 정하므로 앞에 무엇이 왔느냐에 따라 같은 도수가 다른 자리에 놓인다.
+    **지키려는 것은 화성이 같다는 것이고 그것은 음이름이다.**
     """
     notes = arrange(pattern("RUR"), PROGRESSION)
-    first = [n.pitch for n in notes if n.start_tick < TICKS_PER_BAR * BARS_PER_SECTION]
-    third_start = TICKS_PER_BAR * BARS_PER_SECTION * 2
-    third = [n.pitch for n in notes if n.start_tick >= third_start]
-    assert first == third
+    span = TICKS_PER_BAR * BARS_PER_SECTION
+    assert _pitch_classes(notes, 0, span) == _pitch_classes(notes, span * 2)
+
+
+def test_반복_구간의_전위는_달라질_수_있다():
+    """**앞에 무엇이 왔느냐가 전위를 정한다** (D-0137).
+
+    이것이 결함이 아니라는 근거는 두 가지다. 도수가 같다는 것은 위 검사가 지키고,
+    반복 구간의 전위가 매번 같아야 할 음악적 이유가 없다.
+    """
+    notes = arrange(pattern("RUR"), PROGRESSION)
+    span = TICKS_PER_BAR * BARS_PER_SECTION
+    first = [n.pitch for n in notes if n.start_tick < span]
+    third = [n.pitch for n in notes if n.start_tick >= span * 2]
+    assert sorted({p % 12 for p in first}) == sorted({p % 12 for p in third})
 
 
 def test_unique_sections_differ_from_each_other():
