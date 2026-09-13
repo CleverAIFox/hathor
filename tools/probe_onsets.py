@@ -133,6 +133,29 @@ def diagnose(song: tuple[str, np.ndarray, float]) -> int:
     return 0
 
 
+def table(songs: list[tuple[str, np.ndarray, float]]) -> int:
+    """곡마다 한 줄. **전체 분포가 못 가르는 것을 여기서 본다** (D-0160).
+
+    주기를 반으로 볼 때 또렷해지는 곡이 7 / 20이었다. **과반이 아니므로 절반 오류가
+    지배적이지 않은데, 그 일곱은 나아졌다** — 곡마다 사정이 다르다는 뜻이다.
+    """
+    print(f"\n{'곡':<34}{'BPM':>8}{'격차':>7}{'배수격차':>9}{'집중':>7}{'반주기':>8}  판정")
+    for key, envelope, hop in songs:
+        beat = beat_period(envelope, hop)
+        if beat is None:
+            print(f"{key[:32]:<34}{'못 고름':>8}")
+            continue
+        now = max(phase_profile(envelope, beat.period_seconds, hop))
+        half = max(phase_profile(envelope, beat.period_seconds / 2.0, hop))
+        mark = "←반으로" if half > now else ("" if now > 1.5 / PHASE_BINS else "고름")
+        print(
+            f"{key[:32]:<34}{beat.tempo_bpm:>8.1f}{beat.margin:>7.3f}"
+            f"{beat.octave_margin:>9.3f}{now:>7.3f}{half:>8.3f}  {mark}"
+        )
+    print("\n**배수 격차가 낮은 곡이 곧 반으로 볼 곡인지 보면 판정자가 생긴다** (D-0160)")
+    return 0
+
+
 def quantiles(values: list[float]) -> str:
     ordered = sorted(values)
     if len(ordered) < 4:
@@ -151,6 +174,7 @@ def main() -> int:
     parser.add_argument("--out", type=_resolve, default=ROOT / "var" / "ingest", help="산출물 루트")
     parser.add_argument("--limit", type=int, default=None, help="곡 수 상한")
     parser.add_argument("--diagnose", type=int, default=None, help="곡 하나를 뜯는다 (0부터)")
+    parser.add_argument("--table", action="store_true", help="곡별로 한 줄씩 찍는다")
     args = parser.parse_args()
 
     picked = folders(args.out)
@@ -167,6 +191,8 @@ def main() -> int:
     print(f"{folder} · {len(songs)}곡")
     if args.diagnose is not None:
         return diagnose(songs[args.diagnose])
+    if args.table:
+        return table(songs)
     tempos: list[float] = []
     margins: list[float] = []
     octaves: list[float] = []
