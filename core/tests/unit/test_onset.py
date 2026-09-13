@@ -10,9 +10,11 @@ import numpy as np
 import pytest
 
 from hathor.domain.services.onset import (
+    FRAME_RATIO,
     PHASE_BINS,
     TEMPO_RANGE,
     beat_period,
+    envelope,
     phase_profile,
     tempo_bpm,
 )
@@ -136,3 +138,82 @@ def test_에너지가_없으면_균등이다():
 def test_칸이_0이면_거부한다():
     with pytest.raises(ValueError, match="칸은 1 이상"):
         phase_profile(synth(96), 0.5, HOP, bins=0)
+
+
+# ------------------------------------------------------------------ 포락선 (D-0144)
+
+SR = 22050
+
+
+def audio(bpm, pattern=None, *, seconds=30, noise=0.0, seed=1):
+    """합성 음원. **참 박을 아는 자료로 관통을 본다.**"""
+    pattern = pattern or {0.0: 1.0}
+    rng = np.random.default_rng(seed)
+    size = SR * seconds
+    wave = np.zeros(size)
+    period = 60.0 / bpm
+    span = np.linspace(0.0, 0.03, int(SR * 0.03))
+    click = np.exp(-np.linspace(0.0, 12.0, span.size)) * np.sin(2 * np.pi * 900 * span)
+    for beat in range(int(seconds / period)):
+        for phase, amplitude in pattern.items():
+            index = int((beat + phase) * period * SR)
+            if index + click.size < size:
+                wave[index : index + click.size] += click * amplitude
+    return wave + rng.normal(0.0, noise, size)
+
+
+@pytest.mark.parametrize("bpm", [72, 96, 120, 140])
+def test_음원에서_박까지_관통한다(bpm):
+    """**파형 → 포락선 → 박.** 합성이 이 관문을 못 지나면 실측에 안 건다."""
+    found = beat_period(envelope(audio(bpm), SR, HOP), HOP)
+    assert found is not None
+    assert abs(found.tempo_bpm - bpm) < 1.0
+
+
+def test_잡음이_섞여도_관통한다():
+    found = beat_period(envelope(audio(120, noise=0.05), SR, HOP), HOP)
+    assert found is not None
+    assert abs(found.tempo_bpm - 120) < 1.0
+
+
+def test_음원의_위상이_패턴을_가른다():
+    plain = envelope(audio(96), SR, HOP)
+    mixed = envelope(audio(96, {0.0: 1.0, 0.5: 0.7}), SR, HOP)
+    straight = phase_profile(plain, beat_period(plain, HOP).period_seconds, HOP)
+    offbeat = phase_profile(mixed, beat_period(mixed, HOP).period_seconds, HOP)
+    assert max(straight) > max(offbeat)
+
+
+def test_늘어난_몫만_센다():
+    """**줄어든 몫을 빼면 소리가 잦아드는 자리도 온셋이 된다.**
+
+    한 번 치고 천천히 꺼지는 소리를 넣는다. 봉우리는 **치는 순간 하나뿐이어야
+    한다** — 꺼지는 동안 선속이 다시 오르면 절반이 잘못 세어진 것이다.
+    """
+    span = np.linspace(0.0, 2.0, SR * 2)
+    struck = np.exp(-span * 3.0) * np.sin(2 * np.pi * 440 * span)
+    found = envelope(struck, SR, HOP)
+    peak = int(np.argmax(found))
+    assert peak < len(found) // 4
+    assert float(found[len(found) // 2 :].max()) < float(found.max()) * 0.1
+
+
+def test_창은_홉을_따라온다():
+    """**밖에서 오는 값은 홉 하나뿐이다.** 창을 따로 고르면 둘 다 맞출 수 있다."""
+    assert FRAME_RATIO == 4
+
+
+def test_파형이_짧으면_거부한다():
+    with pytest.raises(ValueError, match="너무 짧다"):
+        envelope(np.zeros(100), SR, HOP)
+
+
+def test_표본율이_양수여야_한다():
+    with pytest.raises(ValueError, match="표본율"):
+        envelope(np.zeros(SR), 0, HOP)
+
+
+def test_스테레오는_거부한다():
+    """**섞는 규칙을 여기서 정하지 않는다.** 어느 스템을 볼지는 부르는 쪽이 안다."""
+    with pytest.raises(ValueError, match="1차원"):
+        envelope(np.zeros((2, SR)), SR, HOP)

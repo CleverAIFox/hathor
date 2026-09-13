@@ -53,6 +53,47 @@ PHASE_BINS = 4
 16분음표 해상도이며 `TICKS_PER_BEAT`가 이미 480으로 4분할을 담고 있다."""
 
 
+FRAME_RATIO = 4
+"""분석 창은 홉의 이 배수다. **밖에서 오는 값은 홉 하나뿐이다.**
+
+창 길이를 따로 고르면 값이 둘이 되고 둘 다 맞출 수 있게 된다. 홉은 산출물 격자가
+정하므로 이미 밖에 있고, **창은 그것을 따라온다.**"""
+
+
+def envelope(samples: Sequence[float], sample_rate: int, hop_seconds: float) -> Envelope:
+    """파형에서 온셋 포락선을 만든다 (O-46 · D-0144).
+
+    **스펙트럼 선속(flux)이다** — 크기 스펙트럼이 프레임 사이에 *늘어난 몫*만 더한다.
+    줄어든 몫을 빼면 소리가 끝나는 자리도 온셋으로 세어진다.
+
+    파형을 읽지 파일을 읽지 않는다. **디코딩은 `infrastructure`의 몫이며** 이 함수는
+    순수하다 — 그래서 합성 파형으로 검증할 수 있다.
+    """
+    if sample_rate <= 0:
+        raise ValueError("표본율은 양수여야 한다")
+    if hop_seconds <= 0.0:
+        raise ValueError("홉 길이는 양수여야 한다")
+
+    wave = np.asarray(samples, dtype=np.float64)
+    if wave.ndim != 1:
+        raise ValueError("파형은 1차원이어야 한다")
+
+    hop = max(1, round(hop_seconds * sample_rate))
+    frame = hop * FRAME_RATIO
+    if wave.size < frame * 2:
+        raise ValueError("파형이 너무 짧다")
+
+    window = np.hanning(frame)
+    count = (wave.size - frame) // hop + 1
+    spectra = np.empty((count, frame // 2 + 1), dtype=np.float64)
+    for index in range(count):
+        start = index * hop
+        spectra[index] = np.abs(np.fft.rfft(wave[start : start + frame] * window))
+
+    rising = np.maximum(np.diff(spectra, axis=0), 0.0)
+    return np.concatenate(([0.0], rising.sum(axis=1)))
+
+
 def _normalise(envelope: Sequence[float]) -> Envelope:
     values = np.asarray(envelope, dtype=np.float64)
     if values.ndim != 1:
