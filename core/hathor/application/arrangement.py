@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from hathor.domain.services.melody import sing
 from hathor.domain.services.midi_writer import MIDDLE_C, TICKS_PER_BEAT, Note, chord_pitches
 from hathor.domain.services.song_structure import REPEATED, StructurePattern
 from hathor.domain.services.voice_leading import bass, lead
@@ -61,6 +62,9 @@ def arrange(
     progression: ChordProgression,
     *,
     bars_per_section: int = BARS_PER_SECTION,
+    seed: int | None = None,
+    prior: Sequence[float] | None = None,
+    transition: Sequence[Sequence[float]] | None = None,
 ) -> list[Note]:
     """구조와 화성 진행에서 노트를 배치한다.
 
@@ -74,6 +78,7 @@ def arrange(
     unique_index = 0
     bar_index = 0
     voiced: tuple[int, ...] | None = None
+    sung: list[tuple[str, int]] = []
 
     # **진행이 충분히 길면 섹션마다 겹치지 않는 블록을 읽는다** (D-0111).
     #
@@ -103,6 +108,7 @@ def arrange(
             progression.degrees[(rotation + offset) % progression.length]
             for offset in range(bars_per_section)
         ]
+        sung.extend(_runs(span))
         for degree, repeats in _runs(span):
             start = bar_index * TICKS_PER_BAR
             length = TICKS_PER_BAR * repeats
@@ -119,6 +125,21 @@ def arrange(
                 notes.append(Note(pitch=pitch, start_tick=start, duration_ticks=length))
             bar_index += repeats
 
+    if seed is not None:
+        # **가락은 박 격자를 쓴다** (D-0141). 화음이 마디를 끄는 동안에도 움직이며,
+        # 그것이 전경과 배경의 차이다. 없으면 반주만 남는다 (D-0140).
+        notes.extend(
+            Note(pitch=pitch, start_tick=start, duration_ticks=length)
+            for start, length, pitch in sing(
+                seed,
+                sung,
+                progression.key,
+                ceiling=MIDDLE_C + 12,
+                beats_per_bar=BEATS_PER_BAR,
+                prior=prior,
+                transition=transition,
+            )
+        )
     return notes
 
 
