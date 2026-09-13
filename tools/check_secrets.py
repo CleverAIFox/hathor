@@ -68,11 +68,11 @@ ASSIGNMENT = re.compile(
 SKIP_SUFFIXES = (".patch", ".lock")
 """패치와 잠금 파일은 건너뛴다. 둘 다 다른 파일의 사본이며 원본 쪽에서 이미 본다."""
 
-SKIP_TREES = ("core/tests/",)
-"""검사 나무는 건너뛴다. **비밀정보 검사의 검사는 비밀정보 모양을 가질 수밖에 없다.**
+SKIP_FILES = ("core/tests/unit/test_secrets.py",)
+"""이 검사의 검사. **비밀정보 검사의 검사는 비밀정보 모양을 가질 수밖에 없다.**
 
-`check_issue_mentions`가 같은 이유로 `core/tests`를 뺀다. **대가가 있다** — 검사에
-진짜 값을 적으면 안 잡힌다. `.env` 추적 검사는 그대로 걸리므로 주된 새는 자리는 막힌다."""
+D-0128은 `core/tests`를 통째로 뺐다. **전수로 훑으니 걸리는 것이 이 파일 둘뿐이었고**
+나무를 빼는 것은 넓었다 (D-0146). **파일 하나만 빼면 그 파일만 사각지대다.**"""
 
 
 def tracked() -> list[str]:
@@ -99,7 +99,7 @@ def check(names: list[str]) -> list[str]:
             problems.append(f"{name}: 추적되고 있다. `git rm --cached {name}` 후 값을 갈아치운다")
     for name in names:
         path = ROOT / name
-        if name.startswith(SKIP_TREES) or path.suffix in SKIP_SUFFIXES or not path.is_file():
+        if name in SKIP_FILES or path.suffix in SKIP_SUFFIXES or not path.is_file():
             continue
         try:
             text = path.read_text(encoding="utf-8")

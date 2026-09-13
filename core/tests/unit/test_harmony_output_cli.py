@@ -194,7 +194,7 @@ def test_로더는_잘린_줄을_건너뛴다(tmp_path):
     assert len(load_degree_priors(path, "mix")) == 3
 
 
-# ------------------------------------------------------------------ O-31 배선
+# ------------------------------------------------------------------ O-31·D-0088 배선
 
 
 def test_도수_제한_손실을_낸다(tmp_path, capsys):
@@ -224,7 +224,7 @@ def test_제한_손실도_사전_파일이_없으면_비정상_종료한다(tmp_
     assert "찾지 못했다" in capsys.readouterr().err
 
 
-# ------------------------------------------------------------------ O-33 배선
+# ------------------------------------------------------------------ O-33·D-0090 배선
 
 
 def test_반음계_정체를_낸다(tmp_path, capsys):
@@ -662,7 +662,7 @@ def _run_order(tmp_path, extra, *, hold_windows=1):
 
 
 def test_유지_확률을_판정에_건다(tmp_path, capsys):
-    """`--use-hold` 배선 (O-37). **선이 하나 늘고 음성 대조가 `전이 있음`이다.**"""
+    """`--use-hold` 배선 (O-37·D-0125). **선이 하나 늘고 음성 대조가 `전이 있음`이다.**"""
     assert _run_order(tmp_path, ["--use-hold"], hold_windows=4) == 0
     out = capsys.readouterr().out
     assert "전이+유지" in out

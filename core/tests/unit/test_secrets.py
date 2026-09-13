@@ -84,6 +84,11 @@ def test_소문자_이름은_안_본다(tmp_path, monkeypatch):
     assert _scan(tmp_path, monkeypatch, "a.py", "api_key = compute()\n") == []
 
 
+def test_이_검사의_검사만_뺀다():
+    """**나무를 빼면 그만큼이 사각지대다** (D-0146). 파일 하나만 뺀다."""
+    assert CHECKER.SKIP_FILES == ("core/tests/unit/test_secrets.py",)
+
+
 def test_패치_파일은_건너뛴다(tmp_path, monkeypatch):
     """패치는 다른 파일의 사본이며 **원본 쪽에서 이미 본다.**"""
     assert _scan(tmp_path, monkeypatch, "x.patch", "+DB_PASSWORD=진짜값\n") == []

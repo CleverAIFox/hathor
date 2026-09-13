@@ -49,8 +49,19 @@ ROOT = Path(__file__).resolve().parent.parent
 CLOSED_BEGIN = "<!-- closed-issues:begin -->"
 CLOSED_END = "<!-- closed-issues:end -->"
 
-TREES = ("core/hathor", "tools")
-"""훑을 코드 나무. **`core/tests`는 뺀다** — 검사 이름이 질문 번호를 갖는 것은 정상이다."""
+TREES = ("core/hathor", "tools", "core/tests")
+"""훑을 코드 나무. **`core/tests`도 본다** (D-0146).
+
+D-0126은 *"검사 이름이 질문 번호를 갖는 것은 정상"*이라며 뺐다. **전수로 훑으니
+25곳이 나왔고 전부 산문이었다** — 문서 문자열과 주석이며 제품 코드와 같은 부류다.
+`O-38·D-0114이 닫혔는데 열린 것처럼 적혀 있다`는 위험이 검사 파일이라고 달라지지 않는다.
+
+**나무를 빼는 대신 파일 하나를 뺀다.**"""
+
+SKIP_FILES = ("core/tests/unit/test_issue_mentions.py",)
+"""이 검사의 검사. **맨몸 참조를 일부러 담는다** — 잡히는지 보는 자료다.
+
+나무를 통째로 빼면 사각지대가 되고, 파일 하나를 빼면 그 파일만 사각지대다."""
 
 DOCUMENTS = (
     "README.md",
@@ -101,6 +112,7 @@ def targets() -> list[Path]:
                 path
                 for path in sorted(base.rglob("*.py"))
                 if "__pycache__" not in path.parts
+                and path.relative_to(ROOT).as_posix() not in SKIP_FILES
             )
     found.extend(
         ROOT / name

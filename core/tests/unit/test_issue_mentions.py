@@ -115,6 +115,12 @@ def test_검사가_실제로_자리를_본다():
     assert len(CHECKER.closed_issues(design)) >= 10
 
 
-@pytest.mark.parametrize("tree", ["core/hathor", "tools"])
-def test_두_나무를_다_훑는다(tree):
+@pytest.mark.parametrize("tree", ["core/hathor", "tools", "core/tests"])
+def test_나무_셋을_다_훑는다(tree):
+    """**검사 나무도 본다** (D-0146). 전수로 훑으니 25곳이 나왔고 전부 산문이었다."""
     assert tree in CHECKER.TREES
+
+
+def test_이_검사의_검사만_뺀다():
+    """맨몸 참조를 일부러 담는 자료다. **나무가 아니라 파일 하나를 뺀다.**"""
+    assert CHECKER.SKIP_FILES == ("core/tests/unit/test_issue_mentions.py",)

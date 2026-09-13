@@ -49,14 +49,22 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TREE = ROOT / "core" / "hathor"
+TREES = ("core/hathor", "tools")
+"""훑을 나무. **`tools`도 본다** (D-0146).
+
+D-0134는 `core/hathor`만 봤다. 전수로 훑으니 `tools/probe_musicbrainz.py`가 `urllib`을
+쓰고 있었고 **검사 밖이었다.** 도구도 이 기기에서 돈다."""
 
 NETWORK = ("urllib", "requests", "httpx", "socket", "aiohttp", "http.client", "ftplib", "smtplib")
 """망 라이브러리. **`urllib.parse`만 쓰는 것도 잡는다** — 파서만 쓰는지 요청도 보내는지
 가르려면 호출을 따라가야 하고, 접점 파일이 하나뿐인 지금은 **넓게 잡는 쪽이 싸다.**"""
 
 ALLOWED = {
-    "infrastructure/musicbrainz_lookup.py": (
+    "tools/probe_musicbrainz.py": (
+        "MusicBrainz 조회 탐침 (D-0019). **아티스트·제목 문자열만 보낸다.** "
+        "제품 경로가 아니라 조사용이며 오디오를 만지지 않는다"
+    ),
+    "core/hathor/infrastructure/musicbrainz_lookup.py": (
         "MusicBrainz 조회 (D-0006). **아티스트·제목 문자열만 보낸다.** "
         "응답은 MBID와 재생시간이며 오디오는 어느 방향으로도 흐르지 않는다"
     ),
@@ -69,13 +77,21 @@ ALLOWED = {
 IMPORT = re.compile(r"^\s*(?:import|from)\s+([\w.]+)", re.M)
 
 
+def found_files() -> list[Path]:
+    """훑을 파일 전부."""
+    picked: list[Path] = []
+    for tree in TREES:
+        base = ROOT / tree
+        if base.is_dir():
+            picked.extend(p for p in base.rglob("*.py") if "__pycache__" not in p.parts)
+    return picked
+
+
 def check() -> list[str]:
     """허용 목록 밖의 망 접점. **첫 문제에서 멈추지 않는다.**"""
     problems: list[str] = []
-    for path in sorted(TREE.rglob("*.py")):
-        if "__pycache__" in path.parts:
-            continue
-        name = path.relative_to(TREE).as_posix()
+    for path in sorted(found_files()):
+        name = path.relative_to(ROOT).as_posix()
         found = sorted(
             {
                 module
@@ -86,11 +102,11 @@ def check() -> list[str]:
         if found and name not in ALLOWED:
             joined = " · ".join(found)
             problems.append(
-                f"core/hathor/{name}: 망 라이브러리 {joined}를 쓴다. "
+                f"{name}: 망 라이브러리 {joined}를 쓴다. "
                 "허용 목록에 사유와 보내는 것을 적거나 쓰지 않는다 (D-0015)"
             )
     for name in sorted(ALLOWED):
-        if not (TREE / name).exists():
+        if not (ROOT / name).exists():
             problems.append(f"허용 목록의 {name}이 없다. 지웠으면 목록에서도 뺀다")
     return problems
 
@@ -103,7 +119,7 @@ def main() -> int:
 
     if args.list:
         for name, reason in sorted(ALLOWED.items()):
-            print(f"  core/hathor/{name}\n      {reason}")
+            print(f"  {name}\n      {reason}")
         return 0
 
     problems = check()

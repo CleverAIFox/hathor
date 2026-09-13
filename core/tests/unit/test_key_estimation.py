@@ -598,7 +598,7 @@ def test_random_baseline_follows_the_harmonic_strength():
 
 
 def test_black_keys_are_the_five_accidentals():
-    """O-23의 핵심 지표. 정의가 흔들리면 비교가 성립하지 않는다."""
+    """O-23·D-0061의 핵심 지표. 정의가 흔들리면 비교가 성립하지 않는다."""
     from hathor.domain.services.key_estimation import BLACK_KEYS
 
     assert frozenset({"C#", "D#", "F#", "G#", "A#"}) == BLACK_KEYS
@@ -633,7 +633,7 @@ def test_창을_나눠도_순음이면_같은_피치클래스를_찍는다():
 
 
 def test_중앙값은_소수_구간의_잡음을_버린다():
-    """**O-27의 가설을 고정한다.**
+    """**O-27·D-0074의 가설을 고정한다.**
 
     곡의 대부분이 한 음이고 일부만 잡음이면, 평균은 잡음에 끌리고 중앙값은 안 끌린다.
     이것이 성립하지 않으면 창별 중앙값을 쓸 이유가 없다.

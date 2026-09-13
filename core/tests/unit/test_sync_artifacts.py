@@ -101,7 +101,7 @@ def test_거르개가_없으면_전부다():
 
 
 def test_접두어로_거른다():
-    """실측 1.7GB 중 O-37이 읽는 것은 `keys-*` 74MB뿐이다."""
+    """실측 1.7GB 중 O-37·D-0125이 읽는 것은 `keys-*` 74MB뿐이다."""
     names = {
         "keys-X.keys.jsonl": 1,
         "keys-X.series/a-other.npz": 2,

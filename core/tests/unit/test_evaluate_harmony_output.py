@@ -210,7 +210,7 @@ def test_마디_수를_늘리면_실측이_극한으로_내려간다():
 
 
 def test_대비가_큰_사전이_출력을_더_갈라놓는다():
-    """O-29의 본문. **같은 쌍·같은 시드로 짝지어 센다.**"""
+    """O-29·D-0082의 본문. **같은 쌍·같은 시드로 짝지어 센다.**"""
     harness = EvaluateHarmonyOutput(FAST)
     flat = harness.run(_references(30, contrast=0.35), "mix")
     peaky = harness.run(_references(30, contrast=0.95), "other")
@@ -395,7 +395,7 @@ def test_한_마디짜리_진행은_전이가_없다():
 def test_지금은_순서_정보가_없다():
     """**음성 대조.** 생성기가 마디를 독립으로 뽑으므로 초과가 0이어야 한다 (D-0062).
 
-    이것이 참이 되는 날이 O-32가 풀린 날이다.
+    이것이 참이 되는 날이 O-32·D-0113가 풀린 날이다.
     """
     report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
     line = report.line("paired")

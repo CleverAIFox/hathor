@@ -281,7 +281,7 @@ def test_활성과_닫힘에_같은_ID가_있으면_잡는다():
 
 @pytest.mark.parametrize("mark", ["~~취소선~~", "**해결.**", "**닫힘 (D-0074)**"])
 def test_활성표에_닫힘_표시가_남으면_잡는다(mark):
-    """실제로 O-12·O-18·O-23·O-27이 그렇게 남아 있었다."""
+    """실제로 O-12·D-0044·O-18·D-0050·O-23·D-0061·O-27·D-0074이 그렇게 남아 있었다."""
     text = design([f"| O-1 | {mark} | 상태 |"], ["| O-3 | 닫힘 | 결말 |"])
     assert any("닫힘 표시" in problem for problem in tool.check_open_issues(text))
 

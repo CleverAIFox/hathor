@@ -27,10 +27,10 @@ CHECKER = _module()
 
 
 def _tree(tmp_path, monkeypatch, name: str, text: str):
-    target = tmp_path / name
+    target = tmp_path / "core" / "hathor" / name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
-    monkeypatch.setattr(CHECKER, "TREE", tmp_path)
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
     monkeypatch.setattr(CHECKER, "ALLOWED", {})
     return CHECKER.check()
 
@@ -54,7 +54,7 @@ def test_하위_폴더까지_본다(tmp_path, monkeypatch):
 
 def test_허용_목록이_실물보다_넓으면_잡는다(tmp_path, monkeypatch):
     """**목록이 실물보다 넓으면 방패가 아니라 사각지대다.**"""
-    monkeypatch.setattr(CHECKER, "TREE", tmp_path)
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
     monkeypatch.setattr(CHECKER, "ALLOWED", {"없는파일.py": "사유"})
     problems = CHECKER.check()
     assert problems and "없다" in problems[0]
@@ -75,10 +75,19 @@ def test_넘파이는_망이_아니다(tmp_path, monkeypatch):
 # ------------------------------------------------------------------ 저장소
 
 
-def test_접점이_하나뿐이다():
-    """**구멍이 하나일 때 못 박아 두면 두 번째는 이 검사를 지나야 생긴다.**"""
-    assert len(CHECKER.ALLOWED) == 1
-    assert "musicbrainz" in next(iter(CHECKER.ALLOWED))
+def test_접점이_전부_musicbrainz다():
+    """**구멍을 못 박아 두면 다음 구멍은 이 검사를 지나야 생긴다.**
+
+    D-0146이 `tools`를 훑기 시작하며 하나가 늘었다 — `probe_musicbrainz.py`가
+    `urllib`을 쓰는데 **검사 밖이었다.**
+    """
+    assert all("musicbrainz" in name for name in CHECKER.ALLOWED)
+
+
+def test_도구도_훑는다():
+    """**도구도 이 기기에서 돈다.** 나무를 빼면 그만큼이 사각지대다."""
+    assert "tools" in CHECKER.TREES
+    assert any(path.as_posix().endswith("probe_musicbrainz.py") for path in CHECKER.found_files())
 
 
 def test_허용된_접점이_사유를_적는다():
