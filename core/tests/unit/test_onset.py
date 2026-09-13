@@ -15,6 +15,7 @@ from hathor.domain.services.onset import (
     TEMPO_RANGE,
     beat_period,
     envelope,
+    peaks,
     phase_profile,
     tempo_bpm,
 )
@@ -217,3 +218,41 @@ def test_스테레오는_거부한다():
     """**섞는 규칙을 여기서 정하지 않는다.** 어느 스템을 볼지는 부르는 쪽이 안다."""
     with pytest.raises(ValueError, match="1차원"):
         envelope(np.zeros((2, SR)), SR, HOP)
+
+
+# ------------------------------------------------------------------ 봉우리 (D-0155)
+
+
+def test_바닥이_있어도_위상이_안_뭉개진다():
+    """**실제 곡에는 노래와 지속음이 연속 에너지를 깔아 둔다.**
+
+    평균만 빼면 그 바닥이 모든 위상에 고르게 들어가 분포가 평평해진다 — 20곡
+    실측이 `0.257 · 0.247 · 0.247 · 0.250`이었다 (D-0154).
+    """
+    rng = np.random.default_rng(1)
+    plain = synth(120, bars=50)
+    noisy = plain + np.abs(rng.normal(0.0, 0.05, plain.size))
+    found = beat_period(noisy, HOP)
+    assert found is not None
+    profile = phase_profile(noisy, found.period_seconds, HOP)
+    assert max(profile) > 0.5
+
+
+def test_발음은_봉우리다():
+    """이웃보다 높은 칸만 고른다. **문턱도 창도 없다.**"""
+    found = peaks([0.0, 1.0, 0.0, 0.0, 2.0, 0.0])
+    assert [index for index, _ in found] == [1, 4]
+
+
+def test_바닥_위_높이를_무게로_쓴다():
+    found = dict(peaks([1.0, 3.0, 1.0, 1.0, 5.0, 1.0]))
+    assert found[4] > found[1]
+
+
+def test_바닥_아래는_봉우리가_아니다():
+    """중앙값 아래로 솟은 것은 발음이 아니다."""
+    assert peaks([5.0, 5.0, 0.0, 1.0, 0.0, 5.0, 5.0]) == []
+
+
+def test_짧으면_봉우리가_없다():
+    assert peaks([1.0, 2.0]) == []

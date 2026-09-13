@@ -184,6 +184,33 @@ def tempo_bpm(period_seconds: float) -> float:
     return 60.0 / period_seconds
 
 
+def peaks(envelope: Sequence[float] | Envelope) -> list[tuple[int, float]]:
+    """봉우리와 바닥 위 높이 (D-0155).
+
+    **발음은 봉우리지 에너지가 아니다.** 실제 곡에는 노래와 지속음이 연속 에너지를
+    깔아 두는데, 평균만 빼면 그 바닥이 **모든 위상에 고르게 들어가 분포를 뭉갠다** —
+    합성에 바닥을 넣어 재현했다.
+
+    | 바닥 | 박 안 위상 |
+    |---|---|
+    | 없음 | `0.675 · 0.000 · 0.000 · 0.325` |
+    | 0.2 | `0.192 · 0.307 · 0.194 · 0.307` |
+
+    이웃보다 높은 칸만 고른다. **고를 값이 없다** — 문턱도 창도 없고 중앙값 위
+    높이를 무게로 쓴다.
+    """
+    values = np.asarray(envelope, dtype=np.float64)
+    if values.size < 3:
+        return []
+    floor = float(np.median(values))
+    found: list[tuple[int, float]] = []
+    for index in range(1, values.size - 1):
+        height = float(values[index])
+        if height > values[index - 1] and height >= values[index + 1] and height > floor:
+            found.append((index, height - floor))
+    return found
+
+
 def phase_profile(
     envelope: Sequence[float] | Envelope,
     period_seconds: float,
@@ -201,11 +228,10 @@ def phase_profile(
         raise ValueError("주기와 홉은 양수여야 한다")
 
     values = np.asarray(envelope, dtype=np.float64)
-    values = np.maximum(values - values.mean(), 0.0)
     span = period_seconds / hop_seconds
     found = np.zeros(bins, dtype=np.float64)
-    for index, value in enumerate(values):
-        found[int((index % span) / span * bins) % bins] += value
+    for index, height in peaks(values):
+        found[int((index % span) / span * bins) % bins] += height
     total = float(found.sum())
     if total <= 0.0:
         return tuple(1.0 / bins for _ in range(bins))
