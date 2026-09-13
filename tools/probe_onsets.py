@@ -133,6 +133,57 @@ def diagnose(song: tuple[str, np.ndarray, float]) -> int:
     return 0
 
 
+def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float) -> int:
+    """두 홉을 **같은 곡끼리** 견준다 (D-0165).
+
+    `--limit`으로 다시 뽑으면 표본이 갈려 짝지은 비교가 아니게 된다 (D-0113 · D-0164).
+    여기서는 **두 폴더의 교집합만** 본다.
+    """
+    folder = out / f"keys-{other:g}s{SUFFIX}"
+    if not folder.is_dir():
+        print(f"{folder}가 없다.", file=sys.stderr)
+        return 1
+    theirs = {key: (envelope, hop) for key, envelope, hop in load(folder, None)}
+
+    print(f"\n{folder.name}와 짝지어 본다")
+    gaps: list[float] = []
+    shifted: list[tuple[str, float, float]] = []
+    for key, envelope, hop in songs:
+        if key not in theirs:
+            continue
+        mine = beat_period(envelope, hop)
+        other_beat = beat_period(theirs[key][0], theirs[key][1])
+        if mine is None or other_beat is None:
+            continue
+        gaps.append(
+            max(phase_profile(envelope, mine.period_seconds, hop))
+            - max(phase_profile(theirs[key][0], other_beat.period_seconds, theirs[key][1]))
+        )
+        ratio = mine.tempo_bpm / other_beat.tempo_bpm
+        if abs(ratio - 1.0) > 0.2:
+            shifted.append((key, other_beat.tempo_bpm, mine.tempo_bpm))
+
+    if not gaps:
+        print("겹치는 곡이 없다.", file=sys.stderr)
+        return 1
+    mean = statistics.mean(gaps)
+    spread = statistics.pstdev(gaps) if len(gaps) > 1 else 0.0
+    rose = sum(1 for value in gaps if value > 0)
+    print(
+        f"  짝지은 곡 {len(gaps)} · 집중도 차이 평균 {mean:+.4f}"
+        f" · 중앙 {statistics.median(gaps):+.4f}"
+    )
+    print(f"  오른 곡 {rose} / {len(gaps)}")
+    if spread > 0:
+        print(f"  t {mean / (spread / len(gaps) ** 0.5):+.2f}")
+
+    print(f"\n**박 추정이 홉에 따라 바뀐 곡 {len(shifted)}**")
+    for key, before, after in shifted:
+        print(f"  {key[:36]:<38}{before:>7.1f} → {after:>7.1f}   ({after / before:.2f}배)")
+    print("  **박은 곡의 성질이지 격자의 성질이 아니다** (D-0103과 같은 부류다)")
+    return 0
+
+
 def table(songs: list[tuple[str, np.ndarray, float]]) -> int:
     """곡마다 한 줄. **전체 분포가 못 가르는 것을 여기서 본다** (D-0160).
 
@@ -186,6 +237,7 @@ def main() -> int:
     parser.add_argument("--diagnose", type=int, default=None, help="곡 하나를 뜯는다 (0부터)")
     parser.add_argument("--table", action="store_true", help="곡별로 한 줄씩 찍는다")
     parser.add_argument("--hop", type=float, default=None, help="어느 홉의 폴더를 볼 것인가")
+    parser.add_argument("--against", type=float, default=None, help="다른 홉과 짝지어 견준다")
     args = parser.parse_args()
 
     picked = folders(args.out)
@@ -208,6 +260,8 @@ def main() -> int:
     print(f"{folder} · {len(songs)}곡")
     if args.diagnose is not None:
         return diagnose(songs[args.diagnose])
+    if args.against is not None:
+        return compare(songs, args.out, args.against)
     if args.table:
         return table(songs)
     tempos: list[float] = []
