@@ -42,12 +42,18 @@ def test_못_재면_0으로_안_넘긴다(monkeypatch):
 
 
 def test_오류_수를_읽는다(monkeypatch):
+    """**요약 줄이 아니라 오류 줄을 센다** (D-0150). 요약은 환경 의존까지 포함한다."""
+
     class Done:
-        stdout = "tests/x.py:1: error: 뭐가 틀렸다\nFound 12 errors in 3 files\n"
+        stdout = (
+            "tests/x.py:1: error: 뭐가 틀렸다  [arg-type]\n"
+            "tests/x.py:2: error: 또  [index]\n"
+            "Found 2 errors in 1 file\n"
+        )
         stderr = ""
 
     monkeypatch.setattr(RATCHET.subprocess, "run", lambda *a, **k: Done())
-    assert RATCHET.measure() == 12
+    assert RATCHET.measure() == 2
 
 
 def test_없으면_0이다(monkeypatch):
@@ -59,8 +65,43 @@ def test_없으면_0이다(monkeypatch):
     assert RATCHET.measure() == 0
 
 
+def test_못_재면_None이다(monkeypatch):
+    """**0과 못 잰 것은 다르다** (GR-0.5)."""
+    monkeypatch.setattr(RATCHET.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError()))
+    assert RATCHET.measure() is None
+
+
 def test_성장에는_결정_기록이_필요하다():
     """**손이 한 번 멈추는 것이 요점이다** (D-0118)."""
     source = (ROOT / "tools" / "check_test_types.py").read_text(encoding="utf-8")
     assert "--allow-growth" in source
     assert "D-0118" in source
+
+
+# ------------------------------------------------------------------ 흔들리지 않는다 (D-0150)
+
+
+def test_환경_의존_부류를_안_센다():
+    """첫 못이 75였는데 **다른 기기에서 76이 나왔다.**
+
+    같은 코드에서 수가 다르면 래칫이 아니다. `unused-ignore`는 스텁이 깔렸는지에,
+    `import-not-found`는 `MYPYPATH`에 따라 달라진다.
+    """
+    assert "unused-ignore" in RATCHET.VOLATILE
+    assert "import-not-found" in RATCHET.VOLATILE
+
+
+def test_부류별로_센다():
+    text = (
+        "tests/a.py:1: error: 뭐가 틀렸다  [arg-type]\n"
+        "tests/a.py:2: error: 또 틀렸다  [arg-type]\n"
+        "tests/b.py:3: error: 스텁이 생겼다  [unused-ignore]\n"
+    )
+    assert RATCHET.tally(text) == {"arg-type": 2}
+
+
+def test_어긋나면_어디가_다른지_찍는다():
+    """**다음 어긋남을 한 번에 가리게 한다.** 수만 보면 또 추측한다."""
+    source = (ROOT / "tools" / "check_test_types.py").read_text(encoding="utf-8")
+    body = source.split("if found != PINNED:")[1].split("return 1")[0]
+    assert "counts.items()" in body
