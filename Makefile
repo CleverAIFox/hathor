@@ -62,8 +62,9 @@ ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [NOCOMMIT=1] (D-0070)
 	@bash tools/apply_patch.sh $(PATCH)
 
-clean:         ## 파이썬 바이트코드만 지운다
-	find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+clean:         ## 저장소의 파이썬 바이트코드만 지운다. **.venv/와 var/는 건드리지 않는다** (D-0148)
+	find . -type d \( -name .venv -o -name var -o -name node_modules \) -prune -o \
+	     -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 
 clean-all: clean  ## 검사 도구 캐시까지 지운다. **var/과 .venv/는 남긴다** (D-0067)
 	rm -rf core/.ruff_cache core/.mypy_cache core/.pytest_cache \

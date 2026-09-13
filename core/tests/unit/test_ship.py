@@ -96,3 +96,37 @@ def test_check는_안_받는다():
     """
     source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
     assert '"--check"' not in source
+
+
+# ------------------------------------------------------------------ 세는 범위 (D-0148)
+
+
+def test_venv를_안_센다():
+    """첫 실측 449개 중 **대부분이 `.venv`였다.**
+
+    **세는 수가 틀리면 그 수를 보고 한 행동도 틀린다.**
+    """
+    assert ".venv" in SHIP.OUTSIDE
+    assert "var" in SHIP.OUTSIDE
+
+
+def test_산출물은_찌꺼기가_아니다():
+    """`var/`는 안 센다 (D-0067)."""
+    lines = SHIP.count_leftovers()
+    assert not any("var/" in line for line in lines)
+
+
+def test_지우는_범위를_두_곳에_안_적는다():
+    """**`--fix`는 `make clean`을 부른다.** 두 곳에 적으면 어긋난다."""
+    source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
+    body = source.split("if args.fix:")[1].split("print(")[0]
+    assert '"make", "clean"' in body
+    assert "rm" not in body
+
+
+def test_clean이_venv를_지나친다():
+    """D-0067이 *"`.venv/`는 남긴다"*고 적었는데 **`clean`은 안 지켰다.**"""
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    body = makefile.split("clean:")[1].split("\nclean-all:")[0]
+    assert "-prune" in body
+    assert ".venv" in body

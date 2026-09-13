@@ -49,6 +49,18 @@ OFF = "\033[0m"
 LEFTOVERS = (".backup", ".o7-*")
 """D-0072가 없앤 유물. **쌓여 있다면 그 사실이 소식이다.**"""
 
+OUTSIDE = (".venv", "var", "node_modules")
+"""세지 않는 나무 (D-0148).
+
+첫 실측이 `__pycache__` **449개**였고 **그중 대부분이 `.venv`였다** — 이 저장소
+사본에서 재니 45개 중 27개(60%)가 거기였다. 기기에는 `torch`·`demucs`가 들어 있어
+비율이 더 높다.
+
+**세는 수가 틀리면 그 수를 보고 한 행동도 틀린다.** `make clean`이 그 바이트코드를
+지우면 다음 실행이 전부 다시 컴파일한다.
+
+`var/`도 안 센다. **산출물은 찌꺼기가 아니다** (D-0067)."""
+
 
 def _run(*command: str) -> tuple[int, str]:
     done = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
@@ -78,9 +90,13 @@ def count_leftovers() -> list[str]:
         hits = [path for path in ROOT.glob(pattern) if path.exists()]
         if hits:
             found.append(f"{pattern}가 {len(hits)}개 있다. D-0072가 없앤 유물이다")
-    caches = len(list(ROOT.rglob("__pycache__")))
-    if caches > 0:
-        found.append(f"`__pycache__` {caches}개. `make clean` 또는 `PUSH=1 FIX=1`")
+    caches = [
+        path
+        for path in ROOT.rglob("__pycache__")
+        if not any(part in OUTSIDE for part in path.relative_to(ROOT).parts)
+    ]
+    if caches:
+        found.append(f"저장소 `__pycache__` {len(caches)}개. `make clean` 또는 `FIX=1`")
     scripts = [path.name for path in ROOT.glob("*.sh")]
     if scripts:
         found.append(f"루트에 일회성 스크립트 {len(scripts)}개: {' · '.join(scripts[:3])}")
@@ -95,7 +111,8 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.fix:
-        _run("find", ".", "-name", "__pycache__", "-type", "d", "-exec", "rm", "-rf", "{}", "+")
+        # **`make clean`을 부른다.** 지우는 범위를 두 곳에 적으면 어긋난다 (D-0148).
+        _run("make", "clean")
 
     print(f"{DIM}── 규약 (make check){OFF}")
     code, text = _run("make", "check")
