@@ -115,6 +115,22 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+# 오디오 비이동 (D-0015 · D-0134). 망을 타는 유일한 모듈이 오디오를 만질 수 있는
+# 것들을 **임포트조차 못 하게** 한다. D-0015가 요구한 "타입 수준의 불가능"을
+# 서버가 없는 지금 구현할 수 있는 형태다. 접점의 개수는 tools/check_egress.py가 센다.
+name = "송신부는 오디오를 모른다"
+type = "forbidden"
+source_modules = ["hathor.infrastructure.musicbrainz_lookup"]
+forbidden_modules = [
+  "hathor.domain.ports.audio_analysis",
+  "hathor.domain.entities.audio_stream",
+  "hathor.infrastructure.ffmpeg_audio_decoder",
+  "hathor.infrastructure.demucs_separator",
+  "hathor.infrastructure.mert_feature_extractor",
+  "hathor.infrastructure.mfcc_feature_extractor",
+]
+
+[[tool.importlinter.contracts]]
 name = "애플리케이션은 구현체를 모른다"
 type = "forbidden"
 source_modules = ["hathor.application"]

@@ -19,6 +19,7 @@ docs:          ## 색인 · 조각 · 표기 · 비밀정보 · 레이아웃 (D-
 	python3 tools/check_issue_mentions.py --check
 	python3 tools/check_secrets.py --check
 	python3 tools/check_doc_style.py --check
+	python3 tools/check_egress.py --check
 
 size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)
 	python3 tools/check_file_size.py

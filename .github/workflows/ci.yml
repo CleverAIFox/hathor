@@ -41,6 +41,10 @@ jobs:
         working-directory: .
         run: python3 tools/check_doc_style.py --check
 
+      - name: Egress points
+        working-directory: .
+        run: python3 tools/check_egress.py --check
+
       - name: Secret scan
         working-directory: .
         run: python3 tools/check_secrets.py --check
