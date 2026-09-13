@@ -30,7 +30,7 @@
 5. 제목 계층 건너뛰기 금지 (`##` 다음에 `####`)
 6. 결정 기록에 `- **배경**`
 7. 살아 있는 문서 하위 절의 `**강조**`가 열여섯을 넘지 않을 것
-8. 결정 기록에 `강제자` (D-0131 이후분)
+8. 결정 기록에 `강제자` (전수) · `재현` (D-0135 이후분)
 9. **여섯 번째 문서 금지** — `docs/`에 축 셋 말고 다른 문서가 생기지 않는가
 
 **넷은 이미 위반 0이었다.** 규칙을 새로 만든 것이 아니라 **지켜지고 있던 것을
@@ -265,6 +265,11 @@ def check_records(name: str, text: str) -> list[str]:
                 f"{name}: {number}에 `강제자` 기술이 없다. "
                 "`강제자  tools/xxx.py` 또는 `강제자 없음 — 사유: …`"
             )
+        if int(number[2:]) >= REPRODUCE_FROM and "재현" not in body:
+            problems.append(
+                f"{name}: {number}에 `재현` 기술이 없다. "
+                "명령을 들여쓴 블록으로 적거나 `재현 없음 — 사유: …`"
+            )
         for raw in ENFORCER_PATH.findall(_enforcer_line(body)):
             if not (ROOT / raw).exists():
                 problems.append(
@@ -273,6 +278,23 @@ def check_records(name: str, text: str) -> list[str]:
                 )
     return problems
 
+
+REPRODUCE_FROM = 135
+"""`재현` 기술을 요구하는 첫 결정 번호 (D-0135).
+
+**D-0123이 `+1.982초 · t 21.43 · 곡 승률 95.1%`를 적고 명령을 안 적었다.** 같은
+산출물에서 다시 돌리니 `+1.992 · 21.65 · 96.5%`가 나왔고 **무엇이 달라졌는지 기록으로
+가릴 수 없다.** 승률 1.4%p는 14곡이 뒤집힌 것이다.
+
+형식은 둘이다.
+
+    재현
+        uv run python -m hathor.cli eval harmony-order --songs 200 --seeds 200
+    재현 없음 — 사유: 수치가 없다. 설계 판단이다
+
+**소급하지 않는다.** `강제자`는 *지금* 무엇이 지키는지라 조사하면 알 수 있었다.
+**명령은 그때 무엇을 쳤는지이고 우리는 모른다** — 지어내면 GR-0.5다. 이 구분이
+D-0081의 표기와 내용을 가르는 선과 같은 자리에 있다."""
 
 ENFORCER_PATH = re.compile(r"`([\w./-]+\.(?:py|sh|toml|yml))`")
 """`강제자` 줄이 가리키는 경로. **실재해야 한다** (D-0132).

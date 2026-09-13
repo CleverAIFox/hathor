@@ -288,3 +288,33 @@ def test_강제자_없음도_기술이다():
 def test_들여쓴_인용_블록은_산문이_아니다():
     """**결정 기록은 폐기한 문언을 증거로 인용한다.**"""
     assert _layout('    "이런 느낌으로 생성하라"는 사례다.\n') == []
+
+
+# ------------------------------------------------------------------ 재현 (D-0135)
+
+
+def test_재현이_없는_새_기록을_잡는다():
+    """**D-0123이 수치만 적고 명령을 안 적어 원인을 못 가렸다** (O-40)."""
+    number = f"D-{CHECKER.REPRODUCE_FROM:04d}"
+    body = f"## {number}. 제목\n\n- **배경**: 있다.\n\n강제자 없음 — 사유: x\n"
+    problems = CHECKER.check_records("d.md", body)
+    assert problems and "재현" in problems[0]
+
+
+def test_옛_기록에는_재현을_안_요구한다():
+    """**명령은 그때 무엇을 쳤는지이고 우리는 모른다.** 지어내면 GR-0.5다."""
+    number = f"D-{CHECKER.REPRODUCE_FROM - 1:04d}"
+    body = f"## {number}. 제목\n\n- **배경**: 있다.\n\n강제자 없음 — 사유: x\n"
+    assert CHECKER.check_records("d.md", body) == []
+
+
+def test_재현_없음도_기술이다():
+    number = f"D-{CHECKER.REPRODUCE_FROM:04d}"
+    body = f"## {number}. 제목\n\n- **배경**: x\n\n강제자 없음 — 사유: x\n재현 없음 — 사유: x\n"
+    assert CHECKER.check_records("d.md", body) == []
+
+
+def test_강제자와_재현은_시작이_다르다():
+    """**현재를 조사해 채울 수 있으면 표기, 과거를 추측해야 하면 내용이다** (D-0081)."""
+    assert CHECKER.ENFORCER_FROM == 1
+    assert CHECKER.REPRODUCE_FROM > 1
