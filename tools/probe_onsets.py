@@ -193,11 +193,25 @@ def main() -> int:
     low = sum(1 for value in octaves if value < 0.10)
     print(f"  0.10 미만 {low}곡 — **사람도 갈릴 자리다** (D-0054)")
 
-    print("\n박 안 위상 (평균)")
-    mean = [statistics.mean(profile[index] for profile in profiles) for index in range(PHASE_BINS)]
-    print("  " + " · ".join(f"{value:.3f}" for value in mean))
-    flat = sum(1 for profile in profiles if max(profile) < 1.5 / PHASE_BINS)
-    print(f"  고른 곡 {flat} / {len(profiles)} — 고르면 **정박에 안 몰린다는 뜻이다**")
+    # **곡마다 박의 원점이 다르다** (D-0143 · D-0158). 그대로 평균 내면 상쇄돼
+    # 언제나 균등이 나온다 — 실측 `0.260 · 0.250 · 0.239 · 0.251`이 그것이었다.
+    print("\n박 안 위상 집중도 (곡별 최대 칸)")
+    tops = [max(profile) for profile in profiles]
+    print(f"  {quantiles(tops)}")
+    flat = sum(1 for value in tops if value < 1.5 / PHASE_BINS)
+    print(f"  고른 곡 {flat} / {len(profiles)} · 균등이면 {1 / PHASE_BINS:.3f}")
+
+    print("\n가장 센 칸을 맞춰 포갠 모양")
+    rolled = [
+        tuple(
+            profile[(index + profile.index(max(profile))) % PHASE_BINS]
+            for index in range(PHASE_BINS)
+        )
+        for profile in profiles
+    ]
+    shape = [statistics.mean(profile[index] for profile in rolled) for index in range(PHASE_BINS)]
+    print("  " + " · ".join(f"{value:.3f}" for value in shape))
+    print("  **원점을 맞춰야 모양이 보인다.** 셋째 칸이 크면 뒤박이 있다는 뜻이다")
 
     gap = statistics.median(abs(value - 96.0) for value in tempos)
     print(f"\n`--tempo` 기본값 96과의 차이\n  중앙 {gap:.1f}BPM")
