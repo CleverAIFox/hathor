@@ -201,6 +201,21 @@ def main() -> int:
     flat = sum(1 for value in tops if value < 1.5 / PHASE_BINS)
     print(f"  고른 곡 {flat} / {len(profiles)} · 균등이면 {1 / PHASE_BINS:.3f}")
 
+    # **절반 템포인가.** 박을 절반으로 잡으면 진짜 박 둘이 한 박에 들어가 0번과
+    # 2번 칸이 함께 솟는다 — 실측 모양이 그랬다. 주기를 반으로 보고 다시 재면
+    # 갈린다 (D-0159).
+    doubled: list[float] = []
+    for _, envelope, hop in songs:
+        beat = beat_period(envelope, hop)
+        if beat is not None:
+            doubled.append(max(phase_profile(envelope, beat.period_seconds / 2.0, hop)))
+    if doubled:
+        print("\n주기를 반으로 보면 (= 빠르기 두 배)")
+        print(f"  집중도 {quantiles(doubled)}")
+        better = sum(1 for now, half in zip(tops, doubled, strict=False) if half > now)
+        print(f"  더 또렷해진 곡 {better} / {len(doubled)}")
+        print("  **과반이 또렷해지면 박을 절반으로 잡고 있는 것이다** (D-0159)")
+
     print("\n가장 센 칸을 맞춰 포갠 모양")
     rolled = [
         tuple(
