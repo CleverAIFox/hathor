@@ -48,7 +48,10 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
     # **홉을 폴더 이름에 적는다.** 홉이 다른 파일이 섞이면 박 추정이 조용히
     # 틀린다 — D-0143이 주기 오차 0.8%로 위상이 뭉개지는 것을 실측했다.
     folder = out_root / f"keys-{args.hop:g}s{SUFFIX}"
-    picked = tracks[: args.limit] if args.limit else tracks
+    # **고르게 뽑는다** (D-0161). 앞에서 자르면 스캔 차례가 아티스트순이라 한
+    # 아티스트만 나온다 — 20곡을 뽑았더니 전부 10CM이었고, 그 분포를 코퍼스의
+    # 분포로 읽을 뻔했다.
+    picked = tracks[:: max(1, len(tracks) // args.limit)][: args.limit] if args.limit else tracks
     pending = [
         track
         for track in picked

@@ -143,3 +143,21 @@ def test_가장_최근_폴더를_고른다(tmp_path):
         write_envelope(folder, "a.flac", [1.0, 0.0], hop_seconds=0.01)
     found = find_envelope_root(tmp_path)
     assert found is not None and found.name == "keys-0.02s.onsets"
+
+
+# ------------------------------------------------------------------ 표본 (D-0161)
+
+
+def test_고르게_뽑는다():
+    """**앞에서 자르면 한 아티스트만 나온다** (D-0161).
+
+    20곡을 뽑았더니 전부 10CM이었고 그 분포를 코퍼스의 분포로 읽을 뻔했다.
+    """
+    tracks = [f"{name}-곡{index}" for name in "ABCDE" for index in range(20)]
+    picked = tracks[:: max(1, len(tracks) // 5)][:5]
+    assert sorted({item.split("-")[0] for item in picked}) == ["A", "B", "C", "D", "E"]
+
+
+def test_상한이_곡_수보다_크면_전부다():
+    tracks = ["a", "b", "c"]
+    assert tracks[:: max(1, len(tracks) // 10)][:10] == tracks
