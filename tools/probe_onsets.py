@@ -185,6 +185,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None, help="곡 수 상한")
     parser.add_argument("--diagnose", type=int, default=None, help="곡 하나를 뜯는다 (0부터)")
     parser.add_argument("--table", action="store_true", help="곡별로 한 줄씩 찍는다")
+    parser.add_argument("--hop", type=float, default=None, help="어느 홉의 폴더를 볼 것인가")
     args = parser.parse_args()
 
     picked = folders(args.out)
@@ -192,6 +193,12 @@ def main() -> int:
         print(f"{args.out.resolve()}에 포락선 폴더가 없다.", file=sys.stderr)
         print("`ingest onsets`를 먼저 돌리거나 `--out`을 확인한다 (D-0153).", file=sys.stderr)
         return 1
+    if args.hop is not None:
+        wanted = f"keys-{args.hop:g}s{SUFFIX}"
+        picked = [path for path in picked if path.name == wanted]
+        if not picked:
+            print(f"{wanted}가 없다. `ingest onsets --hop {args.hop:g}`", file=sys.stderr)
+            return 1
     folder = picked[-1]
     songs = load(folder, args.limit)
     if not songs:
