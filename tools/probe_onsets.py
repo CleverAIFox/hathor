@@ -133,6 +133,21 @@ def diagnose(song: tuple[str, np.ndarray, float]) -> int:
     return 0
 
 
+def _spacing(envelope: np.ndarray, hop: float) -> float:
+    """발음 사이 간격의 중앙값 (초). **박을 안 쓴다.**
+
+    봉우리를 고를 때 `apart`가 필요한데 박이 없으므로 **한 칸**을 쓴다.
+
+    **그래서 이 값은 잔물결이 지배한다.** 실측에서 두 홉의 비가 정확히 0.500이었고
+    그것이 홉 비율이다 — **간격이 곡의 성질이 아니라 격자의 성질이라는 뜻이다**
+    (D-0166). 이 함수는 그 사실을 보이려고 남긴다.
+    """
+    found = [index for index, _ in peaks(envelope)]
+    if len(found) < 2:
+        return 0.0
+    return float(np.median(np.diff(found))) * hop
+
+
 def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float) -> int:
     """두 홉을 **같은 곡끼리** 견준다 (D-0165).
 
@@ -148,6 +163,9 @@ def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float)
     print(f"\n{folder.name}와 짝지어 본다")
     gaps: list[float] = []
     shifted: list[tuple[str, float, float]] = []
+    # **박 없이 쓸 수 있는 재료가 있는가** (D-0166). 발음 간격은 절대 시간이라
+    # 격자에 덜 흔들린다. 박이 안 서는 곡에서도 남는지 본다.
+    spacing: list[float] = []
     for key, envelope, hop in songs:
         if key not in theirs:
             continue
@@ -158,6 +176,9 @@ def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float)
         gaps.append(
             max(phase_profile(envelope, mine.period_seconds, hop))
             - max(phase_profile(theirs[key][0], other_beat.period_seconds, theirs[key][1]))
+        )
+        spacing.append(
+            _spacing(envelope, hop) / max(_spacing(theirs[key][0], theirs[key][1]), 1e-9)
         )
         ratio = mine.tempo_bpm / other_beat.tempo_bpm
         if abs(ratio - 1.0) > 0.2:
@@ -176,6 +197,17 @@ def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float)
     print(f"  오른 곡 {rose} / {len(gaps)}")
     if spread > 0:
         print(f"  t {mean / (spread / len(gaps) ** 0.5):+.2f}")
+
+    if spacing:
+        off = [abs(value - 1.0) for value in spacing]
+        print("\n발음 간격 (박을 안 쓴다)")
+        print(
+            f"  두 홉의 비 · 중앙 {statistics.median(spacing):.3f}"
+            f" · 어긋남 중앙 {statistics.median(off):.3f}"
+        )
+        loose = sum(1 for value in off if value > 0.2)
+        print(f"  20%를 넘게 어긋난 곡 {loose} / {len(off)}")
+        print("  **비가 홉 비율과 같으면 간격이 격자 인공물이다** (D-0166)")
 
     print(f"\n**박 추정이 홉에 따라 바뀐 곡 {len(shifted)}**")
     for key, before, after in shifted:
