@@ -184,7 +184,7 @@ def tempo_bpm(period_seconds: float) -> float:
     return 60.0 / period_seconds
 
 
-def peaks(envelope: Sequence[float] | Envelope) -> list[tuple[int, float]]:
+def peaks(envelope: Sequence[float] | Envelope, *, apart: int = 1) -> list[tuple[int, float]]:
     """봉우리와 바닥 위 높이 (D-0155).
 
     **발음은 봉우리지 에너지가 아니다.** 실제 곡에는 노래와 지속음이 연속 에너지를
@@ -196,17 +196,27 @@ def peaks(envelope: Sequence[float] | Envelope) -> list[tuple[int, float]]:
     | 없음 | `0.675 · 0.000 · 0.000 · 0.325` |
     | 0.2 | `0.192 · 0.307 · 0.194 · 0.307` |
 
-    이웃보다 높은 칸만 고른다. **고를 값이 없다** — 문턱도 창도 없고 중앙값 위
-    높이를 무게로 쓴다.
+    `apart`는 봉우리가 서로 떨어져야 하는 칸 수다. **이것 없이 이웃만 보면 잡음의
+    잔물결을 전부 센다** — 실측 5142개(25.7%)에 간격 중앙 3칸이었고 박은 50칸이었다.
+    **16.7배 촘촘했고 그래서 위상이 평평했다** (D-0156).
+
+    부르는 쪽이 **보고할 해상도 한 칸**을 준다. `phase_profile`은 `PHASE_BINS`로
+    나눈 칸을 주며 **새 값이 아니다** — 이미 그 눈금으로 보고한다.
+
+    문턱은 없다. 중앙값 위 높이를 무게로 쓴다.
     """
     values = np.asarray(envelope, dtype=np.float64)
     if values.size < 3:
         return []
     floor = float(np.median(values))
+    reach = max(1, apart)
     found: list[tuple[int, float]] = []
-    for index in range(1, values.size - 1):
+    for index in range(reach, values.size - reach):
         height = float(values[index])
-        if height > values[index - 1] and height >= values[index + 1] and height > floor:
+        if height <= floor:
+            continue
+        window = values[index - reach : index + reach + 1]
+        if height >= float(window.max()) and height > float(values[index - 1]):
             found.append((index, height - floor))
     return found
 
@@ -230,7 +240,7 @@ def phase_profile(
     values = np.asarray(envelope, dtype=np.float64)
     span = period_seconds / hop_seconds
     found = np.zeros(bins, dtype=np.float64)
-    for index, height in peaks(values):
+    for index, height in peaks(values, apart=max(1, int(span / bins / 2))):
         found[int((index % span) / span * bins) % bins] += height
     total = float(found.sum())
     if total <= 0.0:

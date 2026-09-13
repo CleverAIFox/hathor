@@ -223,6 +223,17 @@ def test_스테레오는_거부한다():
 # ------------------------------------------------------------------ 봉우리 (D-0155)
 
 
+def test_뒤박이_섞이면_두_칸에_선다():
+    """**반주 리듬의 재료다.** 한 칸에 몰리면 정박, 두 칸이면 뒤박이 있다."""
+    rng = np.random.default_rng(1)
+    base = synth(120, {0.0: 1.0, 0.5: 0.7}, bars=50)
+    noisy = base + np.abs(rng.normal(0.0, 0.1, base.size))
+    found = beat_period(noisy, HOP)
+    assert found is not None
+    profile = phase_profile(noisy, found.period_seconds, HOP)
+    assert sorted(profile)[-2] > 0.25
+
+
 def test_바닥이_있어도_위상이_안_뭉개진다():
     """**실제 곡에는 노래와 지속음이 연속 에너지를 깔아 둔다.**
 
@@ -239,9 +250,24 @@ def test_바닥이_있어도_위상이_안_뭉개진다():
 
 
 def test_발음은_봉우리다():
-    """이웃보다 높은 칸만 고른다. **문턱도 창도 없다.**"""
+    """이웃보다 높은 칸만 고른다. **문턱은 없다.**"""
     found = peaks([0.0, 1.0, 0.0, 0.0, 2.0, 0.0])
     assert [index for index, _ in found] == [1, 4]
+
+
+def test_해상도_한_칸에_하나다():
+    """**이웃만 보면 잡음의 잔물결을 전부 센다** — 실측 5142개에 간격 3칸이었다."""
+    values = [0.0, 1.0, 0.0, 3.0, 0.0, 1.0, 0.0] + [0.0] * 20
+    assert [index for index, _ in peaks(values, apart=3)] == [3]
+
+
+def test_잡음_바닥에서_봉우리가_줄어든다():
+    """박 50칸에 봉우리 5142개면 **봉우리가 발음이 아니다** (D-0156)."""
+    rng = np.random.default_rng(1)
+    noisy = synth(120, bars=50) + np.abs(rng.normal(0.0, 0.1, synth(120, bars=50).size))
+    dense = peaks(noisy)
+    sparse = peaks(noisy, apart=12)
+    assert len(sparse) < len(dense) / 2
 
 
 def test_바닥_위_높이를_무게로_쓴다():

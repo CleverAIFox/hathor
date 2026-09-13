@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT / "core"))
 from hathor.domain.services.onset import (  # noqa: E402 — sys.path 조작 뒤라야 한다
     PHASE_BINS,
     beat_period,
+    peaks,
     phase_profile,
 )
 from hathor.infrastructure.onset_store import SUFFIX  # noqa: E402
@@ -88,9 +89,28 @@ def diagnose(song: tuple[str, np.ndarray, float]) -> int:
     above = int((centred > peak * 0.3).sum())
     print(f"  최대의 30%를 넘는 칸 {above} ({above / envelope.size:.1%})")
 
+    found_peaks = peaks(envelope)
+    print("\n봉우리")
+    print(f"  {len(found_peaks)}개 ({len(found_peaks) / envelope.size:.1%})")
+    if len(found_peaks) > 1:
+        gaps = np.diff([index for index, _ in found_peaks])
+        print(
+            f"  간격(칸) 중앙 {float(np.median(gaps)):.1f}"
+            f" · 5% {float(np.quantile(gaps, 0.05)):.1f}"
+        )
+
     whole = beat_period(envelope, hop)
     if whole is not None:
         print(f"\n곡 전체 · {whole.tempo_bpm:.2f}BPM · 격차 {whole.margin:.3f}")
+
+    if whole is not None and len(found_peaks) > 1:
+        beat_frames = whole.period_seconds / hop
+        gaps = np.diff([index for index, _ in found_peaks])
+        print(
+            f"  박 하나가 {beat_frames:.1f}칸 · 봉우리 간격 중앙의 "
+            f"{beat_frames / max(float(np.median(gaps)), 1e-9):.1f}배"
+        )
+        print("  **박보다 훨씬 촘촘하면 봉우리가 발음이 아니다** (D-0156)")
 
     span = int(WINDOW_SECONDS / hop)
     found: list[float] = []
