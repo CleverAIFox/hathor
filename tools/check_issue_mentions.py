@@ -20,7 +20,7 @@ D-0125 세션이 그것을 읽고 O-38을 두 판 끌었다. **미해결표를 �
 
 **닫힌 질문 번호를 적으면 같은 줄에 그 질문을 닫은 결정 번호를 적는다.**
 
-- 닫힌 질문과 그 결정 번호는 `docs/DESIGN.md`의 닫힘표에서 읽는다. **여기 손으로
+- 닫힌 질문과 그 결정 번호는 `docs/MASTER.md`의 닫힘표에서 읽는다. **여기 손으로
   적지 않는다** — 두 곳이 어긋난다 (D-0043).
 - **열린 질문은 안 본다.** 열린 질문에는 닫은 결정이 없다.
 - **결정 번호면 무엇이든 통과시킨다.** 닫은 결정을 콕 집어 요구하는 안은 기각했다 —
@@ -76,20 +76,20 @@ SKIP_FILES = (
 
 DOCUMENTS = (
     "README.md",
-    "CONTRIBUTING.md",
+    "MASTER.md",
     "docs/PLAN.md",
-    "docs/DESIGN.md",
+    "docs/MASTER.md",
     "docs/DECISIONS.md",
 )
 """훑을 문서. **축 셋과 규약과 진입 전부다** (D-0145).
 
 D-0126은 `docs/`를 통째로 뺐고 사유는 *"결정 기록은 그 시점을 그대로 적는다"*였다.
-**그 사유는 `docs/decisions/`에만 맞는다** — 과거 축이라 소급 수정이 금지다 (D-0081).
+**그 사유는 ``에만 맞는다** — 과거 축이라 소급 수정이 금지다 (D-0081).
 
 **`PLAN`과 `DESIGN`은 현재와 미래이며 고칠 수 있고 고쳐야 한다.** 실측하니 맨몸
 참조가 0곳이었다 — **지켜지고 있었지만 아무것도 막고 있지 않았다.**"""
 
-SKIP_TREES = ("docs/decisions/",)
+SKIP_TREES = ("",)
 """안 보는 나무. **과거 축은 그 시점을 적는다.**"""
 
 ISSUE = re.compile(r"O-\d+")
@@ -185,7 +185,7 @@ def main() -> int:
     parser.add_argument("--list", action="store_true", help="닫힌 질문과 결정을 찍는다")
     args = parser.parse_args()
 
-    design_text = (ROOT / "docs" / "DESIGN.md").read_text(encoding="utf-8")
+    design_text = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
     plan_text = (ROOT / PLAN).read_text(encoding="utf-8") if (ROOT / PLAN).exists() else ""
     if args.list:
         for issue, closers in closed_issues(design_text).items():

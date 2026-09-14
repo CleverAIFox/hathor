@@ -8,12 +8,12 @@
 
 | 종류 | 파일 | 답하는 질문 | 언제 보는가 |
 |---|---|---|---|
-| **규약** | [`CONTRIBUTING.md`](CONTRIBUTING.md) | 어떻게 일하는가 | 작업을 시작할 때, 커밋·PR 전에 |
-| **기획** | [`docs/DESIGN.md`](docs/DESIGN.md) | 무엇을 왜 만드는가 | 설계를 확인하거나 바꿀 때 |
+| **규약** | [`MASTER.md`](MASTER.md) | 어떻게 일하는가 | 작업을 시작할 때, 커밋·PR 전에 |
+| **기획** | [`docs/MASTER.md`](docs/MASTER.md) | 무엇을 왜 만드는가 | 설계를 확인하거나 바꿀 때 |
 | **결정** | [`docs/DECISIONS.md`](docs/DECISIONS.md) | 왜 그렇게 골랐는가 | "이건 왜 이렇게 됐지"가 나올 때 |
 | **진입** | 이 문서 | 지금 무엇을 할 수 있는가 | 처음 열었을 때, 명령이 필요할 때 |
 
-- `DESIGN.md`가 **설계의 단일 진실 공급원**이다. 기획서 3부작(제안서 · 요구사항 · 상세설계).
+- `MASTER.md`가 **설계의 단일 진실 공급원**이다. 기획서 3부작(제안서 · 요구사항 · 상세설계).
 - `DECISIONS.md`는 **추가 전용**이다. 판단이 바뀌면 고쳐 쓰지 않고 새 번호로 정정한다.
 - **문서를 먼저 고치고 코드를 고친다 (GR-0.1).** 코드가 앞서면 그 즉시 문서를 맞춘다.
 - **도구가 강제하는 것은 문서에 다시 적지 않는다.** 계층 계약은 `core/pyproject.toml`,
@@ -26,12 +26,12 @@
 
 | 단계 | 상태 |
 |---|---|
-| P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/DESIGN.md`, 근거는 `docs/DECISIONS.md` |
+| P0 기반 · P1 인제스트 #1~#14 | 완료 — 상세는 `docs/MASTER.md`, 근거는 `docs/DECISIONS.md` |
 | O-37 화성 리듬 — **측정 완료** (D-0125로 닫힘) | D-0123. 반감점이 **시간 순서에서 온다** — 실측 중앙 3.87초 대 창 뒤섞음 2.32초, `t 21.43` · 곡 승률 95.1% · 1002곡. 곡마다 유지 확률이 나오고 **자유 매개변수가 없다** |
 | **다음 작업** | **소리를 한 번 듣는다.** O-47은 닫혔고(D-0173) 하네스를 또 세우기 전에 출력을 확인할 자리다 (O-44). **정본은 [`docs/PLAN.md`](docs/PLAN.md) §1이며 여기 다시 적지 않는다** (D-0130) |
 
 정본 뷰는 `var/ingest/mert-layers`의 `layer00` + 중심화다 (D-0027 · D-0031).
-실측 수치는 `docs/DESIGN.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
+실측 수치는 `docs/MASTER.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
 
 ## 생성 (D-0052)
 
@@ -463,8 +463,8 @@ MongoDB는 `--wiredTigerCacheSizeGB 0.25`로 캐시를 제한해 core에 포함�
 ## 구조
 
 ```text
-CONTRIBUTING.md     개발 규약 (GROUND RULES)
-docs/DESIGN.md      설계 단일 진실 공급원 (기획서 3부작)
+MASTER.md     개발 규약 (GROUND RULES)
+docs/MASTER.md      설계 단일 진실 공급원 (기획서 3부작)
 core/hathor/        Python 모노레포 (domain · application · engines · infrastructure · interfaces · shared)
 core/tests/         unit · integration
 infra/              postgres init · prometheus 설정

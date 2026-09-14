@@ -31,7 +31,13 @@ from functools import lru_cache
 from pathlib import Path
 
 DOTENV_NAME = ".env"
-REPO_MARKERS = ("CONTRIBUTING.md", "core", "docs")
+REPO_MARKERS = ("Makefile", "core", "docs")
+"""저장소 뿌리를 알아보는 표식.
+
+**`CONTRIBUTING.md`였다** (D-0186). 그 문서가 `docs/MASTER.md`로 흡수되면서
+뿌리에 남지 않았고, 뿌리에 있고 안 옮길 것으로 바꿨다 — `Makefile`이다.
+`core`·`docs`와 함께 셋이 다 있어야 뿌리다.
+"""
 
 LIBRARY_ROOT_ENV = "HATHOR_LIBRARY_ROOT"
 PATCH_DIR_ENV = "HATHOR_PATCH_DIR"

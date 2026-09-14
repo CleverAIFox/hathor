@@ -39,7 +39,6 @@ run() {
 
 # **첫 실패에서 멈추지 않는다.** 한 번에 다 보여야 한 번에 고친다.
 run "결정 색인"   python3 tools/sync_decision_index.py --check
-run "기록 조각"   python3 tools/split_decisions.py --check
 run "닫힌 질문"   python3 tools/check_issue_mentions.py --check
 run "문서 레이아웃" python3 tools/check_doc_style.py --check
 run "망 접점"    python3 tools/check_egress.py --check

@@ -1,26 +1,29 @@
-# 프로젝트 기획서
+# HATHOR · 마스터 문서
 
-> **문서 5종** (D-0043 · D-0130) — 문서는 병렬 축이 아니라 한 항목의 **생애주기**다.
->
-> ```
-> PLAN(미래)  →  도래  →  DESIGN(현재)  →  회고  →  DECISIONS(과거)
-> ```
+취향 잠재 표현 기반 종단간 AI 음악 창작 시스템
+
+> **지금 무엇이 어떤 값인가**만 담는 문서다. 사고 경위와 판단 근거는
+> `DECISIONS.md`, 남은 일은 `PLAN.md` 소관이다.
 >
 > | 문서 | 시제 | 담는 것 |
 > |---|---|---|
-> | `docs/PLAN.md` | 미래 | 남은 일 · 열린 질문 · 갚을 빚 |
-> | `docs/DESIGN.md` | 현재 | 제안서 · 요구사항 · 설계 · 용어 |
-> | `docs/DECISIONS.md` | 과거 | 왜 그렇게 했나 (덧붙이기만) |
-> | `CONTRIBUTING.md` | — | 사람이 지키는 규약. 시제 밖 |
-> | `README.md` | — | 진입. 시제 밖 |
+> | `docs/PLAN.md` | 미래 | 다음 작업 · 열린 질문 · 갚을 빚 |
+> | **`docs/MASTER.md`** | **현재** | **기획 · 요구사항 · 설계 · 작업 원칙 · 결정 대장 (이 문서)** |
+> | `docs/DECISIONS.md` | 과거 | 왜 그렇게 됐나 (추가 전용) |
+> | `README.md` | — | 진입. 이 문서를 가리킨다 |
 >
-> **한 항목은 한 문서에만 산다.** 두 곳에 있으면 한쪽만 고치는 날이 온다.
-> **여섯 번째는 만들지 않는다** — 세 시제가 다 찼다.
->
-> **현재 문서: 현재.**
+> 문서 넷은 병렬 축이 아니라 한 항목의 **생애주기**다 (D-0130 · D-0186).
 
-
-# HATHOR
+| 찾는 것 | 절 |
+|---|---|
+| 무엇을 만드는가 · 왜 | 1. 프로젝트 개요 |
+| 요구사항 | □ REQ-HATHOR 이하 |
+| 코드·데이터 구성 | 1. 시스템 아키텍처 · 2. 데이터 설계 |
+| 지금 못 하는 것 | `PLAN.md` §2 열린 질문 |
+| 평가 · 지표 | 10. 평가 설계 |
+| 작업 원칙 · 규약 | **작업 원칙 (GROUND RULES)** |
+| 지금 효력이 있는 결정 | **결정 대장** |
+| 용어 | 부록 B |
 
 ## 취향 잠재 표현 기반 종단간 AI 음악 창작 시스템
 
@@ -1536,8 +1539,9 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 
 ## 부록 A. 결정 기록 색인
 
-**`docs/DECISIONS.md`로 옮겼다** (D-0133). 색인은 과거 축의 항법이며 현재 상태가
-아니다. 기획서가 결정 목록을 들고 있으면 **한 항목이 두 문서에 산다.**
+**`docs/DECISIONS.md`가 자기 색인을 든다** (D-0133 · D-0187). 색인은 과거 축의
+항법이며 현재 상태가 아니다. 지금 **효력이 있는** 결정은 이 문서의
+「결정 대장」이 한 줄씩 든다 — 사유는 안 적는다.
 
 ## 부록 B. 용어
 
@@ -1551,3 +1555,468 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 | 오디오 비이동 원칙 | 원본 오디오가 사용자 기기를 떠나지 않는다는 설계 불변 조건 |
 | SV | 화자 검증(Speaker Verification). 음색 동일성 판정에 사용 |
 | 실측 필요 | 검증되지 않아 추측으로 채우지 않은 항목 (GR-0.5) |
+
+## 작업 원칙 (GROUND RULES)
+
+**`CONTRIBUTING.md`에서 흡수했다** (D-0186). `fire-lane` · `thoth`가 규약을 마스터
+안에 두고, 규약과 현재 상태를 따로 두면 **한 항목이 두 문서에 산다.**
+
+**`GR-` 번호는 그대로다.** 저장소 안에서 220곳이 그 ID를 부른다 — 번호를 다시
+매기는 것은 값이 없고 참조만 깬다.
+
+### GR-0. 협업 규칙
+
+### GR-0.1 문서 우선
+
+설계 변경은 **문서를 먼저 고치고 코드를 고친다.** 반대 순서는 금지한다.
+대화에서 나온 결정도 문서에 반영되지 않으면 **존재하지 않는 것으로 간주한다.**
+
+### GR-0.2 결정 기록
+
+되돌리기 어려운 선택은 `docs/DECISIONS.md`에 남긴다. 형식: **배경 / 후보 / 선택 / 근거 / 결과**.
+
+**기록 기준**: 선택지가 있었고 어느 쪽을 왜 골랐는지 남아야 하면 기록한다.
+단순 사실이면 어디에도 적지 않는다.
+
+- **추가 전용이다.** 판단이 바뀌면 고쳐 쓰지 않고 새 번호로 정정한다.
+- **문서 체계·개발 규약·도구 체인 변경은 부수 결정으로 처리하지 않는다** (D-0039).
+- **판단 착오도 기록한다.** 반증된 가설은 형식 목록에 없지만 판단력을 증명한다.
+
+**번호를 조용히 비우지 않는다** (D-0080). 잡아 둔 번호에 기록을 안 썼으면
+`## D-XXXX. (결번) …` 표제를 남긴다. 실제로 D-0076이 그렇게 사라졌고 **78건이
+쌓이는 동안 아무 검사도 그것을 보지 않았다.**
+
+**앞 기록을 갱신하면 양쪽에 표시한다.** 갱신하는 쪽에 `- **갱신**: D-XXXX`,
+갱신되는 쪽 표제 아래에 `> **갱신됨 — D-XXXX.**`. **낡은 수치는 기록 맨 뒤가 아니라
+맨 앞에서 알려야 한다** — D-0063의 표를 그대로 인용해 세 곳이 동시에 틀린 적이
+있다 (O-28). 앞을 고치는 것이 아니라 표시하는 것이므로 추가 전용은 깨지지 않는다.
+
+**옛 기록을 형식에 맞추려고 소급 수정하지 않는다.** 형식 검사는
+`sync_decision_index.py`의 `FORMAT_ENFORCED_FROM` 이후에만 걸린다. 추가 전용이
+이 기록의 유일한 방어선이고, 78건을 손대는 순간 그것이 사라진다.
+
+**굵은 글씨는 강조가 필요한 곳에만 쓴다.** 78건 시점에 본문 2.7줄당 하나였고
+그쯤 되면 강조가 강조 기능을 잃는다. **다만 기계로 검사하지 않는다** — 밀도에
+숫자를 걸면 문체를 그 숫자에 맞추게 되고, 그것이 D-0058~D-0061에서 네 세션을
+태운 형태다. 규약을 새로 정하면 검사할 수 있는지 함께 보되(GR-0.8), **검사하지
+않기로 한 것은 그 이유를 남긴다.**
+
+**표기는 소급해 맞추고 내용은 안 맞춘다** (D-0081). 구분선·표 열 수·펜스 태그·
+줄 길이(100자)·낡은 수치는 고쳐도 **그때의 판단이 바뀌지 않으므로** 전 기록에
+강제한다. 배경·후보·선택·결과는 다르다 — 없는 것을 지금 채우면 **그때 하지 않은
+판단을 사후에 지어내는 것**이고 추가 전용이 막으려는 것이 그것이다.
+
+`make check`가 다음을 본다: 색인 일치 · 번호 중복·결번 · **참조 무결성** ·
+필수 절과 후보-선택 짝 · 갱신 배지 짝 · 미해결표 중복·정렬·닫힘 잔류 ·
+표제 앞뒤 표기 · 줄 길이 · 펜스 태그 · 표 열 수 (D-0080 · D-0081).
+
+### GR-0.2.1 강제자와 재현
+
+결정마다 **`강제자`와 `재현`**을 요구한다 (D-0131 · D-0135). 둘 다 **전수**이며
+`강제자 없음 — 사유: …` · `재현 불명 — …`도 기술이다 — **없다는 사실 자체가
+기록이어야 한다** (D-0132 · D-0136).
+
+### GR-0.3 자율성 경계
+
+| 묻지 않고 결정 | 반드시 확인 |
+|---|---|
+| 라이브러리·프레임워크 선택 | 프로젝트 범위 변경 |
+| 알고리즘·자료구조 선택 | 비용이 발생하는 결정 |
+| 코드 구조·네이밍·패턴 적용 | 되돌리기 어려운 아키텍처 결정 |
+| 문서 서술 방식·다이어그램 종류 | 사용자 취향·경험이 판단 근거인 것 |
+| 지표·임계값 초안 | 법적·윤리적 판단이 필요한 것 |
+
+### GR-0.4 반대 의무
+
+판단이 틀렸다고 보면 동의하는 척하지 않고 **근거를 들어 반대한다.**
+그럼에도 사용자가 결정하면 따르되, 문서에 **"사용자 판단으로 결정됨"**을 남긴다.
+
+### GR-0.5 불확실성 표시
+
+확실하지 않은 사실을 **추측으로 채우지 않는다.** 검증하거나 **(실측 필요)**로 표시한다.
+**미해결표에 올리는 것도 정당한 처리다** — 지금 안 하기로 결정했다는 기록이 남는다.
+
+### GR-0.6 진행률 정직성
+
+"거의 다 됐다" 같은 표현을 쓰지 않는다. **완료 조건(GR-6.6) 충족 여부로만 판단한다.**
+
+### GR-0.7 전달 방식
+
+코드·문서 수정은 **검증·되돌리기·멱등성을 갖춘 패치로 전달한다.** 손으로 옮기게 하지 않는다.
+
+**셋 다 git이 진다** (D-0066). `git apply --check`가 검증, `git reset --hard HEAD~1`이
+되돌리기, `git apply --reverse --check`가 멱등 판정이다.
+
+**`make apply` 한 번으로 붙이고 커밋까지 한다** (D-0070). 작업 트리가 깨끗한지 보고,
+이미 적용됐으면 아무것도 하지 않고, 붙인 뒤 색인을 검사하고, **`git add -A`로 커밋한다.**
+
+**커밋할 파일 목록을 손으로 적지 않는다.** 목록을 적다가 실제로 `CONTRIBUTING.md`와
+`tools/apply_patch.sh`를 빠뜨려 작업 트리가 더러운 채 다음 작업으로 넘어갔다.
+GR-4.1의 커밋 분리보다 **빠뜨리지 않는 것이 먼저다** — 한 패치는 한 작업 단위이므로
+한 커밋이 맞다.
+
+**`git add -A`도 쓰지 않는다** (D-0072). 그것은 트리에 있는 것이 전부 이 작업
+것이라고 믿는 것이며, 다른 프로젝트의 명령을 이 저장소에서 돌린 적이 실제로 있다.
+**패치가 건드린다고 선언한 파일과 실제로 바뀐 파일을 대조하고, 일치할 때만 그
+목록으로 담는다.** 사람도 트리도 믿지 않는다.
+
+**별도 백업 디렉터리를 만들지 않는다.** `.backup/`을 쓰다가 `.gitignore`가 뒤늦게
+추가돼 무효인 것을 놓쳤고, 청소하다 추적 파일 25개를 지웠다. git이 이미 하는 일을
+두 번 하면서 사고만 늘렸다.
+
+### GR-0.8 작업 위생
+
+**패치는 저장소 안에서만 푼다.** 저장소 밖에 세션별 디렉터리를 만들지 않는다.
+`~/hathor-D0040` ~ `D0060` 열여섯 개 6.8GB가 그렇게 쌓였고, 전부 git 이력에 있는
+내용의 사본이었다.
+
+**기기를 옮기면 `make doctor`부터 돌린다.** 결정 기록이 여든 건을 넘었고 아무도
+매번 다시 읽지 않는다. D-0004가 저장소 위치를 정해 두었는데 **그 사실을 모른 채
+두 기기 모두 다른 곳에 클론했고 한 번은 윈도우 드라이브였다.** 규칙이 없어서가
+아니라 확인하는 것이 없어서였다.
+
+**규약을 새로 정하면 `doctor`가 검사할 수 있는지 함께 본다.** 검사할 수 없는 규약은
+문서에만 남고 잊힌다.
+
+### GR-0.9 결함은 부류로 고친다
+
+**결함을 고칠 때 같은 부류를 막는 검사를 함께 넣는다.** 개별 수정은 다음 사례를
+못 막는다 — D-0064에서 "인자가 조용히 무시된다"를 고치고 검사를 안 넣었더니
+**네 시간 뒤 같은 부류가 다시 나왔다**(D-0069).
+
+**검사를 넣었으면 일부러 결함을 되살려 빨갛게 뜨는지 본다.** 아무것도 못 잡는 검사는
+늘 통과하는 하네스와 같다.
+
+`import-linter`의 아키텍처 계약 넷은 한 번도 깨지지 않았다. **규율이 좋아서가 아니라
+기계가 매번 보기 때문이다.** 문서에만 있는 규칙은 잊힌다 — D-0004가 이 년 가까이
+그랬다.
+
+**원인을 모를 때 파일을 옮기거나 지우지 않는다.** 진단이 먼저다. 원인을 찾기 전에
+스캔 산출물을 옮겼다가 유일한 사본을 잃었다.
+
+---
+
+### GR-1. 명명 규칙
+
+**현재 저장소는 Python 단일 언어다** (D-0015 로컬 에이전트 전환). 다언어 규칙은
+해당 스택을 실제로 도입할 때 되살린다 — 지금 적으면 검증할 대상이 없다 (GR-0.5).
+
+### GR-1.1 케이스
+
+| 대상 | 케이스 | 예시 |
+|---|---|---|
+| 변수 · 함수 | `snake_case` (PEP 8) | `get_taste_vector` |
+| 클래스 · 타입 | `PascalCase` | `HarmonyStrategy`, `GenerationSpec` |
+| 상수 | `UPPER_SNAKE_CASE` | `MAX_REPAIR_ATTEMPTS`, `DEFAULT_GATE` |
+| 파일 · 모듈 | `snake_case` | `harmony_strategy.py` |
+| DB 테이블 · 컬럼 | `snake_case` | `taste_cluster`, `created_at` |
+| 환경 변수 | `UPPER_SNAKE_CASE` | `SYLLABLE_MATCH_THRESHOLD` |
+| 이벤트 라우팅 키 | `dot.case` | `ingest.raw.discovered` |
+| 브랜치 | `kebab-case` | `feat/ingest-fingerprint` |
+| 문서 파일 | `UPPER` 또는 `kebab-case` | `DESIGN.md`, `docker-compose.yml` |
+
+**언어·생태계 관례와 싸우지 않는다.** 일괄 규칙보다 관례가 우선한다.
+
+**문서·설정 파일명에 한글을 쓰지 않는다** (D-0043). macOS는 NFD, Linux·Windows는 NFC로
+정규화해 git이 같은 파일을 다른 파일로 인식한다. 이 프로젝트는 WSL + Windows 조합이라
+정확히 그 사고가 나는 환경이다. **파일명은 도구가 읽고 문서 제목은 사람이 읽는다** —
+제목은 한글로 둔다.
+
+### GR-1.2 명명 원칙
+
+1. 이름만으로 역할과 의미가 드러나야 한다.
+2. 함수명은 **동사**로 시작한다 (`resolve_entity`, `compute_deficiency`).
+3. 불리언은 `is` / `has` / `can` / `should`로 시작한다 (`is_deficient`, `has_lyric_tag`).
+4. 컬렉션은 **복수형**을 쓴다 (`clusters`, `stems`, `candidates`).
+5. 타입명을 변수명에 넣지 않는다 (`track_list` ✗ → `tracks` ✓).
+6. **단위·시각을 이름에 포함한다** (`timeout_ms`, `f0_rmse_cent`, `created_at`).
+7. 서브시스템명을 접두사로 쓴다 (`IngestNormalizer`, `HarmonyGenerator`).
+
+### GR-1.3 금지어
+
+| 금지어 | 이유 | 재명명 예시 |
+|---|---|---|
+| `data`, `info`, `value`, `thing` | 의미 없음 | `data` → `feature_set` |
+| `temp`, `tmp` | 수명 불명 | `temp` → `decoded_buffer` |
+| `list`, `arr`, `obj` | 타입명 노출 | `list` → `tracks` |
+| `flag` | 의미 없음 | `flag` → `is_deficient` |
+| **`manager`, `util`, `helper`, `common`, `handler`** | **우연적 응집의 신호** | `AudioUtil` → `LoudnessNormalizer` |
+| `process()`, `handle()`, `do_work()` | 동작 불명 | `handle()` → `handle_file_discovered()` |
+
+**`manager` · `util` · `helper`가 이름에 들어가면 응집도 위반을 의심하고 분해를 검토한다.**
+
+---
+
+### GR-4. 커밋 · 브랜치 · PR
+
+### GR-4.1 커밋
+
+형식: `type(scope): subject`
+
+| type | 용도 |
+|---|---|
+| `feat` | 기능 추가 |
+| `fix` | 버그 수정 |
+| `refactor` | 동작 변경 없는 구조 개선 |
+| `perf` | 성능 개선 (**수치 필수**) |
+| `docs` | 문서 |
+| `test` | 테스트 |
+| `chore` | 설정·의존성 |
+| `data` | 데이터셋 버전 |
+| `exp` | 실험 (리포트 라벨 명시) |
+
+scope는 서브시스템 코드명을 쓴다.
+
+```text
+feat(ingest): 지문 기반 정규화 폴백 체인 구현
+perf(eval): 전체 코사인을 행렬곱으로 4.2배 단축
+exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
+```
+
+**하나의 커밋은 하나의 변경만 포함한다.**
+
+### GR-4.2 브랜치
+
+| 브랜치 | 규칙 |
+|---|---|
+| `main` | 항상 배포 가능. **직접 push 금지.** CI 전부 통과해야 병합 |
+| `feat/{subsystem}-{topic}` | 기능 개발 |
+| `fix/{topic}` | 버그 수정 |
+| `spike/{topic}` | 실험. **병합하지 않고 폐기 가능.** 결과만 문서에 기록 |
+| `hotfix/{topic}` | 긴급. main 분기 → fast-forward |
+
+**`develop` 브랜치를 쓰지 않는다.** GitFlow의 develop은 릴리즈 묶음 관리가 있을 때
+의미가 있는데, 1인 + 지속배포 환경에서는 병합 단계만 늘린다. GitHub Flow로 간다.
+
+### GR-4.3 이슈 · PR
+
+1. 작업 시작 전 Issue를 만든다. 제목은 **완료 조건이 드러나게** 쓴다.
+2. `feat/*` 브랜치에서 개발하고 PR로 병합한다.
+3. **1인이라도 PR을 거친다.** CI 게이트를 통과시키기 위해서다.
+4. PR 본문에 **변경 내용 / 변경 이유 / 확인 방법** 3항목을 쓴다.
+5. 병합 후 브랜치를 삭제한다.
+
+---
+
+### GR-5. 기술 원칙
+
+| # | 원칙 | 내용 |
+|---|---|---|
+| 1 | **Async First** | I/O는 비동기 우선. **CPU/GPU 연산은 강제하지 않는다** — 워커나 executor로 이벤트 루프를 보호한다 |
+| 2 | **Fail Fast** | 입력 검증을 진입점에서. 예외를 삼키지 않는다. 재시도 가능한 오류만 명시적 재시도 |
+| 3 | **Idempotency** | 동일 요청 반복 시 상태 동일. 모든 워커에 멱등 키 필수 |
+| 4 | **Deterministic** | 동일 입력 → 동일 출력. **시드 명시 고정.** 재현성 계층은 `docs/DESIGN.md`에 있고 CI가 검사한다 |
+| 5 | **Secrets 분리** | 코드에 비밀정보 금지. `.env` + 환경 변수. `make docs`와 CI가 `check_secrets.py`를 돌리고, 기기 훅은 `doctor`가 본다 (D-0128) |
+| 6 | **DRY** | 동일 로직 **3회 반복 시** 공통화. 2회까지는 중복 허용 (성급한 추상화 방지) |
+| 7 | **Single Responsibility** | 함수·클래스·모듈은 하나의 책임. 계층 간 전달은 DTO로 |
+| 8 | **No Hard Coding** | 반복 값은 상수·enum·설정으로. 임계값은 주입 |
+| 9 | **Environment Independence** | 환경 의존 코드 금지. 설정 분리 |
+| 10 | **Structured Logging** | 구조화 로그, 필드 고정. **개인정보·토큰·프롬프트 전문을 남기지 않는다** |
+| 11 | **Observability** | 모든 잡에 trace ID. 단계별 span |
+| 12 | **Reproducibility** | 코드·데이터·모델·시드 4개가 전부 버전 관리 대상 |
+| 13 | **Graceful Degradation** | 실패 시 축소된 결과라도 낸다 (가창 실패 → 인스트루멘탈) |
+| 14 | **Cost Guard** | 외부 자원은 종료를 보장한다. `finally`에 teardown |
+
+---
+
+### GR-6. 추진 룰
+
+### GR-6.1 MVP 우선
+
+```text
+동작하는 최소 → 검증 → 확장 → 최적화
+```
+
+**최적화는 측정 후에만 한다. 측정 없는 최적화는 금지한다.**
+
+### GR-6.2 개발 순서
+
+```text
+1. 데이터 구조 정의       ← 화면보다 먼저
+2. 도메인 엔티티·포트 정의
+3. 엔진 최소 구현 (더미 출력 허용)
+4. 파이프라인 연결 (종단간 관통)
+5. 각 엔진 품질 향상
+6. UI 연결
+7. 통합 테스트
+```
+
+**이 프로젝트는 화면이 아니라 데이터·파이프라인이 본체이므로 데이터 구조가 먼저다.**
+
+### GR-6.3 작업 단위
+
+한 번에 하나. WIP 제한 2. 단위 기준은 **하나의 엔진 스테이지 / 하나의 API / 하나의 화면**.
+
+### GR-6.4 디버깅 순서
+
+문제 발생 시 **상류에서 하류로 순차 확인**한다. 중간부터 찍지 않는다.
+
+```json
+[인제스트]  스캔 → 태그 → 파싱 → 조회 → 디코딩 → 특징 추출 → npz
+[검색]      npz → 뷰 조립 → 중심화 → 코사인 → 순위
+[생성]      시드 선택 → 조건화 → 엔진 → 품질 게이트 → 산출물
+```
+
+### GR-6.5 실험 규칙
+
+| 규칙 | 내용 |
+|---|---|
+| **지표 우선** | **지표를 먼저 만든다.** 지표 없이 돌린 실험은 반증 불가능한 선택만 남긴다 |
+| **베이스라인 동시 투입** | 지표를 추가할 때 베이스라인을 **같이** 넣는다. 나중에 붙이면 이미 그 지표로 판단을 내린 뒤다 (D-0034) |
+| **단일 변수** | 한 번에 하나만 바꾼다. 여러 개를 동시에 바꾸면 원인 규명이 불가능하다 |
+| 시드 | 항상 명시. `None`이면 생성 후 기록 |
+| 기록 | **실패한 실험도 남긴다.** 반증된 가설은 결정 기록에 보존한다 |
+| 타임박스 | `spike/*`는 사전에 시간 상한을 정하고 초과 시 중단 |
+| 아티팩트 | 오디오·MIDI·악보를 첨부한다. **지표만으로 소리를 판단할 수 없다** |
+
+**만들어두고 보지 않는 지표는 없는 것과 같다** (D-0030에서 허브 문제를 놓친 사례).
+
+### GR-6.6 완료 기준
+
+**전부 충족해야 "완료"다.**
+
+1. 기능이 정상 동작한다
+2. 계층 계약을 위반하지 않는다 — `import-linter` 통과
+3. 기술 원칙(GR-5)을 준수한다
+4. 테스트가 있고 통과한다
+5. 품질 게이트를 통과한다 (해당 시)
+6. 오류 로그가 발생하지 않는다
+7. Git 기록이 남아 있다 (Issue → PR → 병합)
+8. **문서가 갱신되어 있다** (GR-0.1)
+
+`make check`가 2·4를 기계로 검사하고 문서 색인 어긋남까지 잡는다 (D-0042).
+
+## 결정 대장
+
+코드에 들어간 판단 중 **지금 효력이 있는 것**의 색인이다. **사유는 여기 적지
+않는다** — `DECISIONS.md`가 든다. 이 절은 *"무엇이 지금 효력이 있는가"*만 든다.
+
+**고르지 않고 뽑는다** (D-0186). `강제자`를 적은 기록이 곧 효력이 있는 것이며,
+`tools/sync_decision_index.py`가 이 표를 다시 쓴다. **손으로 고치지 않는다** —
+고치면 다음 갱신에 지워지고, 그것이 D-0043이 말한 *"두 곳이 어긋난다"*이다.
+
+| 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |
+|---|---|---|
+| D-0004 | 저장소를 WSL ext4에 두고 F 드라이브는 데이터 전용으로 쓴다 | `core/tests/unit/test_paths.py` |
+| D-0005 | 가사는 태그 우선, STT 폴백 경로를 유지한다 | `core/tests/unit/test_lyrics_axis.py` |
+| D-0006 | ISRC 부재로 Chromaprint 지문 정규화가 주 경로가 된다 | `core/tests/unit/test_musicbrainz_lookup.py` |
+| D-0009 | 노트북 2대 역할을 재정의하고 파이썬 3.12로 고정한다 | `core/tests/unit/test_paths.py` |
+| D-0013 | 라이브러리 변경 추적은 명시적 재스캔 + 델타 감지로 한다 | `core/tests/unit/test_cli.py` |
+| D-0014 | 아티스트 파서는 정규화하지 않고 후보를 제시한다 | `core/tests/unit/test_artist_name_parser.py` |
+| D-0015 | 로컬 에이전트 아키텍처를 채택하고 오디오 비이동을 불변 원칙으로 둔다 | `tools/check_egress.py` |
+| D-0016 | 아티스트 파서 출력 스키마와 표기 체계 휴리스틱 | `core/tests/unit/test_artist_name_parser.py` |
+| D-0017 | 정규화 기준을 ISRC에서 MusicBrainz MBID로 옮기고 Track을 폐기한다 | `core/tests/unit/test_domain.py` |
+| D-0019 | MusicBrainz 조회는 2단계 구조로 하고 78.5%를 상한으로 받아들인다 | `core/tests/unit/test_musicbrainz_lookup.py` |
+| D-0020 | 재생시간으로 레코딩 버전을 확정한다 | `core/tests/unit/test_lookup_verdict.py` |
+| D-0021 | 오디오 디코딩은 ffmpeg 서브프로세스, 정규화는 MERT 특징 추출기에 맡긴다 | `core/tests/unit/test_ffmpeg_audio_decoder.py` |
+| D-0022 | 배치 중복 실행은 flock으로 막고 인덱스는 키 정렬로 유지한다 | `core/tests/unit/test_ingest_resume.py` |
+| D-0023 | 검색 평가 하네스를 태그 동치류로 구성한다 (M0/M1/M2) | `core/tests/unit/test_evaluate_retrieval.py` |
+| D-0025 | MERT와 MFCC는 상보적이다 | `core/tests/unit/test_npz_feature_store.py` |
+| D-0028 | 취향 라벨 수집은 무작위 평가 집합을 먼저 확보한다 | `core/tests/unit/test_taste_collection.py` |
+| D-0030 | 임베딩 공간이 뭉쳐 허브 곡이 생긴다 | `core/tests/unit/test_isotropy.py` |
+| D-0033 | 시드 결합 규칙을 실측으로 고른다 | `core/tests/unit/test_evaluate_fusion.py` |
+| D-0036 | 가사축은 문자 n-gram 해싱 베이스라인으로 착수한다 | `core/tests/unit/test_lyrics_axis.py` |
+| D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` |
+| D-0041 | M0에 순위 진단과 해석적 베이스라인을 넣는다 | `core/tests/unit/test_retrieval_metrics.py` |
+| D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/sync_decision_index.py` |
+| D-0045 | 가사축 인코더를 BGE-M3로 한다 | `core/tests/unit/test_bge_m3_lyrics_encoder.py` |
+| D-0047 | CLI 배선을 테스트로 고정한다 | `core/tests/unit/test_eval_cli.py` |
+| D-0049 | 구조 생성을 가사 반복 패턴에서 규칙으로 뽑는다 | `core/tests/unit/test_song_structure.py` |
+| D-0050 | 가사 구간 폴백 판정을 정리 뒤로 옮긴다 | `core/tests/unit/test_song_structure.py` |
+| D-0052 | 생성 경로가 종단간 관통했다 | `core/tests/unit/test_midi_writer.py` |
+| D-0054 | 참조곡에서 조성을 추정한다 | `core/tests/unit/test_key_estimation.py` |
+| D-0056 | 크로마를 반음 격자로 바꾼다 | `core/tests/unit/test_key_estimation.py` |
+| D-0059 | 베이스라인이 조건을 따라가지 않았다 | `core/tests/unit/test_key_estimation.py` |
+| D-0060 | 베이스라인이 또 조건을 안 따라갔다 | `core/tests/unit/test_key_estimation.py` |
+| D-0062 | O-21의 판정 장치를 생성기보다 먼저 만든다 | `core/tests/unit/test_harmony_prior.py` |
+| D-0063 | O-21을 닫는다 | `core/tests/unit/test_harmony_generator.py` |
+| D-0064 | 창별 중앙값 크로마를 넣는다 (O-27 (b)) | `core/tests/unit/test_key_estimation.py` |
+| D-0066 | 두 기기 개발 환경을 규약으로 고정한다 | `core/tests/unit/test_paths.py` |
+| D-0067 | 규약을 기계가 확인하게 한다 | `core/tests/unit/test_paths.py` |
+| D-0068 | 기기 설정을 탐지해서 쓴다 | `core/tests/unit/test_paths.py` |
+| D-0069 | 부류를 검사로 바꾼다 | `core/tests/unit/test_cli_contracts.py` |
+| D-0070 | 패치 적용과 커밋을 한 명령으로 묶는다 | `tools/apply_patch.sh` |
+| D-0071 | 검사가 기기 상태에 의존했다 | `core/tests/conftest.py` |
+| D-0072 | 커밋 대상을 패치와 대조한다 | `tools/apply_patch.sh` |
+| D-0073 | O-27 (a) 타악 분리를 구현한다 | `core/tests/unit/test_harmony_prior_cli.py` |
+| D-0075 | 조성 추출을 이어받게 한다 | `core/tests/unit/test_ingest_resume.py` |
+| D-0077 | 추출을 동시에 못 돌게 한다 | `core/tests/unit/test_ingest_resume.py` |
+| D-0079 | O-29 도구를 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0080 | 결정 기록 자신의 규약을 기계가 검사하게 한다 | `tools/sync_decision_index.py` |
+| D-0081 | 표기는 전수 강제하고 내용만 신규에 건다 | `tools/sync_decision_index.py` |
+| D-0083 | O-31 도구 | `core/tests/unit/test_evaluate_degree_restriction.py` |
+| D-0084 | 귀무선이 질량까지 바꿨다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
+| D-0085 | O-31을 닫는다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
+| D-0086 | 귀무선의 0점이 0이 아니었다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
+| D-0087 | 선을 하나 더했더니 다른 선의 수가 바뀌었다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0089 | O-33 도구 | `core/tests/unit/test_evaluate_chromatic_origin.py` |
+| D-0091 | 차용은 뭉치고 누설은 고르게 번진다 | `core/tests/unit/test_evaluate_chromatic_origin.py` |
+| D-0092 | 머리글과 값을 따로 쓰다가 이름표가 밀렸다 | `core/tests/unit/test_harmony_output_cli.py` |
+| D-0094 | 어휘를 넓힌다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0095 | 어휘를 넓혔는데 번 몫이 없다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0096 | 8마디에서 안 보인다고 없는 것이 아니다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0097 | O-36을 닫는다 | `core/tests/unit/test_arrangement.py` |
+| D-0098 | 비싼 작업 전에 게이트를 세운다 | `core/tests/unit/test_evaluate_time_drift.py` |
+| D-0099 | 게이트가 통과했는데 못 읽는다 | `core/tests/unit/test_evaluate_time_drift.py` |
+| D-0100 | 이어받기가 조건을 다 보지 않았다 | `core/tests/unit/test_ingest_resume.py` |
+| D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` |
+| D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` |
+| D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` |
+| D-0108 | 한쪽 기기에서만 초록이었다 | `core/tests/unit/test_evaluate_time_drift.py` |
+| D-0109 | 생성기가 배열을 조건화한다 | `core/tests/unit/test_harmony_generator.py` |
+| D-0110 | 배열 사전이 생성 경로에 붙었다 | `core/tests/unit/test_harmony_output_cli.py` |
+| D-0111 | 배열 조건화가 소리에 거의 안 닿고 있었다 | `core/tests/unit/test_arrangement.py` |
+| D-0112 | 쌍 거리로는 배열 조건화를 판정할 수 없다 | `core/tests/unit/test_evaluate_order_conditioning.py` |
+| D-0115 | 결정 기록 하나가 조각 밖에 있었고 검사가 못 봤다 | `tools/sync_decision_index.py` |
+| D-0116 | 저장소 로더를 CLI에서 인프라로 내린다 | `core/tests/unit/test_chroma_series.py` |
+| D-0117 | 파일 길이에 래칫을 건다 | `tools/check_file_size.py` |
+| D-0118 | 산출물 교두보를 세운다 | `tools/sync_artifacts.py` |
+| D-0119 | 교두보가 실제 기기에서 세 자리에 걸렸다 | `core/tests/unit/test_sync_artifacts.py` |
+| D-0120 | 쓰지 않는 것을 옮기다 죽었다 | `core/tests/unit/test_sync_artifacts.py` |
+| D-0121 | 검사를 만들어 놓고 안 불렀다 | `core/tests/unit/test_decision_index.py` |
+| D-0123 | 화성 리듬은 손잡이가 아니다 | `core/tests/unit/test_chord_rhythm.py` |
+| D-0124 | 유지 확률을 곡에서 뽑아 판정에 건다 | `core/tests/unit/test_evaluate_order_conditioning.py ·` |
+| D-0126 | 닫힌 질문을 코드가 열린 것처럼 적는다 | `tools/check_issue_mentions.py` |
+| D-0127 | `main.py`를 쪼개 래칫을 되돌린다 | `tools/check_file_size.py` |
+| D-0128 | 규약이 "검사가 돈다"고 적었는데 그 검사가 없었다 | `tools/check_secrets.py` |
+| D-0129 | 문서 강제자 | `tools/check_doc_style.py` |
+| D-0130 | 문서 축을 시제로 다시 나눈다 | `tools/check_doc_style.py` |
+| D-0131 | 결정에 `강제자` 칸을 세운다 | `tools/check_doc_style.py` |
+| D-0132 | `강제자`를 전수 소급한다 | `tools/check_doc_style.py` |
+| D-0133 | 빚 넷 중 셋을 한 번에 청산한다 | `tools/check_doc_style.py` |
+| D-0134 | 오디오 비이동을 강제한다 | `tools/check_egress.py` |
+| D-0135 | 실측에 명령을 붙인다 | `tools/check_doc_style.py` |
+| D-0136 | `재현`을 전수 소급한다 | `tools/check_doc_style.py` |
+| D-0137 | 성부 진행을 넣는다 | `core/tests/unit/test_voice_leading.py` |
+| D-0138 | 이어지는 같은 도수를 다시 치지 않는다 | `core/tests/unit/test_arrangement.py` |
+| D-0139 | 베이스를 붙인다 | `core/tests/unit/test_voice_leading.py` |
+| D-0141 | 가락을 붙인다 | `core/tests/unit/test_melody.py` |
+| D-0142 | 두 번째로 들었다 | `core/tests/unit/test_melody.py` |
+| D-0143 | 박과 온셋 | `core/tests/unit/test_onset.py` |
+| D-0144 | 온셋 포락선 | `core/tests/unit/test_onset.py` |
+| D-0145 | 온셋 배선을 끝낸다 | `core/tests/unit/test_extract_onsets.py` |
+| D-0146 | 검사마다 빼 둔 나무를 전수로 훑는다 | `tools/check_egress.py` |
+| D-0147 | 파이프라인이 없었다 | `core/tests/unit/test_ship.py` |
+| D-0148 | 세는 수가 틀렸다 | `core/tests/unit/test_ship.py` |
+| D-0149 | 린트와 타입 검사의 사각지대를 닫는다 | `core/tests/unit/test_test_types.py` |
+| D-0150 | 래칫이 기기마다 다른 수를 냈다 | `core/tests/unit/test_test_types.py` |
+| D-0151 | 합계만 박은 못은 어디가 달라졌는지 못 알려준다 | `core/tests/unit/test_test_types.py` |
+| D-0153 | 탐침이 빈손으로 돌아왔다 | `core/tests/unit/test_cli_contracts.py` |
+| D-0155 | 위상이 평평했던 것은 드리프트가 아니라 바닥이었다 | `core/tests/unit/test_onset.py` |
+| D-0156 | 두 번 짐작하고 두 번 틀렸다 | `core/tests/unit/test_onset.py` |
+| D-0161 | 스무 곡이 전부 한 아티스트였다 | `core/tests/unit/test_extract_onsets.py` |
+| D-0164 | 예측은 맞았으나 짝지은 비교가 아니었다 | `core/tests/unit/test_extract_onsets.py` |
+| D-0168 | 세션을 닫는다 | `tools/check_doc_style.py` |
+| D-0169 | 창을 홉에서 떼어낸다 | `core/tests/unit/test_onset.py` |
+| D-0170 | 반감점이 옮겨왔다 | `core/tests/unit/test_onset.py` |
+| D-0171 | 예측 둘이 통과했다 | `core/tests/unit/test_onset.py` |
+| D-0174 | 귀가 처음으로 무언가를 지적했다 | `core/tests/unit/test_arrangement.py` |
+| D-0176 | 귀 아픈 것은 음역이 아니라 밀도였다 | `core/tests/unit/test_arrangement.py` |
+| D-0177 | 한 층 안에서 세기가 전부 같았다 | `core/tests/unit/test_arrangement.py` |
+| D-0183 | 위생 점검 | `core/tests/unit/test_issue_mentions.py` |
+| D-0184 | CI를 만들어 놓고 안 쓰고 있었다 | `core/tests/unit/test_ci_parity.py` |
+
+★ **번호는 재사용하지 않는다.** 새 결정은 `DECISIONS.md`의 다음 번호로 적고,
+`강제자`를 적으면 이 표에 저절로 올라온다.

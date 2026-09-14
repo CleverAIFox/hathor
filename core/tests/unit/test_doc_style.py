@@ -109,10 +109,7 @@ def test_표_앞_산문에_빈_줄이_있으면_통과한다():
 
 
 def _records() -> list[tuple[str, str]]:
-    text = "".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted((ROOT / "docs" / "decisions").glob("*.md"))
-    )
+    text = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
     parts = re.split(r"^## (D-\d{4})\.", text, flags=re.M)
     return [(parts[i], parts[i + 1]) for i in range(1, len(parts), 2)]
 
@@ -144,15 +141,16 @@ def test_저장소가_통과한다():
     assert CHECKER.check() == []
 
 
-@pytest.mark.parametrize("name", ["README.md", "CONTRIBUTING.md", "docs/DESIGN.md"])
+@pytest.mark.parametrize("name", ["README.md", "MASTER.md", "docs/MASTER.md"])
 def test_세_축을_다_본다(name):
     assert name in CHECKER.DOCUMENTS
 
 
 def test_폐기_보관소가_없다():
-    """**git이 이력을 든다** (D-0133). `docs/`에는 축 셋과 조각뿐이다."""
+    """**git이 이력을 든다** (D-0133). `docs/`에는 축 셋뿐이다 (D-0187)."""
     assert not (ROOT / "docs" / "archive").exists()
-    assert CHECKER.ALLOWED_TREES == ("decisions",)
+    assert CHECKER.ALLOWED_TREES == ()
+    assert sorted(path.name for path in (ROOT / "docs").iterdir()) == sorted(CHECKER.AXES)
 
 
 def test_백틱_안의_예시는_경어체가_아니다():
@@ -165,7 +163,7 @@ def test_백틱_안의_예시는_경어체가_아니다():
 
 def test_축_셋만_허용한다():
     """**미래·현재·과거 세 시제가 다 찼다.** 넷째 축은 만들지 않는다."""
-    assert set(CHECKER.AXES) == {"PLAN.md", "DESIGN.md", "DECISIONS.md"}
+    assert set(CHECKER.AXES) == {"PLAN.md", "MASTER.md", "DECISIONS.md"}
 
 
 def test_여섯_번째_문서를_잡는다(tmp_path, monkeypatch):
@@ -188,15 +186,18 @@ def test_하위_폴더까지_본다(tmp_path, monkeypatch):
     assert CHECKER.check_sixth_document()
 
 
-def test_조각은_통과한다(tmp_path, monkeypatch):
-    for name in ("decisions/D-0001-0050.md",):
-        path = tmp_path / "docs" / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("# x\n", encoding="utf-8")
+def test_축_셋만_통과한다(tmp_path, monkeypatch):
+    """**하위 폴더도 안 된다** (D-0187). 넷째 축이 숨어들 자리다."""
     for name in CHECKER.AXES:
+        (tmp_path / "docs" / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / "docs" / name).write_text("# x\n", encoding="utf-8")
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
     assert CHECKER.check_sixth_document() == []
+
+    nested = tmp_path / "docs" / "decisions" / "D-0001-0050.md"
+    nested.parent.mkdir(parents=True, exist_ok=True)
+    nested.write_text("# x\n", encoding="utf-8")
+    assert CHECKER.check_sixth_document() != []
 
 
 def test_저장소에_여섯_번째가_없다():

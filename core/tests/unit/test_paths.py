@@ -25,7 +25,7 @@ from hathor.shared.config.paths import (
 
 def test_저장소_루트는_표식을_갖는다():
     root = repo_root()
-    assert (root / "CONTRIBUTING.md").exists()
+    assert (root / "Makefile").exists()
     assert (root / "core").is_dir()
     assert (root / "docs").is_dir()
 
@@ -153,7 +153,7 @@ def test_doctor는_설정이_다_있으면_0이다(hooks, tmp_path, monkeypatch,
     fake = tmp_path / "projects" / "hathor"
     (fake / "core").mkdir(parents=True)
     (fake / "docs").mkdir()
-    (fake / "CONTRIBUTING.md").write_text("x", encoding="utf-8")
+    (fake / "Makefile").write_text("x", encoding="utf-8")
     (fake / ".env").write_text("", encoding="utf-8")
 
     monkeypatch.setattr("hathor.interfaces.cli.doctor.repo_root", lambda: fake)

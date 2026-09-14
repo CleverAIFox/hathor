@@ -71,16 +71,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DECISIONS = ROOT / "docs" / "DECISIONS.md"
-DECISIONS_DIR = ROOT / "docs" / "decisions"
-DESIGN = ROOT / "docs" / "DESIGN.md"
+MASTER = ROOT / "docs" / "MASTER.md"
 PLAN = ROOT / "docs" / "PLAN.md"
 
-PART_NAME = "D-{low:04d}-{high:04d}.md"
+
 PART_FILE = re.compile(r"^D-(\d{4})-(\d{4})\.md$")
-
-
-def part_path(name: str) -> Path:
-    return DECISIONS_DIR / name
 
 
 def merge_parts(parts: list[tuple[str, str]]) -> str:
@@ -99,17 +94,27 @@ def merge_parts(parts: list[tuple[str, str]]) -> str:
 def load_parts() -> list[tuple[str, str]]:
     """검사 대상 결정 기록을 (이름, 본문)으로 낸다. **번호 순서다.**
 
-    조각이 있으면 조각만 읽는다. 없으면 `DECISIONS.md` 한 장을 읽는다 —
-    **분할 전후 어느 쪽에서도 검사가 돌아야 한다.**
+    **한 파일이다** (D-0187). 조각으로 나눴다가 되돌렸다 — `fire-lane` 5,985줄과
+    `thoth` 3,287줄이 한 파일이고, 우리가 14,000줄인 것은 건수가 아니라 **건당
+    길이**가 두 배였기 때문이다. 목록을 내는 모양은 남긴다 — 부르는 쪽이 넷이고
+    한 장이든 여럿이든 같은 코드로 돈다.
     """
-    if DECISIONS_DIR.is_dir():
-        parts = sorted(DECISIONS_DIR.glob("D-*.md"))
-        if parts:
-            return [(path.stem, path.read_text(encoding="utf-8")) for path in parts]
     return [("DECISIONS", DECISIONS.read_text(encoding="utf-8"))]
 
 
 HEADING = re.compile(r"^## (D-\d{4})\. (.+?)\s*$", re.MULTILINE)
+
+
+def records_with_body(text: str) -> list[tuple[str, str, str]]:
+    """`(번호, 표제, 본문)`. **본문 길이를 재려고 쓴다** (D-0188)."""
+    found: list[tuple[str, str, str]] = []
+    marks = list(HEADING.finditer(text))
+    for index, mark in enumerate(marks):
+        end = marks[index + 1].start() if index + 1 < len(marks) else len(text)
+        found.append((mark.group(1), mark.group(2), text[mark.start() : end]))
+    return found
+
+
 REFERENCE = re.compile(r"D-(\d{4})")
 SUPERSEDES = re.compile(r"^- \*\*갱신\*\*: (D-\d{4})", re.MULTILINE)
 BADGE = re.compile(r"^> \*\*갱신됨 — (D-\d{4})", re.MULTILINE)
@@ -139,8 +144,17 @@ FORMAT_ENFORCED_FROM = 80
 옮기면 여기서 드러난다.
 """
 
-SPLIT_LINE_LIMIT = 6000
-SPLIT_RECORD_LIMIT = 100
+RECORD_LINE_LIMIT = 120
+"""기록 하나의 줄 상한 (D-0188).
+
+`fire-lane` 40줄 · `thoth` 51줄 · 하토르 **76줄**이다. 우리 결정 기록이 14,000줄인
+것은 건수가 아니라 **건당 길이**였다. 넉넉히 잡되 두 배는 못 가게 한다.
+
+**소급하지 않는다** — `LENGTH_ENFORCED_FROM` 이후에만 건다 (GR-0.2 · D-0081).
+"""
+
+LENGTH_ENFORCED_FROM = 186
+"""길이 상한을 거는 첫 번호. **옛 기록은 안 고친다** — 추가 전용이다."""
 """한 조각의 상한. **O-30이 정한 숫자를 그대로 옮긴 것이다** (D-0080).
 
 조건을 문서에만 적어 두고 **검사를 안 걸었다.** 발동한 뒤로도 한참을 그냥 지났고
@@ -148,13 +162,6 @@ SPLIT_RECORD_LIMIT = 100
 없는 규약은 잊힌다"고 적어 놓고 **정작 자기 파일 크기만 안 보고 있었다.**
 
 **여기서 건다. 넘으면 `make split`이다.**
-"""
-
-RECORDS_PER_PART = 50
-"""한 조각에 담는 건수. `SPLIT_RECORD_LIMIT`의 절반이다.
-
-**상한에 딱 맞춰 나누면 다음 기록 하나에 바로 다시 빨개진다.** 절반으로 나누면
-조각당 50건 · 최근 평균 88.3줄 기준 약 4400줄로 두 상한 모두에 여유가 남는다.
 """
 
 LINE_LIMIT = 100
@@ -301,14 +308,19 @@ def check_split(parts: list[tuple[str, str]]) -> list[str]:
     seen: set[int] = set()
     for name, text in parts:
         records = scan_records(text)
-        lines = text.count("\n") + 1
-        if lines > SPLIT_LINE_LIMIT:
-            problems.append(f"{name}: {lines}줄로 상한 {SPLIT_LINE_LIMIT}줄을 넘는다. make split")
-        if len(records) > SPLIT_RECORD_LIMIT:
-            problems.append(
-                f"{name}: {len(records)}건으로 상한 {SPLIT_RECORD_LIMIT}건을 넘는다. make split"
-            )
-        match = PART_FILE.match(f"{name}.md")
+        # **길이 상한은 파일이 아니라 기록 하나에 건다** (D-0188). 파일 상한은
+        # 조각을 부르고, 조각은 색인을 부르고, 색인은 두 곳이 어긋날 자리를 만든다
+        # — D-0187이 되돌린 사슬이다. `fire-lane` 5,985줄 · `thoth` 3,287줄이 한
+        # 파일이며, 우리가 14,000줄인 것은 **건당 76줄로 저쪽 40줄의 두 배**여서다.
+        for identifier, _, body in records_with_body(text):
+            if int(identifier[2:]) < LENGTH_ENFORCED_FROM:
+                continue
+            length = body.count("\n") + 1
+            if length > RECORD_LINE_LIMIT:
+                problems.append(
+                    f"{identifier}: {length}줄로 상한 {RECORD_LINE_LIMIT}줄을 넘는다. 쪼갠다"
+                )
+        match = None
         if match is None:
             continue
         low, high = int(match.group(1)), int(match.group(2))
@@ -362,7 +374,7 @@ def check_supersession(records: list[Record]) -> list[str]:
 
     **낡은 수치는 기록 맨 뒤가 아니라 맨 앞에서 알려야 한다.** D-0063의 표에
     K-K 대비 14.1%가 있고 갱신이 뒤에 붙어 있어, 위에서 아래로 읽는 사람은
-    낡은 값을 먼저 본다. 실제로 결정 기록·코드 독스트링·DESIGN 표 세 곳이
+    낡은 값을 먼저 본다. 실제로 결정 기록·코드 독스트링·MASTER 표 세 곳이
     동시에 틀렸다 (O-28).
 
     **앞을 고치는 것이 아니라 표시하는 것이다.** 추가 전용은 깨지지 않는다.
@@ -391,11 +403,11 @@ def _section(text: str, begin: str, end: str) -> str | None:
 def check_open_issues(issues_text: str) -> list[str]:
     """미해결표가 중복 없이 정렬돼 있고 닫힌 항목이 섞여 있지 않은가 (D-0080 · D-0130).
 
-    `issues_text`는 **`PLAN.md`와 `DESIGN.md`를 이어 붙인 것**이다. 열린 질문은 미래라
-    PLAN이, 닫힌 질문의 한 줄 색인은 현재 상태라 DESIGN이 든다. **두 표가 서로 다른
+    `issues_text`는 **`PLAN.md`와 `MASTER.md`를 이어 붙인 것**이다. 열린 질문은 미래라
+    PLAN이, 닫힌 질문의 한 줄 색인은 현재 상태라 MASTER이 든다. **두 표가 서로 다른
     문서에 있어도 `O-32`(D-0113)처럼 양쪽에 걸치는 것을 잡아야 한다** — 실제로 걸쳐 있었다.
 
-    **닫힌 항목을 지우지 않는다.** DESIGN이 "해소되면 결정 기록으로 옮기고 여기서
+    **닫힌 항목을 지우지 않는다.** MASTER이 "해소되면 결정 기록으로 옮기고 여기서
     지운다"고 적어 두었으나, 지우면 "이건 왜 안 하기로 했지"를 다시 묻게 된다 —
     O-11과 O-23(D-0061)이 정확히 그 종류다. **지우는 대신 닫힘 절로 옮기고 한 줄만
     남긴다.** 규약을 어기는 대신 규약을 고친다.
@@ -404,7 +416,7 @@ def check_open_issues(issues_text: str) -> list[str]:
     active = _section(issues_text, OPEN_BEGIN, OPEN_END)
     closed = _section(issues_text, CLOSED_BEGIN, CLOSED_END)
     if active is None or closed is None:
-        return [f"PLAN에 {OPEN_BEGIN}, DESIGN에 {CLOSED_BEGIN} 표식이 있어야 한다"]
+        return [f"PLAN에 {OPEN_BEGIN}, MASTER에 {CLOSED_BEGIN} 표식이 있어야 한다"]
 
     for label, block in (("활성", active), ("닫힘", closed)):
         rows = ISSUE_ROW.findall(block)
@@ -457,19 +469,16 @@ def check_stray_records(documents: dict[str, str]) -> list[str]:
     **엉뚱한 파일에 있는** 것이다. 둘 다 "표제를 긁는 검사는 긁는 자리만 본다"에서 온다.
     """
     problems: list[str] = []
-    for name in ("DECISIONS", "DESIGN", "CONTRIBUTING", "README"):
-        found = HEADING.findall(documents.get(name, ""))
-        for identifier, _ in found:
-            problems.append(
-                f"{name}.md에 {identifier} 표제가 있다. 본문은 docs/decisions/ 조각에만 둔다"
-            )
+    for name in ("MASTER", "README"):
+        for identifier, _ in HEADING.findall(documents.get(name, "")):
+            problems.append(f"{name}.md에 {identifier} 표제가 있다. 본문은 DECISIONS.md만 든다")
     return problems
 
 
 def check_issue_references(issues_text: str, records: list[Record]) -> list[str]:
     """미해결표가 가리키는 결정 번호가 실재하는가 (D-0115).
 
-    `check_references`는 **기록 본문 안**만 본다. 미해결표는 DESIGN에 있어 그 밖이고,
+    `check_references`는 **기록 본문 안**만 본다. 미해결표는 MASTER에 있어 그 밖이고,
     `O-38 ... 닫힘 (D-0114)`가 없는 기록을 가리키는 채로 통과했다.
     **닫혔다고 적힌 항목의 근거가 사라진 것이 조용히 넘어가면 안 된다.**
     """
@@ -501,9 +510,8 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
     records = scan_records(merge_parts(parts))
     issues = PLAN.read_text(encoding="utf-8") + "\n" + design_text
     documents = {
-        "DESIGN": design_text,
+        "MASTER": design_text,
         "PLAN": PLAN.read_text(encoding="utf-8"),
-        "CONTRIBUTING": (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"),
         "README": (ROOT / "README.md").read_text(encoding="utf-8"),
         "DECISIONS": DECISIONS.read_text(encoding="utf-8"),
         **dict(parts),
@@ -534,7 +542,7 @@ def main() -> int:
 
     parts = load_parts()
     decisions_text = merge_parts(parts)
-    problems = run_checks(parts, DESIGN.read_text(encoding="utf-8"))
+    problems = run_checks(parts, MASTER.read_text(encoding="utf-8"))
     if problems:
         print(f"결정 기록·미해결표에 문제가 {len(problems)}건 있다.", file=sys.stderr)
         for problem in problems:

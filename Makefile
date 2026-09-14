@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs size resize split clean clean-all setup env doctor apply artifacts-push artifacts-pull artifacts
+.PHONY: up down logs ps check lint type arch test cov docs size resize clean clean-all setup env doctor apply artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -13,9 +13,8 @@ ps:
 
 check: docs size lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
 
-docs:          ## 색인 · 조각 · 표기 · 비밀정보 · 레이아웃 (D-0126 · D-0128 · D-0129)
+docs:          ## 색인 · 표기 · 비밀정보 · 레이아웃 (D-0126 · D-0128 · D-0129)
 	python3 tools/sync_decision_index.py --check
-	python3 tools/split_decisions.py --check
 	python3 tools/check_issue_mentions.py --check
 	python3 tools/check_secrets.py --check
 	python3 tools/check_doc_style.py --check
@@ -27,8 +26,6 @@ size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117
 resize:        ## 래칫을 내린다. 올리려면 GROW=1 + 결정 기록 (D-0118)
 	python3 tools/check_file_size.py --update $(if $(GROW),--allow-growth,)
 
-split:         ## 결정 기록을 번호대별로 다시 나눈다. make docs가 빨개지면 (O-30)
-	python3 tools/split_decisions.py
 lint:
 	cd core && uv run ruff check . ../tools && uv run ruff format --check . ../tools
 type:

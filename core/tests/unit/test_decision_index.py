@@ -293,28 +293,6 @@ def test_상한_안이면_통과한다():
     assert tool.check_split([("D-0001-0050", decisions(1, 2))]) == []
 
 
-def test_건수가_상한을_넘으면_잡는다():
-    """**O-30이 정한 조건이 발동하는 자리다.** 문서에만 적혀 있어 아무도 안 봤다."""
-    many = HEAD + "".join(record(n) for n in range(1, tool.SPLIT_RECORD_LIMIT + 2))
-    assert any("건으로 상한" in problem for problem in tool.check_split([("한장", many)]))
-
-
-def test_줄_수가_상한을_넘으면_잡는다():
-    long = HEAD + record(1, "- **배경**: 가.\n" * (tool.SPLIT_LINE_LIMIT + 10))
-    assert any("줄로 상한" in problem for problem in tool.check_split([("한장", long)]))
-
-
-def test_조각_이름의_범위_밖이면_잡는다():
-    """**이름이 범위다.** 안 맞으면 `grep` 없이 파일을 고를 수 없다."""
-    problems = tool.check_split([("D-0001-0050", decisions(51))])
-    assert any("범위 밖" in problem for problem in problems)
-
-
-def test_같은_번호가_두_조각에_있으면_잡는다():
-    problems = tool.check_split([("D-0001-0050", decisions(1)), ("D-0051-0100", decisions(1, 51))])
-    assert any("다른 조각에도" in problem for problem in problems)
-
-
 def test_조각을_이으면_머리말이_본문에_안_섞인다():
     """안 떼면 앞 조각 마지막 기록의 본문에 다음 조각 머리말이 딸려 들어간다."""
     merged = tool.merge_parts([("가", decisions(1)), ("나", "# 다른 머리말\n" + record(2))])
@@ -343,13 +321,13 @@ def test_문제를_모아_낸다():
 
 def test_실제_저장소가_전_검사를_통과한다():
     """**이것이 `make check`가 매번 보는 것이다.**"""
-    assert tool.run_checks(tool.load_parts(), tool.DESIGN.read_text(encoding="utf-8")) == []
+    assert tool.run_checks(tool.load_parts(), tool.MASTER.read_text(encoding="utf-8")) == []
 
 
 def test_실제_저장소의_색인이_일치한다():
-    design_text = tool.DESIGN.read_text(encoding="utf-8")
+    master_text = tool.MASTER.read_text(encoding="utf-8")
     index = tool.build_index(tool.merge_parts(tool.load_parts()))
-    assert tool.BLOCK.sub(lambda _: index, design_text, count=1) == design_text
+    assert tool.BLOCK.sub(lambda _: index, master_text, count=1) == master_text
 
 
 # --------------------------------------------------------------- 배선

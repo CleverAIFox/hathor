@@ -53,9 +53,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 DOCUMENTS = (
     "README.md",
-    "CONTRIBUTING.md",
+    "MASTER.md",
     "docs/PLAN.md",
-    "docs/DESIGN.md",
+    "docs/MASTER.md",
     "docs/DECISIONS.md",
 )
 DOCUMENT_TREES = ("docs/decisions",)
@@ -334,11 +334,14 @@ ENFORCER_FROM = 1
 
 **없다는 사실 자체가 기록이어야 한다.** 비워 두면 보이지 않는다."""
 
-AXES = ("PLAN.md", "DESIGN.md", "DECISIONS.md")
+AXES = ("PLAN.md", "MASTER.md", "DECISIONS.md")
 """`docs/` 바로 아래에 허용되는 문서. **미래·현재·과거 세 시제가 다 찼다** (D-0130)."""
 
-ALLOWED_TREES = ("decisions",)
-"""하위 폴더. `decisions/`는 조각이다 (O-30 · D-0080).
+ALLOWED_TREES: tuple[str, ...] = ()
+"""허용하는 하위 폴더. **하나도 없다** (D-0187).
+
+`decisions/` 조각을 되돌리면서 비었다. `fire-lane`·`thoth`가 `docs/` 바로 아래
+셋만 두며, **하위 폴더는 넷째 축이 숨어들 자리다.**
 
 **`archive/`를 뺐다** (D-0133). 폐기 문서를 저장소에 두는 이유는 이력인데 **git이
 이미 그 일을 한다.** 읽지 말라는 표지를 붙인 4302줄이 저장소 최대 파일이었다."""
@@ -378,9 +381,9 @@ def check() -> list[str]:
         name = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
         problems.extend(check_layout(name, text))
-        if not name.startswith("docs/decisions/"):
+        if not name.startswith(""):
             problems.extend(check_bold_density(name, text))
-        if name.startswith("docs/decisions/"):
+        if name.startswith(""):
             problems.extend(check_records(name, text))
     return problems
 

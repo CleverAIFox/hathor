@@ -105,13 +105,13 @@ def test_표식이_없으면_문제로_낸다():
 
 def test_저장소가_통과한다():
     """**지금 상태가 초록이어야 이 검사를 켤 수 있다.**"""
-    design = (ROOT / "docs" / "DESIGN.md").read_text(encoding="utf-8")
+    design = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
     assert CHECKER.check(design) == []
 
 
 def test_검사가_실제로_자리를_본다():
     """닫힌 질문이 한 건도 안 읽히면 통과가 뜻이 없다."""
-    design = (ROOT / "docs" / "DESIGN.md").read_text(encoding="utf-8")
+    design = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
     assert len(CHECKER.closed_issues(design)) >= 10
 
 
