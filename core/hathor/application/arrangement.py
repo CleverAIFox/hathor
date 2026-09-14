@@ -26,7 +26,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from hathor.domain.services.melody import sing
-from hathor.domain.services.midi_writer import MIDDLE_C, TICKS_PER_BEAT, Note, chord_pitches
+from hathor.domain.services.midi_writer import (
+    DYNAMICS,
+    METRIC_STRESS,
+    MIDDLE_C,
+    TICKS_PER_BEAT,
+    Note,
+    chord_pitches,
+    softer,
+)
 from hathor.domain.services.song_structure import REPEATED, StructurePattern
 from hathor.domain.services.voice_leading import bass, lead
 from hathor.domain.value_objects.chord_progression import ChordProgression
@@ -40,6 +48,33 @@ BARS_PER_SECTION = 8
 둘 중 하나는 반드시 틀린다.**
 """
 TICKS_PER_BAR = TICKS_PER_BEAT * BEATS_PER_BAR
+
+
+def _beat(start_tick: int) -> int:
+    """마디 안 몇 번째 박인가. **나눗셈이며 고를 것이 없다.**"""
+    return start_tick // TICKS_PER_BEAT % BEATS_PER_BAR
+
+
+def _tie(sung: Sequence[tuple[int, int, int]]) -> list[tuple[int, int, int]]:
+    """이어지는 같은 음을 한 음으로 잇는다 (D-0176).
+
+    **D-0138이 화음에서 세운 규칙을 가락에 그대로 적용한다.** 새 판단이 아니며
+    문턱도 값도 없다 — 붙어 있고 음높이가 같으면 한 음이다.
+
+    D-0141이 *"같은 음 유지 25%"*를 쟀고 실측 재현이 **23.4%**다. 이으면 타격이
+    192개에서 147개로 준다.
+
+    **밀도는 안 바뀐다.** 같은 시간에 같은 음이 울리므로 동시 5음도 쉼 0%도 그대로다
+    (O-50). 주는 것은 **다시 치는 횟수**뿐이다.
+    """
+    found: list[tuple[int, int, int]] = []
+    for start, length, pitch in sung:
+        if found and found[-1][2] == pitch and found[-1][0] + found[-1][1] == start:
+            before = found[-1]
+            found[-1] = (before[0], before[1] + length, pitch)
+        else:
+            found.append((start, length, pitch))
+    return found
 
 
 def _runs(degrees: Sequence[str]) -> list[tuple[str, int]]:
@@ -121,23 +156,41 @@ def arrange(
             # **베이스는 전위를 안 따른다** (D-0139). 근음은 화음의 성질이고 전위는
             # 자리다. 실측 음역이 60~77로 한 옥타브 남짓이었고 **가장 낮은 음이
             # 마디마다 바뀌어 바닥이 없었다.**
-            for pitch in (bass(rooted, octave_base=MIDDLE_C), *voiced):
-                notes.append(Note(pitch=pitch, start_tick=start, duration_ticks=length))
+            # **층마다 세기가 다르다** (D-0174). 전부 72이던 동안 가락과 반주가 같은
+            # 층에서 울렸고, 귀가 *"반주가 앞에서 논다"*로 판정했다. 표는 여린소리표이며
+            # 배치는 위에 적힌 역할을 그대로 따른다 — 받침과 배경이다.
+            for pitch, level in (
+                (bass(rooted, octave_base=MIDDLE_C), DYNAMICS["mp"]),
+                *((pitch, DYNAMICS["p"]) for pitch in voiced),
+            ):
+                notes.append(
+                    Note(pitch=pitch, start_tick=start, duration_ticks=length, velocity=level)
+                )
             bar_index += repeats
 
     if seed is not None:
         # **가락은 박 격자를 쓴다** (D-0141). 화음이 마디를 끄는 동안에도 움직이며,
         # 그것이 전경과 배경의 차이다. 없으면 반주만 남는다 (D-0140).
         notes.extend(
-            Note(pitch=pitch, start_tick=start, duration_ticks=length)
-            for start, length, pitch in sing(
-                seed,
-                sung,
-                progression.key,
-                ceiling=MIDDLE_C + 12,
-                beats_per_bar=BEATS_PER_BAR,
-                prior=prior,
-                transition=transition,
+            # **가락이 전경이고 박마다 세기가 다르다** (D-0141 · D-0174 · D-0177).
+            # 층 사이는 D-0174가 갈랐고 **층 안은 박자 강세가 가른다** — 전부 같은
+            # 세기면 초보가 치는 소리가 난다.
+            Note(
+                pitch=pitch,
+                start_tick=start,
+                duration_ticks=length,
+                velocity=softer(DYNAMICS["f"], METRIC_STRESS[_beat(start) % len(METRIC_STRESS)]),
+            )
+            for start, length, pitch in _tie(
+                sing(
+                    seed,
+                    sung,
+                    progression.key,
+                    ceiling=MIDDLE_C + 12,
+                    beats_per_bar=BEATS_PER_BAR,
+                    prior=prior,
+                    transition=transition,
+                )
             )
         )
     return notes

@@ -9,7 +9,12 @@ from hathor.application.arrangement import (
     duration_seconds,
     total_bars,
 )
-from hathor.domain.services.midi_writer import chord_pitches
+from hathor.domain.services.midi_writer import (
+    DYNAMICS,
+    METRIC_STRESS,
+    chord_pitches,
+    softer,
+)
 from hathor.domain.services.song_structure import StructurePattern
 from hathor.domain.value_objects.chord_progression import ChordProgression
 from hathor.domain.value_objects.key import Key, Mode
@@ -209,3 +214,95 @@ def test_섹션당_마디는_한_곳에서_온다():
     assert generation_pipeline.DEFAULT_BARS == (
         generation_pipeline.DEFAULT_SECTIONS * BARS_PER_SECTION
     )
+
+
+# ------------------------------------------------------------------ 층별 세기 (D-0174)
+
+
+def test_박마다_세기가_다르다():
+    """**층 안이 갈린다** (D-0177).
+
+    전부 같은 세기면 *"초등학생이 치는 느낌"*이 난다 — 귀가 그렇게 판정했다.
+    """
+    notes = arrange(pattern("UUR"), PROGRESSION, seed=7)
+    melody = {note.velocity for note in notes if note.velocity >= DYNAMICS["mp"]}
+    assert len(melody) >= 3
+
+
+def test_강박이_가장_세다():
+    """강 · 약 · 중 · 약. **밖에서 온 격자다.**"""
+    assert METRIC_STRESS == (0, 2, 1, 2)
+    assert METRIC_STRESS[0] == min(METRIC_STRESS)
+    assert METRIC_STRESS[2] < METRIC_STRESS[1]
+
+
+def test_표_안에서만_내린다():
+    """**표 밖으로 안 나간다.** 맨 아래보다 더 내려가면 맨 아래다."""
+    assert softer(DYNAMICS["f"], 0) == DYNAMICS["f"]
+    assert softer(DYNAMICS["f"], 1) == DYNAMICS["mf"]
+    assert softer(DYNAMICS["f"], 2) == DYNAMICS["mp"]
+    assert softer(DYNAMICS["pp"], 3) == DYNAMICS["pp"]
+    with pytest.raises(ValueError, match="여린소리표 밖"):
+        softer(72, 1)
+
+
+def test_올리지_않는다():
+    """**귀가 이미 *\"소리가 크다\"*로 판정했다** (D-0174). 올릴 근거가 없다."""
+    notes = arrange(pattern("UUR"), PROGRESSION, seed=7)
+    assert max(note.velocity for note in notes) == DYNAMICS["f"]
+
+
+def test_층마다_세기가_다르다():
+    """전부 72이던 동안 **가락과 반주가 같은 층에서 울렸다.**
+
+    귀가 *"반주가 앞에서 논다"*로 판정했고 그것이 근거다 (D-0174).
+    """
+    notes = arrange(pattern("UUR"), PROGRESSION, seed=7)
+    levels = {note.velocity for note in notes}
+    assert levels <= set(DYNAMICS.values())
+    # 화음 · 베이스 · 가락 강박이 서로 다르다. 가락 약박이 더 갈린다 (D-0177).
+    assert len(levels) >= 3
+
+
+def test_가락이_가장_세다():
+    """**전경이 배경보다 세야 한다** (D-0141의 층 구분을 소리로 옮긴 것이다)."""
+    notes = arrange(pattern("UUR"), PROGRESSION, seed=7)
+    top = max(note.velocity for note in notes)
+    assert sum(1 for note in notes if note.velocity == top) > 0
+    assert min(note.velocity for note in notes) < top
+
+
+def test_여린소리표_밖의_값을_안_쓴다():
+    """**밖에서 온 격자다.** 실험으로 옮기면 그 순간 D-0058이다."""
+    assert DYNAMICS == {"pp": 32, "p": 48, "mp": 64, "mf": 80, "f": 96, "ff": 112}
+
+
+# ------------------------------------------------------------------ 잇기 (D-0176)
+
+
+def test_이어지는_같은_음을_잇는다():
+    """**D-0138이 화음에서 세운 규칙을 가락에 그대로 쓴다.**
+
+    D-0141이 *"같은 음 유지 25%"*를 쟀고, 다시 치는 것과 끄는 것은 다른 소리다.
+    """
+    notes = arrange(pattern("UUR"), PROGRESSION, seed=7)
+    melody = [note for note in notes if note.velocity == DYNAMICS["f"]]
+    lengths = {note.duration_ticks for note in melody}
+    assert len(lengths) > 1
+
+
+def test_붙어_있고_같아야_잇는다():
+    """**문턱이 없다.** 떨어져 있거나 음이 다르면 안 잇는다."""
+    from hathor.application.arrangement import _tie
+
+    assert _tie([(0, 480, 60), (480, 480, 60)]) == [(0, 960, 60)]
+    assert _tie([(0, 480, 60), (480, 480, 62)]) == [(0, 480, 60), (480, 480, 62)]
+    assert _tie([(0, 480, 60), (960, 480, 60)]) == [(0, 480, 60), (960, 480, 60)]
+
+
+def test_잇기가_밀도를_안_바꾼다():
+    """**같은 시간에 같은 음이 울린다.** 주는 것은 다시 치는 횟수뿐이다 (O-50)."""
+    from hathor.application.arrangement import _tie
+
+    sung = [(0, 480, 60), (480, 480, 60), (960, 480, 62)]
+    assert sum(length for _, length, _ in _tie(sung)) == sum(length for _, length, _ in sung)
