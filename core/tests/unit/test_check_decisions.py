@@ -2,7 +2,7 @@
 
 ### 왜 이 파일이 따로 있는가
 
-`sync_decision_index.py`는 D-0042 이후 `make check`가 매번 부르는 도구인데
+`check_decisions.py`는 D-0042 이후 `make check`가 매번 부르는 도구인데
 **그 도구 자신은 한 번도 검사받지 않았다.** 그리고 색인만 보느라 `D-0076`이
 사라진 것을 78건이 쌓이는 동안 못 봤다.
 
@@ -26,7 +26,7 @@ from hathor.shared.config.paths import repo_root
 
 sys.path.insert(0, str(repo_root() / "tools"))
 
-import sync_decision_index as tool
+import check_decisions as tool
 
 HEAD = "# 결정 기록\n\n"
 
@@ -60,21 +60,6 @@ def test_기록을_표제_단위로_자른다():
     assert [item.number for item in found] == [1, 2, 3]
     assert found[0].title == "제목 1"
     assert "무엇이 있었다" in found[0].body
-
-
-def test_기록이_없으면_색인_생성이_거부한다():
-    with pytest.raises(SystemExit):
-        tool.build_index("표제가 없는 글")
-
-
-def test_색인은_제목을_그대로_옮긴다():
-    """**요약하지 않는다.** 요약하는 순간 두 번째 진실 공급원이 된다 (D-0042)."""
-    index = tool.build_index(decisions(1, 2))
-    assert "| D-0001 | 제목 1 |" in index
-    assert "| D-0002 | 제목 2 |" in index
-
-
-# --------------------------------------------------------------- 번호
 
 
 def test_깨끗한_기록에는_번호_문제가_없다():
@@ -324,15 +309,6 @@ def test_실제_저장소가_전_검사를_통과한다():
     assert tool.run_checks(tool.load_parts(), tool.MASTER.read_text(encoding="utf-8")) == []
 
 
-def test_실제_저장소의_색인이_일치한다():
-    master_text = tool.MASTER.read_text(encoding="utf-8")
-    index = tool.build_index(tool.merge_parts(tool.load_parts()))
-    assert tool.BLOCK.sub(lambda _: index, master_text, count=1) == master_text
-
-
-# --------------------------------------------------------------- 배선
-
-
 def _recipes(makefile: str) -> dict[str, tuple[list[str], list[str]]]:
     """Makefile을 `타깃 -> (선행, 레시피)`로 읽는다. **탭이 레시피다.**"""
     targets: dict[str, tuple[list[str], list[str]]] = {}
@@ -372,3 +348,15 @@ def test_check가_있는_도구는_전부_check_사슬에서_불린다():
             f"{path.name}에 --check가 있는데 make check 사슬이 부르지 않는다. "
             "Makefile의 docs 타깃에 한 줄 더한다"
         )
+
+
+def test_색인을_만들지_않는다():
+    """**색인은 같은 목록이 두 곳에 사는 구조다** (D-0189).
+
+    `fire-lane` 151건 · `thoth` 64건 둘 다 색인 표가 없다. 찾는 일은 편집기가 한다.
+    """
+    assert not hasattr(tool, "build_index")
+    # **옛 기록 본문은 안 본다.** 그때는 색인이 있었고 기록은 그때를 적는다
+    # (GR-0.2 · D-0081). 지금 문서에 **표식이 살아 있는지**만 본다.
+    text = (repo_root() / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    assert "\n<!-- decision-index:begin -->" not in text

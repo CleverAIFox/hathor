@@ -17,7 +17,7 @@ MAKEFILE = ROOT / "Makefile"
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 HOOK = ROOT / ".githooks" / "pre-commit"
 
-CHECK_TOOLS = re.compile(r"tools/(check_\w+\.py|sync_decision_index\.py|split_decisions\.py)")
+CHECK_TOOLS = re.compile(r"tools/(check_\w+\.py|check_decisions\.py|split_decisions\.py)")
 
 
 def test_메이크파일이_부르는_검사는_전부_CI에도_있다():

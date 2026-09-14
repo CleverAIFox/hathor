@@ -436,7 +436,7 @@ D는 제외한다. 현행 생성 모델 품질로 전문가 요구를 충족할 
 **닫힌 항목을 지우지 않고 아래 「닫힌 미해결」로 옮긴다** (D-0080). 예전 규약은
 "해소되면 결정 기록으로 옮기고 여기서 지운다"였는데, 지우면 **"이건 왜 안 하기로
 했지"를 다시 묻게 된다** — 결정 기록 80건에서 그 항목을 찾는 것보다 여기 한 줄이
-싸다. ID 중복·정렬·닫힘 표시는 `tools/sync_decision_index.py`가 검사한다.
+싸다. ID 중복·정렬·닫힘 표시는 `tools/check_decisions.py`가 검사한다.
 
 **열린 질문은 `docs/PLAN.md` §2에 있다** (D-0130). 미래는 이 문서 소관이 아니다.
 
@@ -1592,7 +1592,7 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 있다 (O-28). 앞을 고치는 것이 아니라 표시하는 것이므로 추가 전용은 깨지지 않는다.
 
 **옛 기록을 형식에 맞추려고 소급 수정하지 않는다.** 형식 검사는
-`sync_decision_index.py`의 `FORMAT_ENFORCED_FROM` 이후에만 걸린다. 추가 전용이
+`check_decisions.py`의 `FORMAT_ENFORCED_FROM` 이후에만 걸린다. 추가 전용이
 이 기록의 유일한 방어선이고, 78건을 손대는 순간 그것이 사라진다.
 
 **굵은 글씨는 강조가 필요한 곳에만 쓴다.** 78건 시점에 본문 2.7줄당 하나였고
@@ -1805,7 +1805,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | 1 | **Async First** | I/O는 비동기 우선. **CPU/GPU 연산은 강제하지 않는다** — 워커나 executor로 이벤트 루프를 보호한다 |
 | 2 | **Fail Fast** | 입력 검증을 진입점에서. 예외를 삼키지 않는다. 재시도 가능한 오류만 명시적 재시도 |
 | 3 | **Idempotency** | 동일 요청 반복 시 상태 동일. 모든 워커에 멱등 키 필수 |
-| 4 | **Deterministic** | 동일 입력 → 동일 출력. **시드 명시 고정.** 재현성 계층은 `docs/DESIGN.md`에 있고 CI가 검사한다 |
+| 4 | **Deterministic** | 동일 입력 → 동일 출력. **시드 명시 고정.** 재현성 계층은 `docs/MASTER.md`에 있고 CI가 검사한다 |
 | 5 | **Secrets 분리** | 코드에 비밀정보 금지. `.env` + 환경 변수. `make docs`와 CI가 `check_secrets.py`를 돌리고, 기기 훅은 `doctor`가 본다 (D-0128) |
 | 6 | **DRY** | 동일 로직 **3회 반복 시** 공통화. 2회까지는 중복 허용 (성급한 추상화 방지) |
 | 7 | **Single Responsibility** | 함수·클래스·모듈은 하나의 책임. 계층 간 전달은 DTO로 |
@@ -1892,7 +1892,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 않는다** — `DECISIONS.md`가 든다. 이 절은 *"무엇이 지금 효력이 있는가"*만 든다.
 
 **고르지 않고 뽑는다** (D-0186). `강제자`를 적은 기록이 곧 효력이 있는 것이며,
-`tools/sync_decision_index.py`가 이 표를 다시 쓴다. **손으로 고치지 않는다** —
+`tools/check_decisions.py`가 이 표를 다시 쓴다. **손으로 고치지 않는다** —
 고치면 다음 갱신에 지워지고, 그것이 D-0043이 말한 *"두 곳이 어긋난다"*이다.
 
 | 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |
@@ -1918,7 +1918,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0036 | 가사축은 문자 n-gram 해싱 베이스라인으로 착수한다 | `core/tests/unit/test_lyrics_axis.py` |
 | D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` |
 | D-0041 | M0에 순위 진단과 해석적 베이스라인을 넣는다 | `core/tests/unit/test_retrieval_metrics.py` |
-| D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/sync_decision_index.py` |
+| D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/check_decisions.py` |
 | D-0045 | 가사축 인코더를 BGE-M3로 한다 | `core/tests/unit/test_bge_m3_lyrics_encoder.py` |
 | D-0047 | CLI 배선을 테스트로 고정한다 | `core/tests/unit/test_eval_cli.py` |
 | D-0049 | 구조 생성을 가사 반복 패턴에서 규칙으로 뽑는다 | `core/tests/unit/test_song_structure.py` |
@@ -1942,8 +1942,8 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0075 | 조성 추출을 이어받게 한다 | `core/tests/unit/test_ingest_resume.py` |
 | D-0077 | 추출을 동시에 못 돌게 한다 | `core/tests/unit/test_ingest_resume.py` |
 | D-0079 | O-29 도구를 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0080 | 결정 기록 자신의 규약을 기계가 검사하게 한다 | `tools/sync_decision_index.py` |
-| D-0081 | 표기는 전수 강제하고 내용만 신규에 건다 | `tools/sync_decision_index.py` |
+| D-0080 | 결정 기록 자신의 규약을 기계가 검사하게 한다 | `tools/check_decisions.py` |
+| D-0081 | 표기는 전수 강제하고 내용만 신규에 건다 | `tools/check_decisions.py` |
 | D-0083 | O-31 도구 | `core/tests/unit/test_evaluate_degree_restriction.py` |
 | D-0084 | 귀무선이 질량까지 바꿨다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
 | D-0085 | O-31을 닫는다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
@@ -1969,13 +1969,13 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0110 | 배열 사전이 생성 경로에 붙었다 | `core/tests/unit/test_harmony_output_cli.py` |
 | D-0111 | 배열 조건화가 소리에 거의 안 닿고 있었다 | `core/tests/unit/test_arrangement.py` |
 | D-0112 | 쌍 거리로는 배열 조건화를 판정할 수 없다 | `core/tests/unit/test_evaluate_order_conditioning.py` |
-| D-0115 | 결정 기록 하나가 조각 밖에 있었고 검사가 못 봤다 | `tools/sync_decision_index.py` |
+| D-0115 | 결정 기록 하나가 조각 밖에 있었고 검사가 못 봤다 | `tools/check_decisions.py` |
 | D-0116 | 저장소 로더를 CLI에서 인프라로 내린다 | `core/tests/unit/test_chroma_series.py` |
 | D-0117 | 파일 길이에 래칫을 건다 | `tools/check_file_size.py` |
 | D-0118 | 산출물 교두보를 세운다 | `tools/sync_artifacts.py` |
 | D-0119 | 교두보가 실제 기기에서 세 자리에 걸렸다 | `core/tests/unit/test_sync_artifacts.py` |
 | D-0120 | 쓰지 않는 것을 옮기다 죽었다 | `core/tests/unit/test_sync_artifacts.py` |
-| D-0121 | 검사를 만들어 놓고 안 불렀다 | `core/tests/unit/test_decision_index.py` |
+| D-0121 | 검사를 만들어 놓고 안 불렀다 | `core/tests/unit/test_check_decisions.py` |
 | D-0123 | 화성 리듬은 손잡이가 아니다 | `core/tests/unit/test_chord_rhythm.py` |
 | D-0124 | 유지 확률을 곡에서 뽑아 판정에 건다 | `core/tests/unit/test_evaluate_order_conditioning.py ·` |
 | D-0126 | 닫힌 질문을 코드가 열린 것처럼 적는다 | `tools/check_issue_mentions.py` |

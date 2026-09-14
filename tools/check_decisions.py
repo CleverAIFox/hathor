@@ -57,8 +57,8 @@
 했다는 사실을 여기 적는다** (GR-0.8의 예외이므로 이유가 남아야 한다).
 
 사용법:
-    python tools/sync_decision_index.py           # 색인을 다시 쓰고 검사한다
-    python tools/sync_decision_index.py --check   # 쓰지 않는다. 어긋나면 1로 끝난다
+    python tools/check_decisions.py           # 색인을 다시 쓰고 검사한다
+    python tools/check_decisions.py --check   # 쓰지 않는다. 어긋나면 1로 끝난다
 """
 
 from __future__ import annotations
@@ -121,9 +121,6 @@ BADGE = re.compile(r"^> \*\*갱신됨 — (D-\d{4})", re.MULTILINE)
 CANDIDATES = re.compile(r"^- \*\*후보\*\*", re.MULTILINE)
 CHOICE = re.compile(r"^- \*\*선택\*\*", re.MULTILINE)
 
-BEGIN = "<!-- decision-index:begin -->"
-END = "<!-- decision-index:end -->"
-BLOCK = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
 
 OPEN_BEGIN = "<!-- open-issues:begin -->"
 OPEN_END = "<!-- open-issues:end -->"
@@ -439,25 +436,6 @@ def check_open_issues(issues_text: str) -> list[str]:
     return problems
 
 
-def build_index(decisions_text: str) -> str:
-    """결정 기록 제목을 표로 만든다. 번호 순서는 파일 등장 순서를 따른다."""
-    records = scan_records(decisions_text)
-    if not records:
-        raise SystemExit("결정 기록에서 `## D-XXXX. 제목`을 찾지 못했다")
-    rows = "\n".join(f"| {record.identifier} | {record.title} |" for record in records)
-    return (
-        f"{BEGIN}\n"
-        "<!-- 이 표는 tools/sync_decision_index.py가 생성한다."
-        " 손으로 고치지 않는다 (D-0042). -->\n"
-        f"\n"
-        f"| ID | 결정 |\n"
-        f"|---|---|\n"
-        f"{rows}\n"
-        f"\n"
-        f"{END}"
-    )
-
-
 def check_stray_records(documents: dict[str, str]) -> list[str]:
     """조각 파일 **밖에** 결정 기록 표제가 있는가 (D-0115).
 
@@ -531,17 +509,11 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="결정 기록 검사 및 색인 동기화 (D-0042 · D-0133)")
-    parser.add_argument("--check", action="store_true", help="쓰지 않고 어긋남만 검사한다")
-    args = parser.parse_args()
-
-    index_text = DECISIONS.read_text(encoding="utf-8")
-    if not BLOCK.search(index_text):
-        print(f"{DECISIONS}에 {BEGIN} ... {END} 표식이 없다", file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser(description="결정 기록 검사 (D-0189)")
+    parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
+    parser.parse_args()
 
     parts = load_parts()
-    decisions_text = merge_parts(parts)
     problems = run_checks(parts, MASTER.read_text(encoding="utf-8"))
     if problems:
         print(f"결정 기록·미해결표에 문제가 {len(problems)}건 있다.", file=sys.stderr)
@@ -549,20 +521,7 @@ def main() -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    index = build_index(decisions_text)
-    updated = BLOCK.sub(lambda _: index, index_text, count=1)
-
-    if updated == index_text:
-        print(f"결정 기록 검사 통과 · 색인 일치 ({index.count('| D-')}건)")
-        return 0
-
-    if args.check:
-        print("색인이 결정 기록과 어긋난다.", file=sys.stderr)
-        print("  python tools/sync_decision_index.py 로 다시 쓴다.", file=sys.stderr)
-        return 1
-
-    DECISIONS.write_text(updated, encoding="utf-8")
-    print(f"색인 갱신 ({index.count('| D-')}건)")
+    print(f"결정 기록 검사 통과 · {len(scan_records(parts[0][1]))}건")
     return 0
 
 

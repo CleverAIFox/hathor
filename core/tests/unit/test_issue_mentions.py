@@ -129,5 +129,5 @@ def test_가짜_자료를_든_검사만_뺀다():
     """
     assert CHECKER.SKIP_FILES == (
         "core/tests/unit/test_issue_mentions.py",
-        "core/tests/unit/test_decision_index.py",
+        "core/tests/unit/test_check_decisions.py",
     )

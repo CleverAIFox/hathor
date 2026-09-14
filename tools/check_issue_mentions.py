@@ -63,7 +63,7 @@ D-0126은 *"검사 이름이 질문 번호를 갖는 것은 정상"*이라며 �
 
 SKIP_FILES = (
     "core/tests/unit/test_issue_mentions.py",
-    "core/tests/unit/test_decision_index.py",
+    "core/tests/unit/test_check_decisions.py",
 )
 """검사에서 빼는 파일. **둘 다 가짜 자료를 들고 있다.**
 

@@ -27,7 +27,7 @@ jobs:
 
       - name: Docs index
         working-directory: .
-        run: python3 tools/sync_decision_index.py --check
+        run: python3 tools/check_decisions.py --check
 
       - name: Closed issue mentions
         working-directory: .
@@ -40,6 +40,10 @@ jobs:
       - name: Egress points
         working-directory: .
         run: python3 tools/check_egress.py --check
+
+      - name: Doc reality check
+        working-directory: .
+        run: python3 tools/doc_fsck.py --check
 
       - name: Secret scan
         working-directory: .

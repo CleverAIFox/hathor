@@ -17,7 +17,7 @@
 - `DECISIONS.md`는 **추가 전용**이다. 판단이 바뀌면 고쳐 쓰지 않고 새 번호로 정정한다.
 - **문서를 먼저 고치고 코드를 고친다 (GR-0.1).** 코드가 앞서면 그 즉시 문서를 맞춘다.
 - **도구가 강제하는 것은 문서에 다시 적지 않는다.** 계층 계약은 `core/pyproject.toml`,
-  결정 색인은 `tools/sync_decision_index.py`가 진실이다 (D-0042 · D-0043).
+  결정 색인은 `tools/check_decisions.py`가 진실이다 (D-0042 · D-0043).
 - `docs/archive/`는 폐기된 초안이다. 참조용으로만 남긴다.
 
 ## 현재 단계
@@ -473,7 +473,7 @@ docs/DECISIONS.md   결정 기록 (GR-0.2)
 tools/step0_check.py  환경·라이브러리 실측 스크립트
 tools/check_file_size.py  파일 길이 래칫 · 양방향 (D-0117)
 tools/sync_artifacts.py   산출물 교두보 동기화 · 추가 전용 (D-0118)
-tools/sync_decision_index.py  부록 A 색인 생성·검증 (D-0042)
+tools/check_decisions.py  부록 A 색인 생성·검증 (D-0042)
 tools/lyrics_language_profile.py  가사 언어 구성 실측 (D-0044)
 tools/lyrics_exclusion_probe.py   가사 제외 곡 원인 진단 (D-0048)
 ```
