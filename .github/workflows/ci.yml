@@ -53,10 +53,14 @@ jobs:
         working-directory: .
         run: python3 tools/check_file_size.py
 
+      - name: Test type ratchet
+        working-directory: .
+        run: python3 tools/check_test_types.py --check
+
       - name: Lint & format
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
+          uv run ruff check . ../tools
+          uv run ruff format --check . ../tools
 
       - name: Type check
         run: uv run mypy hathor --strict

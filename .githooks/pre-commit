@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# hathor 저장소 훅. 전역 `~/.githooks/pre-commit`이 이것을 찾아 부른다 (D-0184).
+#
+# **전역 설정을 안 건드린다.** 배선이 이미 있었고 이 파일만 없었다.
+#
+# ── 무엇을 넣고 무엇을 뺐나
+#
+# 빠른 것만 넣는다. 실측으로 **문서 검사 + ruff가 2.6초**이고 pytest는 **99초**다.
+# 커밋마다 99초를 물리면 `--no-verify`를 쓰게 되고, 그러면 훅이 없는 것과 같다 —
+# `doctor`가 *"느려지면 안 돌리게 된다"*고 적은 그 함정이다.
+#
+#   여기        문서 검사 · ruff              2.6초
+#   CI          mypy · pytest · 아키텍처 · 재현성
+#
+# **이 세션에서 걸린 것이 전부 여기 있다** — 색인 불일치, 맨몸 참조, 줄 길이.
+#
+# ── 자격증명
+#
+# 전역 훅이 `credential-check`를 먼저 돌리고 `HOOK_CREDENTIAL_CHECKED`를 내린다.
+# **저장소가 로컬 `core.hooksPath`를 박으면 전역이 안 돌므로** 그때는 여기서
+# 직접 불러야 한다 — 지금은 전역이 돌고 있으니 안 부른다.
+#
+# 우회:  git commit --no-verify   (이유를 커밋 메시지에 남길 것)
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root" || exit 1
+
+fail=0
+run() {
+  local label="$1"
+  shift
+  if ! "$@" >/dev/null 2>&1; then
+    printf '✗ %s\n' "$label"
+    "$@" 2>&1 | sed 's/^/    /'
+    fail=1
+  fi
+}
+
+# **첫 실패에서 멈추지 않는다.** 한 번에 다 보여야 한 번에 고친다.
+run "결정 색인"   python3 tools/sync_decision_index.py --check
+run "기록 조각"   python3 tools/split_decisions.py --check
+run "닫힌 질문"   python3 tools/check_issue_mentions.py --check
+run "문서 레이아웃" python3 tools/check_doc_style.py --check
+run "망 접점"    python3 tools/check_egress.py --check
+run "파일 길이"   python3 tools/check_file_size.py
+
+# **`core`에서 돌린다.** 설정이 `core/pyproject.toml`에 있어 뿌리에서 부르면
+# 줄 길이 같은 규약을 못 읽고 176개 중 17개가 틀렸다고 나온다 — Makefile과
+# 같은 자리에서 같은 인자로 부른다.
+if command -v uv >/dev/null 2>&1; then
+  run "ruff 검사" bash -c 'cd core && uv run ruff check . ../tools'
+  run "ruff 서식" bash -c 'cd core && uv run ruff format --check . ../tools'
+else
+  printf '! uv가 없어 ruff를 건너뛴다. CI가 잡는다\n'
+fi
+
+if [ "$fail" -ne 0 ]; then
+  printf '\n커밋을 중단한다. `make check`으로 전부 본다.\n'
+  printf '정말 필요하면  git commit --no-verify  (이유를 메시지에 남길 것)\n'
+  exit 1
+fi
+exit 0
