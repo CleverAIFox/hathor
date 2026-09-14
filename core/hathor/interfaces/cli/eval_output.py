@@ -20,12 +20,6 @@ from hathor.interfaces.cli.tables import parse_key, render_table
 if TYPE_CHECKING:
     import argparse
 
-KEY_MARGIN_FLOOR = 0.05
-"""이보다 격차가 작으면 조성 추정을 신뢰하지 않고 표시한다 (D-0054).
-
-`main.py`가 이 상수를 쓰는 곳이 여기뿐이라 함께 내려왔다 (D-0133).
-**상수는 그것을 읽는 코드 옆에 둔다.**"""
-
 
 def report_harmonic_sweep(rows: list[dict[str, object]], profile: str) -> int:
     """배음 감산 강도를 훑어 한 표로 낸다 (D-0060).
@@ -38,6 +32,7 @@ def report_harmonic_sweep(rows: list[dict[str, object]], profile: str) -> int:
 
     from hathor.domain.services.key_estimation import (
         BLACK_KEYS,
+        KEY_MARGIN_FLOOR,
         estimate_key,
         random_baseline,
         relative_key,

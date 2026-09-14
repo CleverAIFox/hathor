@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+
+from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -60,4 +64,75 @@ def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[obj
         lines.append(
             "".join(f"{value:{spec}}" for value, (_, spec) in zip(row, columns, strict=True))
         )
+    return lines
+
+
+def ambiguity_report(
+    *,
+    modes: Sequence[str],
+    ambiguous: np.ndarray,
+    relative: Sequence[bool],
+    floor: float,
+    tunings: Sequence[float],
+) -> list[str]:
+    """조성 애매함 보고의 뒷부분 (O-22 · O-54 · D-0185).
+
+    `--eda`가 크로마 상한을 **장조 0.6626 · 단조 0.3409**로 봤다. 조성 라벨이
+    나온 바로 그 자료가 반토막이므로, **애매함이 단조에 몰려 있는지**가 그 원인을
+    가른다.
+
+    **바닥은 하나다.** `random_baseline`은 무작위 크로마 2000개이며 곡과 짝이 없고
+    어느 선법인지도 안 낸다 — 선법별로 가를 수 없으므로 둘 다 같은 값과 견준다.
+    **전체 바닥을 부분집합에 갖다 대는 것과는 다르다** (D-0182에서 그렇게 틀렸다).
+
+    **`main.py`에 안 넣는다.** 래칫이 2902줄에서 막았고 그 파일은 이미 빚이다 —
+    *"되돌리거나 쪼갠다"*를 따랐다 (D-0185).
+    """
+    kinds = np.asarray(modes)
+    flags = np.asarray(ambiguous, dtype=bool)
+    near = np.asarray(relative, dtype=bool)
+    total, held_all = len(kinds), int(flags.sum())
+    lines = [
+        f"\n애매({KEY_MARGIN_FLOOR} 미만)  코퍼스 {held_all / total:.1%}  무작위 {floor:.1%}",
+        f"2등이 나란한조 — 전체 대비          {float(near.mean()):.1%}",
+    ]
+    # **애매함의 원인은 애매한 곡 안에서 재야 한다** (D-0057). 전체 대비로 재면
+    # 확신도 높은 곡의 2등까지 섞여 희석된다 — 분모가 틀린 지표였다.
+    if held_all:
+        share = float(near[flags].mean())
+        lines.append(
+            f"2등이 나란한조 — 애매한 곡 안에서   {share:.1%}"
+            f"  ({int(near[flags].sum())}/{held_all})"
+        )
+    lines.append(f"\n선법마다 (O-54) · 무작위 바닥은 {floor:.1%} 하나다")
+    for name in ("major", "minor"):
+        picked = kinds == name
+        count = int(picked.sum())
+        if not count:
+            continue
+        inside = near[picked & flags]
+        held = f"{float(inside.mean()):>6.1%}" if inside.size else "     -"
+        lines.append(
+            f"  {name:<8}{count:>5}곡  애매 {float(flags[picked].mean()):>6.1%}"
+            f"  나란한조 {float(near[picked].mean()):>6.1%}  애매 안에서 {held}"
+        )
+    lines.append("  **무작위 바닥에 붙으면 그 선법에서는 격차가 판별을 못 한다**")
+
+    # **`if tunings`로 거르지 않는다.** 0.0이 거짓이라 정확히 0센트인 곡이 통째로
+    # 빠진다 — D-0057에서 분모 오류를 적어놓고 같은 세션에 또 냈다.
+    if len(tunings):
+        cents = np.asarray(tunings, dtype=float)
+        off = int((np.abs(cents) > 10).sum())
+        lines.append(
+            f"\n조율 편차  중앙값 {float(np.median(cents)):+.1f}센트 · "
+            f"|편차|>10센트 {off}곡 ({off / len(cents):.1%})"
+        )
+
+    lines += [
+        "\n--- 읽는 법 ---",
+        "상관·격차가 무작위와 비슷하면 그 지표는 판별력이 없다. 절대값에 속지 않는다.",
+        "2등이 나란한조인 비율이 높으면 애매함은 K-S의 원리적 한계다 (고칠 수 없다).",
+        "낮으면 크로마 추출이나 프로파일 쪽 문제이므로 고칠 여지가 있다.",
+        "**맞다는 증명은 아니다. 틀렸다는 신호를 잡는 장치다 (O-22).**",
+    ]
     return lines

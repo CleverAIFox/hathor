@@ -33,7 +33,7 @@ from hathor.application.search_similar import SearchSimilar, SearchTrack
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
-from hathor.domain.services.key_estimation import KeyEstimate
+from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR, KeyEstimate
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
@@ -69,7 +69,7 @@ from hathor.interfaces.cli.eval_vocabulary import (
 )
 from hathor.interfaces.cli.ingest_onsets import add_parser as add_onset_parser
 from hathor.interfaces.cli.ingest_onsets import run as run_ingest_onsets
-from hathor.interfaces.cli.tables import parse_key, render_table
+from hathor.interfaces.cli.tables import ambiguity_report, parse_key, render_table
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
     load_dotenv,
@@ -788,14 +788,6 @@ def _run_generate(args: argparse.Namespace) -> int:
     else:
         print(payload)
     return 0
-
-
-KEY_MARGIN_FLOOR = 0.05
-"""이보다 격차가 작으면 조성 추정을 신뢰하지 않고 표시한다 (D-0054).
-
-Krumhansl-Schmuckler는 나란한 장·단조를 구분하기 어렵다(C장조 ↔ A단조).
-구성음이 같기 때문이며 원리적 한계다. **1등만 남기면 그 사실이 사라진다.**
-"""
 
 
 def _estimate_key(
@@ -1539,12 +1531,6 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     tonics: Counter[str] = Counter(key.tonic for key in keys)
     is_relative = [relative_key(key) == other for key, other in zip(keys, runner_ups, strict=True)]
     ambiguous_flags = margins < KEY_MARGIN_FLOOR
-    relative_confusions = sum(is_relative)
-    # **애매함의 원인은 애매한 곡 안에서 재야 한다** (D-0057). 전체 대비로 재면
-    # 확신도 높은 곡의 2등까지 섞여 희석된다 — 분모가 틀린 지표였다.
-    ambiguous_relative = sum(
-        1 for flag, rel in zip(ambiguous_flags, is_relative, strict=True) if flag and rel
-    )
 
     print(f"곡 {total}개\n")
     print("선법")
@@ -1577,35 +1563,17 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             f"{float(np.median(base)):>10.4f}{gap:>+10.4f}"
         )
 
-    ambiguous = int(ambiguous_flags.sum())
-    base_ambiguous = float((base_margin < KEY_MARGIN_FLOOR).mean())
     print(
-        f"\n애매({KEY_MARGIN_FLOOR} 미만)  코퍼스 {ambiguous / total:.1%}"
-        f"  무작위 {base_ambiguous:.1%}"
+        "\n".join(
+            ambiguity_report(
+                modes=[key.mode.value for key in keys],
+                ambiguous=ambiguous_flags,
+                relative=is_relative,
+                floor=float((base_margin < KEY_MARGIN_FLOOR).mean()),
+                tunings=[float(str(row["tuning_cents"])) for row in rows if "tuning_cents" in row],
+            )
+        )
     )
-    print(f"2등이 나란한조 — 전체 대비          {relative_confusions / total:.1%}")
-    if ambiguous:
-        print(
-            f"2등이 나란한조 — 애매한 곡 안에서   {ambiguous_relative / ambiguous:.1%}"
-            f"  ({ambiguous_relative}/{ambiguous})"
-        )
-
-    # **`if row.get(...)`를 쓰지 않는다.** 0.0이 거짓이라 정확히 0센트인 곡이
-    # 통째로 빠진다 — D-0057에서 분모 오류를 적어놓고 같은 세션에 또 냈다.
-    tunings = [float(str(row["tuning_cents"])) for row in rows if "tuning_cents" in row]
-    if tunings:
-        array = np.asarray(tunings)
-        off = int((np.abs(array) > 10).sum())
-        print(
-            f"\n조율 편차  중앙값 {float(np.median(array)):+.1f}센트 · "
-            f"|편차|>10센트 {off}곡 ({off / len(tunings):.1%})"
-        )
-
-    print("\n--- 읽는 법 ---")
-    print("상관·격차가 무작위와 비슷하면 그 지표는 판별력이 없다. 절대값에 속지 않는다.")
-    print("2등이 나란한조인 비율이 높으면 애매함은 K-S의 원리적 한계다 (고칠 수 없다).")
-    print("낮으면 크로마 추출이나 프로파일 쪽 문제이므로 고칠 여지가 있다.")
-    print("**맞다는 증명은 아니다. 틀렸다는 신호를 잡는 장치다 (O-22).**")
     return 0
 
 

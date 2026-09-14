@@ -493,6 +493,19 @@ def relative_key(key: Key) -> Key:
     return Key(tonic=PITCH_CLASSES[tonic], mode=other)
 
 
+KEY_MARGIN_FLOOR = 0.05
+"""이보다 격차가 작으면 조성 추정을 신뢰하지 않고 표시한다 (D-0054).
+
+Krumhansl-Schmuckler는 나란한 장·단조를 구분하기 어렵다(C장조 ↔ A단조).
+구성음이 같기 때문이며 원리적 한계다. **1등만 남기면 그 사실이 사라진다.**
+
+**정본은 여기 하나다** (D-0185). D-0133이 *"상수는 읽는 코드 옆에 둔다"*며
+`eval_output.py`에 복사를 뒀고 `main.py`에도 남아 둘이 됐다. `tables.py`가
+세 번째가 되는 자리에서 묶었다 — GR-5 #6이고, **무엇보다 문턱 값이다.**
+셋으로 흩어지면 한쪽만 고쳐지고 그것을 아무도 모른다.
+"""
+
+
 def random_baseline(
     count: int = 2000,
     seed: int = 20260818,

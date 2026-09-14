@@ -56,8 +56,8 @@ TREES = {
 # ---------------------------------------------------------------- 예외표 시작
 EXCEPTIONS: dict[str, int] = {
     "core/hathor/application/evaluate_harmony_output.py": 663,
-    "core/hathor/domain/services/key_estimation.py": 755,
-    "core/hathor/interfaces/cli/main.py": 2902,
+    "core/hathor/domain/services/key_estimation.py": 768,
+    "core/hathor/interfaces/cli/main.py": 2870,
 }
 # ---------------------------------------------------------------- 예외표 끝
 """넘고 있는 파일을 **현재 줄 수로 못 박은 것**이다. 상한이 아니라 래칫이다.
