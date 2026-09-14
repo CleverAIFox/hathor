@@ -10,12 +10,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hathor.application.evaluate_time_drift import (
-    GATE_T,
-    DriftObservation,
-    EvaluateTimeDrift,
-    drift_vector,
-)
+from hathor.application.evaluate_time_drift import GATE_T, EvaluateTimeDrift
+from hathor.domain.services.chroma_drift import DriftObservation, drift_vector
 
 DEGREES = 12
 KRUMHANSL = np.asarray([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])

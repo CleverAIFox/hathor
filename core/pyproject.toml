@@ -158,6 +158,21 @@ type = "layers"
 layers = [
   "hathor.interfaces",
   "hathor.application",
+  "hathor.infrastructure",
   "hathor.engines",
   "hathor.domain",
+]
+# **`infrastructure`가 계약에 없어 역방향이 안 잡혔다** (D-0190). `keys_jsonl_store`가
+# 함수 안에서 응용을 불렀고 그것이 런타임 역전이었다 — `chroma_drift`를 도메인으로
+# 내려 끊었다.
+#
+# 남은 다섯은 **`TYPE_CHECKING` 안이며 저장소가 담는 DTO의 타입만 빌린다.** 성격이
+# 다르므로 이름으로 적어 둔다 — **예외가 목록이면 빚이 보이고, 계약이 없으면 안 보인다.**
+# 갚는 방향은 그 DTO들을 도메인으로 내리는 것이고 PLAN §3에 적었다.
+ignore_imports = [
+  "hathor.infrastructure.npz_feature_store -> hathor.application.extract_features",
+  "hathor.infrastructure.jsonl_scan_store -> hathor.application.scan_library",
+  "hathor.infrastructure.jsonl_scan_store -> hathor.application.scan_summary",
+  "hathor.infrastructure.jsonl_resolution_store -> hathor.application.resolution_summary",
+  "hathor.infrastructure.jsonl_resolution_store -> hathor.application.resolve_identities",
 ]

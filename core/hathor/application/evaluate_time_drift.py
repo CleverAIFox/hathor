@@ -54,6 +54,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hathor.domain.services.chroma_drift import DriftObservation
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 
 DriftTable = np.ndarray[tuple[int, int], np.dtype[np.float64]]
@@ -68,32 +69,6 @@ DEFAULT_NULL_REPEATS = 20
 DEFAULT_BOOTSTRAP = 40
 GATE_T = 3.0
 """게이트 통과 문턱. **관측 문턱(2)보다 높다** — 큰 작업을 승인하기 때문이다."""
-
-
-@dataclass(frozen=True, slots=True)
-class DriftObservation:
-    """곡 하나의 두 출처 변화 벡터. **이미 으뜸음으로 회전돼 있다.**"""
-
-    source_key: str
-    left: tuple[float, ...]
-    right: tuple[float, ...]
-
-    def __post_init__(self) -> None:
-        for vector in (self.left, self.right):
-            if len(vector) != DEGREE_COUNT:
-                raise ValueError(f"변화 벡터는 12차원이어야 한다: {len(vector)}")
-
-
-def drift_vector(head: Sequence[float], tail: Sequence[float]) -> tuple[float, ...]:
-    """`log(tail) - log(head)`. **로그를 쓰는 이유는 크기가 아니라 방향을 보기 위해서다.**
-
-    반쪽마다 전체 세기가 다를 수 있고 그것은 화성이 아니다. 로그 차는 비율을 재므로
-    세기의 곱셈 성분이 상수로 빠진다.
-    """
-    left = np.maximum(np.asarray(head, dtype=np.float64), 1e-12)
-    right = np.maximum(np.asarray(tail, dtype=np.float64), 1e-12)
-    changed = np.log(right) - np.log(left)
-    return tuple(float(value) for value in changed - changed.mean())
 
 
 def _cell_correlation(left: DriftTable, right: DriftTable) -> float:

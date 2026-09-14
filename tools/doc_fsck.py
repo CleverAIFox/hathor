@@ -24,6 +24,7 @@
 | 경로 | 문서가 적은 `tools/x.py` · `core/...`가 실재하는가 |
 | 명령 | `재현` 절의 `python3 tools/x.py`가 실재하는가 |
 | 도구 | `tools/*.py`가 문서 어디서든 불리는가 (죽은 도구) |
+| 빈 자리 | 비어 있는 패키지가 **언제 차는지**를 적었는가 |
 
 ### 무엇을 안 보나
 
@@ -103,12 +104,45 @@ def check_orphan_tools() -> list[str]:
     return problems
 
 
+def check_reserved_packages() -> list[str]:
+    """비어 있는 패키지가 **언제 차는지**를 적었는가 (D-0190).
+
+    빈 폴더 스물둘이 전부 0바이트 `__init__.py`였다. **비운 것이 아니라 열어 둔
+    것인데 그 말이 어디에도 없었다** — 마스터에 `engines`가 1회, `artwork`·`score`는
+    0회 나온다. 단계표(P1~P8)는 있는데 **어느 단계가 어느 폴더를 채우는지**가 없었다.
+
+    `docstring`이 정본인 저장소에서 **빈 파일은 아무 말도 안 한다.** 적어 두면
+    빈 자리가 약속이 되고, 안 적으면 그냥 잊힌 폴더다.
+
+    **차 있는 패키지는 안 본다.** 형제 파일이 있으면 그 파일들이 설명한다.
+    """
+    base = ROOT / "core" / "hathor"
+    if not base.is_dir():
+        return []
+    problems: list[str] = []
+    for init in sorted(base.rglob("__init__.py")):
+        if "__pycache__" in init.parts:
+            continue
+        # **자식이 차 있으면 뿌리는 비어도 된다.** `domain/`은 파일을 안 들고
+        # `entities`·`services`를 드는 계층 뿌리이며, 그 폴더들이 설명한다.
+        filled = [
+            path
+            for path in init.parent.rglob("*.py")
+            if path.name != "__init__.py" and "__pycache__" not in path.parts
+        ]
+        if filled or init.stat().st_size:
+            continue
+        problems.append(f"{init.relative_to(ROOT).as_posix()}: 빈 패키지인데 언제 차는지 안 적혔다")
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="문서 ↔ 실물 대조 (D-0189)")
     parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
     parser.parse_args()
 
     problems = check_paths() + check_commands() + check_orphan_tools()
+    problems += check_reserved_packages()
     if problems:
         print(f"문서가 없는 것을 가리키는 자리가 {len(problems)}곳 있다.", file=sys.stderr)
         for problem in problems:

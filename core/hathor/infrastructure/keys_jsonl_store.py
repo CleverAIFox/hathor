@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, cast
 
+from hathor.domain.services.chroma_drift import DriftObservation, drift_vector
 from hathor.domain.services.harmony_prior import merge_degree_priors
 from hathor.domain.services.stem_sets import MIX_SOURCE
 from hathor.domain.value_objects.key import PITCH_CLASSES
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
     from pathlib import Path
 
-    from hathor.application.evaluate_time_drift import DriftObservation
+    from hathor.domain.services.chroma_drift import DriftObservation
 
 Row = dict[str, object]
 
@@ -151,8 +152,6 @@ def load_drift_observations(path: Path, left_set: str, right_set: str) -> list[D
     **으뜸음은 앞반쪽 추정을 쓴다** — 곡 전체에서 추정하면 뒷반쪽이 회전 정렬에
     관여한다 (D-0062). 두 관측이 같은 회전을 써야 비교가 성립한다.
     """
-    from hathor.application.evaluate_time_drift import DriftObservation, drift_vector
-
     found: list[DriftObservation] = []
     for row in iter_rows(path):
         parts = {"left": halves_of(row, left_set), "right": halves_of(row, right_set)}
