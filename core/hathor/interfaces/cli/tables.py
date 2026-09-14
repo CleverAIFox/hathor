@@ -136,3 +136,42 @@ def ambiguity_report(
         "**맞다는 증명은 아니다. 틀렸다는 신호를 잡는 장치다 (O-22).**",
     ]
     return lines
+
+
+REPLAY_HONOURS = ("--harmonic", "--profile")
+"""`--replay`가 실제로 거는 손잡이 (D-0191)."""
+
+
+REPLAY_DEFAULTS = (
+    ("--gamma", "gamma", 0.0),
+    ("--aggregate", "aggregate", "mean"),
+    ("--window-seconds", "window_seconds", 10.0),
+    ("--chroma", "chroma", "cq"),
+    ("--tuning", "tuning", False),
+    ("--separate", "separate", False),
+    ("--halves", "halves", False),
+    ("--series", "series", None),
+)
+"""`--replay`가 못 쓰는 손잡이와 그 기본값 (D-0191)."""
+
+
+def replay_refusal(args: object) -> str:
+    """`--replay`가 못 쓰는 손잡이를 쓴 경우의 한 줄. 없으면 빈 문자열이다.
+
+    저장된 크로마에서 다시 재므로 `REPLAY_HONOURS` 둘만 걸린다. `--gamma`는 추출
+    경로에만 배선돼 있었고 `--aggregate`는 창별 중앙값이라 **크로마가 이미 계산된
+    뒤에는 원리적으로 못 쓴다.**
+
+    **조용히 무시하면 *"효과가 없다"*로 읽힌다** — 실제로 그렇게 읽을 뻔했다.
+    `--gamma 0.5`와 `--aggregate median`이 기본값과 **소수점까지 같은 표**를 냈다.
+    D-0164가 두 번 당한 부류이며 거기서는 산출물이 섞였고 여기서는 손잡이가 죽었다.
+    """
+    used = [
+        flag for flag, name, default in REPLAY_DEFAULTS if getattr(args, name, default) != default
+    ]
+    if not used:
+        return ""
+    return (
+        f"--replay는 {' · '.join(used)}를 못 쓴다. "
+        f"저장된 크로마에서 재판정하므로 {' · '.join(REPLAY_HONOURS)}만 걸린다."
+    )

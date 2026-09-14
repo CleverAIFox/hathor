@@ -69,7 +69,7 @@ from hathor.interfaces.cli.eval_vocabulary import (
 )
 from hathor.interfaces.cli.ingest_onsets import add_parser as add_onset_parser
 from hathor.interfaces.cli.ingest_onsets import run as run_ingest_onsets
-from hathor.interfaces.cli.tables import ambiguity_report, parse_key, render_table
+from hathor.interfaces.cli.tables import ambiguity_report, parse_key, render_table, replay_refusal
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
     load_dotenv,
@@ -1265,6 +1265,10 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     rows: list[dict[str, object]] = []
 
     if args.replay is not None:
+        if refusal := replay_refusal(args):
+            print(refusal, file=sys.stderr)
+            return 2
+
         with args.replay.open(encoding="utf-8") as stream:
             rows = [json.loads(line) for line in stream if line.strip()]
         recomputed = 0
