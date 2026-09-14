@@ -9,7 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hathor.domain.services.chord_rhythm import shuffled
+from hathor.domain.services import chord_rhythm
+from hathor.domain.services.chord_rhythm import BUNDLES, shuffled
 from hathor.domain.services.onset import (
     PHASE_BINS,
     TEMPO_RANGE,
@@ -17,6 +18,7 @@ from hathor.domain.services.onset import (
     band_edges,
     bands,
     beat_period,
+    bundle_grid,
     envelope,
     event_scale,
     peaks,
@@ -415,3 +417,70 @@ def test_대역_시계열은_2차원이어야_한다():
 def test_사건_길이도_홉이_양수여야_한다():
     with pytest.raises(ValueError, match="홉 길이"):
         event_scale(np.zeros((100, 4)), 0.0)
+
+
+# ------------------------------------------------------------------ 묶음 격자 (D-0171)
+
+
+def held(hold, *, seconds=60, noise=0.02, seed=1):
+    """`hold`초마다 음색이 바뀌는 지속음. **사건 길이를 아는 자료다.**"""
+    rng = np.random.default_rng(seed)
+    size = SR * seconds
+    wave = np.zeros(size)
+    span = np.arange(size) / SR
+    for count in range(int(seconds / hold)):
+        start, end = int(count * hold * SR), min(size, int((count + 1) * hold * SR))
+        freq = [110, 165, 220, 330][count % 4]
+        wave[start:end] += np.sin(2 * np.pi * freq * span[start:end])
+        wave[start:end] += 0.5 * np.sin(2 * np.pi * 3 * freq * span[start:end])
+    return wave + rng.normal(0.0, noise, size)
+
+
+def test_격자는_새로_고른_것이_아니다():
+    """`BUNDLES`는 **2의 거듭제곱과 그 1.5배**이고 같은 규칙을 이을 뿐이다."""
+    grid = bundle_grid(100_000)
+    assert grid[: len(BUNDLES)] == BUNDLES
+    assert grid[len(BUNDLES) : len(BUNDLES) + 4] == (96, 128, 192, 256)
+
+
+def test_상한은_곡이_정한다():
+    """묶음이 둘은 나와야 반감점을 보간한다. **고른 값이 없다.**"""
+    assert max(bundle_grid(40)) <= 20
+    assert max(bundle_grid(4000)) <= 2000
+    assert bundle_grid(0) == (1,)
+
+
+def test_긴_사건을_놓치지_않는다():
+    """`BUNDLES` 상한 64는 **칸이지 초가 아니다** (D-0171).
+
+    홉 0.01에서 0.64초이고 그보다 긴 사건은 반이 안 내려와 `None`이 됐다. 실측
+    39곡에서 홉 0.005가 7곡밖에 못 잰 것이 그 탓이었다.
+    """
+    for hold in (0.8, 1.5, 3.0):
+        found = event_scale(bands(held(hold), SR, HOP), HOP)
+        assert found is not None, f"{hold}초 사건을 못 쟀다"
+        assert found > WINDOW_SECONDS
+
+
+def test_긴_사건도_격자에_안_흔들린다():
+    """격자 무관이 **전 범위로** 간다. 늘리기 전에는 아래쪽에서만 확인됐다."""
+    wave = held(1.5)
+    coarse = event_scale(bands(wave, SR, HOP), HOP)
+    fine = event_scale(bands(wave, SR, HOP / 2), HOP / 2)
+    assert coarse is not None
+    assert fine is not None
+    assert abs(fine / coarse - 1.0) < 0.05
+
+
+def test_이미_재던_값은_안_바뀐다():
+    """격자를 늘린 것이 **값을 옮기지 않는다.**
+
+    짧은 사건은 `BUNDLES` 안에서 이미 반을 지나므로 뒤를 이어도 같은 자리에서
+    끊긴다. 안 그러면 D-0171이 옛 수치를 전부 무효로 만든다.
+    """
+    series = bands(held(0.3), SR, HOP)
+    old = chord_rhythm.measure(series)
+    new = event_scale(series, HOP)
+    assert old is not None
+    assert new is not None
+    assert abs(new / (old * HOP) - 1.0) < 0.01

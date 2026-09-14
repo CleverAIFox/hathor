@@ -164,6 +164,38 @@ def bands(samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds: fl
     return np.asarray(stacked, dtype=np.float64)
 
 
+def bundle_grid(frames: int) -> tuple[int, ...]:
+    """묶음 격자. **`chord_rhythm.BUNDLES`를 곡 길이까지 이은 것이다** (O-47 · D-0171).
+
+    ### 새 격자가 아니다
+
+    `BUNDLES`는 **2의 거듭제곱과 그 1.5배**의 집합이고, 이 함수가 같은 규칙을 계속
+    적용할 뿐이다. 앞의 열둘은 `BUNDLES`와 바이트로 같으며 검사가 그것을 고정한다.
+
+    ### 왜 필요했나
+
+    `BUNDLES`의 상한 64는 **칸이지 초가 아니다.** 홉 0.01에서 0.64초, 0.005에서
+    0.32초이고 **그보다 긴 사건은 반이 안 내려와 `None`이 된다.**
+
+    실측이 그 선을 칼같이 보여줬다 — 홉 0.005에서 살아남은 7곡은 전부 0.312초
+    이하였고, 잃은 열한 곡은 전부 0.364초 이상이었다. **한 곡도 안 섞였다.**
+
+    ### 상한을 고르지 않는다
+
+    **곡이 정한다.** 묶음이 둘은 나와야 반감점을 보간할 수 있으므로 `frames // 2`가
+    끝이고, `curve`가 모자란 묶음에서 알아서 멈춘다.
+    """
+    limit = max(1, frames // 2)
+    sizes: set[int] = set()
+    size = 1
+    while size <= limit:
+        sizes.add(size)
+        if size * 3 // 2 <= limit:
+            sizes.add(size * 3 // 2)
+        size *= 2
+    return tuple(sorted(sizes))
+
+
 def event_scale(band_series: np.ndarray, hop_seconds: float) -> float | None:
     """그 곡의 **사건 길이.** 초 단위이며 못 재면 `None`이다 (O-47 · D-0170).
 
@@ -182,19 +214,24 @@ def event_scale(band_series: np.ndarray, hop_seconds: float) -> float | None:
 
     ### 격자 무관 (사전 등록 예측 통과)
 
-    홉을 반·4분의 1로 줄여도 값이 안 바뀐다 — 합성 5곡에서 비 0.991~1.001이다.
-    D-0166의 발음 간격은 같은 자리에서 **정확히 0.500**이었다. 창을 초로 고정한
-    것이 조건이며(D-0169), 창이 홉을 따라오면 이 성질이 사라진다.
+    홉을 반·4분의 1로 줄여도 값이 안 바뀐다 — 합성 5곡에서 비 0.991~1.001이고
+    **실측 39곡에서 중앙 1.003**이었다 (D-0171). D-0166의 발음 간격은 같은 자리에서
+    **0.500**이었다. 창을 초로 고정한 것이 조건이며(D-0169), 창이 홉을 따라오면
+    이 성질이 사라진다.
 
     **창 길이 근처 값은 못 잰 것이다.** 지속음만 있는 합성에서 0.032초가 나왔고
-    그것은 창 0.04초의 바닥이다.
+    그것은 창 0.04초의 바닥이다. **위쪽은 묶음 격자가 정하며 곡 길이까지 잇는다**
+    (`bundle_grid`) — 안 이으면 0.64초를 넘는 사건이 전부 `None`이 된다 (D-0171).
     """
     if hop_seconds <= 0.0:
         raise ValueError("홉 길이는 양수여야 한다")
     stacked = np.asarray(band_series, dtype=np.float64)
     if stacked.ndim != 2:
         raise ValueError("대역 시계열은 2차원이어야 한다")
-    found = chord_rhythm.measure(stacked)
+    found = chord_rhythm.half_fall(
+        chord_rhythm.curve(stacked, bundle_grid(len(stacked))),
+        chord_rhythm.limit_spikiness(stacked),
+    )
     return None if found is None else float(found) * hop_seconds
 
 
