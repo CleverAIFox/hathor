@@ -39,7 +39,7 @@ BATCH_LOCK_NAME = ".batch.lock"
 
 
 class BatchAlreadyRunningError(RuntimeError):
-    """같은 산출물 디렉터리에서 배치가 이미 돌고 있다 (O-7)."""
+    """같은 산출물 디렉터리에서 배치가 이미 돌고 있다 (O-7(D-0022))."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,9 +110,9 @@ class NpzFeatureStore:
 
     @contextmanager
     def batch_lock(self) -> Iterator[None]:
-        """배치 중복 실행을 막는다 (O-7).
+        """배치 중복 실행을 막는다 (O-7(D-0022)).
 
-        O-7의 원인은 인덱스 append가 아니라 배치 자체가 두 번 돈 것이다.
+        O-7(D-0022)의 원인은 인덱스 append가 아니라 배치 자체가 두 번 돈 것이다.
         append는 O_APPEND + 200바이트라 리눅스에서 이미 원자적이었고,
         실제로 데이터도 깨지지 않았다. 막아야 하는 것은 프로세스 수준이다.
 
@@ -159,7 +159,7 @@ class NpzFeatureStore:
         return {str(record["source_key"]) for record in self.read_records()}
 
     def compact_index(self, *, drop_missing: bool = True) -> CompactReport:
-        """중복·고아 기록을 없애고 source_key 순으로 다시 쓴다 (O-7 정리).
+        """중복·고아 기록을 없애고 source_key 순으로 다시 쓴다 (O-7(D-0022) 정리).
 
         같은 키가 여럿이면 **마지막 기록을 남긴다.** npz는 같은 이름으로
         덮어써졌으므로 파일과 짝이 맞는 것은 나중 기록이다.
@@ -239,7 +239,7 @@ class NpzFeatureStore:
         """인덱스 순서대로 (source_key, 임베딩)을 방출한다.
 
         인덱스에 중복이 있으면 같은 곡을 여러 번 낸다. 정리는 `compact_index`의
-        일이며 여기서 조용히 감추면 O-7 같은 사건이 지표 단계에서야 드러난다.
+        일이며 여기서 조용히 감추면 O-7(D-0022) 같은 사건이 지표 단계에서야 드러난다.
         1004곡 x 5키면 전량 적재해도 347MB이므로 스트리밍이 필수는 아니지만,
         코퍼스가 커질 때 여기가 병목이 되지 않게 이터레이터로 둔다.
         """
@@ -263,7 +263,7 @@ class NpzFeatureStore:
         temporary.replace(target)
         with self.index_path.open("a", encoding="utf-8") as stream:
             # O_APPEND 자체로 이미 원자적이다. 잠금은 그 보장을 코드에
-            # 드러내기 위한 것이며 O-7의 원인은 여기가 아니었다.
+            # 드러내기 위한 것이며 O-7(D-0022)의 원인은 여기가 아니었다.
             # 실행 수준 방어는 batch_lock()이 한다.
             fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
             line = json.dumps(features_as_record(features), ensure_ascii=False, sort_keys=False)

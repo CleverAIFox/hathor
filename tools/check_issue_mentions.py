@@ -48,6 +48,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 CLOSED_BEGIN = "<!-- closed-issues:begin -->"
 CLOSED_END = "<!-- closed-issues:end -->"
+OPEN_BEGIN = "<!-- open-issues:begin -->"
+OPEN_END = "<!-- open-issues:end -->"
+PLAN = "docs/PLAN.md"
 
 TREES = ("core/hathor", "tools", "core/tests")
 """훑을 코드 나무. **`core/tests`도 본다** (D-0146).
@@ -58,8 +61,16 @@ D-0126은 *"검사 이름이 질문 번호를 갖는 것은 정상"*이라며 �
 
 **나무를 빼는 대신 파일 하나를 뺀다.**"""
 
-SKIP_FILES = ("core/tests/unit/test_issue_mentions.py",)
-"""이 검사의 검사. **맨몸 참조를 일부러 담는다** — 잡히는지 보는 자료다.
+SKIP_FILES = (
+    "core/tests/unit/test_issue_mentions.py",
+    "core/tests/unit/test_decision_index.py",
+)
+"""검사에서 빼는 파일. **둘 다 가짜 자료를 들고 있다.**
+
+앞의 것은 이 검사의 검사다 — **맨몸 참조를 일부러 담는다**. 잡히는지 보는 자료다.
+
+뒤의 것은 색인 도구를 합성한 열림·닫힘표로 시험한다 (D-0183). 거기 적힌 질문 번호는
+**참조가 아니라 자료**이며, 결정 번호를 붙이면 시험이 시험이 아니게 된다.
 
 나무를 통째로 빼면 사각지대가 되고, 파일 하나를 빼면 그 파일만 사각지대다."""
 
@@ -84,6 +95,19 @@ SKIP_TREES = ("docs/decisions/",)
 ISSUE = re.compile(r"O-\d+")
 DECISION = re.compile(r"D-(\d{4})")
 ROW = re.compile(r"^\|\s*(O-\d+)\s*\|")
+
+
+def open_issues(plan_text: str) -> set[str]:
+    """열린 질문 번호. **열린표가 정본이다** — 여기 목록을 적지 않는다."""
+    if OPEN_BEGIN not in plan_text or OPEN_END not in plan_text:
+        return set()
+    block = plan_text.split(OPEN_BEGIN)[1].split(OPEN_END)[0]
+    found: set[str] = set()
+    for row in block.splitlines():
+        match = ROW.match(row)
+        if match:
+            found.add(match.group(1))
+    return found
 
 
 def closed_issues(design_text: str) -> dict[str, set[int]]:
@@ -122,11 +146,12 @@ def targets() -> list[Path]:
     return found
 
 
-def check(design_text: str) -> list[str]:
+def check(design_text: str, plan_text: str = "") -> list[str]:
     """규칙을 어긴 자리를 전부 낸다. **첫 문제에서 멈추지 않는다.**"""
     table = closed_issues(design_text)
     if not table:
         return [f"DESIGN에 {CLOSED_BEGIN} 표식이 없다"]
+    living = open_issues(plan_text)
     problems: list[str] = []
     for path in targets():
         name = path.relative_to(ROOT).as_posix()
@@ -134,7 +159,17 @@ def check(design_text: str) -> list[str]:
             annotated = bool(DECISION.search(line))
             for issue in dict.fromkeys(ISSUE.findall(line)):
                 closers = table.get(issue)
-                if closers is None or annotated:
+                if closers is None:
+                    # **두 표 어디에도 없으면 고아다** (D-0183). 닫힘표에 있는 번호만
+                    # 보던 동안 `O-1(D-0019)` · `O-7` · `O-8` · `O-9`가 27자리에서 조용히
+                    # 불리고 있었다 — 닫혔는데 표에 소급 등록이 안 된 것들이다.
+                    if living and issue not in living:
+                        problems.append(
+                            f"{name}:{number}: {issue}이 열린표에도 닫힘표에도 없다. "
+                            f"닫혔으면 DESIGN 닫힘표에 적는다"
+                        )
+                    continue
+                if annotated:
                     continue
                 wanted = " · ".join(f"D-{value:04d}" for value in sorted(closers))
                 problems.append(
@@ -151,19 +186,23 @@ def main() -> int:
     args = parser.parse_args()
 
     design_text = (ROOT / "docs" / "DESIGN.md").read_text(encoding="utf-8")
+    plan_text = (ROOT / PLAN).read_text(encoding="utf-8") if (ROOT / PLAN).exists() else ""
     if args.list:
         for issue, closers in closed_issues(design_text).items():
             joined = " · ".join(f"D-{value:04d}" for value in sorted(closers))
             print(f"  {issue}  {joined}")
         return 0
 
-    problems = check(design_text)
+    problems = check(design_text, plan_text)
     if problems:
         print(f"닫힌 질문을 열린 것처럼 적은 자리가 {len(problems)}곳 있다.", file=sys.stderr)
         for text in problems:
             print(f"  - {text}", file=sys.stderr)
         return 1
-    print(f"닫힌 질문 표기 검사 통과 · 닫힘 {len(closed_issues(design_text))}건")
+    print(
+        f"닫힌 질문 표기 검사 통과 · 닫힘 {len(closed_issues(design_text))}건"
+        f" · 열림 {len(open_issues(plan_text))}건"
+    )
     return 0
 
 

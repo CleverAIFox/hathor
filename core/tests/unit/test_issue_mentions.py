@@ -121,6 +121,13 @@ def test_나무_셋을_다_훑는다(tree):
     assert tree in CHECKER.TREES
 
 
-def test_이_검사의_검사만_뺀다():
-    """맨몸 참조를 일부러 담는 자료다. **나무가 아니라 파일 하나를 뺀다.**"""
-    assert CHECKER.SKIP_FILES == ("core/tests/unit/test_issue_mentions.py",)
+def test_가짜_자료를_든_검사만_뺀다():
+    """**나무가 아니라 파일을 뺀다.** 둘 다 질문 번호를 자료로 들고 있다 (D-0183).
+
+    앞의 것은 맨몸 참조를 일부러 담고, 뒤의 것은 합성한 열림·닫힘표로 색인 도구를
+    시험한다. **거기 적힌 번호는 참조가 아니다.**
+    """
+    assert CHECKER.SKIP_FILES == (
+        "core/tests/unit/test_issue_mentions.py",
+        "core/tests/unit/test_decision_index.py",
+    )

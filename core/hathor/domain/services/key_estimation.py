@@ -185,11 +185,6 @@ def semitone_hz(index: int) -> float:
     return MIN_HZ * 2 ** (index / 12)
 
 
-def _octave_band(index: int) -> int:
-    """반음 번호가 속한 옥타브. 창 크기 선택에 쓴다."""
-    return min(index // 12, len(CQ_WINDOWS) - 1)
-
-
 @lru_cache(maxsize=16)
 def cq_filterbank(
     window_size: int,

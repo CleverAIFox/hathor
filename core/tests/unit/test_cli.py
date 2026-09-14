@@ -98,7 +98,7 @@ def _fake_track(source_key):
     )
 
 
-# ---------------------------------------------------------------- ingest compact (O-7)
+# ---------------------------------------------------------------- ingest compact (O-7(D-0022))
 
 
 def _seed_features(root, keys, *, duplicates=()):
@@ -195,7 +195,7 @@ def test_compact_refuses_while_batch_runs(tmp_path, capsys):
 
 
 def test_features_exits_3_when_batch_locked(tmp_path, capsys):
-    """O-7 방어. 두 배치가 겹치면 인덱스에 중복이 쌓인다."""
+    """O-7(D-0022) 방어. 두 배치가 겹치면 인덱스에 중복이 쌓인다."""
     store = _seed_features(tmp_path, ["a.mp3"])
     with store.batch_lock():
         assert main(["ingest", "features", "--out", str(tmp_path)]) == 3

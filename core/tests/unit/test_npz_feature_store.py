@@ -115,7 +115,7 @@ def test_summary_is_per_run(tmp_path: Path) -> None:
     assert json.loads(path.read_text(encoding="utf-8"))["processed"] == 3
 
 
-# ---------------------------------------------------------------- O-7 정리·잠금
+# ---------------------------------------------------------------- O-7(D-0022) 정리·잠금
 
 
 def test_compact_keeps_last_record_per_key(tmp_path: Path) -> None:
@@ -216,7 +216,7 @@ def test_compact_on_missing_index_is_noop(tmp_path: Path) -> None:
 
 
 def test_batch_lock_blocks_second_holder(tmp_path: Path) -> None:
-    """O-7. 두 배치가 겹쳐 돌면 인덱스에 중복이 쌓인다."""
+    """O-7(D-0022). 두 배치가 겹쳐 돌면 인덱스에 중복이 쌓인다."""
     store = NpzFeatureStore(tmp_path)
     with store.batch_lock():
         other = NpzFeatureStore(tmp_path)
@@ -295,7 +295,7 @@ def test_iter_vectors_follows_index_order(tmp_path):
 
 
 def test_iter_vectors_exposes_duplicates(tmp_path):
-    """중복을 조용히 감추지 않는다. O-7이 지표 단계에서야 드러나면 늦는다."""
+    """중복을 조용히 감추지 않는다. O-7(D-0022)이 지표 단계에서야 드러나면 늦는다."""
     store = NpzFeatureStore(tmp_path)
     store.write_track(make_features("가.mp3", chunks=2))
     store.write_track(make_features("가.mp3", chunks=2))

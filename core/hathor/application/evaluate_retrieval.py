@@ -45,7 +45,6 @@ from hathor.domain.services.retrieval_metrics import (
 )
 
 MIXTURE_KEY = "mixture"
-STEM_KEYS = ("drums", "bass", "other", "vocals")
 DEFAULT_SEED = 20260816
 DEFAULT_SPLIT_SEED = 20260817
 DEFAULT_K = 10

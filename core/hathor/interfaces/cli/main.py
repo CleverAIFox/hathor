@@ -305,7 +305,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="이미 추출된 곡도 다시 처리",
     )
 
-    compact = ingest_sub.add_parser("compact", help="특징 인덱스의 중복·고아 기록 정리 (O-7)")
+    compact = ingest_sub.add_parser("compact", help="특징 인덱스 중복·고아 정리 (O-7 · D-0022)")
     compact.add_argument(
         "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
     )
@@ -965,15 +965,6 @@ def _run_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-KEYS_SETTING_FIELDS = (
-    "chroma_mode",
-    "profile",
-    "gamma",
-    "harmonic",
-    "aggregate",
-    "separated",
-    "halves",
-)
 """이어받기가 같다고 볼 조건 (D-0075).
 
 **하나라도 다르면 새 파일을 연다.** 조건이 섞인 산출물은 무엇을 잰 것인지 알 수 없고,
@@ -1893,7 +1884,7 @@ def _drive_extraction(
 
 
 def _run_ingest_compact(args: argparse.Namespace) -> int:
-    """특징 인덱스의 중복·고아 기록을 정리한다 (O-7).
+    """특징 인덱스의 중복·고아 기록을 정리한다 (O-7(D-0022)).
 
     배치가 겹쳐 돌아 1004곡 인덱스에 1574줄이 쌓인 상태를 되돌린다.
     정리하지 않으면 인덱스를 읽는 모든 후속 작업이 같은 곡을 여러 번
@@ -2035,7 +2026,7 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
         seen: set[str] = set()
         for source_key, vectors in store.iter_vectors():
             if source_key in seen:
-                # O-7의 재발이다. 중복을 조용히 흡수하면 유사도 행렬에 같은 곡이
+                # O-7(D-0022)의 재발이다. 중복을 조용히 흡수하면 유사도 행렬에 같은 곡이
                 # 여러 번 들어가 지표가 틀어진 채로 그럴듯한 숫자를 낸다.
                 print(f"인덱스에 중복 키가 있다: {source_key} ({root})", file=sys.stderr)
                 print("먼저 `hathor ingest compact`로 정리한다.", file=sys.stderr)

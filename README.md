@@ -92,7 +92,7 @@ uv run python -m hathor.cli eval layers --out var/ingest --layers 0,3,6,9
 uv run python -m hathor.cli eval retrieval --out var/ingest \
     --features var/ingest/mert-layers --keys layer00 --label mert-layer00
 
-# 두 추출기 결합 (O-8). 서로 다른 추출기는 --block-l2가 필수다
+# 두 추출기 결합 (O-8(D-0024)). 서로 다른 추출기는 --block-l2가 필수다
 uv run python -m hathor.cli eval retrieval --out var/ingest \
     --features mert=var/ingest --features mfcc=var/ingest/baseline-mfcc \
     --keys mert:mixture,mfcc:mixture --block-l2 --label mert+mfcc

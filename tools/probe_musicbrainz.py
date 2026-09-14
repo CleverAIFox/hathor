@@ -127,7 +127,7 @@ def probe_recordings(
         parsed = parse_artist_field(raw_artist) if raw_artist else None
         artist = parsed.primary.name if parsed else ""
         # 2단계 조회: 1단계에서 확정한 MB 정규명을 쓴다.
-        # 태그 표기 '아이유'로는 실패하고 정규명 'IU'로는 성공한다 (O-1).
+        # 태그 표기 '아이유'로는 실패하고 정규명 'IU'로는 성공한다 (O-1(D-0019)).
         if parsed:
             hit = resolved.get(parsed.primary.normalized_key)
             if hit and hit[0] == "RESOLVED" and hit[1]:

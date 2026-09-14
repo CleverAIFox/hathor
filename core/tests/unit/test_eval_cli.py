@@ -133,7 +133,7 @@ def test_eval_retrieval_report_filename_carries_label(tmp_path):
 
 
 def test_eval_retrieval_rejects_duplicate_index(tmp_path, capsys):
-    """O-7 재발 방어. 중복을 흡수하면 지표가 조용히 틀어진다."""
+    """O-7(D-0022) 재발 방어. 중복을 흡수하면 지표가 조용히 틀어진다."""
     build_corpus(tmp_path)
     store = NpzFeatureStore(tmp_path)
     store.write_track(
