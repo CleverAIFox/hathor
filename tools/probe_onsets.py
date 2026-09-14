@@ -35,6 +35,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "core"))
 
+from hathor.domain.services import chord_rhythm  # noqa: E402
 from hathor.domain.services.onset import (  # noqa: E402 — sys.path 조작 뒤라야 한다
     PHASE_BINS,
     beat_period,
@@ -42,6 +43,7 @@ from hathor.domain.services.onset import (  # noqa: E402 — sys.path 조작 뒤
     peaks,
     phase_profile,
 )
+from hathor.infrastructure.chroma_series_store import series_path  # noqa: E402
 from hathor.infrastructure.onset_store import SUFFIX, load_bands  # noqa: E402
 
 
@@ -281,6 +283,158 @@ def table(songs: list[tuple[str, np.ndarray, float]], folder: Path) -> int:
     return 0
 
 
+SERIES_WINDOW_SECONDS = 1.0
+"""`.series` 크로마 한 창의 길이 (D-0104). **반감점을 초로 바꿀 때 쓴다.**"""
+
+PERMUTATIONS = 1000
+"""짝 뒤섞기 횟수. **상한을 읽는 자다** (O-25 (3))."""
+
+
+def _ranks(values: np.ndarray) -> np.ndarray:
+    order = np.argsort(np.argsort(values))
+    return np.asarray(order, dtype=np.float64)
+
+
+def _spearman(left: np.ndarray, right: np.ndarray) -> float:
+    """순위상관. **`scipy` 없이 순위에 피어슨을 건다.**"""
+    if len(left) < 3:
+        return 0.0
+    first, second = _ranks(left) - _ranks(left).mean(), _ranks(right) - _ranks(right).mean()
+    scale = float(np.sqrt((first**2).sum() * (second**2).sum()))
+    return float((first * second).sum() / scale) if scale > 0.0 else 0.0
+
+
+def _null_band(left: np.ndarray, right: np.ndarray, seed: int = 7) -> tuple[float, float]:
+    """짝을 뒤섞은 순위상관의 95% 구간.
+
+    **두 분포는 그대로고 짝만 죽는다.** 실측이 이 구간 안이면 아무 말도 못 한다 —
+    규칙을 적기 전에 귀무에서 먼저 돌린다 (O-25 (4)).
+
+    **구간 밖이라고 상관이 있는 것이 아니다.** 95% 구간이므로 무관한 두 열도 스무 번에
+    한 번은 밖으로 나온다 — 합성 세 판에서 한 번 `+0.365`가 나왔다. 비교가 둘이라
+    적어도 하나가 헛나올 확률이 10%다. **세기를 함께 본다.**
+    """
+    rng = np.random.default_rng(seed)
+    drawn = [_spearman(left, right[rng.permutation(len(right))]) for _ in range(PERMUTATIONS)]
+    return float(np.quantile(drawn, 0.025)), float(np.quantile(drawn, 0.975))
+
+
+def _chord_seconds(out: Path, key: str, stem: str) -> float | None:
+    """그 곡·스템의 **화성 리듬 반감점** (초). `.series`가 없으면 `None`이다."""
+    for folder in sorted(out.glob("keys-*.series"), reverse=True):
+        path = series_path(folder, key, stem)
+        if not path.exists():
+            continue
+        with np.load(path, allow_pickle=False) as bundle:
+            series = np.asarray(bundle["series"], dtype=np.float64)
+        found = chord_rhythm.measure(series)
+        return None if found is None else float(found) * SERIES_WINDOW_SECONDS
+    return None
+
+
+def _stems_on_disk(out: Path) -> list[str]:
+    """`.series`에 실제로 있는 스템 이름. **추측하지 않고 파일을 센다** (D-0100).
+
+    D-0172가 `other` 하나로만 견줬고 **대역은 혼합이라 스템이 교란이었다.** 있는
+    것을 전부 견주면 상관이 스템을 따라 움직이는지 보인다.
+
+    **`mix`가 특히 뜻이 있다.** 대역과 오디오가 통째로 겹치므로 D-0099대로 상관이
+    부풀려지는 쪽이고, **그런데도 낮으면 진짜 낮은 것이다.**
+    """
+    found: set[str] = set()
+    for folder in sorted(out.glob("keys-*.series"), reverse=True):
+        for path in folder.glob("*.npz"):
+            name = path.stem.split("-", 1)
+            if len(name) == 2:
+                found.add(name[1])
+    return sorted(found)
+
+
+def what(songs: list[tuple[str, np.ndarray, float]], out: Path, folder: Path) -> int:
+    """**사건 길이가 무엇인가** (O-47 · D-0172 · D-0173).
+
+    D-0171이 39 / 39를 재게 했는데 값이 0.149~5.168초로 **35배 벌어졌고 14곡이 박보다
+    길다.** `apart`로 쓸 수 없다. 무엇을 재고 있는지 먼저 가른다.
+
+    **판정하지 않는다** — 분포와 귀무 구간을 낼 뿐이고 무엇을 할지는 결정 기록으로
+    정한다 (D-0058).
+    """
+    stems = _stems_on_disk(out)
+    scales: list[float] = []
+    beats: list[float] = []
+    nulls: list[float] = []
+    chords: dict[str, list[float]] = {stem: [] for stem in stems}
+    missing = 0
+    for key, envelope, hop in songs:
+        scale = _scale(folder, key, hop)
+        beat = beat_period(envelope, hop)
+        if scale is None or beat is None:
+            missing += 1
+            continue
+        series = load_bands(folder, key)
+        if series is None:
+            missing += 1
+            continue
+        shaken = event_scale(chord_rhythm.shuffled(series), hop)
+        if shaken is None:
+            missing += 1
+            continue
+        scales.append(scale)
+        beats.append(beat.period_seconds)
+        nulls.append(shaken)
+        for stem in stems:
+            found = _chord_seconds(out, key, stem)
+            chords[stem].append(float("nan") if found is None else found)
+
+    if len(scales) < 3:
+        print(f"견줄 곡이 모자라다 ({len(scales)}곡). `.series`가 있는지 본다.", file=sys.stderr)
+        return 1
+
+    left = np.asarray(scales)
+    print(f"\n사건 길이가 무엇인가 · {len(scales)}곡 · 못 견준 곡 {missing}")
+    print(f"  사건 길이 {quantiles(scales)}")
+    print(f"  박 주기  {quantiles(beats)}")
+    print(f"  `.series`에 있는 스템 {' · '.join(stems) if stems else '없다'}")
+
+    print("\n프레임 순서를 뒤섞으면 (귀무 · D-0086)")
+    gaps = [real - null for real, null in zip(scales, nulls, strict=True)]
+    spread = statistics.pstdev(gaps) if len(gaps) > 1 else 0.0
+    print(
+        f"  짝지은 차이 평균 {statistics.mean(gaps):+.3f}초 · 중앙 {statistics.median(gaps):+.3f}"
+    )
+    print(f"  실측이 큰 곡 {sum(1 for value in gaps if value > 0)} / {len(gaps)}")
+    if spread > 0:
+        print(f"  t {statistics.mean(gaps) / (spread / len(gaps) ** 0.5):+.2f}")
+
+    pairs: list[tuple[str, list[float]]] = [("박 주기", beats)]
+    pairs += [(f"화성 리듬 ({stem})", chords[stem]) for stem in stems]
+    for label, other in pairs:
+        right = np.asarray(other)
+        keep = ~np.isnan(right)
+        if int(keep.sum()) < 3:
+            print(f"\n{label}와의 순위상관")
+            print(f"  견줄 곡이 {int(keep.sum())}곡뿐이다")
+            continue
+        mine, right = left[keep], right[keep]
+        found = _spearman(mine, right)
+        low, high = _null_band(mine, right)
+        if low <= found <= high:
+            verdict = "**구간 안 — 아무 말도 못 한다**"
+        elif abs(found) < 0.5:
+            verdict = "구간 밖이나 **약하다** — 무관한 열도 스무 번에 한 번 여기 온다"
+        else:
+            verdict = "**구간 밖이고 세다**"
+        print(f"\n{label}와의 순위상관 · {len(mine)}곡")
+        print(f"  중앙 {statistics.median(right):.2f}초")
+        print(f"  순위상관 {found:+.3f} · 짝 뒤섞기 95% 구간 [{low:+.3f}, {high:+.3f}]")
+        print(f"  {verdict}")
+
+    print("\n**순위상관이 세면 다른 창으로 같은 것을 다시 잰 것이다** — 새 값이 아니다")
+    print("합성 대조: 무관한 열은 ±0.36까지 나왔고 같은 것을 다시 재면 +0.95였다")
+    print("**`mix`는 대역과 오디오가 통째로 겹친다** — 부풀려지는 쪽인데도 낮으면 진짜 낮다")
+    return 0
+
+
 def quantiles(values: list[float]) -> str:
     ordered = sorted(values)
     if len(ordered) < 4:
@@ -302,6 +456,7 @@ def main() -> int:
     parser.add_argument("--table", action="store_true", help="곡별로 한 줄씩 찍는다")
     parser.add_argument("--hop", type=float, default=None, help="어느 홉의 폴더를 볼 것인가")
     parser.add_argument("--against", type=float, default=None, help="다른 홉과 짝지어 견준다")
+    parser.add_argument("--what", action="store_true", help="사건 길이가 무엇인지 가른다 (O-48)")
     args = parser.parse_args()
 
     picked = folders(args.out)
@@ -326,6 +481,8 @@ def main() -> int:
         return diagnose(songs[args.diagnose])
     if args.against is not None:
         return compare(songs, args.out, args.against, folder)
+    if args.what:
+        return what(songs, args.out, folder)
     if args.table:
         return table(songs, folder)
     tempos: list[float] = []
