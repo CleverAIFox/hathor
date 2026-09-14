@@ -229,6 +229,114 @@ def halves(keys: list[str], seed: int) -> tuple[list[str], list[str]]:
     )
 
 
+def _spearman(left: np.ndarray, right: np.ndarray) -> float:
+    """순위상관. **`probe_onsets`에도 같은 것이 있다** — 두 번째이므로 아직 안 묶는다
+    (GR-5 #6). 세 번째가 생기면 도메인으로 올린다."""
+    if len(left) < 3:
+        return 0.0
+    ranks = [np.argsort(np.argsort(value)).astype(np.float64) for value in (left, right)]
+    first, second = (value - value.mean() for value in ranks)
+    scale = float(np.sqrt((first**2).sum() * (second**2).sum()))
+    return float((first * second).sum() / scale) if scale > 0.0 else 0.0
+
+
+def spread(counted: Counter[str]) -> float:
+    """**유효 종수.** `1 / Σp²`이며 고른 값이 없다.
+
+    24종이 균등하면 24, 한 종에 몰리면 1이다. **쏠림을 한 수로 말한다** —
+    무작위 하한이 `1/종수`보다 높으면 그만큼 몰려 있다는 뜻이고, 그 하한을
+    이 수로 설명할 수 있는지 보려고 낸다.
+    """
+    total = sum(counted.values())
+    return 1.0 / sum((count / total) ** 2 for count in counted.values())
+
+
+def by_mode(name: str, keys: list[str], labels: dict[str, str], matrix: np.ndarray, k: int) -> None:
+    """장단으로 묶어 잰다. **같은 자를 여러 임베딩에 댄다.**
+
+    `layer03`만 보면 단조가 낮은 것이 **라벨 오염인지 임베딩 한계인지 못 가른다.**
+    크로마는 조성 라벨이 나온 바로 그 자료이므로, **크로마도 단조에서 낮으면
+    라벨 쪽이 고장난 것이다** (D-0054의 나란한조).
+    """
+    relevant, excluded = masks(keys, labels)
+    similarity = cosine_similarity(matrix, matrix)
+    line = [f"  {name:<14}"]
+    for mode in ("major", "minor"):
+        picked = np.asarray([labels[key].endswith(mode) for key in keys])
+        if not picked.any():
+            continue
+        found = score_retrieval(similarity[picked], relevant[picked], excluded[picked], k)
+        line.append(f"{mode} {found.precision_at_k:.4f}")
+    print(" · ".join(line))
+
+
+def eda(keys: list[str], labels: dict[str, str], matrix: np.ndarray, k: int) -> None:
+    """코퍼스가 어떻게 생겼는지 (O-49).
+
+    **판정하지 않는다.** 34%가 작은 것이 임베딩 탓인지 코퍼스 탓인지 자 탓인지
+    못 가른 채로 논하고 있었다 — 분포를 안 보고 수치를 읽은 것이다.
+    """
+    counted = Counter(labels[key] for key in keys)
+    artists = Counter(artist_of(key) for key in keys)
+    print(f"\n조성 {len(counted)}종 · 유효 {spread(counted):.1f}종")
+    print(
+        f"  균등이면 무작위 하한이 {1 / len(counted):.4f}, 유효 종수로는 {1 / spread(counted):.4f}"
+    )
+    ranked = counted.most_common()
+    print("  많은 쪽 " + " · ".join(f"{name} {count}" for name, count in ranked[:4]))
+    print("  적은 쪽 " + " · ".join(f"{name} {count}" for name, count in ranked[-4:]))
+    print(f"\n아티스트 {len(artists)}명 · 유효 {spread(artists):.1f}명")
+    print("  많은 쪽 " + " · ".join(f"{name} {count}" for name, count in artists.most_common(4)))
+
+    print("\n조성마다 따로 잰다 — **곡 수를 따라가면 곡 수를 재는 것이다**")
+    relevant, excluded = masks(keys, labels)
+    similarity = cosine_similarity(matrix, matrix)
+    rows: list[tuple[str, int, float]] = []
+    for name, count in ranked:
+        picked = np.asarray([labels[key] == name for key in keys])
+        found = score_retrieval(similarity[picked], relevant[picked], excluded[picked], k)
+        rows.append((name, count, found.precision_at_k))
+    order = sorted(rows, key=lambda row: -row[2])
+    shown = order if len(order) <= 10 else [*order[:5], ("...", 0, -1.0), *order[-5:]]
+    for name, count, score in shown:
+        if score < 0.0:
+            print("  ...")
+            continue
+        print(f"  {name:<14} {count:>4}곡  P@{k} {score:.4f}")
+    sizes = np.asarray([float(count) for _, count, _ in rows])
+    scores = np.asarray([score for _, _, score in rows])
+    print(f"  곡 수와 점수의 순위상관 {_spearman(sizes, scores):+.3f}")
+
+    modes: dict[str, list[float]] = {}
+    for name, _, score in rows:
+        modes.setdefault(name.rsplit(" ", 1)[-1], []).append(score)
+    print("\n으뜸음 말고 **장단**으로 묶으면")
+    for mode, found in sorted(modes.items()):
+        songs = sum(count for name, count, _ in rows if name.endswith(mode))
+        print(
+            f"  {mode:<8} {len(found):>2}종 {songs:>4}곡  P@{k} 중앙 {float(np.median(found)):.4f}"
+        )
+    print("  **D-0054의 나란한조 혼동이 여기 있을 수 있다** — 오염된 쪽은 못 맞힌다")
+
+
+def capped(keys: list[str], labels: dict[str, str]) -> list[str]:
+    """조성마다 **중앙값 개수**까지만 남긴 부표본.
+
+    **중앙값은 자료가 정한다** — 고른 값이 아니다. 쏠린 조성이 점수를 끌고 있는지
+    보려고 자른다. 순서는 정렬된 채로 잘라 **시드가 필요 없다.**
+    """
+    counted = Counter(labels[key] for key in keys)
+    limit = int(np.median(list(counted.values())))
+    taken: Counter[str] = Counter()
+    found: list[str] = []
+    for key in keys:
+        name = labels[key]
+        if taken[name] < limit:
+            taken[name] += 1
+            found.append(key)
+    return found
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=_resolve, default=ROOT / "var" / "ingest", help="산출물 루트")
@@ -242,6 +350,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--clear", action="store_true", help="`(애매)` 조성을 뺀다")
     parser.add_argument("--split", action="store_true", help="곡을 반으로 갈라 양쪽에서 잰다")
+    parser.add_argument("--eda", action="store_true", help="코퍼스가 어떻게 생겼는지 본다")
     args = parser.parse_args()
 
     labels, source = labels_of(args.out)
@@ -276,6 +385,40 @@ def main() -> int:
     print("\n조성이 같은 곡을 찾는다 — 높을수록 화성을 담는다")
     shown = args.keys.rpartition(":")[2]
     report(shown, np.stack([mine[key] for key in keys]), keys, labels, args.k, len(keys))
+
+    if args.eda:
+        eda(keys, labels, np.stack([mine[key] for key in keys]), args.k)
+        part = capped(keys, labels)
+        stacked = np.stack([mine[key] for key in part])
+        print("\n조성마다 중앙값 개수까지만 남기고 다시 잰다")
+        cut_relevant, cut_excluded = masks(part, labels)
+        counted = Counter(labels[key] for key in part)
+        print(f"  조성 유효 {spread(counted):.1f}종 (전체는 위에 있다)")
+        floor = expected_random_precision(cut_relevant, cut_excluded)
+        print(f"  **이 부표본의 해석 하한** {floor:.4f}")
+        report(f"{shown} (고르게)", stacked, part, labels, args.k, len(part))
+
+        print("\n같은 자를 여럿에 댄다 — **크로마도 단조가 낮으면 라벨이 고장난 것이다**")
+        whole = np.stack([mine[key] for key in keys])
+        by_mode(shown, keys, labels, whole, args.k)
+        chroma_all = chroma_of(args.out)
+        picked = [key for key in keys if key in chroma_all]
+        if picked:
+            by_mode("크로마", picked, labels, np.stack([chroma_all[key] for key in picked]), args.k)
+        noise = np.random.default_rng(args.seed).normal(0.0, 1.0, whole.shape).astype(np.float32)
+        by_mode("무작위", keys, labels, noise, args.k)
+
+        chroma = chroma_of(args.out)
+        top = [key for key in part if key in chroma]
+        if len(top) >= args.k * 2:
+            report(
+                "크로마 (고르게)",
+                np.stack([chroma[key] for key in top]),
+                top,
+                labels,
+                args.k,
+                len(top),
+            )
 
     if args.split:
         for side, part in zip(("앞", "뒤"), halves(keys, args.seed), strict=True):
