@@ -211,6 +211,24 @@ def shuffled_floor(
     return float(np.quantile(drawn, 0.025)), float(np.quantile(drawn, 0.975))
 
 
+def halves(keys: list[str], seed: int) -> tuple[list[str], list[str]]:
+    """곡을 둘로 가른다. **같은 시드면 같은 갈림이다.**
+
+    **고르는 데 쓴 자료로 판정하지 않는다** (D-0012와 같은 자리). 여섯 층을 같은
+    1004곡에서 보고 최고를 고르면 그 고름이 그 자료에 맞춰진 것이고, 절반에서 고른
+    뒤 나머지 절반에서 확인해야 고름과 판정이 갈린다.
+
+    **아티스트로 가르지 않는다** — 곡으로 갈라도 같은 아티스트는 어차피 후보에서
+    빠지므로(D-0180) 한쪽에 몰려도 정답이 새지 않는다.
+    """
+    order = np.random.default_rng(seed).permutation(len(keys))
+    cut = len(keys) // 2
+    return (
+        sorted(keys[int(index)] for index in order[:cut]),
+        sorted(keys[int(index)] for index in order[cut:]),
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=_resolve, default=ROOT / "var" / "ingest", help="산출물 루트")
@@ -223,6 +241,7 @@ def main() -> int:
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--clear", action="store_true", help="`(애매)` 조성을 뺀다")
+    parser.add_argument("--split", action="store_true", help="곡을 반으로 갈라 양쪽에서 잰다")
     args = parser.parse_args()
 
     labels, source = labels_of(args.out)
@@ -257,6 +276,11 @@ def main() -> int:
     print("\n조성이 같은 곡을 찾는다 — 높을수록 화성을 담는다")
     shown = args.keys.rpartition(":")[2]
     report(shown, np.stack([mine[key] for key in keys]), keys, labels, args.k, len(keys))
+
+    if args.split:
+        for side, part in zip(("앞", "뒤"), halves(keys, args.seed), strict=True):
+            stacked = np.stack([mine[key] for key in part])
+            report(f"{shown} ({side}절반)", stacked, part, labels, args.k, len(part))
 
     other, _ = vectors_of(args.out, args.against)
     shared = [key for key in keys if key in other]
