@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE
-from hathor.domain.services.onset import envelope
+from hathor.domain.services.onset import bands, envelope
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -44,6 +44,11 @@ class TrackOnsets:
 
     source_key: str
     envelope: np.ndarray
+    bands: np.ndarray
+    """`(프레임, 대역)` 크기 스펙트럼 (O-47 · D-0170).
+
+    **포락선과 같은 디코딩에서 나온다.** 따로 뽑으면 1004곡을 두 번 읽는다.
+    """
     hop_seconds: float
 
     @property
@@ -90,5 +95,6 @@ class ExtractOnsets:
         return TrackOnsets(
             source_key=track.source_key,
             envelope=envelope(mono, SOURCE_SAMPLE_RATE, self._hop_seconds),
+            bands=bands(mono, SOURCE_SAMPLE_RATE, self._hop_seconds),
             hop_seconds=self._hop_seconds,
         )

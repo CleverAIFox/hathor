@@ -36,18 +36,41 @@ def envelope_path(root: Path, source_key: str) -> Path:
 
 
 def write_envelope(
-    root: Path, source_key: str, envelope: Sequence[float] | np.ndarray, *, hop_seconds: float
+    root: Path,
+    source_key: str,
+    envelope: Sequence[float] | np.ndarray,
+    *,
+    hop_seconds: float,
+    bands: np.ndarray | None = None,
 ) -> None:
-    """곡 하나의 포락선을 `npz`로 쓴다. **파일이 있으면 부르는 쪽이 건너뛴다.**"""
+    """곡 하나의 포락선을 `npz`로 쓴다. **파일이 있으면 부르는 쪽이 건너뛴다.**
+
+    **대역은 같은 파일에 넣는다** (D-0170). 디코딩이 가장 비싼 단계이고 둘이 같은
+    스펙트럼에서 나오므로, 따로 두면 1004곡을 두 번 읽게 된다. 대역 없이 쓴 옛
+    파일이 섞여도 읽는 쪽이 `None`으로 받는다 — **이어받기가 전제다** (D-0075).
+    """
     if hop_seconds <= 0.0:
         raise ValueError("홉 길이는 양수여야 한다")
     root.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        envelope_path(root, source_key),
-        envelope=np.asarray(envelope, dtype=np.float32),
-        hop_seconds=np.float64(hop_seconds),
-        source_key=source_key,
-    )
+    payload: dict[str, object] = {
+        "envelope": np.asarray(envelope, dtype=np.float32),
+        "hop_seconds": np.float64(hop_seconds),
+        "source_key": source_key,
+    }
+    if bands is not None:
+        payload["bands"] = np.asarray(bands, dtype=np.float32)
+    np.savez_compressed(envelope_path(root, source_key), **payload)  # type: ignore[arg-type]
+
+
+def load_bands(root: Path, source_key: str) -> np.ndarray | None:
+    """곡 하나의 `(프레임, 대역)`. **없으면 `None`이다** — 옛 파일에는 없다."""
+    path = envelope_path(root, source_key)
+    if not path.exists():
+        return None
+    with np.load(path, allow_pickle=False) as bundle:
+        if "bands" not in bundle:
+            return None
+        return np.asarray(bundle["bands"], dtype=np.float64)
 
 
 def load_envelope(root: Path, source_key: str) -> tuple[np.ndarray, float] | None:

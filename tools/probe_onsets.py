@@ -38,10 +38,11 @@ sys.path.insert(0, str(ROOT / "core"))
 from hathor.domain.services.onset import (  # noqa: E402 — sys.path 조작 뒤라야 한다
     PHASE_BINS,
     beat_period,
+    event_scale,
     peaks,
     phase_profile,
 )
-from hathor.infrastructure.onset_store import SUFFIX  # noqa: E402
+from hathor.infrastructure.onset_store import SUFFIX, load_bands  # noqa: E402
 
 
 def _resolve(value: str) -> Path:
@@ -148,27 +149,43 @@ def _spacing(envelope: np.ndarray, hop: float) -> float:
     return float(np.median(np.diff(found))) * hop
 
 
-def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float) -> int:
+def _scale(folder: Path, key: str, hop: float) -> float | None:
+    """그 곡의 사건 길이(초). **대역이 없는 옛 파일이면 `None`이다** (D-0170)."""
+    found = load_bands(folder, key)
+    return None if found is None else event_scale(found, hop)
+
+
+def compare(
+    songs: list[tuple[str, np.ndarray, float]], out: Path, other: float, folder: Path
+) -> int:
     """두 홉을 **같은 곡끼리** 견준다 (D-0165).
 
     `--limit`으로 다시 뽑으면 표본이 갈려 짝지은 비교가 아니게 된다 (D-0113 · D-0164).
     여기서는 **두 폴더의 교집합만** 본다.
     """
-    folder = out / f"keys-{other:g}s{SUFFIX}"
-    if not folder.is_dir():
-        print(f"{folder}가 없다.", file=sys.stderr)
+    theirs_folder = out / f"keys-{other:g}s{SUFFIX}"
+    if not theirs_folder.is_dir():
+        print(f"{theirs_folder}가 없다.", file=sys.stderr)
         return 1
-    theirs = {key: (envelope, hop) for key, envelope, hop in load(folder, None)}
+    theirs = {key: (envelope, hop) for key, envelope, hop in load(theirs_folder, None)}
 
-    print(f"\n{folder.name}와 짝지어 본다")
+    print(f"\n{theirs_folder.name}와 짝지어 본다")
     gaps: list[float] = []
     shifted: list[tuple[str, float, float]] = []
     # **박 없이 쓸 수 있는 재료가 있는가** (D-0166). 발음 간격은 절대 시간이라
     # 격자에 덜 흔들린다. 박이 안 서는 곡에서도 남는지 본다.
     spacing: list[float] = []
+    # **사건 길이는 격자 무관이어야 한다** (D-0170). 합성에서 비 0.991~1.001이었고
+    # 발음 간격은 같은 자리에서 0.500이었다. **실측에서 이 비가 1에서 멀면 예측이
+    # 틀린 것이고, 그러면 `apart`를 여기서 못 가져온다.**
+    scales: list[float] = []
     for key, envelope, hop in songs:
         if key not in theirs:
             continue
+        mine_scale = _scale(folder, key, hop)
+        their_scale = _scale(theirs_folder, key, theirs[key][1])
+        if mine_scale is not None and their_scale is not None and their_scale > 0.0:
+            scales.append(mine_scale / their_scale)
         mine = beat_period(envelope, hop)
         other_beat = beat_period(theirs[key][0], theirs[key][1])
         if mine is None or other_beat is None:
@@ -209,6 +226,19 @@ def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float)
         print(f"  20%를 넘게 어긋난 곡 {loose} / {len(off)}")
         print("  **비가 홉 비율과 같으면 간격이 격자 인공물이다** (D-0166)")
 
+    if scales:
+        off = [abs(value - 1.0) for value in scales]
+        print("\n사건 길이 (대역 반감점 · D-0170)")
+        print(
+            f"  두 홉의 비 · 중앙 {statistics.median(scales):.3f}"
+            f" · 어긋남 중앙 {statistics.median(off):.3f}"
+        )
+        loose = sum(1 for value in off if value > 0.2)
+        print(f"  20%를 넘게 어긋난 곡 {loose} / {len(off)}")
+        print("  **1에 붙으면 격자 무관이다.** 홉 비율에 붙으면 간격과 같은 인공물이다")
+    else:
+        print("\n사건 길이를 못 쟀다 — 대역이 없는 옛 산출물이다. `--force`로 다시 뽑는다")
+
     print(f"\n**박 추정이 홉에 따라 바뀐 곡 {len(shifted)}**")
     for key, before, after in shifted:
         print(f"  {key[:36]:<38}{before:>7.1f} → {after:>7.1f}   ({after / before:.2f}배)")
@@ -216,7 +246,7 @@ def compare(songs: list[tuple[str, np.ndarray, float]], out: Path, other: float)
     return 0
 
 
-def table(songs: list[tuple[str, np.ndarray, float]]) -> int:
+def table(songs: list[tuple[str, np.ndarray, float]], folder: Path) -> int:
     """곡마다 한 줄. **전체 분포가 못 가르는 것을 여기서 본다** (D-0160).
 
     주기를 반으로 볼 때 또렷해지는 곡이 7 / 20이었다. **과반이 아니므로 절반 오류가
@@ -224,7 +254,7 @@ def table(songs: list[tuple[str, np.ndarray, float]]) -> int:
     """
     print(
         f"\n{'곡':<32}{'BPM':>7}{'칸':>6}{'격차':>7}"
-        f"{'배수격차':>8}{'집중':>7}{'반주기':>7}{'배주기':>7}  판정"
+        f"{'배수격차':>8}{'집중':>7}{'반주기':>7}{'배주기':>7}{'사건':>8}  판정"
     )
     for key, envelope, hop in songs:
         beat = beat_period(envelope, hop)
@@ -241,9 +271,11 @@ def table(songs: list[tuple[str, np.ndarray, float]]) -> int:
         if best <= 1.5 / PHASE_BINS:
             mark = "고름"
         frames = beat.period_seconds / hop
+        scale = _scale(folder, key, hop)
+        shown = "     -" if scale is None else f"{scale:>6.3f}"
         print(
             f"{key[:30]:<32}{beat.tempo_bpm:>7.1f}{frames:>6.0f}{beat.margin:>7.3f}"
-            f"{beat.octave_margin:>8.3f}{now:>7.3f}{half:>7.3f}{twice:>7.3f}  {mark}"
+            f"{beat.octave_margin:>8.3f}{now:>7.3f}{half:>7.3f}{twice:>7.3f}{shown:>8}  {mark}"
         )
     print("\n**칸이 작으면 봉우리가 다시 촘촘해진다** — 빠른 곡의 고름은 그 탓일 수 있다 (D-0162)")
     return 0
@@ -293,9 +325,9 @@ def main() -> int:
     if args.diagnose is not None:
         return diagnose(songs[args.diagnose])
     if args.against is not None:
-        return compare(songs, args.out, args.against)
+        return compare(songs, args.out, args.against, folder)
     if args.table:
-        return table(songs)
+        return table(songs, folder)
     tempos: list[float] = []
     margins: list[float] = []
     octaves: list[float] = []

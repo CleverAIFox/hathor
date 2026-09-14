@@ -101,7 +101,13 @@ def _write(
     extractor = ExtractOnsets(FfmpegAudioDecoder(), library_root, hop_seconds=args.hop)
     written = 0
     for found in extractor.run(pending):
-        write_envelope(folder, found.source_key, found.envelope, hop_seconds=found.hop_seconds)
+        write_envelope(
+            folder,
+            found.source_key,
+            found.envelope,
+            hop_seconds=found.hop_seconds,
+            bands=found.bands,
+        )
         written += 1
         if written % 50 == 0:
             print(f"  {written} / {len(pending)}")

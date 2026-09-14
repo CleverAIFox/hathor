@@ -9,12 +9,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from hathor.domain.services.chord_rhythm import shuffled
 from hathor.domain.services.onset import (
-    FRAME_RATIO,
     PHASE_BINS,
     TEMPO_RANGE,
+    WINDOW_SECONDS,
+    band_edges,
+    bands,
     beat_period,
     envelope,
+    event_scale,
     peaks,
     phase_profile,
     tempo_bpm,
@@ -199,9 +203,19 @@ def test_늘어난_몫만_센다():
     assert float(found[len(found) // 2 :].max()) < float(found.max()) * 0.1
 
 
-def test_창은_홉을_따라온다():
-    """**밖에서 오는 값은 홉 하나뿐이다.** 창을 따로 고르면 둘 다 맞출 수 있다."""
-    assert FRAME_RATIO == 4
+def test_창은_홉을_따라오지_않는다():
+    """**창은 주파수 해상도를 정한다** (D-0169).
+
+    홉을 따라 움직이면 보고 격자를 바꿨을 뿐인데 재는 대상이 바뀐다 — D-0103이
+    대각선을 버린 것과 같은 부류다. **기본 홉에서 값은 그대로다** (0.01 × 4).
+    """
+    assert WINDOW_SECONDS == 0.04
+
+
+def test_홉을_바꿔도_포락선_길이만_바뀐다():
+    """창이 고정이므로 **같은 구간을 더 촘촘히 볼 뿐이다.**"""
+    wave = audio(120)
+    assert len(envelope(wave, SR, HOP / 2)) > len(envelope(wave, SR, HOP)) * 1.9
 
 
 def test_파형이_짧으면_거부한다():
@@ -282,3 +296,122 @@ def test_바닥_아래는_봉우리가_아니다():
 
 def test_짧으면_봉우리가_없다():
     assert peaks([1.0, 2.0]) == []
+
+
+# ------------------------------------------------------------------ 대역 (O-47 · D-0170)
+
+
+def mixed(bpm, *, spacing=None, seconds=40, noise=0.02, drone=0.3, seed=1):
+    """음색이 사건마다 바뀌는 합성 음원.
+
+    **대역 분포가 사건마다 달라야 반감점이 뜻을 갖는다.** 지속 베이스를 깔아
+    실제 곡의 연속 에너지를 흉내 낸다 — D-0155가 그것에 당했다.
+    """
+    rng = np.random.default_rng(seed)
+    size = SR * seconds
+    wave = np.zeros(size)
+    step = spacing if spacing is not None else 60.0 / bpm
+
+    def hit(freq, decay, length=0.12):
+        span = np.linspace(0.0, length, int(SR * length))
+        return np.exp(-np.linspace(0.0, decay, span.size)) * np.sin(2 * np.pi * freq * span)
+
+    voices = [hit(60, 8.0), hit(700, 10.0), hit(3000, 18.0, 0.06)]
+    for count in range(int(seconds / step)):
+        index = int(count * step * SR)
+        voice = voices[count % 3]
+        if index + voice.size < size:
+            wave[index : index + voice.size] += voice
+    span = np.arange(size) / SR
+    wave += drone * np.sin(2 * np.pi * 110 * span)
+    return wave + rng.normal(0.0, noise, size)
+
+
+def test_대역은_옥타브다():
+    """**밖에서 온 격자다** — 12반음이 한 옥타브인 것과 같은 부류다."""
+    frequencies = np.fft.rfftfreq(round(WINDOW_SECONDS * SR), 1.0 / SR)
+    edges = band_edges(frequencies, SR)
+    assert edges
+    assert all(high / low == pytest.approx(2.0) for low, high in edges)
+    assert edges[-1][1] == pytest.approx(SR / 2.0)
+
+
+def test_대역_수가_홉에_안_흔들린다():
+    """창이 고정이므로 대역도 고정이다 (D-0169).
+
+    창이 홉을 따라오던 때는 같은 곡에서 **9개와 8개**가 나왔고, 그러면 두 홉의
+    뾰족함을 나란히 놓을 수 없다.
+    """
+    wave = mixed(120)
+    assert bands(wave, SR, HOP).shape[1] == bands(wave, SR, HOP / 2).shape[1]
+
+
+def test_사건_길이가_격자에_안_흔들린다():
+    """**사전 등록 예측이다** (D-0170). 발음 간격은 같은 자리에서 0.500이었다 (D-0166).
+
+    홉을 반으로 줄여도 값이 안 바뀌어야 한다. 바뀌면 O-47의 우회로가 또 막힌 것이다.
+    """
+    wave = mixed(120)
+    coarse = event_scale(bands(wave, SR, HOP), HOP)
+    fine = event_scale(bands(wave, SR, HOP / 2), HOP / 2)
+    assert coarse is not None
+    assert fine is not None
+    assert abs(fine / coarse - 1.0) < 0.05
+
+
+def test_시간_순서에서_온다():
+    """뒤섞으면 짧아진다. **귀무 대조를 먼저 돌린다** (D-0086 · O-25 (5))."""
+    series = bands(mixed(120), SR, HOP)
+    real = event_scale(series, HOP)
+    null = event_scale(shuffled(series), HOP)
+    assert real is not None
+    assert null is not None
+    assert real > null * 1.2
+
+
+def test_창보다_짧으면_못_잰_것이다():
+    """**창 길이보다 짧은 값은 사건이 아니다** (D-0170).
+
+    잴 수 있는 가장 짧은 길이가 창이며 그보다 아래는 바닥이다. 문턱을 고른 것이
+    아니라 **분해능이 그렇다.** 백색잡음 0.014초 · 지속음만 0.035초로 둘 다 창
+    아래이고, 사건이 있는 곡은 0.071초다.
+    """
+    rng = np.random.default_rng(3)
+    span = np.arange(SR * 20) / SR
+    noise_only = event_scale(bands(rng.normal(0.0, 1.0, SR * 20), SR, HOP), HOP)
+    drone_only = event_scale(
+        bands(
+            0.3 * np.sin(2 * np.pi * 110 * span) + 0.02 * rng.normal(0.0, 1.0, span.size), SR, HOP
+        ),
+        HOP,
+    )
+    played = event_scale(bands(mixed(120), SR, HOP), HOP)
+    assert noise_only is not None
+    assert drone_only is not None
+    assert played is not None
+    assert noise_only < WINDOW_SECONDS
+    assert drone_only < WINDOW_SECONDS
+    assert played > WINDOW_SECONDS * 1.5
+
+
+def test_간격보다_길이에_붙어_있다():
+    """**간격을 재는 값이 아니다.**
+
+    간격을 8배 좁혀도 값은 1.5배 안쪽에서 움직인다 — 감쇠 시간이 지배한다.
+    `apart`의 자리에는 맞을 수 있으나 **간격으로 읽으면 안 된다.**
+    """
+    wide = event_scale(bands(mixed(0, spacing=1.0), SR, HOP), HOP)
+    tight = event_scale(bands(mixed(0, spacing=0.125), SR, HOP), HOP)
+    assert wide is not None
+    assert tight is not None
+    assert 1.0 < wide / tight < 1.5
+
+
+def test_대역_시계열은_2차원이어야_한다():
+    with pytest.raises(ValueError, match="2차원"):
+        event_scale(np.zeros(100), HOP)
+
+
+def test_사건_길이도_홉이_양수여야_한다():
+    with pytest.raises(ValueError, match="홉 길이"):
+        event_scale(np.zeros((100, 4)), 0.0)

@@ -40,6 +40,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hathor.domain.services import chord_rhythm
+
 Envelope = np.ndarray
 
 TEMPO_RANGE = (50.0, 200.0)
@@ -53,11 +55,16 @@ PHASE_BINS = 4
 16분음표 해상도이며 `TICKS_PER_BEAT`가 이미 480으로 4분할을 담고 있다."""
 
 
-FRAME_RATIO = 4
-"""분석 창은 홉의 이 배수다. **밖에서 오는 값은 홉 하나뿐이다.**
+WINDOW_SECONDS = 0.04
+"""분석 창의 길이. **홉을 따라 움직이지 않는다** (D-0169).
 
-창 길이를 따로 고르면 값이 둘이 되고 둘 다 맞출 수 있게 된다. 홉은 산출물 격자가
-정하므로 이미 밖에 있고, **창은 그것을 따라온다.**"""
+D-0144는 창을 홉의 네 배로 묶었다 — *"밖에서 오는 값은 홉 하나뿐"*이라는 근거였고,
+그 자체로는 옳았다. **그런데 창은 주파수 해상도를 정한다.** 홉을 반으로 줄이면 창도
+반이 되고 **스펙트럼이 통째로 달라진다** — 보고 격자를 바꿨을 뿐인데 재는 대상이
+바뀐다. D-0103이 *"창 길이가 그 값을 정한다"*며 대각선을 버린 것과 같은 부류다.
+
+**기본 홉 0.01초에서 값이 같다** — `0.01 * 4 = 0.04`이며 산출물이 안 바뀐다.
+새로 고른 값이 아니라 **묶여 있던 것을 푼 것이다.**"""
 
 
 def envelope(samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds: float) -> Envelope:
@@ -74,12 +81,30 @@ def envelope(samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds:
     if hop_seconds <= 0.0:
         raise ValueError("홉 길이는 양수여야 한다")
 
+    spectra, _ = _spectra(samples, sample_rate, hop_seconds)
+    rising = np.maximum(np.diff(spectra, axis=0), 0.0)
+    return np.concatenate(([0.0], rising.sum(axis=1)))
+
+
+def _spectra(
+    samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """`(프레임, 주파수 빈)과 빈의 주파수`. **포락선과 대역이 같은 것을 본다.**
+
+    둘이 따로 창을 잡으면 같은 곡에서 다른 스펙트럼을 보게 되고, 그것이 D-0157이
+    겪은 부류다 — 세는 것과 쓰는 것이 어긋난다.
+    """
+    if sample_rate <= 0:
+        raise ValueError("표본율은 양수여야 한다")
+    if hop_seconds <= 0.0:
+        raise ValueError("홉 길이는 양수여야 한다")
+
     wave = np.asarray(samples, dtype=np.float64)
     if wave.ndim != 1:
         raise ValueError("파형은 1차원이어야 한다")
 
     hop = max(1, round(hop_seconds * sample_rate))
-    frame = hop * FRAME_RATIO
+    frame = max(4, round(WINDOW_SECONDS * sample_rate))
     if wave.size < frame * 2:
         raise ValueError("파형이 너무 짧다")
 
@@ -89,9 +114,88 @@ def envelope(samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds:
     for index in range(count):
         start = index * hop
         spectra[index] = np.abs(np.fft.rfft(wave[start : start + frame] * window))
+    return spectra, np.fft.rfftfreq(frame, 1.0 / sample_rate)
 
-    rising = np.maximum(np.diff(spectra, axis=0), 0.0)
-    return np.concatenate(([0.0], rising.sum(axis=1)))
+
+def band_edges(frequencies: np.ndarray, sample_rate: int) -> list[tuple[float, float]]:
+    """옥타브 대역. **나이퀴스트에서 반씩 내려오며 빈이 없으면 멈춘다.**
+
+    **옥타브는 밖에서 온 격자다** — 12반음이 한 옥타브인 것과 같은 부류이고 맞추는
+    값이 아니다. 개수도 고르지 않는다: 창이 정한 주파수 해상도가 더 못 내려가는
+    자리에서 끝난다.
+
+    창이 초로 고정돼 있으므로(D-0169) **홉을 바꿔도 대역 수가 안 바뀐다.** 창이 홉을
+    따라오던 때는 9개와 8개가 나왔고, 그러면 두 홉의 뾰족함을 견줄 수 없다.
+    """
+    edges: list[tuple[float, float]] = []
+    top = sample_rate / 2.0
+    while True:
+        low = top / 2.0
+        if not np.any((frequencies >= low) & (frequencies < top)):
+            break
+        edges.append((low, top))
+        top = low
+    return edges[::-1]
+
+
+def bands(samples: Sequence[float] | Envelope, sample_rate: int, hop_seconds: float) -> np.ndarray:
+    """`(프레임, 대역)` 크기 스펙트럼 (O-47 · D-0170).
+
+    **선속이 아니라 크기다.** D-0167이 반감점을 1차원 포락선에 두 번 옮기려다
+    실패하며 원인을 짚었다 — *"잡음 바닥이 합을 지배한다"*. 크로마에 그 문제가
+    없는 이유는 **프레임마다 분포이고 프레임별로 정규화되기 때문**이며, 선속은
+    발음 사이가 비어 있어 그 성질을 못 갖는다.
+
+    **여기서 하는 것은 크로마와 같은 것을 더 고운 창으로 하는 것이다.** 크로마는
+    스펙트럼을 12반음으로 접고 1초 창으로 본다. 대역은 옥타브로 접고 0.04초 창으로
+    본다. **새로 고른 것은 접는 격자뿐이고 그것은 옥타브다.**
+    """
+    spectra, frequencies = _spectra(samples, sample_rate, hop_seconds)
+    edges = band_edges(frequencies, sample_rate)
+    if not edges:
+        raise ValueError("대역이 서지 않는다")
+    stacked = np.stack(
+        [
+            spectra[:, (frequencies >= low) & (frequencies < high)].sum(axis=1)
+            for low, high in edges
+        ],
+        axis=1,
+    )
+    return np.asarray(stacked, dtype=np.float64)
+
+
+def event_scale(band_series: np.ndarray, hop_seconds: float) -> float | None:
+    """그 곡의 **사건 길이.** 초 단위이며 못 재면 `None`이다 (O-47 · D-0170).
+
+    O-37(D-0125로 닫힘)의 반감점을 그대로 부른다 — **정본은 `chord_rhythm` 하나이고 여기서
+    베끼지 않는다** (D-0123과 같은 자리). 대역 분포를 묶으면 뾰족함이 떨어지고,
+    **한 사건의 음색이 유지되는 길이를 넘는 순간 급락한다.**
+
+    ### 무엇을 재는가
+
+    **간격이 아니라 길이다.** 합성에서 사건 간격을 8배(1.0초 → 0.125초) 좁혔는데
+    값은 1.33배만 움직였다(0.0735 → 0.0552). 감쇠 0.12초가 고정이었고 **값이 그쪽에
+    붙어 있다.** 간격을 재는 값으로 쓰면 안 된다.
+
+    그래도 `apart`의 자리에는 이것이 맞다 — **한 사건이 우는 동안의 잔물결은 다른
+    발음이 아니다**(D-0156이 막으려던 것). 실측에서 그런지는 안 봤다 (O-47).
+
+    ### 격자 무관 (사전 등록 예측 통과)
+
+    홉을 반·4분의 1로 줄여도 값이 안 바뀐다 — 합성 5곡에서 비 0.991~1.001이다.
+    D-0166의 발음 간격은 같은 자리에서 **정확히 0.500**이었다. 창을 초로 고정한
+    것이 조건이며(D-0169), 창이 홉을 따라오면 이 성질이 사라진다.
+
+    **창 길이 근처 값은 못 잰 것이다.** 지속음만 있는 합성에서 0.032초가 나왔고
+    그것은 창 0.04초의 바닥이다.
+    """
+    if hop_seconds <= 0.0:
+        raise ValueError("홉 길이는 양수여야 한다")
+    stacked = np.asarray(band_series, dtype=np.float64)
+    if stacked.ndim != 2:
+        raise ValueError("대역 시계열은 2차원이어야 한다")
+    found = chord_rhythm.measure(stacked)
+    return None if found is None else float(found) * hop_seconds
 
 
 def _normalise(envelope: Sequence[float] | Envelope) -> Envelope:
