@@ -1995,6 +1995,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0200 | 죽은 손잡이 하나와, 모든 표가 어긋나 있었다 | `core/tests/unit/test_tables.py::test_한글_머리글이_값과_어긋나지_않는다` |
 | D-0201 | 배음 감산을 켠다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_고정_집합_바닥이_전체_바닥보다_낮다` |
 | D-0203 | 산출물을 전부 버리고 한 패스로 다시 뽑는다 | `core/tests/unit/test_ingest_all.py::test_디코딩과_분리를_곡당_한_번만_한다` |
+| D-0204 | 새 하위 명령이 조용히 스캔으로 갔다 | `core/tests/unit/test_cli_contracts.py::test_ingest_하위_명령이_전부_배선돼_있다` |
 
 <!-- decision-ledger:end -->
 

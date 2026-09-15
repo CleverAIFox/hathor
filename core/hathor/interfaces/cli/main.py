@@ -298,7 +298,6 @@ def build_parser() -> argparse.ArgumentParser:
     every.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 루트")
     every.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
     every.add_argument("--force", action="store_true", help="끝난 곡도 다시 뽑는다")
-    every.set_defaults(func=_run_ingest_all)
 
     features = ingest_sub.add_parser("features", help="오디오 특징 추출 (GPU)")
     features.add_argument(
@@ -770,6 +769,11 @@ def main(argv: list[str] | None = None) -> int:
             return run_eval_harmony_order(args)
         return _run_eval_retrieval(args)
     if args.command == "ingest":
+        # **떨어지는 기본이 `scan`이다.** 새 하위 명령을 여기 안 적으면 조용히
+        # 스캔이 돌고, 스캔에만 있는 인자를 찾다 `AttributeError`로 죽는다 —
+        # `ingest all`이 그렇게 났다 (D-0204).
+        if args.ingest_command == "all":
+            return _run_ingest_all(args)
         if args.ingest_command == "keys":
             return _run_ingest_keys(args)
         if args.ingest_command == "resolve":

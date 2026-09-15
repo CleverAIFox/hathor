@@ -202,3 +202,27 @@ def test_거부_목록이_파서와_맞다():
     for flag, name, default in REPLAY_DEFAULTS:
         assert hasattr(parsed, name), f"{flag}가 파서에 없다"
         assert getattr(parsed, name) == default, f"{flag}의 기본값이 어긋난다"
+
+
+def test_ingest_하위_명령이_전부_배선돼_있다():
+    """**떨어지는 기본이 `scan`이다** (D-0204).
+
+    새 하위 명령을 `main`의 분기에 안 적으면 **조용히 스캔이 돈다.** 그리고
+    스캔에만 있는 인자를 찾다 `AttributeError`로 죽는다 — `ingest all`이 그렇게
+    났고, 그 바람에 `scan-*.jsonl`이 하나 더 생겼다.
+
+    파서가 아는 이름과 분기가 아는 이름이 **같아야 한다.** 한쪽만 늘면 틀린다.
+    """
+    import re
+
+    from hathor.interfaces.cli import main
+
+    source = Path(main.__file__).read_text(encoding="utf-8")
+    declared = set(re.findall(r'ingest_sub\.add_parser\(\s*"([\w-]+)"', source))
+    block = source[source.index('if args.command == "ingest":') :]
+    block = block[: block.index("return _run_ingest_scan(args)")]
+    routed = set(re.findall(r'args\.ingest_command == "([\w-]+)"', block))
+
+    assert declared, "파서에서 하위 명령을 못 찾았다"
+    missing = declared - routed - {"scan"}
+    assert not missing, f"배선이 빠진 하위 명령: {sorted(missing)}"
