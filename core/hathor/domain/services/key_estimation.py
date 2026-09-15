@@ -530,6 +530,21 @@ def random_baseline(
     디리클레 분포를 쓴다 — 합이 1인 12차원 벡터를 고르게 뽑는다. 균등난수를
     정규화하면 중앙으로 몰려 실제 크로마보다 평평해진다.
     """
+    estimates = _random_estimates(count, seed, profile=profile, harmonic=harmonic)
+    return (
+        np.asarray([item.correlation for item in estimates], dtype=np.float64),
+        np.asarray([item.margin for item in estimates], dtype=np.float64),
+    )
+
+
+def _random_estimates(
+    count: int,
+    seed: int,
+    *,
+    profile: str,
+    harmonic: float,
+) -> list[KeyEstimate]:
+    """무작위 크로마를 추정한 결과. `random_baseline`과 선법별 바닥이 함께 쓴다."""
     generator = np.random.default_rng(seed)
     samples = generator.dirichlet(np.ones(12), size=count)
     estimates = []
@@ -544,10 +559,34 @@ def random_baseline(
         estimates.append(
             estimate_key(np.asarray(vector / total, dtype=np.float32), profile=profile)
         )
-    return (
-        np.asarray([item.correlation for item in estimates], dtype=np.float64),
-        np.asarray([item.margin for item in estimates], dtype=np.float64),
-    )
+    return estimates
+
+
+def random_baseline_by_mode(
+    count: int = 2000,
+    seed: int = 20260818,
+    *,
+    profile: str = PROFILE_KRUMHANSL,
+    harmonic: float = HARMONIC_STRENGTH,
+) -> dict[Mode, tuple[int, float]]:
+    """무작위 크로마의 **선법별** (개수, 애매율). **전체 바닥을 선법에 쓰면 안 된다.**
+
+    O-25 (1)이 *"무엇과 비교할지"*를 요구하는데, 지표를 선법으로 나누면 비교선도
+    나뉘어야 한다. **안 나누면 판정이 뒤집힌다** — 장조 바닥과 단조 바닥이 6%p 넘게
+    다르고, D-0191이 *"바닥 아래로 내렸다"*고 읽은 것이 전체 바닥을 단조에 댄
+    결과였다. 실측은 D-0197에 있다 (O-28 — 수치를 코드에 박지 않는다).
+
+    **선법은 참값이 아니라 추정기가 뱉은 라벨이다.** 그래서 귀무 자료도 같은
+    방식으로 — 추정된 선법으로 — 나눈다. 라벨이 없는 상태에서(O-22) 이것이
+    성립하는 유일한 짝짓기다.
+    """
+    estimates = _random_estimates(count, seed, profile=profile, harmonic=harmonic)
+    table: dict[Mode, tuple[int, float]] = {}
+    for mode in (Mode.MAJOR, Mode.MINOR):
+        picked = [item for item in estimates if item.key.mode is mode]
+        ambiguous = sum(1 for item in picked if item.margin < KEY_MARGIN_FLOOR)
+        table[mode] = (len(picked), ambiguous / len(picked) if picked else 0.0)
+    return table
 
 
 def _correlate(vector: np.ndarray, profile: np.ndarray) -> float:

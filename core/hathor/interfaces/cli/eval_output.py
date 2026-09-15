@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from hathor.domain.services.stem_sets import MIX_SOURCE
 from hathor.infrastructure.keys_jsonl_store import (
@@ -19,91 +19,73 @@ from hathor.interfaces.cli.tables import parse_key, render_table
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Sequence
 
 
 def report_harmonic_sweep(rows: list[dict[str, object]], profile: str) -> int:
-    """배음 감산 강도를 훑어 한 표로 낸다 (D-0060).
+    """배음 감산 강도를 **선법으로 나눠** 훑는다 (D-0060 · D-0197).
 
-    셸 반복문으로 다섯 번 돌리고 눈으로 비교하던 것을 도구로 옮긴다.
-    **베이스라인도 강도마다 다시 잰다** — 코퍼스만 감산하고 하한을 고정하면
-    판별력이 낮게 보고된다.
+    D-0060이 전체 지표만 냈고 **코퍼스가 장조 745 · 단조 259라 전체는 장조가
+    든다.** 통계는 `application`이 낸다 (GR-2.2) — 여기는 찍기만 한다.
     """
-    import numpy as np
-
-    from hathor.domain.services.key_estimation import (
-        BLACK_KEYS,
-        KEY_MARGIN_FLOOR,
-        estimate_key,
-        random_baseline,
-        relative_key,
-        subtract_harmonics,
-    )
-    from hathor.domain.value_objects.key import Key, Mode
+    from hathor.application.sweep_harmonic_modes import sweep_harmonic_modes
+    from hathor.domain.value_objects.key import Mode
 
     saved = [row.get("chroma") for row in rows]
     if any(item is None for item in saved):
         print("저장된 크로마가 없다. 먼저 크로마를 포함해 추출한다.", file=sys.stderr)
         return 1
 
-    def parse(text: str) -> Key:
-        tonic, mode = str(text).rsplit(" ", 1)
-        return Key(tonic=tonic, mode=Mode(mode))
-
-    print(f"곡 {len(rows)}개 · 프로파일 {profile}\n")
-    header = (
-        f"{'강도':>5}{'상관차':>10}{'격차차':>10}{'애매차':>10}"
-        f"{'검은건반':>10}{'장조':>8}{'애매내 나란한조':>17}"
+    chromas = cast("list[Sequence[float]]", saved)
+    sweep = sweep_harmonic_modes(chromas, profile=profile)
+    print(
+        f"곡 {sweep.song_count}개 · 프로파일 {profile}"
+        f" · 고정 집합 {sweep.stable_count}곡 ({sweep.stable_share:.1%})\n"
     )
-    print(header)
-    print("-" * len(header))
 
-    for strength in (0.0, 0.3, 0.5, 0.7, 1.0):
-        estimates = []
-        for item in saved:
-            vector = subtract_harmonics(np.asarray(item, dtype=np.float64), strength)
-            total = float(vector.sum())
-            if total <= 0:
-                continue
-            estimates.append(
-                estimate_key(np.asarray(vector / total, dtype=np.float32), profile=profile)
+    for text in render_table(
+        (
+            ("강도", ">6.1f"),
+            ("선법", "<8"),
+            ("곡", ">6"),
+            ("비중", ">8.1%"),
+            ("애매", ">8.1%"),
+            ("무작위바닥", ">12.1%"),
+            ("초과", ">9.1f"),
+            ("고정집합", ">10.1%"),
+            ("나란한조", ">10.1%"),
+            ("이동", ">6"),
+        ),
+        [
+            (
+                item.strength,
+                "major" if cell.mode is Mode.MAJOR else "minor",
+                cell.count,
+                cell.share,
+                cell.ambiguous,
+                cell.floor,
+                cell.excess,
+                cell.stable_ambiguous,
+                cell.relative_in_ambiguous,
+                item.moved,
             )
-        if not estimates:
-            continue
-
-        correlations = np.asarray([item.correlation for item in estimates])
-        margins = np.asarray([item.margin for item in estimates])
-        base_correlation, base_margin = random_baseline(profile=profile, harmonic=strength)
-
-        total_songs = len(estimates)
-        black = sum(1 for item in estimates if item.key.tonic in BLACK_KEYS)
-        major = sum(1 for item in estimates if item.key.mode is Mode.MAJOR)
-        ambiguous = [item for item in estimates if item.margin < KEY_MARGIN_FLOOR]
-        relative_in_ambiguous = sum(
-            1 for item in ambiguous if relative_key(item.key) == item.runner_up
-        )
-        ambiguous_gap = (
-            len(ambiguous) / total_songs - float((base_margin < KEY_MARGIN_FLOOR).mean())
-        ) * 100
-        if ambiguous:
-            share = relative_in_ambiguous / len(ambiguous)
-            relative_ratio = f"{share:.1%} ({relative_in_ambiguous}/{len(ambiguous)})"
-        else:
-            relative_ratio = "-"
-        print(
-            f"{strength:>5.1f}"
-            f"{float(np.median(correlations)) - float(np.median(base_correlation)):>+10.4f}"
-            f"{float(np.median(margins)) - float(np.median(base_margin)):>+10.4f}"
-            f"{ambiguous_gap:>+9.1f}p"
-            f"{black / total_songs:>10.1%}"
-            f"{major / total_songs:>8.1%}"
-            f"{relative_ratio:>17}"
-        )
+            for item in sweep.rows
+            for cell in item.cells
+        ],
+    ):
+        print(text)
 
     print("\n--- 읽는 법 ---")
-    print("**검은건반이 핵심이다** (O-23 · D-0061). 33.5%가 실제 대중가요보다 명백히 높다.")
-    print("줄지 않으면 배음도 원인이 아니며 O-23의 후보가 전부 소진된다 (D-0061).")
-    print("애매차는 무작위 대비다. 음수가 클수록 판정이 결정적이다.")
-    print("애매내 나란한조가 오르면 남은 애매함이 원리적 한계 쪽으로 이동한 것이다.")
+    print("**`무작위바닥`이 선법별이다** (D-0197). 전체 바닥 하나를 두 선법에 같이 대면")
+    print("판정이 뒤집힌다 — 귀무에서 장조 바닥 35.7% · 단조 바닥 29.4%로 6%p 넘게 다르다.")
+    print("**`초과`가 판정이다.** 양수면 그 선법에서 추정이 무작위보다 나쁘다.")
+    print("**`고정집합`을 먼저 읽는다.** 강도를 올리면 경계의 곡이 선법을 갈아타고")
+    print("(`이동`), 갈아탄 곡은 원래 애매하다 — 귀무에서 넘어온 곡의 93.9%가 애매했다.")
+    print("그래서 `애매`는 실력이 아니라 분모 이동으로도 움직인다. **선법이 전 강도에서")
+    print("안 바뀐 곡만 본 것이 `고정집합`이며 거기서만 강도끼리 비교가 성립한다.**")
+    print("나란한조가 오르면 남은 애매함이 원리적 한계 쪽으로 이동한 것이다.")
+    print("**귀무가 코퍼스 구조를 재현하지 않는다** (O-25 다섯째 줄). 디리클레는 선법")
+    print("구성이 45/55인데 코퍼스는 74/26이다. 바닥은 하한이지 예측이 아니다.")
     return 0
 
 

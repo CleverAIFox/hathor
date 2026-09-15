@@ -1987,6 +1987,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0192 | 강제자를 적고 안 지켰다 | `core/tests/unit/test_tables.py` |
 | D-0193 | 결정 대장이 낡아 있었다 | `core/tests/unit/test_check_decisions.py::test_색인을_만들지_않는다` |
 | D-0196 | `make apply`가 넉 달째 죽어 있었다 | `core/tests/unit/test_doc_fsck.py::test_배선이_없는_스크립트를_부르면_잡는다` |
+| D-0197 | 선법별 지표에는 선법별 바닥을 댄다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_선법별_바닥이_전체_바닥과_다르다` |
 
 <!-- decision-ledger:end -->
 
