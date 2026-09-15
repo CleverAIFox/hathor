@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from hathor.application.sweep_harmonic_modes import DEFAULT_STRENGTHS, sweep_harmonic_modes
+from hathor.application.sweep_harmonic_modes import (
+    DEFAULT_STRENGTHS,
+    _null_floors,
+    sweep_harmonic_modes,
+)
 from hathor.domain.services.key_estimation import (
+    HARMONIC_STRENGTH,
     KRUMHANSL_MAJOR,
     KRUMHANSL_MINOR,
     random_baseline,
@@ -99,3 +104,42 @@ def test_강도는_다섯이_기본이다():
     sweep = sweep_harmonic_modes(chromas)
 
     assert tuple(row.strength for row in sweep.rows) == DEFAULT_STRENGTHS
+
+
+def test_고정_집합_바닥이_전체_바닥보다_낮다():
+    """**짝이 되는 바닥을 안 붙여 같은 실수가 새 열에서 되풀이됐다** (D-0201).
+
+    귀무에서도 고정 집합은 훨씬 덜 애매하다 — 선법이 안 흔들린 표본만 남기면
+    경계가 걸러진다. 그래서 `stable_ambiguous`를 `floor`에 대면 실력을 크게
+    부풀려 읽는다.
+    """
+    full, stable = _null_floors(DEFAULT_STRENGTHS, "krumhansl")
+
+    for strength in DEFAULT_STRENGTHS[1:]:
+        assert stable[strength, Mode.MINOR] < full[strength, Mode.MINOR]
+
+
+def test_전체_바닥은_도메인_정본과_같다():
+    """**두 바닥이 다른 난수에서 나오면 안 된다.** 같은 표의 두 열이 갈린다."""
+    full, _ = _null_floors(DEFAULT_STRENGTHS, "krumhansl")
+
+    for strength in DEFAULT_STRENGTHS:
+        table = random_baseline_by_mode(harmonic=strength)
+        for mode in (Mode.MAJOR, Mode.MINOR):
+            assert abs(full[strength, mode] - table[mode][1]) < 1e-12
+
+
+def test_고정초과가_고정바닥을_뺀다():
+    """`excess`는 전체끼리, `stable_excess`는 고정끼리. **섞으면 안 된다.**"""
+    chromas = [_rotated(KRUMHANSL_MAJOR, step) for step in range(12)]
+    chromas += [_rotated(KRUMHANSL_MINOR, step) for step in range(12)]
+
+    cell = sweep_harmonic_modes(chromas).rows[0].cell(Mode.MAJOR)
+
+    assert abs(cell.stable_excess - (cell.stable_ambiguous - cell.stable_floor) * 100) < 1e-9
+    assert cell.stable_floor != cell.floor
+
+
+def test_기본값이_실측에서_왔다():
+    """**D-0059를 뒤집었다** (D-0201). 켜는 것이 기본이다."""
+    assert HARMONIC_STRENGTH == 0.5

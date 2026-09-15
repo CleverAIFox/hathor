@@ -288,8 +288,12 @@ def test_cq_fixes_a_key_the_linear_method_got_wrong():
     signal = np.concatenate(
         [chord([55, 59, 62]), chord([60, 64, 67]), chord([62, 66, 69]), chord([55, 59, 62])]
     )
-    assert estimate_key(chroma(signal, mode=CHROMA_LINEAR)).key != Key(tonic="G", mode=Mode.MAJOR)
-    assert estimate_key(chroma(signal, mode=CHROMA_CQ)).key == Key(tonic="G", mode=Mode.MAJOR)
+    # **감산을 끄고 본다** (D-0201). 이 검사가 재는 것은 CQ ↔ 선형의 차이이고,
+    # 기본 강도 0.5를 켜면 **선형도 G를 맞힌다** — 감산이 이 오류를 따로 고친다.
+    linear = chroma(signal, mode=CHROMA_LINEAR, harmonic=0.0)
+    assert estimate_key(linear).key != Key(tonic="G", mode=Mode.MAJOR)
+    cq = chroma(signal, mode=CHROMA_CQ, harmonic=0.0)
+    assert estimate_key(cq).key == Key(tonic="G", mode=Mode.MAJOR)
 
 
 def test_cq_raises_margin_on_ambiguous_progressions():
@@ -558,12 +562,29 @@ def test_harmonic_subtraction_never_goes_negative():
 
 
 def test_harmonic_zero_is_identity():
-    """기본이 끔이므로 기존 산출물이 재현되어야 한다."""
-    from hathor.domain.services.key_estimation import HARMONIC_STRENGTH, subtract_harmonics
+    """**0은 여전히 항등이다.** 기본이 0.5로 바뀌어도(D-0201) 끄는 길은 남는다."""
+    from hathor.domain.services.key_estimation import subtract_harmonics
 
-    assert HARMONIC_STRENGTH == 0.0
     vector = np.asarray([0.1, 0.2, 0.05, 0.3, 0.05, 0.1, 0.02, 0.08, 0.03, 0.04, 0.02, 0.01])
     assert np.array_equal(subtract_harmonics(vector, 0.0), vector)
+
+
+def test_감산은_평균과_교환되지_않는다():
+    """**클리핑 때문이다** (D-0201). 빼고 평균 ≠ 평균 내고 빼기.
+
+    `np.maximum(reduced, 0.0)`이 비선형이라 창을 묶는 순서가 결과를 바꾼다.
+    기본값을 켜자 `group_series` 검사가 0.0117에서 **0.0812**로 벌어져 드러났다.
+    **파이프라인은 감산을 한 자리에서만 해야 한다.**
+    """
+    from hathor.domain.services.key_estimation import subtract_harmonics
+
+    first = np.asarray([0.30, 0.02, 0.01, 0.02, 0.25, 0.02, 0.01, 0.20, 0.02, 0.01, 0.12, 0.02])
+    second = np.roll(first, 5)
+
+    apart = 0.5 * (subtract_harmonics(first, 0.5) + subtract_harmonics(second, 0.5))
+    together = subtract_harmonics(0.5 * (first + second), 0.5)
+
+    assert not np.allclose(apart, together)
 
 
 def test_harmonic_rejects_negative_strength():

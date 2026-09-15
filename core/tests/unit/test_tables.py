@@ -58,8 +58,8 @@ def test_조율이_없으면_안_적는다():
 
 
 def test_읽는_법이_끝에_붙는다():
-    """**맞다는 증명이 아니라 틀렸다는 신호를 잡는 장치다** (O-22)."""
-    assert _report(["major"], [0], [False]).rstrip().endswith("(O-22).**")
+    """**맞다는 증명이 아니라 틀렸다는 신호를 잡는 장치다** (O-22(닫힘 D-0201))."""
+    assert _report(["major"], [0], [False]).rstrip().endswith("(O-22(닫힘 D-0201)).**")
 
 
 def test_한글_머리글이_값과_어긋나지_않는다():

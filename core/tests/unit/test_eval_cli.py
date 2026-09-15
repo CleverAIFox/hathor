@@ -521,7 +521,7 @@ def test_generate_defaults_follow_the_decision_record():
 
 
 def test_ingest_keys_is_wired():
-    """조성 분포 실측 배선 (O-22)."""
+    """조성 분포 실측 배선 (O-22(닫힘 D-0201))."""
     from hathor.interfaces.cli.main import build_parser
 
     args = build_parser().parse_args(["ingest", "keys", "--limit", "50"])

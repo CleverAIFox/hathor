@@ -36,6 +36,7 @@ D-0191이 `--harmonic 0.3`에서 단조 애매가 36.7% → 30.8%로 내려가�
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -45,7 +46,6 @@ from hathor.domain.services.key_estimation import (
     PROFILE_KRUMHANSL,
     KeyEstimate,
     estimate_key,
-    random_baseline_by_mode,
     relative_key,
     subtract_harmonics,
 )
@@ -68,6 +68,17 @@ class ModeCell:
     ambiguous: float
     floor: float
     """같은 강도 · 같은 선법의 무작위 애매율. **전체 바닥이 아니다.**"""
+    stable_floor: float
+    """**고정 집합의 바닥이다** (D-0201). `stable_ambiguous`와 짝이다.
+
+    D-0197이 전체 바닥을 선법에 대면 안 된다고 고쳐 놓고 **고정 집합에는 짝이
+    되는 바닥을 안 붙였다.** 그래서 표를 읽는 사람이 `stable_ambiguous`를
+    `floor`에 대게 되고 **같은 실수가 새 열에서 되풀이됐다.**
+
+    귀무에서도 고정 집합은 훨씬 덜 애매하다 — 선법이 안 흔들린 표본만 남기면
+    경계가 걸러지기 때문이다. 실측 예: krumhansl 단조 강도 0.5에서 전체 바닥은
+    28.8%인데 **고정 집합 바닥은 15.6%다.** 13%p를 잘못 벌어 읽는다.
+    """
     relative_in_ambiguous: float
     stable_count: int
     stable_ambiguous: float
@@ -77,6 +88,11 @@ class ModeCell:
     def excess(self) -> float:
         """바닥 대비 초과(%p). **양수면 무작위보다 나쁘다.**"""
         return (self.ambiguous - self.floor) * 100
+
+    @property
+    def stable_excess(self) -> float:
+        """고정 집합에서의 초과(%p). **강도끼리 비교가 서는 유일한 칸이다.**"""
+        return (self.stable_ambiguous - self.stable_floor) * 100
 
 
 @dataclass(frozen=True)
@@ -103,6 +119,54 @@ class ModeSweep:
     @property
     def stable_share(self) -> float:
         return self.stable_count / self.song_count if self.song_count else 0.0
+
+
+@lru_cache(maxsize=8)
+def _null_floors(
+    strengths: tuple[float, ...],
+    profile: str,
+    count: int = 2000,
+    seed: int = 20260818,
+) -> tuple[dict[tuple[float, Mode], float], dict[tuple[float, Mode], float]]:
+    """귀무의 (전체 바닥, 고정 집합 바닥) (D-0201).
+
+    **한 번 뽑은 표본으로 둘 다 낸다.** 따로 뽑으면 두 바닥이 다른 난수에서 나와
+    같은 표의 두 열이 서로 다른 세계를 가리킨다.
+
+    `random_baseline_by_mode`와 같은 씨·같은 개수라 전체 바닥은 값이 같다 —
+    검사가 그것을 고정한다. **정본은 저쪽이고 여기는 고정 집합 때문에 있다**
+    (고정은 훑기 전체를 쥐어야 정의되므로 도메인 함수 하나로는 못 낸다).
+    """
+    generator = np.random.default_rng(seed)
+    samples = generator.dirichlet(np.ones(12), size=count)
+    layers: list[list[KeyEstimate]] = []
+    for strength in strengths:
+        row = []
+        for item in samples:
+            vector = subtract_harmonics(np.asarray(item, dtype=np.float64), strength)
+            total = vector.sum()
+            if total <= 0:
+                continue
+            row.append(estimate_key(np.asarray(vector / total, dtype=np.float32), profile=profile))
+        layers.append(row)
+
+    usable = min(len(row) for row in layers)
+    held = {index for index in range(usable) if len({row[index].key.mode for row in layers}) == 1}
+    full: dict[tuple[float, Mode], float] = {}
+    stable: dict[tuple[float, Mode], float] = {}
+    for strength, row in zip(strengths, layers, strict=True):
+        for mode in (Mode.MAJOR, Mode.MINOR):
+            everyone = [item for item in row if item.key.mode is mode]
+            picked = [row[index] for index in sorted(held) if row[index].key.mode is mode]
+            full[strength, mode] = _ambiguous_share(everyone)
+            stable[strength, mode] = _ambiguous_share(picked)
+    return full, stable
+
+
+def _ambiguous_share(items: list[KeyEstimate]) -> float:
+    if not items:
+        return 0.0
+    return sum(1 for item in items if item.margin < KEY_MARGIN_FLOOR) / len(items)
 
 
 def sweep_harmonic_modes(
@@ -139,9 +203,9 @@ def sweep_harmonic_modes(
     stable = {index for index in usable if len({layer[index].key.mode for layer in layers}) == 1}
 
     first = layers[0]
+    full_floor, stable_floor = _null_floors(strengths, profile)
     rows: list[SweepRow] = []
     for strength, layer in zip(strengths, layers, strict=True):
-        floors = random_baseline_by_mode(profile=profile, harmonic=strength)
         picked = [layer[index] for index in usable]
         cells: list[ModeCell] = []
         for mode in (Mode.MAJOR, Mode.MINOR):
@@ -155,7 +219,8 @@ def sweep_harmonic_modes(
                     count=len(members),
                     share=len(members) / len(picked) if picked else 0.0,
                     ambiguous=len(ambiguous) / len(members) if members else 0.0,
-                    floor=floors[mode][1],
+                    floor=full_floor[strength, mode],
+                    stable_floor=stable_floor[strength, mode],
                     relative_in_ambiguous=(
                         sum(1 for item in ambiguous if relative_key(item.key) == item.runner_up)
                         / len(ambiguous)

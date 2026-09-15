@@ -33,7 +33,12 @@ from hathor.application.search_similar import SearchSimilar, SearchTrack
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
-from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR, KeyEstimate
+from hathor.domain.services.key_estimation import (
+    HARMONIC_STRENGTH,
+    KEY_MARGIN_FLOOR,
+    PROFILE_TEMPERLEY,
+    KeyEstimate,
+)
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
@@ -189,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_sub = ingest.add_subparsers(dest="ingest_command", required=True)
 
     add_onset_parser(ingest_sub)
-    keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22)")
+    keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22(닫힘 D-0201))")
     keys.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
     keys.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
     keys.add_argument(
@@ -213,8 +218,8 @@ def build_parser() -> argparse.ArgumentParser:
     keys.add_argument(
         "--profile",
         choices=("krumhansl", "temperley"),
-        default="krumhansl",
-        help="조성 프로파일. krumhansl이 베이스라인이다 (D-0058)",
+        default=PROFILE_TEMPERLEY,
+        help="조성 프로파일. temperley가 기본이다 (D-0201)",
     )
     keys.add_argument(
         "--gamma", type=float, default=0.0, help="로그 압축. 0이 끔이며 기본이다 (D-0058)"
@@ -222,8 +227,8 @@ def build_parser() -> argparse.ArgumentParser:
     keys.add_argument(
         "--harmonic",
         type=float,
-        default=0.0,
-        help="배음 감산 강도. 0이 끔이며 기본이다 (D-0059)",
+        default=HARMONIC_STRENGTH,
+        help=f"배음 감산 강도. 기본 {HARMONIC_STRENGTH:g} (D-0201)",
     )
     keys.add_argument(
         "--harmonic-sweep",
@@ -1233,7 +1238,7 @@ def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | Non
 
 
 def _run_ingest_keys(args: argparse.Namespace) -> int:
-    """코퍼스 조성 분포를 실측한다 (O-22).
+    """코퍼스 조성 분포를 실측한다 (O-22(닫힘 D-0201)).
 
     **정답 라벨이 없으므로 분포와 베이스라인으로 검사한다.** 맞다는 증명은
     할 수 없고 틀렸다는 신호만 잡을 수 있다.

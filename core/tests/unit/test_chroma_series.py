@@ -43,8 +43,11 @@ def test_묶은_것과_직접_뽑은_것이_같다(factor):
     무시할 수준이다.**
     """
     wave = _chord(4.0, (220.0, 261.6, 196.0, 293.7, 246.9, 174.6))
-    grouped = group_series(chroma_series(wave, window_seconds=1.0), factor)
-    direct = chroma_series(wave, window_seconds=float(factor))
+    # **감산을 끄고 본다** (D-0201). 클리핑이 비선형이라 감산을 켜면 묶기와
+    # 교환되지 않고 이 거리가 0.0117 → 0.0812로 벌어진다. 이 검사가 재는 것은
+    # **묶기의 충실도**이지 감산의 성질이 아니다.
+    grouped = group_series(chroma_series(wave, window_seconds=1.0, harmonic=0.0), factor)
+    direct = chroma_series(wave, window_seconds=float(factor), harmonic=0.0)
     count = min(len(grouped), len(direct))
     assert count > 0
     gaps = [0.5 * float(np.abs(grouped[i] - direct[i]).sum()) for i in range(count)]
