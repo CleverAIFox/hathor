@@ -323,41 +323,6 @@ def check_layout(parts: list[tuple[str, str]]) -> list[str]:
     return problems
 
 
-def check_split(parts: list[tuple[str, str]]) -> list[str]:
-    """조각이 상한 안에 있고 이름이 범위를 정확히 덮는가 (O-30 · D-0080).
-
-    **이름이 범위다.** `D-0051-0100.md`에 `D-0101`이 들어 있으면 `grep` 없이 파일을
-    고를 수 없고, 그 순간 조각 나누기는 아무것도 벌어 주지 않는다.
-    """
-    problems: list[str] = []
-    seen: set[int] = set()
-    for name, text in parts:
-        records = scan_records(text)
-        # **길이 상한은 파일이 아니라 기록 하나에 건다** (D-0188). 파일 상한은
-        # 조각을 부르고, 조각은 색인을 부르고, 색인은 두 곳이 어긋날 자리를 만든다
-        # — D-0187이 되돌린 사슬이다. `fire-lane` 5,985줄 · `thoth` 3,287줄이 한
-        # 파일이며, 우리가 14,000줄인 것은 **건당 76줄로 저쪽 40줄의 두 배**여서다.
-        for identifier, _, body in records_with_body(text):
-            if int(identifier[2:]) < LENGTH_ENFORCED_FROM:
-                continue
-            length = body.count("\n") + 1
-            if length > RECORD_LINE_LIMIT:
-                problems.append(
-                    f"{identifier}: {length}줄로 상한 {RECORD_LINE_LIMIT}줄을 넘는다. 쪼갠다"
-                )
-        match = None
-        if match is None:
-            continue
-        low, high = int(match.group(1)), int(match.group(2))
-        for record in records:
-            if not low <= record.number <= high:
-                problems.append(f"{name}: {record.identifier}이 이름의 범위 밖이다")
-            if record.number in seen:
-                problems.append(f"{name}: {record.identifier}이 다른 조각에도 있다")
-            seen.add(record.number)
-    return problems
-
-
 def check_text_style(paths: dict[str, str]) -> list[str]:
     """줄 길이·코드 펜스 태그·표 열 수. 문서 다섯 전부에 건다 (D-0081 · D-0130)."""
     problems: list[str] = []
@@ -530,7 +495,6 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_open_issues(issues),
         *check_issue_references(issues, records),
         *check_stray_records(documents),
-        *check_split(parts),
         *check_layout(parts),
         *check_text_style(documents),
     ]

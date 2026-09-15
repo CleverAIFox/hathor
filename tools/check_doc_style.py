@@ -263,6 +263,11 @@ def check_records(name: str, text: str) -> list[str]:
     parts = RECORD.split(text)
     for index in range(1, len(parts), 2):
         number, body = parts[index], parts[index + 1]
+        # **결번은 빈 자리를 알리는 표제다.** 번호를 재사용하지 않으려고 남기며
+        # 필수 절이 있을 수 없다. `check_decisions`가 이미 같은 규약을 든다 —
+        # **두 검사가 다른 규약을 들면 하나는 반드시 헛돈다** (D-0043).
+        if BLANK_RECORD in body.splitlines()[0]:
+            continue
         if "- **배경**" not in body:
             problems.append(f"{name}: {number}에 `- **배경**`이 없다")
         if int(number[2:]) >= ENFORCER_FROM and not _field(body, "강제자"):
@@ -312,6 +317,9 @@ ENFORCER_PATH = re.compile(r"`([\w./-]+\.(?:py|sh|toml|yml))`")
 칸을 채우는 것과 그 칸이 참인 것은 다르다. 도구를 지우거나 옮기면 **포인터가 조용히
 낡는다** — 이 저장소가 O-28로 등재한 부류다. 채우기가 전수 적재라면 이 검사가 그
 뒤를 잇는다."""
+
+BLANK_RECORD = "(결번)"
+"""번호를 비워 두는 표제 (D-0195). `check_decisions`와 같은 말을 쓴다."""
 
 ENFORCER_FROM = 1
 """`강제자` 기술을 요구하는 첫 결정 번호 (D-0131 · D-0132).
