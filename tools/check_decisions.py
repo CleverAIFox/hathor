@@ -105,6 +105,34 @@ def load_parts() -> list[tuple[str, str]]:
 HEADING = re.compile(r"^## (D-\d{4})\. (.+?)\s*$", re.MULTILINE)
 
 
+LEDGER_BEGIN = "<!-- decision-ledger:begin -->"
+LEDGER_END = "<!-- decision-ledger:end -->"
+"""마스터의 결정 대장 자리 (D-0193).
+
+**색인과 다르다.** 색인은 같은 목록이 두 곳에 사는 구조라 D-0189가 없앴다. 대장은
+*"지금 무엇이 효력이 있는가"*이며 **강제자가 있는 기록만** 든다 — `fire-lane` §16과
+같은 자리다. 목록이 아니라 **선별**이므로 두 곳이 아니다.
+
+**손으로 고치지 않는다.** D-0186이 *"도구가 다시 쓴다"*고 적어 놓고 그 도구를 안
+만들어 **120행에서 멈춘 채 일곱이 빠졌다.** 검사도 못 잡았다.
+"""
+
+
+def build_ledger(text: str) -> str:
+    """강제자를 적은 기록에서 대장을 뽑는다. **고르지 않는다.**"""
+    rows = []
+    for identifier, title, body in records_with_body(text):
+        found = re.search(r"^강제자  (\S.*)$", body, re.MULTILINE)
+        if not found:
+            continue
+        keeper = found.group(1).strip().replace("`", "").split(" · ")[0]
+        rows.append(f"| {identifier} | {title.split(' — ')[0].strip()} | `{keeper}` |")
+    head = ["| 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |", "|---|---|---|"]
+    # **표식과 표 사이를 빈 줄로 띄운다.** HTML 주석은 표 머리로 안 읽히고,
+    # `check_doc_style`이 *"산문이 표를 끊는다"*로 문다.
+    return "\n".join([LEDGER_BEGIN, "", *head, *rows, "", LEDGER_END])
+
+
 def records_with_body(text: str) -> list[tuple[str, str, str]]:
     """`(번호, 표제, 본문)`. **본문 길이를 재려고 쓴다** (D-0188)."""
     found: list[tuple[str, str, str]] = []
@@ -521,7 +549,16 @@ def main() -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    print(f"결정 기록 검사 통과 · {len(scan_records(parts[0][1]))}건")
+    decisions = parts[0][1]
+    master_text = MASTER.read_text(encoding="utf-8")
+    if LEDGER_BEGIN in master_text:
+        block = re.compile(re.escape(LEDGER_BEGIN) + r".*?" + re.escape(LEDGER_END), re.DOTALL)
+        wanted = build_ledger(decisions)
+        if block.search(master_text).group(0) != wanted:
+            MASTER.write_text(block.sub(lambda _: wanted, master_text), encoding="utf-8")
+            print(f"결정 대장 갱신 ({wanted.count('| D-')}건)")
+
+    print(f"결정 기록 검사 통과 · {len(scan_records(decisions))}건")
     return 0
 
 

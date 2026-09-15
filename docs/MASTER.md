@@ -1534,6 +1534,8 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 | 1.33 | 2026-08-18 | **베이스라인이 프로파일을 안 따라가 판정이 뒤집혀 있었다.** 프로파일 가설 기각. 배음 감산 추가, 크로마 저장으로 음원 없이 재판정 가능. D-0059 반영 |
 | 1.34 | 2026-08-18 | 베이스라인이 배음도 안 따라감(여섯 번째). **검은건반 비율을 아예 안 찍고 있었다.** 배음 스윕 도구화. O-25 등재. D-0060 반영 |
 | 1.35 | 2026-08-19 | **O-23 기각 — 33.5%는 균등(41.7%)보다 낮았다.** 조성 추정 종료. 광인사 `make check` 상시 실패 수정. D-0061 반영 |
+| — | — | **D-0062 ~ D-0168은 이 표에 안 적혔다** (D-0193). 107건이 쌓이는 동안 아무도 안 봤다 — **소급하지 않는다**(GR-0.2). 근거는 `DECISIONS.md`가 든다 |
+| 1.36 | 2026-09-14 | **온셋 격자 문제를 닫았다**(O-47). 창을 홉에서 떼고 대역 반감점을 세웠다. 귀로 네 판 — 층별 세기·잇기·박자 강세. `layer03`이 화성을 담는 것을 확인(상한의 34%). **문서를 넷으로 재편** — `MASTER` 신설·`CONTRIBUTING` 흡수·조각 되돌림·색인 폐지. `doc_fsck` 신설. 계층 계약에 `infrastructure` 추가. D-0169 ~ D-0193 반영 |
 
 ---
 
@@ -1891,9 +1893,11 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 코드에 들어간 판단 중 **지금 효력이 있는 것**의 색인이다. **사유는 여기 적지
 않는다** — `DECISIONS.md`가 든다. 이 절은 *"무엇이 지금 효력이 있는가"*만 든다.
 
-**고르지 않고 뽑는다** (D-0186). `강제자`를 적은 기록이 곧 효력이 있는 것이며,
-`tools/check_decisions.py`가 이 표를 다시 쓴다. **손으로 고치지 않는다** —
+**고르지 않고 뽑는다** (D-0186 · D-0193). `강제자`를 적은 기록이 곧 효력이 있는
+것이며, `tools/check_decisions.py`가 이 표를 다시 쓴다. **손으로 고치지 않는다** —
 고치면 다음 갱신에 지워지고, 그것이 D-0043이 말한 *"두 곳이 어긋난다"*이다.
+
+<!-- decision-ledger:begin -->
 
 | 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |
 |---|---|---|
@@ -2017,6 +2021,16 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0177 | 한 층 안에서 세기가 전부 같았다 | `core/tests/unit/test_arrangement.py` |
 | D-0183 | 위생 점검 | `core/tests/unit/test_issue_mentions.py` |
 | D-0184 | CI를 만들어 놓고 안 쓰고 있었다 | `core/tests/unit/test_ci_parity.py` |
+| D-0186 | `MASTER.md`로 합친다 | `core/tests/unit/test_doc_style.py::test_폐기_보관소가_없다` |
+| D-0187 | 조각을 되돌린다 | `core/tests/unit/test_doc_style.py::test_축_셋만_통과한다` |
+| D-0188 | 길이 상한을 파일에서 기록으로 옮긴다 | `core/tests/unit/test_check_decisions.py::test_실제_저장소가_전_검사를_통과한다` |
+| D-0189 | 색인을 없애고 문서 ↔ 실물 강제자를 세운다 | `core/tests/unit/test_doc_fsck.py::test_저장소가_통과한다` |
+| D-0190 | 빈 자리가 말을 하게 한다 | `core/tests/unit/test_doc_fsck.py::test_저장소가_통과한다` |
+| D-0191 | 배음 감산이 단조를 살린다 | `core/tests/unit/test_cli_contracts.py` |
+| D-0192 | 강제자를 적고 안 지켰다 | `core/tests/unit/test_tables.py` |
+| D-0193 | 결정 대장이 낡아 있었다 | `core/tests/unit/test_check_decisions.py::test_색인을_만들지_않는다` |
+
+<!-- decision-ledger:end -->
 
 ★ **번호는 재사용하지 않는다.** 새 결정은 `DECISIONS.md`의 다음 번호로 적고,
 `강제자`를 적으면 이 표에 저절로 올라온다.
