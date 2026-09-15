@@ -356,3 +356,56 @@ def test_색인을_만들지_않는다():
     # (GR-0.2 · D-0081). 지금 문서에 **표식이 살아 있는지**만 본다.
     text = (repo_root() / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
     assert "\n<!-- decision-index:begin -->" not in text
+
+
+def test_check가_대장을_쓰지_않는다(tmp_path, monkeypatch, capsys):
+    """**`--check`는 이름대로 검사만 한다** (D-0198).
+
+    받고 버리면 `make docs`가 트리를 고치는 검사가 되고, `apply_patch.sh`가 붙인
+    파일 목록을 대조할 때 **검사가 방금 쓴 `MASTER.md`가 「트리에만」으로 잡혀**
+    커밋 직전에 죽는다 — D-0196과 같은 자리·같은 모양이다.
+    """
+    master = tmp_path / "MASTER.md"
+    master.write_text(
+        f"{tool.LEDGER_BEGIN}\n\n| # | 표제 | 강제자 |\n|---|---|---|\n\n{tool.LEDGER_END}\n",
+        encoding="utf-8",
+    )
+    before = master.read_text(encoding="utf-8")
+    monkeypatch.setattr(tool, "MASTER", master)
+    monkeypatch.setattr(tool, "load_parts", lambda: [(tool.DECISIONS, _LEDGER_SOURCE)])
+    monkeypatch.setattr(tool, "run_checks", lambda *_: [])
+    monkeypatch.setattr(sys, "argv", ["check_decisions.py", "--check"])
+
+    assert tool.main() == 1
+    assert master.read_text(encoding="utf-8") == before
+
+
+def test_무플래그는_대장을_쓴다(tmp_path, monkeypatch, capsys):
+    """고치는 길이 있어야 검사가 규율이 된다. **없으면 사람이 검사를 끈다.**"""
+    master = tmp_path / "MASTER.md"
+    master.write_text(
+        f"{tool.LEDGER_BEGIN}\n\n| # | 표제 | 강제자 |\n|---|---|---|\n\n{tool.LEDGER_END}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(tool, "MASTER", master)
+    monkeypatch.setattr(tool, "load_parts", lambda: [(tool.DECISIONS, _LEDGER_SOURCE)])
+    monkeypatch.setattr(tool, "run_checks", lambda *_: [])
+    monkeypatch.setattr(sys, "argv", ["check_decisions.py"])
+
+    assert tool.main() == 0
+    assert "D-0900" in master.read_text(encoding="utf-8")
+
+
+_LEDGER_SOURCE = """
+---
+
+## D-0900. 대장에 실리는 기록
+
+- **배경**: 대장은 **강제자를 적은 기록만** 든다.
+
+- **결과**: 없다.
+
+재현 없음 — 사유: 시험 자료다
+
+강제자  `core/tests/unit/test_check_decisions.py`
+"""

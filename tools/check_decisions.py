@@ -57,8 +57,12 @@
 했다는 사실을 여기 적는다** (GR-0.8의 예외이므로 이유가 남아야 한다).
 
 사용법:
-    python tools/check_decisions.py           # 색인을 다시 쓰고 검사한다
-    python tools/check_decisions.py --check   # 쓰지 않는다. 어긋나면 1로 끝난다
+    python3 tools/check_decisions.py           # 결정 대장을 다시 쓰고 검사한다
+    python3 tools/check_decisions.py --check   # 쓰지 않는다. 어긋나면 1로 끝난다
+
+**이 두 줄이 넉 달 동안 사실이 아니었다** (D-0198). `--check`를 받고 버렸고
+대장은 늘 쓰였다. GR-0.9의 *"적혀 있는데 안 지켜지는 규약"*이 **검사 도구
+자신의 사용법에서** 났다.
 """
 
 from __future__ import annotations
@@ -482,8 +486,12 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="결정 기록 검사 (D-0189)")
-    parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
-    parser.parse_args()
+    # **`--check`는 이름대로 검사만 한다** (D-0198). 예전에는 이 플래그를 받고
+    # 버렸고 대장은 **늘 쓰였다.** `make docs`가 트리를 고치는 검사가 되고,
+    # `apply_patch.sh`가 붙인 파일 목록을 대조할 때 **검사가 방금 쓴 `MASTER.md`가
+    # 「트리에만」으로 잡혀** 커밋 직전에 죽는다 — D-0196과 같은 자리·같은 모양이다.
+    parser.add_argument("--check", action="store_true", help="쓰지 않는다. 어긋나면 1로 끝난다")
+    args = parser.parse_args()
 
     parts = load_parts()
     problems = run_checks(parts, MASTER.read_text(encoding="utf-8"))
@@ -497,10 +505,18 @@ def main() -> int:
     master_text = MASTER.read_text(encoding="utf-8")
     if LEDGER_BEGIN in master_text:
         block = re.compile(re.escape(LEDGER_BEGIN) + r".*?" + re.escape(LEDGER_END), re.DOTALL)
-        wanted = build_ledger(decisions)
-        if block.search(master_text).group(0) != wanted:
-            MASTER.write_text(block.sub(lambda _: wanted, master_text), encoding="utf-8")
-            print(f"결정 대장 갱신 ({wanted.count('| D-')}건)")
+        wanted = block.search(master_text)
+        built = build_ledger(decisions)
+        if wanted is not None and wanted.group(0) != built:
+            if args.check:
+                print(
+                    "결정 대장이 기록과 어긋난다. `python3 tools/check_decisions.py`로 "
+                    "다시 쓰고 그 변경도 함께 넣는다.",
+                    file=sys.stderr,
+                )
+                return 1
+            MASTER.write_text(block.sub(lambda _: built, master_text), encoding="utf-8")
+            print(f"결정 대장 갱신 ({built.count('| D-')}건)")
 
     print(f"결정 기록 검사 통과 · {len(scan_records(decisions))}건")
     return 0
