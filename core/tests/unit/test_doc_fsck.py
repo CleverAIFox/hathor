@@ -19,6 +19,33 @@ def test_저장소가_통과한다():
     assert CHECKER.check_paths() == []
     assert CHECKER.check_commands() == []
     assert CHECKER.check_orphan_tools() == []
+    assert CHECKER.check_wiring() == []
+
+
+def test_배선이_없는_스크립트를_부르면_잡는다(tmp_path, monkeypatch):
+    """**`make apply`를 커밋 직전에 죽인 것이 이것이다** (D-0196).
+
+    `check_orphan_tools`는 *"도구가 불리는가"*를 묻고 이쪽은 *"부르는 이름이
+    실재하는가"*를 묻는다. 방향이 반대라 저쪽이 초록인 채로 이것이 났다.
+    """
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "붙인다.sh").write_text(
+        "python3 tools/없어진도구.py --check\n", encoding="utf-8"
+    )
+    (tmp_path / "Makefile").write_text("x:\n\ttrue\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    assert CHECKER.check_wiring()
+
+
+def test_주석_속_예시는_안_잡는다(tmp_path, monkeypatch):
+    """사용법 예시가 주석에 산다. **실행되지 않으므로 없어도 안 죽는다.**"""
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "붙인다.sh").write_text(
+        "#   python3 tools/예시.py 처럼 쓴다\ntrue\n", encoding="utf-8"
+    )
+    (tmp_path / "Makefile").write_text("x:\n\ttrue\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    assert CHECKER.check_wiring() == []
 
 
 def test_없는_경로를_잡는다(tmp_path, monkeypatch):

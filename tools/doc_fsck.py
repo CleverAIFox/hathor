@@ -16,6 +16,7 @@
 | `PLAN §1`이 없는 `tools/probe_keys.py`를 가리켰다 | D-0182 |
 | 탐침이 `find_keys_store`에 엉뚱한 인자를 넘겼다 | D-0180 |
 | 재현 절이 `cd core` 기준 상대 경로를 적어 빈손이 됐다 | D-0153이 검사를 만든 뒤에도 |
+| `apply_patch.sh`가 이름이 바뀐 도구를 불러 `make apply`가 죽었다 | D-0189 이후 줄곧 |
 
 ### 무엇을 보나
 
@@ -24,6 +25,7 @@
 | 경로 | 문서가 적은 `tools/x.py` · `core/...`가 실재하는가 |
 | 명령 | `재현` 절의 `python3 tools/x.py`가 실재하는가 |
 | 도구 | `tools/*.py`가 문서 어디서든 불리는가 (죽은 도구) |
+| 배선 | `Makefile`·훅·CI·셸이 부르는 스크립트가 실재하는가 (D-0196) |
 | 빈 자리 | 비어 있는 패키지가 **언제 차는지**를 적었는가 |
 
 ### 무엇을 안 보나
@@ -53,6 +55,10 @@ PATH_LIKE = re.compile(r"`((?:tools|core|docs|web|infra|docker)/[\w./\-]+\.\w+)`
 
 SKIP_SUFFIXES = (".mp3", ".mid", ".npz", ".jsonl", ".json", ".patch")
 """산출물은 `.park` 뒤에 있어 없는 것이 정상이다 (D-0075)."""
+
+INVOCATION = re.compile(r"(?:python3?|bash|sh)\s+(?:\.\./)?((?:tools|core)/[\w./\-]+\.(?:py|sh))")
+"""배선이 실제로 부르는 스크립트. **`python3 tools/x.py` 꼴만 본다** — 산문의
+경로 언급과 달리 이것은 실행되는 줄이며, 없으면 그 자리에서 죽는다."""
 
 
 def living_documents() -> list[Path]:
@@ -104,6 +110,42 @@ def check_orphan_tools() -> list[str]:
     return problems
 
 
+def wiring_files() -> list[Path]:
+    """**배선이다** — 문서가 아니라 실제로 실행되는 자리."""
+    found = [ROOT / "Makefile", *sorted((ROOT / "tools").glob("*.sh"))]
+    for folder in (ROOT / ".githooks", ROOT / ".github" / "workflows"):
+        if folder.is_dir():
+            found += sorted(path for path in folder.iterdir() if path.is_file())
+    return [path for path in found if path.exists()]
+
+
+def check_wiring() -> list[str]:
+    """배선이 부르는 스크립트가 실재하는가 (D-0196).
+
+    **`check_orphan_tools`와 방향이 반대다.** 저쪽은 *"도구가 어디서 불리는가"*를
+    묻고 여기는 *"부르는 이름이 실재하는가"*를 묻는다. 그래서 D-0189가 이름을
+    `sync_decision_index.py` → `check_decisions.py`로 바꿨을 때 **둘 다 초록이었다** —
+    새 이름은 문서가 부르고 있었고, 옛 이름은 아무도 안 봤다.
+
+    그 옛 이름이 `apply_patch.sh`에 남아 `make apply`를 **커밋 직전에** 죽였다.
+    붙이기는 이미 끝난 뒤였으므로 사람이 손으로 커밋을 이어 쳤고, 그 결과 커밋
+    메시지와 내용이 어긋났다 — O-60(닫힘 D-0196)이 *"도구를 안 쓴 탓"*으로 적은
+    것의 실제 원인이다.
+
+    **주석 줄은 뺀다.** 사용법 예시가 주석에 있고 그것은 실행되지 않는다.
+    """
+    problems: list[str] = []
+    for path in wiring_files():
+        name = path.relative_to(ROOT).as_posix()
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            for found in dict.fromkeys(INVOCATION.findall(line)):
+                if not (ROOT / found).exists():
+                    problems.append(f"{name}:{number}: 부르는 `{found}`가 없다")
+    return problems
+
+
 def check_reserved_packages() -> list[str]:
     """비어 있는 패키지가 **언제 차는지**를 적었는가 (D-0190).
 
@@ -142,7 +184,7 @@ def main() -> int:
     parser.parse_args()
 
     problems = check_paths() + check_commands() + check_orphan_tools()
-    problems += check_reserved_packages()
+    problems += check_wiring() + check_reserved_packages()
     if problems:
         print(f"문서가 없는 것을 가리키는 자리가 {len(problems)}곳 있다.", file=sys.stderr)
         for problem in problems:

@@ -474,6 +474,7 @@ D는 제외한다. 현행 생성 모델 품질로 전문가 요구를 충족할 
 | O-38 | 8마디 부호 뒤집힘 | D-0109 · D-0112 · D-0114 · D-0125 |
 | O-47 | 박이 격자에 흔들린다 | D-0169 · D-0171 · D-0173 |
 | O-52 | 어느 층이 화성을 담는가 | D-0180 · D-0181 |
+| O-60 | 패치 도구를 안 쓴 것이 아니라 **죽어 있었다** | D-0070 · D-0196 |
 
 <!-- closed-issues:end -->
 
@@ -1985,6 +1986,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0191 | 배음 감산이 단조를 살린다 | `core/tests/unit/test_cli_contracts.py` |
 | D-0192 | 강제자를 적고 안 지켰다 | `core/tests/unit/test_tables.py` |
 | D-0193 | 결정 대장이 낡아 있었다 | `core/tests/unit/test_check_decisions.py::test_색인을_만들지_않는다` |
+| D-0196 | `make apply`가 넉 달째 죽어 있었다 | `core/tests/unit/test_doc_fsck.py::test_배선이_없는_스크립트를_부르면_잡는다` |
 
 <!-- decision-ledger:end -->
 

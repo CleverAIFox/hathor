@@ -48,7 +48,7 @@ git apply --check "$PATCH" || die "적용할 수 없다. 브랜치와 기준 커
 git apply "$PATCH"
 ok "적용 완료"
 
-python3 tools/sync_decision_index.py --check || die "부록 A 색인이 어긋난다"
+python3 tools/check_decisions.py --check || die "결정 기록 검사가 어긋난다"
 
 if [[ -n "${NOCOMMIT:-}" ]]; then
   echo "NOCOMMIT이라 커밋하지 않았다. 되돌리려면: git apply -R '${PATCH}'"
