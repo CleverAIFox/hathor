@@ -16,9 +16,23 @@ cd "$(git rev-parse --show-toplevel)"
 die() { printf '\033[31m실패:\033[0m %s\n' "$1" >&2; exit 1; }
 ok()  { printf '\033[32m%s\033[0m\n' "$1"; }
 
+# **`.env`를 읽는 자리는 하나다** (D-0199). 예전에는 여기서 `grep`으로 직접
+# 갈랐고 `paths.load_dotenv`와 규약이 달랐다 — CRLF · 따옴표 · `=` 주변 공백
+# 셋에서 **다른 값이 나왔다.** WSL에서 `.env`를 윈도 편집기로 고치면 값 끝에
+# `\r`이 붙어 *"패치 폴더가 없다: /mnt/d/patches"*가 뜬다. 폴더는 눈앞에 있다.
+#
+# `paths.py`는 서드파티 의존이 없어 **맨 `python3`으로 임포트된다** — venv 없이 돈다.
 if [[ -f .env && -z "${HATHOR_PATCH_DIR:-}" ]]; then
-  line="$(grep -E '^\s*HATHOR_PATCH_DIR\s*=' .env | tail -1 || true)"
-  [[ -n "$line" ]] && export HATHOR_PATCH_DIR="${line#*=}"
+  value="$(python3 - <<'PY' 2>/dev/null || true
+import sys
+
+sys.path.insert(0, "core")
+from hathor.shared.config.paths import load_dotenv
+
+print(load_dotenv().get("HATHOR_PATCH_DIR", ""), end="")
+PY
+)"
+  [[ -n "$value" ]] && export HATHOR_PATCH_DIR="$value"
 fi
 
 PATCH="${1:-}"

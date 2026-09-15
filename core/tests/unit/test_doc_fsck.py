@@ -69,3 +69,29 @@ def test_산출물은_없어도_된다(tmp_path, monkeypatch):
 def test_과거_문서는_안_본다():
     """**결정 기록은 그때를 적는다.** 소급해서 고치지 않는다 (GR-0.2 · D-0081)."""
     assert "DECISIONS.md" not in CHECKER.LIVING
+
+
+def test_파이썬이_인자로_부르는_도구도_본다(tmp_path, monkeypatch):
+    """**`ship.py`가 `_run("python3", "tools/x.py")`로 부른다** (D-0199).
+
+    인자가 쪼개져 있어 셸용 정규식이 못 본다. 개명하면 같은 자리에서 같은
+    모양으로 죽는다 — D-0196이 겪은 그것이다.
+    """
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "보낸다.py").write_text(
+        'run("python3", "tools/없어진도구.py", "status")\n', encoding="utf-8"
+    )
+    (tmp_path / "Makefile").write_text("x:\n\ttrue\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    assert CHECKER.check_wiring()
+
+
+def test_문서_문자열_속_예시는_안_잡는다(tmp_path, monkeypatch):
+    """`ast`로 **호출 인자만** 보므로 산문은 공짜로 빠진다."""
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "보낸다.py").write_text(
+        '"""사용법:\n\n    python3 tools/예시.py --check\n"""\n', encoding="utf-8"
+    )
+    (tmp_path / "Makefile").write_text("x:\n\ttrue\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    assert CHECKER.check_wiring() == []

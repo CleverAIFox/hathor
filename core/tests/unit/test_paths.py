@@ -59,6 +59,17 @@ def test_따옴표를_벗긴다():
     assert parse_dotenv("A=\"/mnt/f/노래\"\nB='x'\n") == {"A": "/mnt/f/노래", "B": "x"}
 
 
+def test_CRLF를_벗긴다():
+    """**WSL에서 `.env`를 윈도 편집기로 고치면 값 끝에 `\\r`이 붙는다** (D-0199).
+
+    `splitlines()`가 이미 떼지만 **고정해 둔다** — 셸이 따로 갈랐을 때 이것 하나로
+    *"패치 폴더가 없다"*가 떴고 폴더는 눈앞에 있었다.
+    """
+    assert parse_dotenv("HATHOR_PATCH_DIR=/mnt/d/patches\r\n") == {
+        "HATHOR_PATCH_DIR": "/mnt/d/patches"
+    }
+
+
 def test_값에_등호가_있어도_첫_등호에서만_가른다():
     assert parse_dotenv("URL=postgresql://a:b@c/d?x=1\n")["URL"].endswith("?x=1")
 
@@ -339,3 +350,18 @@ def test_doctor가_환경_프로파일을_찍는다(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "설치 프로파일" in out
     assert ("리전형" in out) or ("광인사형" in out)
+
+
+def test_셸이_env를_따로_가르지_않는다():
+    """**`.env` 파서는 하나다** (D-0199).
+
+    예전에는 `apply_patch.sh`가 `grep`으로 직접 갈랐고 `parse_dotenv`와 규약이
+    달랐다 — **CRLF · 따옴표 · `=` 주변 공백 셋에서 다른 값이 나왔다.** 같은
+    파일을 두 규약으로 읽으면 하나는 반드시 헛돈다 (D-0043).
+    """
+    text = (repo_root() / "tools" / "apply_patch.sh").read_text(encoding="utf-8")
+    body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    assert "load_dotenv" in body, "셸이 파이썬 파서를 부르지 않는다"
+    assert "grep" not in body or ".env" not in body.split("grep")[1][:80], (
+        "셸이 `.env`를 직접 가른다. `parse_dotenv` 하나만 쓴다"
+    )

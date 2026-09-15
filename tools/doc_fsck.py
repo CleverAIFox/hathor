@@ -41,6 +41,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -57,8 +58,10 @@ SKIP_SUFFIXES = (".mp3", ".mid", ".npz", ".jsonl", ".json", ".patch")
 """산출물은 `.park` 뒤에 있어 없는 것이 정상이다 (D-0075)."""
 
 INVOCATION = re.compile(r"(?:python3?|bash|sh)\s+(?:\.\./)?((?:tools|core)/[\w./\-]+\.(?:py|sh))")
-"""배선이 실제로 부르는 스크립트. **`python3 tools/x.py` 꼴만 본다** — 산문의
-경로 언급과 달리 이것은 실행되는 줄이며, 없으면 그 자리에서 죽는다."""
+"""셸·`Makefile`이 실제로 부르는 스크립트. **`python3 tools/x.py` 꼴 한 줄이다.**"""
+
+TOOL_PATH = re.compile(r"(?:tools|core)/[\w./\-]+\.(?:py|sh)")
+"""파이썬 호출 인자에 통째로 적힌 도구 경로. 쪼개져 있어 `INVOCATION`이 못 본다."""
 
 
 def living_documents() -> list[Path]:
@@ -100,7 +103,11 @@ def check_orphan_tools() -> list[str]:
     """
     blob = "".join(
         path.read_text(encoding="utf-8")
-        for path in [*living_documents(), ROOT / "docs" / "DECISIONS.md", ROOT / "Makefile"]
+        for path in [
+            *living_documents(),
+            ROOT / "docs" / "DECISIONS.md",
+            ROOT / "Makefile",
+        ]
         if path.exists()
     )
     problems: list[str] = []
@@ -120,7 +127,7 @@ def wiring_files() -> list[Path]:
 
 
 def check_wiring() -> list[str]:
-    """배선이 부르는 스크립트가 실재하는가 (D-0196).
+    """배선이 부르는 스크립트가 실재하는가 (D-0196 · D-0199).
 
     **`check_orphan_tools`와 방향이 반대다.** 저쪽은 *"도구가 어디서 불리는가"*를
     묻고 여기는 *"부르는 이름이 실재하는가"*를 묻는다. 그래서 D-0189가 이름을
@@ -132,7 +139,10 @@ def check_wiring() -> list[str]:
     메시지와 내용이 어긋났다 — O-60(닫힘 D-0196)이 *"도구를 안 쓴 탓"*으로 적은
     것의 실제 원인이다.
 
-    **주석 줄은 뺀다.** 사용법 예시가 주석에 있고 그것은 실행되지 않는다.
+    **셸과 파이썬을 다르게 읽는다.** 셸은 `python3 tools/x.py` 꼴 한 줄이고
+    주석은 뺀다. 파이썬은 `_run("python3", "tools/x.py")`처럼 **인자가 쪼개져
+    있어** 정규식이 못 본다 — `ast`로 호출 인자만 본다. 문서 문자열이 걸리지
+    않는 것도 이 방식이라 공짜로 따라온다.
     """
     problems: list[str] = []
     for path in wiring_files():
@@ -143,6 +153,29 @@ def check_wiring() -> list[str]:
             for found in dict.fromkeys(INVOCATION.findall(line)):
                 if not (ROOT / found).exists():
                     problems.append(f"{name}:{number}: 부르는 `{found}`가 없다")
+    return problems + _check_python_calls()
+
+
+def _check_python_calls() -> list[str]:
+    """`tools/*.py`가 호출 인자로 적은 도구 경로가 실재하는가.
+
+    `ship.py`가 `_run("python3", "tools/sync_artifacts.py", "status")`로 부른다.
+    **개명하면 같은 자리에서 같은 모양으로 죽는다.**
+    """
+    problems: list[str] = []
+    for path in sorted((ROOT / "tools").glob("*.py")):
+        name = path.relative_to(ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for argument in node.args:
+                items = argument.elts if isinstance(argument, ast.List | ast.Tuple) else [argument]
+                for item in items:
+                    if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
+                        continue
+                    if TOOL_PATH.fullmatch(item.value) and not (ROOT / item.value).exists():
+                        problems.append(f"{name}:{item.lineno}: 부르는 `{item.value}`가 없다")
     return problems
 
 

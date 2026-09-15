@@ -12,7 +12,10 @@
 #   여기        문서 검사 · ruff              2.6초
 #   CI          mypy · pytest · 아키텍처 · 재현성
 #
-# **이 세션에서 걸린 것이 전부 여기 있다** — 색인 불일치, 맨몸 참조, 줄 길이.
+# **이 세션에서 걸린 것이 전부 여기 있다** — 대장 불일치, 맨몸 참조, 줄 길이.
+#
+# `--check`는 **쓰지 않는다** (D-0198). 예전에는 여기서 `MASTER.md`를 조용히
+# 고쳤고 스테이지에는 안 올라가 **커밋이 대장 없이 나갔다.**
 #
 # ── 자격증명
 #
@@ -38,7 +41,7 @@ run() {
 }
 
 # **첫 실패에서 멈추지 않는다.** 한 번에 다 보여야 한 번에 고친다.
-run "결정 색인"   python3 tools/check_decisions.py --check
+run "결정 기록"   python3 tools/check_decisions.py --check
 run "닫힌 질문"   python3 tools/check_issue_mentions.py --check
 run "문서 레이아웃" python3 tools/check_doc_style.py --check
 run "망 접점"    python3 tools/check_egress.py --check
