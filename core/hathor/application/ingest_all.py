@@ -62,6 +62,14 @@ if TYPE_CHECKING:
 
 MIXTURE = "mixture"
 
+MERT_LAST_KEY = "mixture"
+"""추출기가 `last_hidden_state`를 내놓는 키. **층을 전부 뽑으면 중복이다.**
+
+이름이 같은 것은 우연이 아니다 — 포트가 *"반환 키에 반드시 `mixture`가
+포함된다"*고 규약했고 그 자리를 마지막 층이 쓴다. 소스별로 부를 때는 그 이름이
+거짓이 되므로 여기서 걷어낸다.
+"""
+
 CHROMA_SERIES_SOURCES = (MIXTURE, "other", "bass", "vocals")
 """크로마 시계열을 낼 곳. **`drums`는 뺀다** — 음고가 없어 크로마가 잡음이다."""
 
@@ -133,6 +141,13 @@ class IngestAll:
         # MERT — 한 번의 forward에서 열세 층이 나온다.
         for name, signal in sources.items():
             for layer, matrix in self.extractor.extract_layers(signal).items():
+                # **`mixture` 키를 안 담는다** (D-0205). 포트가 그 이름으로
+                # `last_hidden_state`를 내는데 층을 전부 요청하면 **마지막 층과
+                # 같은 행렬이다.** 담으면 소스마다 한 벌씩 중복되고, 무엇보다
+                # `mert/bass/mixture`는 *"베이스의 믹스"*라 뜻이 안 된다 —
+                # `stem_names`에 층 이름을 밀어 넣던 것과 같은 결함이다.
+                if layer == MERT_LAST_KEY:
+                    continue
                 arrays[f"mert/{name}/{layer}"] = matrix
 
         for name, signal in sources.items():

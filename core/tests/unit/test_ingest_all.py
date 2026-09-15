@@ -114,6 +114,20 @@ def test_믹스와_스템_전부에서_층을_뽑는다(job: IngestAll) -> None:
             assert f"mert/{source}/layer{index:02d}" in bundle.arrays
 
 
+def test_마지막_층을_두_번_담지_않는다(job: IngestAll) -> None:
+    """**`mert/bass/mixture`는 뜻이 안 되는 이름이다** (D-0205).
+
+    포트가 `mixture` 키로 `last_hidden_state`를 내는데 층을 전부 요청하면
+    마지막 층과 같은 행렬이다. 실측으로 5소스 전부에서 `layer12`와 동일했다.
+    """
+    bundle = next(iter(job.run([_track("가.mp3")])))
+
+    assert not [
+        name for name in bundle.arrays if name.startswith("mert/") and name.endswith("/mixture")
+    ]
+    assert len([name for name in bundle.arrays if name.startswith("mert/")]) == 5 * len(LAYERS)
+
+
 def test_온셋은_믹스에서_안_뽑는다(job: IngestAll) -> None:
     """**무엇이 울린 것인지 안 갈린다** (O-46).
 
