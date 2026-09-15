@@ -46,6 +46,9 @@ env:           ## 해석된 경로와 설정을 찍는다 (D-0066)
 doctor:        ## 기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)
 	cd core && uv run python -m hathor.cli doctor
 
+var-fsck:      ## 산출물이 무엇인지 찍는다. 판정하지 않는다 (D-0203)
+	python3 tools/var_fsck.py
+
 artifacts:     ## 교두보와 저장소에 무엇이 있는지 (D-0118)
 	python3 tools/sync_artifacts.py status
 

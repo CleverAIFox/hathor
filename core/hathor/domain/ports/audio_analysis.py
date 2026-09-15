@@ -94,4 +94,48 @@ class LayeredFeatureExtractor(Protocol):
     같은 저장소·같은 평가 하네스가 구분 없이 읽게 한다.
     """
 
+    @property
+    def layers(self) -> tuple[int, ...]:
+        """뽑는 레이어 번호. **산출물이 자기를 설명하게 하려고 포트에 둔다** (D-0203).
+
+        옛 산출물은 `stem_names` 자리에 층 이름을 밀어 넣었고, 그래서 무엇으로
+        뽑혔는지 **추측으로만 알 수 있었다.** 한 필드가 두 뜻을 가지면 둘 중
+        하나는 반드시 틀린다 (D-0111).
+        """
+        ...
+
     def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]: ...
+
+
+type PitchTrack = np.ndarray[tuple[int], np.dtype[np.float32]]
+"""프레임별 기본 주파수(Hz). 무성 구간은 `NaN`이다."""
+
+PITCH_SAMPLE_RATE = 11025
+"""음고 추적 표본율. **베이스·보컬 모두 5.5kHz 아래에 산다.**
+
+44.1kHz를 그대로 쓰면 pyin이 곡당 45초인데 여기서는 **8초다** (D-0203 실측).
+"""
+
+PITCH_HOP = 512
+"""음고 프레임 간격. 초당 22프레임이다.
+
+16분음표가 120BPM에서 초당 8개이므로 **여유가 두 배 넘는다.** 더 촘촘히 뜨면
+1004곡에서 한 시간이 두 시간이 되고 얻는 것이 없다.
+"""
+
+
+class PitchTracker(Protocol):
+    """단성 파형의 기본 주파수를 프레임마다 낸다.
+
+    **다성에는 쓰지 않는다.** `bass`·`vocals` 스템처럼 한 번에 한 음이 우는
+    신호에만 뜻이 있다. 믹스에 걸면 무엇의 음고인지 알 수 없다.
+    """
+
+    def track(
+        self,
+        waveform: Waveform,
+        *,
+        sample_rate: int,
+        fmin: float,
+        fmax: float,
+    ) -> PitchTrack: ...

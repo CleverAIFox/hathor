@@ -110,6 +110,7 @@ class FakeLayeredExtractor:
 
     def __init__(self, layers=(0, 3), chunks=2, dim=4):
         self._layers = layers
+        self.layers = tuple(layers)
         self._chunks = chunks
         self._dim = dim
         self.calls = 0
@@ -127,6 +128,8 @@ class FakeLayeredExtractor:
 
 
 class BrokenLayeredExtractor:
+    layers = ()
+
     def extract_layers(self, waveform):
         import numpy as np
 

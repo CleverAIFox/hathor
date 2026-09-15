@@ -293,6 +293,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CONTACT,
         help="User-Agent에 넣을 연락처. MB가 식별 가능한 값을 요구한다",
     )
+    every = ingest_sub.add_parser("all", help="한 패스로 전부 뽑는다 (GPU · D-0203)")
+    every.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
+    every.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 루트")
+    every.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+    every.add_argument("--force", action="store_true", help="끝난 곡도 다시 뽑는다")
+    every.set_defaults(func=_run_ingest_all)
+
     features = ingest_sub.add_parser("features", help="오디오 특징 추출 (GPU)")
     features.add_argument(
         "--root",
@@ -1766,6 +1773,73 @@ def _run_ingest_scan(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    return 0
+
+
+ALL_MERT_LAYERS = 13
+"""MERT-v1-95M의 은닉 상태 수 (임베딩 출력 포함).
+
+**열셋 전부 뽑는다.** 한 번의 forward에서 다 나오므로 골라 담는 것이 공짜이고,
+D-0181은 **넷만 보고** `layer03`을 골랐다 — 이웃 층이 더 나은지 안 뽑아서
+모른다. 전부 뽑으면 그 질문이 재추출 없이 풀린다 (D-0203).
+"""
+
+BUNDLE_DIRNAME = "audio"
+"""한 패스 산출물이 사는 곳. **타임스탬프 폴더를 만들지 않는다** (D-0203)."""
+
+
+def _run_ingest_all(args: argparse.Namespace) -> int:
+    """곡 하나를 한 번만 열어 전부 뽑는다 (D-0203).
+
+    **분리가 곡당 비용의 대부분이고 스템은 디스크에 못 남긴다** — 4분 곡 하나가
+    340MB라 1004곡이면 340GB다. 그래서 스템이 메모리에 떠 있는 그 한 번에
+    스템 의존 산출물을 전부 뽑는다. 패스를 쪼개면 그만큼 Demucs를 다시 돈다.
+    """
+    from hathor.application.ingest_all import IngestAll
+    from hathor.infrastructure.demucs_separator import DemucsStemSeparator
+    from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
+    from hathor.infrastructure.librosa_pitch_tracker import LibrosaPitchTracker
+    from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
+    from hathor.infrastructure.track_bundle_store import TrackBundleStore
+
+    tracks = list(JsonlScanStore(args.out).read_tracks())
+    if not tracks:
+        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
+        return 2
+
+    store = TrackBundleStore(args.out / BUNDLE_DIRNAME)
+    pending = tracks if args.force else [t for t in tracks if not store.has(t.source_key)]
+    if args.limit is not None:
+        pending = pending[: args.limit]
+    if not pending:
+        print(f"이미 다 끝났다. {store.counts()}")
+        return 0
+
+    extractor = MertFeatureExtractor(layers=tuple(range(ALL_MERT_LAYERS)))
+    job = IngestAll(
+        decoder=FfmpegAudioDecoder(),
+        separator=DemucsStemSeparator(),
+        extractor=extractor,
+        pitch=LibrosaPitchTracker(),
+        library_root=_resolve_root(args.root),
+    )
+    print(f"곡 {len(pending)}개 · 산출물 {store.root}\n")
+
+    started = time.perf_counter()
+    for index, bundle in enumerate(job.run(pending), 1):
+        store.write(bundle.source_key, bundle.arrays, bundle.manifest)
+        elapsed = time.perf_counter() - started
+        left = (len(pending) - index) * elapsed / index
+        print(
+            f"  {index}/{len(pending)}  {elapsed / index:.1f}초/곡"
+            f"  남은 {left / 3600:.1f}시간  {bundle.source_key}",
+            flush=True,
+        )
+    for source_key, reason in job.failed:
+        store.record_failure(source_key, reason)
+        print(f"  실패 {source_key}: {reason}", file=sys.stderr)
+
+    print(f"\n성공 {job.processed}곡 · 실패 {len(job.failed)}곡 · 누적 {store.counts()}")
     return 0
 
 
