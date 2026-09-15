@@ -28,6 +28,7 @@ from pathlib import Path
 import pytest
 
 from hathor.interfaces.cli.main import build_parser
+from hathor.interfaces.cli.tables import REPLAY_DEFAULTS, replay_refusal
 from hathor.shared.config.paths import repo_path_hints, resolve_path
 
 
@@ -137,3 +138,67 @@ def test_도구의_경로_인자도_저장소_루트로_풀린다():
 
 def test_경로_인자_목록이_비어_있지_않다():
     assert PATH_ARGUMENTS
+
+
+# ------------------------------------------------------------------ 재판정 거부 (D-0191)
+
+
+def _keys_args(**given: object) -> argparse.Namespace:
+    """`ingest keys` 기본값 그대로 파싱하고 준 것만 바꾼다.
+
+    **손으로 기본값을 적지 않는다** — 파서가 정본이고, 여기 베끼면 두 곳이 어긋난다
+    (D-0043). 기본값이 바뀌면 이 검사가 따라 움직인다.
+    """
+    parsed = build_parser().parse_args(["ingest", "keys", "--replay", "x.jsonl"])
+    for name, value in given.items():
+        setattr(parsed, name, value)
+    return parsed
+
+
+def test_기본값이면_거부하지_않는다():
+    """**기본으로 돌리는 재판정은 막히면 안 된다.**"""
+    assert replay_refusal(_keys_args()) == ""
+
+
+def test_재판정이_쓰는_둘은_거부하지_않는다():
+    """`--harmonic` · `--profile`은 저장된 크로마에서도 걸린다 (D-0191)."""
+    assert replay_refusal(_keys_args(harmonic=0.3)) == ""
+    assert replay_refusal(_keys_args(profile="temperley")) == ""
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "flag"),
+    [
+        ("gamma", 0.5, "--gamma"),
+        ("aggregate", "median", "--aggregate"),
+        ("window_seconds", 5.0, "--window-seconds"),
+        ("chroma", "linear", "--chroma"),
+        ("tuning", True, "--tuning"),
+        ("separate", True, "--separate"),
+        ("halves", True, "--halves"),
+        ("series", 1.0, "--series"),
+    ],
+)
+def test_못_쓰는_손잡이를_이름으로_말한다(name, value, flag):
+    """**조용히 무시하면 *"효과가 없다"*로 읽힌다** (D-0191).
+
+    `--gamma 0.5`와 `--aggregate median`이 기본값과 소수점까지 같은 표를 냈고,
+    그것을 *"이 손잡이는 효과가 없다"*로 읽을 뻔했다.
+    """
+    refusal = replay_refusal(_keys_args(**{name: value}))
+    assert flag in refusal
+    assert "--harmonic" in refusal and "--profile" in refusal
+
+
+def test_여러_개면_전부_말한다():
+    """**첫 하나에서 멈추지 않는다.** 한 번에 다 보여야 한 번에 고친다."""
+    refusal = replay_refusal(_keys_args(gamma=0.5, tuning=True))
+    assert "--gamma" in refusal and "--tuning" in refusal
+
+
+def test_거부_목록이_파서와_맞다():
+    """**기본값을 베껴 적지 않았는가.** 두 곳이 어긋나면 조용히 통과한다 (D-0043)."""
+    parsed = build_parser().parse_args(["ingest", "keys", "--replay", "x.jsonl"])
+    for flag, name, default in REPLAY_DEFAULTS:
+        assert hasattr(parsed, name), f"{flag}가 파서에 없다"
+        assert getattr(parsed, name) == default, f"{flag}의 기본값이 어긋난다"
