@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -48,23 +50,53 @@ def render_table(columns: Sequence[tuple[str, str]], rows: Sequence[Sequence[obj
         # **공백이 들어가면 표를 다시 읽을 수 없다.** 검사도 사람도 못 읽는다.
         if any(ch.isspace() for ch in name):
             raise ValueError(f"열 이름에 공백을 넣지 않는다: {name!r}")
-    widths: list[int] = []
-    for _, spec in columns:
-        digits = "".join(ch for ch in spec.split(".")[0] if ch.isdigit())
-        widths.append(int(digits) if digits else 10)
-    aligns = [spec[0] if spec[:1] in "<>^" else ">" for _, spec in columns]
+    parsed = [_parse_spec(spec) for _, spec in columns]
     header = "".join(
-        f"{name:{align}{width}}"
-        for (name, _), align, width in zip(columns, aligns, widths, strict=True)
+        _pad(name, align, width)
+        for (name, _), (align, width, _) in zip(columns, parsed, strict=True)
     )
-    lines = [header, "-" * len(header.encode("utf-8"))]
+    lines = [header, "-" * _display_width(header)]
     for row in rows:
         if len(row) != len(columns):
             raise ValueError(f"열 수가 머리글과 다르다: {len(row)} vs {len(columns)}")
         lines.append(
-            "".join(f"{value:{spec}}" for value, (_, spec) in zip(row, columns, strict=True))
+            "".join(
+                _pad(format(value, rest), align, width)
+                for value, (align, width, rest) in zip(row, parsed, strict=True)
+            )
         )
     return lines
+
+
+SPEC = re.compile(r"^([<>^])?([+\- ])?(\d*)((?:\.\d+)?[a-zA-Z%]?)$")
+"""`>+10.4f`를 정렬·폭·나머지로 가른다. 폭은 우리가 채우므로 형식에서 뺀다."""
+
+
+def _display_width(text: str) -> int:
+    """**터미널이 차지하는 칸 수다.** 한글은 한 글자가 두 칸이다 (D-0200).
+
+    `len()`으로 채우면 `강도`(2글자·4칸)가 폭 6을 4칸만 먹은 것으로 계산돼
+    **머리글이 값 위로 밀려 붙는다.** 구분선은 더 나빴다 — `len(...encode("utf-8"))`
+    은 한글을 **세 배**로 세어 표보다 한참 길었다.
+    """
+    return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
+
+
+def _parse_spec(spec: str) -> tuple[str, int, str]:
+    found = SPEC.match(spec)
+    if found is None:
+        raise ValueError(f"읽을 수 없는 열 형식이다: {spec!r}")
+    align, sign, digits, rest = found.groups()
+    return align or ">", int(digits) if digits else 10, (sign or "") + (rest or "")
+
+
+def _pad(text: str, align: str, width: int) -> str:
+    gap = max(0, width - _display_width(text))
+    if align == "<":
+        return text + " " * gap
+    if align == "^":
+        return " " * (gap // 2) + text + " " * (gap - gap // 2)
+    return " " * gap + text
 
 
 def ambiguity_report(

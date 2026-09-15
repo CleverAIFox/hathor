@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from hathor.interfaces.cli.tables import ambiguity_report
+from hathor.interfaces.cli.tables import _display_width, ambiguity_report, render_table
 
 
 def _report(modes, ambiguous, relative, floor=0.30, tunings=()):
@@ -60,3 +60,32 @@ def test_조율이_없으면_안_적는다():
 def test_읽는_법이_끝에_붙는다():
     """**맞다는 증명이 아니라 틀렸다는 신호를 잡는 장치다** (O-22)."""
     assert _report(["major"], [0], [False]).rstrip().endswith("(O-22).**")
+
+
+def test_한글_머리글이_값과_어긋나지_않는다():
+    """**한글은 터미널에서 두 칸이다** (D-0200).
+
+    `len()`으로 채우면 `강도`(2글자·4칸)가 폭 6을 4칸만 먹은 것으로 계산돼
+    머리글이 값 위로 밀려 붙는다. D-0092가 *"머리글과 값은 갈릴 수 없다"*고
+    적고 **같은 명세에서 그리게 했는데 표시폭이 달라 여전히 어긋났다.**
+    """
+    lines = render_table((("강도", ">8.1f"), ("선법", ">9")), [(0.0, "major")])
+
+    assert _display_width(lines[0]) == 17
+    assert _display_width(lines[2]) == 17
+    assert len(lines[1]) == 17
+
+
+def test_구분선이_표와_같은_길이다():
+    """`len(header.encode("utf-8"))`은 한글을 **세 배**로 셌다."""
+    lines = render_table((("무작위바닥", ">13.1%"), ("나란한조", ">11.1%")), [(0.35, 0.2)])
+
+    assert len(lines[1]) == _display_width(lines[0])
+
+
+def test_부호와_소수점이_있는_형식도_읽는다():
+    """`>+10.4f` 같은 명세를 정렬·폭·나머지로 가른다."""
+    lines = render_table((("차이", ">+10.4f"),), [(-0.5,)])
+
+    assert lines[2].strip() == "-0.5000"
+    assert len(lines[2]) == 10

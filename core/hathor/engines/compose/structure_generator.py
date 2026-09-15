@@ -14,7 +14,7 @@ SECTION_VOCABULARY: tuple[str, ...] = (
 )
 
 
-def generate_structure(seed: int, section_count: int = 8) -> list[str]:
+def generate_structure(seed: int, section_count: int) -> list[str]:
     """시드 고정 시 항상 동일한 섹션 배열을 반환한다.
 
     P4에서 실제 구조 모델로 교체된다. 지금 필요한 것은 파이프라인 관통과

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""결정 기록과 미해결표를 기계가 검사한다. 부록 A 색인도 여기서 생성한다.
+"""결정 기록과 미해결표를 기계가 검사한다. 마스터의 결정 대장도 여기서 생성한다.
 
 ### 왜 필요한가
 
@@ -30,7 +30,7 @@
 
 | 검사 | 무엇을 잡는가 |
 |---|---|
-| 색인 일치 | 부록 A가 손으로 고쳐졌거나 낡았다 |
+| 대장 일치 | 마스터의 결정 대장이 손으로 고쳐졌거나 낡았다 |
 | 번호 중복·결번 | D-0076처럼 번호가 조용히 비었다 |
 | **참조 무결성** | 본문이 없는 번호를 가리킨다. **D-0076을 그 자리에서 잡았을 검사다** |
 | 후보-선택 짝 | 후보를 적고 무엇을 골랐는지 안 적었다 |
@@ -77,9 +77,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DECISIONS = ROOT / "docs" / "DECISIONS.md"
 MASTER = ROOT / "docs" / "MASTER.md"
 PLAN = ROOT / "docs" / "PLAN.md"
-
-
-PART_FILE = re.compile(r"^D-(\d{4})-(\d{4})\.md$")
 
 
 def merge_parts(parts: list[tuple[str, str]]) -> str:

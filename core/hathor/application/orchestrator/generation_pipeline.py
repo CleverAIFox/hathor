@@ -98,8 +98,18 @@ def render(
     return data, summary
 
 
-def run_dry(job: GenerationJob, key: Key = DEFAULT_KEY) -> dict[str, Any]:
-    """모델 없이 결정적 산출물만 만든다. CI 재현성 검증이 이 경로를 쓴다."""
+def run_dry(
+    job: GenerationJob,
+    sections: int = DEFAULT_SECTIONS,
+    key: Key = DEFAULT_KEY,
+) -> dict[str, Any]:
+    """모델 없이 결정적 산출물만 만든다. CI 재현성 검증이 이 경로를 쓴다.
+
+    **`sections`가 `key`보다 앞이다** (D-0200). 예전에는 `generate_structure(job.seed)`로
+    불러 **엔진의 기본값 8이 조용히 이겼고**, `--sections`는 선언만 있고 아무도
+    안 읽었다 — `chroma(harmonic=...)`가 무시되던 D-0064와 같은 모양이다.
+    `key`는 아직 아무도 안 넘기므로 순서를 바꿔도 부를 자리가 없다.
+    """
     job.mark_running()
     result: dict[str, Any] = {
         "job": {"seed": job.seed, "stages": [s.value for s in job.stages]},
@@ -107,7 +117,7 @@ def run_dry(job: GenerationJob, key: Key = DEFAULT_KEY) -> dict[str, Any]:
     }
     try:
         if Stage.STRUCTURE in job.stages:
-            result["structure"] = generate_structure(job.seed)
+            result["structure"] = generate_structure(job.seed, sections)
         if Stage.HARMONY in job.stages:
             result["harmony"] = list(generate_harmony(job.seed, key).degrees)
     except Exception:

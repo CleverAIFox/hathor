@@ -26,7 +26,7 @@ from hathor.application.evaluate_retrieval import (
     ViewSpec,
 )
 from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
-from hathor.application.orchestrator.generation_pipeline import run_dry
+from hathor.application.orchestrator.generation_pipeline import DEFAULT_SECTIONS, run_dry
 from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
 from hathor.application.search_similar import SearchSimilar, SearchTrack
@@ -141,7 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gen.add_argument("--scan-out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
     gen.add_argument("--tempo", type=int, default=96, help="템포 (BPM)")
-    gen.add_argument("--sections", type=int, default=None, help="구간 수. 기본은 참조곡 평균")
+    gen.add_argument("--sections", type=int, default=DEFAULT_SECTIONS, help="구간 수")
     gen.add_argument(
         "--root",
         type=resolve_path,
@@ -780,7 +780,7 @@ def _run_generate(args: argparse.Namespace) -> int:
         return 2
 
     job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
-    payload = json.dumps(run_dry(job), ensure_ascii=False, indent=2, sort_keys=True)
+    payload = json.dumps(run_dry(job, args.sections), ensure_ascii=False, indent=2, sort_keys=True)
 
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
