@@ -30,7 +30,18 @@ from hathor.domain.value_objects.key import Key, Mode
 TICKS_PER_BEAT = 480
 """4분음표 하나의 틱 수. 480은 대부분의 DAW가 쓰는 값이다."""
 
-DEFAULT_TEMPO_BPM = 96
+DEFAULT_TEMPO_BPM = 126
+"""기본 템포 (BPM). **1003곡 실측 중앙값이다** (D-0206).
+
+96은 근거 없이 놓여 있었고 **코퍼스 분포의 8% 지점**이다 — 하위 10분의 1이다.
+박은 곡의 드럼 스템에서 뽑았고 200곡 중 못 찾은 곡이 없었다.
+
+**배수 모호성을 읽을 때 푼다.** `beat_period`의 원값 중앙은 67인데 사람도 120을
+60으로 짚으며 `Beat`가 그것을 결함이 아니라 성질이라 적었다 (D-0054와 같은
+자리). 90 미만을 두 배로 읽어 126을 얻는다.
+
+수치는 D-0206에 있다 (O-28).
+"""
 DEFAULT_VELOCITY = 72
 MIDDLE_C = 60
 

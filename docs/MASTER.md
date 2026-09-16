@@ -1997,6 +1997,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0203 | 산출물을 전부 버리고 한 패스로 다시 뽑는다 | `core/tests/unit/test_ingest_all.py::test_디코딩과_분리를_곡당_한_번만_한다` |
 | D-0204 | 새 하위 명령이 조용히 스캔으로 갔다 | `core/tests/unit/test_cli_contracts.py::test_ingest_하위_명령이_전부_배선돼_있다` |
 | D-0205 | 마지막 층을 소스마다 두 번 담았다 | `core/tests/unit/test_ingest_all.py::test_마지막_층을_두_번_담지_않는다` |
+| D-0206 | O-46의 비교선이 섰다 | `core/tests/unit/test_determinism.py` |
 
 <!-- decision-ledger:end -->
 

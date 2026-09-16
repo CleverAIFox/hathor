@@ -39,6 +39,7 @@ from hathor.domain.services.key_estimation import (
     PROFILE_TEMPERLEY,
     KeyEstimate,
 )
+from hathor.domain.services.midi_writer import DEFAULT_TEMPO_BPM
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
@@ -145,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="참조곡 제목 일부. 여러 번 줄 수 있다. 그 곡의 구조를 조건으로 쓴다",
     )
     gen.add_argument("--scan-out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
-    gen.add_argument("--tempo", type=int, default=96, help="템포 (BPM)")
+    gen.add_argument("--tempo", type=int, default=DEFAULT_TEMPO_BPM, help="템포 (BPM)")
     gen.add_argument("--sections", type=int, default=DEFAULT_SECTIONS, help="구간 수")
     gen.add_argument(
         "--root",
