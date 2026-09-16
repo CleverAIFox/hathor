@@ -12,6 +12,7 @@ from hathor.application.arrangement import (
 from hathor.domain.services.midi_writer import (
     DYNAMICS,
     METRIC_STRESS,
+    TICKS_PER_BEAT,
     chord_pitches,
     softer,
 )
@@ -46,10 +47,16 @@ def test_모든_마디가_소리를_갖는다():
 
 
 def test_화음마다_네_성부다():
-    """베이스 하나에 3화음 셋 (D-0139)."""
+    """베이스 하나에 3화음 셋 (D-0139).
+
+    **베이스는 발음이 드물다** (D-0207). 위 성부는 박마다 다시 치고 받침은 끈다.
+    """
     notes = arrange(pattern("URUR"), PROGRESSION)
-    starts = {note.start_tick for note in notes}
-    assert all(sum(1 for n in notes if n.start_tick == tick) == 4 for tick in starts)
+    counts = {
+        tick: sum(1 for n in notes if n.start_tick == tick)
+        for tick in {note.start_tick for note in notes}
+    }
+    assert set(counts.values()) == {3, 4}, counts
 
 
 def test_소리가_끊기지_않는다():
@@ -60,7 +67,8 @@ def test_소리가_끊기지_않는다():
     """
     notes = arrange(pattern("UU"), PROGRESSION)
     starts = sorted({note.start_tick for note in notes})
-    assert all(tick % TICKS_PER_BAR == 0 for tick in starts)
+    # **박 격자다** (D-0207). 마디 격자였을 때 화음 에너지의 100%가 첫 박에 몰렸다.
+    assert all(tick % TICKS_PER_BEAT == 0 for tick in starts)
     assert starts[0] == 0
     ends = {note.end_tick for note in notes}
     assert max(ends) == 2 * BARS_PER_SECTION * TICKS_PER_BAR
@@ -132,8 +140,12 @@ def test_progression_shorter_than_section_wraps():
     """
     short = ChordProgression(key=KEY, degrees=("I",))
     notes = arrange(pattern("U"), short)
-    assert {note.start_tick for note in notes} == {0}
-    assert {note.duration_ticks for note in notes} == {TICKS_PER_BAR * BARS_PER_SECTION}
+    whole = TICKS_PER_BAR * BARS_PER_SECTION
+    # **베이스는 한 번 쳐서 구간 전체를 끈다** — D-0138이 지키려던 것이다.
+    assert [n.duration_ticks for n in notes if n.start_tick == 0].count(whole) == 1
+    # **위 성부는 박마다 다시 친다** (D-0207).
+    assert {n.duration_ticks for n in notes} == {whole, TICKS_PER_BEAT}
+    assert max(n.end_tick for n in notes) == whole
 
 
 def test_arrangement_is_deterministic():

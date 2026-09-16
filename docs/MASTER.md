@@ -1998,6 +1998,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0204 | 새 하위 명령이 조용히 스캔으로 갔다 | `core/tests/unit/test_cli_contracts.py::test_ingest_하위_명령이_전부_배선돼_있다` |
 | D-0205 | 마지막 층을 소스마다 두 번 담았다 | `core/tests/unit/test_ingest_all.py::test_마지막_층을_두_번_담지_않는다` |
 | D-0206 | O-46의 비교선이 섰다 | `core/tests/unit/test_determinism.py` |
+| D-0207 | 화음이 마디 머리에만 울렸다 | `core/tests/unit/test_arrangement.py::test_소리가_끊기지_않는다` |
 
 <!-- decision-ledger:end -->
 

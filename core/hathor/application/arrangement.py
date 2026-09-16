@@ -159,13 +159,45 @@ def arrange(
             # **층마다 세기가 다르다** (D-0174). 전부 72이던 동안 가락과 반주가 같은
             # 층에서 울렸고, 귀가 *"반주가 앞에서 논다"*로 판정했다. 표는 여린소리표이며
             # 배치는 위에 적힌 역할을 그대로 따른다 — 받침과 배경이다.
-            for pitch, level in (
-                (bass(rooted, octave_base=MIDDLE_C), DYNAMICS["mp"]),
-                *((pitch, DYNAMICS["p"]) for pitch in voiced),
-            ):
-                notes.append(
-                    Note(pitch=pitch, start_tick=start, duration_ticks=length, velocity=level)
+            # **베이스는 끌고 위 성부는 박마다 발음한다** (D-0207).
+            #
+            # 예전에는 다섯 성부가 마디 머리에서 한 번 울리고 통째로 끌었고,
+            # 그래서 **화음 에너지의 100%가 첫 박에 몰렸다.** 1003곡 실측은 마디
+            # 4등분에서 가장 센 칸이 **중앙 28.2% · 최대 53.9%**다 — **우리가
+            # 코퍼스 어느 곡보다 몰려 있었다.**
+            #
+            # **위상 강세는 없었다.** 곡마다 가장 센 칸을 맞춰 정렬해도 순서를
+            # 섞은 귀무와 소수점 셋째 자리까지 같다. 그 강세는 정렬이 만든 것이다.
+            # 그래서 네 박에 고르게 놓는다.
+            #
+            # **베이스까지 쪼개면 D-0138을 되돌린다.** 그 결정이 이어지는 도수를
+            # 잇게 해 **음길이 종류를 1에서 2로** 늘렸는데, 다섯 성부를 전부 박으로
+            # 쪼개면 다시 한 종류가 된다. 받침은 끌고 배경만 움직인다 — D-0139가
+            # *"가장 낮은 음이 마디마다 바뀌어 바닥이 없었다"*고 적은 그 바닥이다.
+            #
+            # **세기는 `METRIC_STRESS`다** (D-0177). 자리는 실측이, 세기는 관례가
+            # 정한다 — **둘을 섞어 적지 않는다.**
+            notes.append(
+                Note(
+                    pitch=bass(rooted, octave_base=MIDDLE_C),
+                    start_tick=start,
+                    duration_ticks=length,
+                    velocity=DYNAMICS["mp"],
                 )
+            )
+            beats = BEATS_PER_BAR * repeats
+            beat_length = length // beats
+            for beat in range(beats):
+                fall = METRIC_STRESS[beat % len(METRIC_STRESS)]
+                for pitch in voiced:
+                    notes.append(
+                        Note(
+                            pitch=pitch,
+                            start_tick=start + beat * beat_length,
+                            duration_ticks=beat_length,
+                            velocity=softer(DYNAMICS["p"], fall),
+                        )
+                    )
             bar_index += repeats
 
     if seed is not None:
