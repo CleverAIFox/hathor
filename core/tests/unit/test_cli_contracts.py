@@ -204,25 +204,31 @@ def test_거부_목록이_파서와_맞다():
         assert getattr(parsed, name) == default, f"{flag}의 기본값이 어긋난다"
 
 
-def test_ingest_하위_명령이_전부_배선돼_있다():
-    """**떨어지는 기본이 `scan`이다** (D-0204).
+def test_하위_명령이_전부_배선돼_있다():
+    """**떨어지는 기본이 오류를 삼킨다** (D-0204 · D-0208).
 
-    새 하위 명령을 `main`의 분기에 안 적으면 **조용히 스캔이 돈다.** 그리고
-    스캔에만 있는 인자를 찾다 `AttributeError`로 죽는다 — `ingest all`이 그렇게
+    새 하위 명령을 `main`의 분기에 안 적으면 **조용히 다른 명령이 돈다.** 그리고
+    그 명령에만 있는 인자를 찾다 `AttributeError`로 죽는다 — `ingest all`이 그렇게
     났고, 그 바람에 `scan-*.jsonl`이 하나 더 생겼다.
 
-    파서가 아는 이름과 분기가 아는 이름이 **같아야 한다.** 한쪽만 늘면 틀린다.
+    **갈래가 넷이다.** D-0204는 `ingest`만 봤고 나머지 셋은 같은 모양으로 무방비였다.
+    그룹마다 분기에 안 적힌 이름이 **정확히 하나**여야 한다 — 그것이 떨어지는
+    기본이다. 둘 이상이면 하나는 영영 안 불린다.
     """
     import re
 
     from hathor.interfaces.cli import main
 
     source = Path(main.__file__).read_text(encoding="utf-8")
-    declared = set(re.findall(r'ingest_sub\.add_parser\(\s*"([\w-]+)"', source))
-    block = source[source.index('if args.command == "ingest":') :]
-    block = block[: block.index("return _run_ingest_scan(args)")]
-    routed = set(re.findall(r'args\.ingest_command == "([\w-]+)"', block))
-
-    assert declared, "파서에서 하위 명령을 못 찾았다"
-    missing = declared - routed - {"scan"}
-    assert not missing, f"배선이 빠진 하위 명령: {sorted(missing)}"
+    body = source[source.index("def main(") :]
+    for group, variable in (
+        ("ingest_sub", "ingest_command"),
+        ("eval_sub", "eval_command"),
+        ("taste_sub", "taste_command"),
+        ("lyrics_sub", "lyrics_command"),
+    ):
+        declared = set(re.findall(rf"(?<![\w]){group}\.add_parser\(\s*\"([\w-]+)\"", source))
+        routed = set(re.findall(rf'args\.{variable} == "([\w-]+)"', body))
+        assert declared, f"{group}에서 하위 명령을 못 찾았다"
+        unrouted = declared - routed
+        assert len(unrouted) == 1, f"{group}: 분기에 없는 이름이 {sorted(unrouted)}이다"
