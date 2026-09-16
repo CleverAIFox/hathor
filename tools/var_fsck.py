@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -77,6 +78,30 @@ def describe(path: Path) -> str:
     return "**manifest 없음** · 정체 불명"
 
 
+STAMP = re.compile(r"^(?P<name>[\w.-]*?)-?(?P<stamp>\d{8}T\d{6}Z)(?P<rest>\..*)?$")
+"""`scan-20260915T133016Z.jsonl` 꼴에서 이름과 시각을 가른다."""
+
+
+def runs(files: list[Path]) -> dict[str, tuple[set[str], int]]:
+    """이름별 `(실행 시각 집합, 총 바이트)` (D-0209).
+
+    **한 실행이 낸 파일들을 한 묶음으로 센다.** `scan-*`는 한 번 돌면
+    `.jsonl` · `.failures.jsonl` · `.summary.json` **셋**이 나온다. 접두사만 보고
+    세면 **정상을 «여럿»으로 찍고**, 그 경고가 매번 뜨면 사람이 읽기를 그만둔다 —
+    **정상을 잔해로 부르는 검사는 진짜 잔해를 가린다.**
+
+    시각이 둘 이상일 때가 진짜 잔해다. 시각이 없는 파일은 한 실행으로 센다.
+    """
+    table: dict[str, tuple[set[str], int]] = {}
+    for item in files:
+        found = STAMP.match(item.name)
+        name = (found["name"] or item.stem) if found else item.stem
+        stamp = found["stamp"] if found else ""
+        stamps, size = table.get(name, (set(), 0))
+        table[name] = (stamps | {stamp}, size + item.stat().st_size)
+    return table
+
+
 def report(root: Path) -> int:
     if not root.exists():
         print(f"산출물 루트가 없다: {root}", file=sys.stderr)
@@ -95,14 +120,16 @@ def report(root: Path) -> int:
         print(f"{folder.name:<34}{human(size):>8}{count:>8}  {text}")
 
     print(f"\n낱개 파일 {len(files)}개")
-    groups: dict[str, list[Path]] = {}
-    for item in files:
-        groups.setdefault(item.name.split("-")[0], []).append(item)
-    for prefix, members in sorted(groups.items()):
-        if len(members) > 1:
-            total = sum(item.stat().st_size for item in members)
-            print(f"  {prefix:<14} {len(members)}개 · {human(total)}  ← 같은 접두사가 여럿이다")
+    stale = 0
+    for label, (stamps, size) in sorted(runs(files).items()):
+        mark = ""
+        if len(stamps) > 1:
+            stale += 1
+            mark = "  ← **옛 실행이 남았다**"
+        print(f"  {label:<22} 실행 {len(stamps)}회 · {human(size):>6}{mark}")
 
+    if stale:
+        print(f"\n**{stale}개 이름에 실행이 여럿 남았다.** 최신만 남긴다 (O-62).")
     if unnamed:
         print(f"\n**{unnamed}개 묶음이 자기를 설명하지 않는다.** 정체를 추측해야 한다 (D-0203).")
     return 0
