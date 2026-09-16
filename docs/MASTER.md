@@ -2010,6 +2010,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0207 | 화음이 마디 머리에만 울렸다 | `core/tests/unit/test_arrangement.py::test_소리가_끊기지_않는다` |
 | D-0208 | 떨어지는 기본이 네 갈래인데 검사는 하나만 봤다 | `core/tests/unit/test_cli_contracts.py::test_하위_명령이_전부_배선돼_있다` |
 | D-0209 | 정상을 잔해로 찍고 있었다 | `core/tests/unit/test_var_fsck.py::test_한_실행이_낸_파일_셋을_한_묶음으로_센다` |
+| D-0211 | 묶음에서 옛 규격을 다시 쓴다 | `core/tests/unit/test_keys_from_bundles.py::test_생성_경로의_옛_로더가_새_산출물을_읽는다` |
 
 <!-- decision-ledger:end -->
 

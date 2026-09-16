@@ -40,8 +40,8 @@
 산출물은 `var/ingest/audio/*.npz`의 `mert/<소스>/layer<번호>`이며 **열세 층이 전부 있다** (D-0203).
 실측 수치는 `docs/MASTER.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
 
-> **아래 명령 예시 중 `keys-*`·`mert-layers`를 가리키는 것은 지금 안 돈다** (O-63).
-> D-0203이 산출물을 `audio/` 묶음으로 바꿨고 **읽는 쪽을 아직 안 고쳤다.**
+> **아래 명령 예시 중 `keys-*`를 가리키는 것은 `ingest keys --from-bundles`를 한 번
+> 돌린 뒤에 돈다** (D-0211). 조합·반쪽을 요구하는 것과 `mert-layers`는 아직 안 돈다 (O-63).
 
 ## 생성 (D-0052)
 
@@ -141,7 +141,7 @@ make artifacts-pull     # 복원:  SSD -> var/ingest
 ```
 
 **복원은 17192개에 4분 12초다** (D-0122 실측). 재추출은 GPU로 1시간 40분이므로
-`doctor`가 사전이 없다고 하면 **재추출 전에 `make artifacts-pull`을 먼저 본다.**
+`doctor`가 사전이 없다고 하면 **묶음부터 본다** — 크로마가 이미 있다 (D-0211).
 
 **덮어쓰지 않는다.** 목적지에 같은 이름이 있으면 건너뛰므로 몇 번을 돌려도 같고,
 양쪽 어느 방향으로도 안전하다 — 산출물 이름에 스탬프가 박혀 있어 서로 다른 실행이
@@ -155,8 +155,8 @@ make artifacts-push ONLY=keys    # keys-*.keys.jsonl + keys-*.series (74MB)
 make artifacts-pull  ONLY=keys
 ```
 
-`doctor`가 스템 사전이 없다고 하면 **재추출 전에 `make artifacts-pull`을 먼저 본다.**
-수십 초와 1시간 40분의 차이다.
+`doctor`가 스템 사전이 없고 묶음이 있으면 **`ingest keys --from-bundles`가 먼저다**
+(D-0211). 교두보의 옛 `keys-*`는 D-0203이 밀기로 한 것이라 당겨 오면 되돌린다.
 
 ### 내보내기 (D-0147)
 

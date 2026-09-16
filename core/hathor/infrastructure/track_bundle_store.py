@@ -33,9 +33,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
     type Arrays = dict[str, np.ndarray[tuple[int, ...], np.dtype[np.float32]]]
+
+BUNDLE_DIRNAME = "audio"
+"""`var/ingest` 아래 묶음 폴더. **쓰는 쪽과 읽는 쪽이 이 이름 하나를 본다** (D-0211)."""
 
 MANIFEST_NAME = "manifest.json"
 FAILURES_NAME = "failures.jsonl"
@@ -140,3 +144,32 @@ class TrackBundleStore:
             else 0
         )
         return {"done": done, "failed": failed}
+
+    def manifests(self) -> Iterator[tuple[str, Path, dict[str, object]]]:
+        """끝난 묶음을 `(source_key, npz 경로, manifest)`로 낸다 (O-63 · D-0211).
+
+        **manifest가 있어야 끝난 것이다** (`has`와 같은 규약). 원 곡 키는 파일
+        이름이 아니라 manifest가 든다 — 이름은 해시다.
+        """
+        if not self._root.is_dir():
+            return
+        for path in sorted(self._root.glob(f"*.{MANIFEST_NAME}")):
+            found = json.loads(path.read_text(encoding="utf-8"))
+            stem = path.name.removesuffix(f".{MANIFEST_NAME}")
+            bundle = self._root / f"{stem}{BUNDLE_SUFFIX}"
+            if isinstance(found, dict) and bundle.exists() and "source_key" in found:
+                yield str(found["source_key"]), bundle, found
+
+    @staticmethod
+    def read(path: Path, prefixes: tuple[str, ...]) -> Arrays:
+        """그 접두어로 시작하는 배열만 읽는다.
+
+        **MERT를 안 연다.** 묶음 대부분이 MERT 65벌이고 `npz`는 연 배열만
+        풀므로 크로마만 읽으면 곡당 수 밀리초다.
+        """
+        with np.load(path, allow_pickle=False) as bundle:
+            return {
+                name: np.asarray(bundle[name], dtype=np.float32)
+                for name in bundle.files
+                if name.startswith(prefixes)
+            }

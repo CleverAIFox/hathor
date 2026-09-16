@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from hathor.domain.services.stem_sets import DEFAULT_STEM_SET
 from hathor.infrastructure.keys_jsonl_store import find_keys_store
+from hathor.infrastructure.track_bundle_store import BUNDLE_DIRNAME, TrackBundleStore
 from hathor.shared.config.paths import (
     ARTIFACT_STORE_ENV,
     LIBRARY_ROOT_ENV,
@@ -217,10 +218,15 @@ def run_doctor(args: argparse.Namespace) -> int:
     store = find_keys_store(root, DEFAULT_STEM_SET)
     if store is None:
         print(f"    !! {DEFAULT_STEM_SET} 스템 사전이 없다. 생성이 전체 믹스로 물러난다 (D-0074)")
-        # **다시 뽑기 전에 교두보를 먼저 본다** (D-0118). 리전에서 1시간 40분 걸린
-        # 것을 광인사가 30초에 가져올 수 있는데 재추출을 시키고 있었다.
-        print("       먼저:   make artifacts-pull   (SSD 교두보에 있으면 수십 초)")
-        print("       없으면: 리전에서 ingest keys --separate  (GPU · 약 1시간 40분)")
+        # **가진 것부터 본다** (D-0211). 묶음에 크로마가 이미 있는데 교두보에서 밀기로
+        # 한 것을 되돌리게 하거나 GPU 1시간 40분을 시키고 있었다.
+        bundles = TrackBundleStore(ingest / BUNDLE_DIRNAME).counts()["done"]
+        if bundles:
+            print(
+                f"       묶음 {bundles}곡이 있다: ingest keys --from-bundles  (음원·GPU 없이 수 분)"
+            )
+        else:
+            print("       묶음이 없다: 리전에서 ingest all  (GPU · 약 13시간)")
     else:
         print(f"    {DEFAULT_STEM_SET} 스템 사전  {store.name}")
     store_root = artifact_store()

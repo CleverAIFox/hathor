@@ -90,6 +90,9 @@ PITCH_SOURCES: tuple[tuple[str, float, float], ...] = (
 해도 **이 둘은 단성이라 실제로 된다** — 지금 없는 비교선이 서는 유일한 길이다.
 """
 
+CHROMA_SERIES_SECONDS = 1.0
+"""크로마 시계열 창. **가장 짧은 창으로 뽑고 읽을 때 묶는다** (D-0104)."""
+
 SILENCE_FLOOR = 1e-4
 """무음 판정 진폭. 16비트 양자화 바닥(약 3e-5)보다 위에 둔다."""
 
@@ -129,7 +132,12 @@ class IngestAll:
             yield bundle
 
     def _one(self, track: ScannedTrack) -> TrackBundle:
-        from hathor.domain.services.key_estimation import chroma_series, cq_chroma
+        from hathor.domain.services.key_estimation import (
+            HARMONIC_STRENGTH,
+            LOG_GAMMA,
+            chroma_series,
+            cq_chroma,
+        )
         from hathor.domain.services.onset import envelope
 
         waveform = self.decoder.decode(self.library_root / track.source_key)
@@ -152,9 +160,18 @@ class IngestAll:
 
         for name, signal in sources.items():
             mono = _mono(signal)
-            arrays[f"chroma/{name}"] = np.asarray(cq_chroma(mono), dtype=np.float32)
+            # **조건을 인자로 넘기고 manifest에 적는다** (D-0211). D-0203은 기본값에
+            # 기대고 안 적어서, 배음이 이미 빠진 크로마를 `--replay`가 또 뺄 뻔했다.
+            arrays[f"chroma/{name}"] = np.asarray(
+                cq_chroma(mono, gamma=LOG_GAMMA, harmonic=HARMONIC_STRENGTH), dtype=np.float32
+            )
             if name in CHROMA_SERIES_SOURCES:
-                arrays[f"chroma_series/{name}"] = chroma_series(mono)
+                arrays[f"chroma_series/{name}"] = chroma_series(
+                    mono,
+                    window_seconds=CHROMA_SERIES_SECONDS,
+                    gamma=LOG_GAMMA,
+                    harmonic=HARMONIC_STRENGTH,
+                )
             if name in ONSET_SOURCES:
                 arrays[f"onset/{name}"] = np.asarray(
                     envelope(mono, SOURCE_SAMPLE_RATE, SILENCE_HOP_SECONDS), dtype=np.float32
@@ -187,6 +204,10 @@ class IngestAll:
                 "onset_hop_seconds": SILENCE_HOP_SECONDS,
                 "silence_floor": SILENCE_FLOOR,
                 "dtype": "float32",
+                "chroma_mode": "cq",
+                "chroma_harmonic": HARMONIC_STRENGTH,
+                "chroma_gamma": LOG_GAMMA,
+                "chroma_series_seconds": CHROMA_SERIES_SECONDS,
             },
         )
 

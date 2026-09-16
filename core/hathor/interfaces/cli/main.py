@@ -66,6 +66,7 @@ from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzLookup,
 )
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
+from hathor.interfaces.cli import ingest_keys_bundles
 from hathor.interfaces.cli.doctor import run_doctor
 from hathor.interfaces.cli.eval_order import run_eval_harmony_order
 from hathor.interfaces.cli.eval_output import report_harmonic_sweep, run_eval_harmony_output
@@ -205,6 +206,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="크로마 방식. linear는 D-0056 이전 베이스라인이다",
     )
     keys.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
+    ingest_keys_bundles.add_argument(keys)
     keys.add_argument(
         "--replay",
         type=resolve_path,
@@ -1281,13 +1283,18 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
     out_root = Path(args.out)
     rows: list[dict[str, object]] = []
 
-    if args.replay is not None:
+    if args.from_bundles:  # 옛 규격을 다시 쓰고 같은 보고로 이어 간다 (O-63 · D-0211)
+        if not (rows := ingest_keys_bundles.run(args) or []):
+            return 2
+    elif args.replay is not None:
         if refusal := replay_refusal(args):
             print(refusal, file=sys.stderr)
             return 2
 
         with args.replay.open(encoding="utf-8") as stream:
             rows = [json.loads(line) for line in stream if line.strip()]
+        if (strength := ingest_keys_bundles.replay_strength(rows, args)) is None:
+            return 2  # 이미 뺀 배음을 또 빼지 않는다 (D-0211)
         recomputed = 0
         for row in rows:
             saved = row.get("chroma")
@@ -1296,7 +1303,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
             # **저장된 크로마로 다시 판정한다** (D-0059). 프로파일과 배음 감산을
             # 바꿔 가며 실험할 수 있고 음원도 GPU도 필요 없다. 크로마를 뽑는
             # 것만 리전이고 알고리즘 실험은 어느 기기에서든 돈다.
-            vector = subtract_harmonics(np.asarray(saved, dtype=np.float64), args.harmonic)
+            vector = subtract_harmonics(np.asarray(saved, dtype=np.float64), strength)
             total = float(vector.sum())
             if total <= 0:
                 continue
@@ -1789,9 +1796,6 @@ D-0181은 **넷만 보고** `layer03`을 골랐다 — 이웃 층이 더 나은�
 모른다. 전부 뽑으면 그 질문이 재추출 없이 풀린다 (D-0203).
 """
 
-BUNDLE_DIRNAME = "audio"
-"""한 패스 산출물이 사는 곳. **타임스탬프 폴더를 만들지 않는다** (D-0203)."""
-
 
 def _run_ingest_all(args: argparse.Namespace) -> int:
     """곡 하나를 한 번만 열어 전부 뽑는다 (D-0203).
@@ -1805,7 +1809,7 @@ def _run_ingest_all(args: argparse.Namespace) -> int:
     from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
     from hathor.infrastructure.librosa_pitch_tracker import LibrosaPitchTracker
     from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
-    from hathor.infrastructure.track_bundle_store import TrackBundleStore
+    from hathor.infrastructure.track_bundle_store import BUNDLE_DIRNAME, TrackBundleStore
 
     tracks = list(JsonlScanStore(args.out).read_tracks())
     if not tracks:
