@@ -173,7 +173,8 @@ def test_생성_경로의_옛_로더가_새_산출물을_읽는다(
 
     series = find_series_root(tmp_path, "other")
     assert series is not None and series.name == store.name.replace(".keys.jsonl", ".series")
-    assert set(load_transition_priors(series, "other", ["가.mp3", "나.mp3"])) == {
+    tonics = {"가.mp3": 0, "나.mp3": 0}
+    assert set(load_transition_priors(series, "other", ["가.mp3", "나.mp3"], tonics=tonics)) == {
         "가.mp3",
         "나.mp3",
     }
@@ -284,3 +285,93 @@ def test_doctor가_묶음이_있으면_재생성을_권한다(
     assert "artifacts-pull" not in out
     manifest = json.loads(next((ingest / BUNDLE_DIRNAME).glob("*.manifest.json")).read_text())
     assert manifest["source_key"] == "가.mp3"
+
+
+# ------------------------------------------- 전이 사전은 도수여야 한다 (D-0213)
+
+
+def _write_progression(root: Path, name: str, tonic: int, degrees: tuple[int, ...]) -> None:
+    """절대음으로 저장된 시계열. **실물 산출물이 이렇다** — 회전하지 않고 쓴다."""
+    from hathor.infrastructure.chroma_series_store import write_series
+
+    rows = np.full((len(degrees) * 4, 12), 0.01, dtype=np.float32)
+    for index in range(len(rows)):
+        rows[index, (tonic + degrees[index % len(degrees)]) % 12] = 1.0
+    write_series(root, name, "other", rows)
+
+
+def test_전이_사전이_으뜸음으로_돌아간다(tmp_path: Path) -> None:
+    """**E장조의 I → IV → V가 도수 0 → 5 → 7로 읽혀야 한다.**
+
+    회전을 안 하면 절대음 4 → 9 → 11이 되고, 생성기는 그것을 III → VI → VII로 읽는다.
+    그러면 **I의 행이 비어** 으뜸화음이 곡에서 사라진다 — 실측 10곡 중 4곡이 0~6%였다.
+    """
+    _write_progression(tmp_path, "E장조.mp3", 4, (0, 5, 7))
+
+    table = load_transition_priors(tmp_path, "other", ["E장조.mp3"], tonics={"E장조.mp3": 4})
+    matrix = np.asarray(table["E장조.mp3"])
+
+    assert matrix[0, 5] > 0 and matrix[5, 7] > 0 and matrix[7, 0] > 0
+    assert matrix[4, 9] == 0
+
+
+def test_조성이_달라도_같은_진행이면_같은_사전이다(tmp_path: Path) -> None:
+    """**이조 불변.** 이것이 깨져 있어 판정 하네스(D-0112)가 못 잡았다 — self/other는
+    곡마다 절대음 행렬을 따로 쓰므로 회전이 틀려도 자기 행렬은 자기가 제일 닮는다."""
+    _write_progression(tmp_path, "C.mp3", 0, (0, 9, 5, 7))
+    _write_progression(tmp_path, "G#.mp3", 8, (0, 9, 5, 7))
+
+    table = load_transition_priors(
+        tmp_path, "other", ["C.mp3", "G#.mp3"], tonics={"C.mp3": 0, "G#.mp3": 8}
+    )
+
+    assert np.allclose(table["C.mp3"], table["G#.mp3"])
+
+
+def test_으뜸음을_모르는_곡은_C로_읽지_않는다(tmp_path: Path) -> None:
+    _write_progression(tmp_path, "모름.mp3", 4, (0, 5, 7))
+    assert load_transition_priors(tmp_path, "other", ["모름.mp3"], tonics={}) == {}
+
+
+def test_생성_경로가_곡의_으뜸음으로_돌린다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`generate --transitions`가 `keys.jsonl`의 조성으로 회전하는지 끝에서 끝까지 본다."""
+    import argparse
+
+    from hathor.interfaces.cli.main import _resolve_transition_prior
+
+    ingest = tmp_path / "var" / "ingest"
+    arrays = _arrays()
+    e_major = np.roll(C_MAJOR, 4)
+    arrays["chroma/mixture"] = e_major
+    rows = np.full((12, 12), 0.01, dtype=np.float32)
+    for index in range(12):
+        rows[index, (4 + (0, 5, 7)[index % 3]) % 12] = 1.0
+    arrays["chroma_series/other"] = rows
+    TrackBundleStore(ingest / BUNDLE_DIRNAME).write("E.mp3", arrays, {})
+    assert main(["ingest", "keys", "--from-bundles", "--out", str(ingest)]) == 0
+    monkeypatch.setattr("hathor.shared.config.paths.repo_root", lambda: tmp_path)
+
+    args = argparse.Namespace(transitions=True, series=None, priors=None, stem_set="other")
+    matrix, _ = _resolve_transition_prior(args, ["E.mp3"])
+
+    assert matrix is not None
+    assert matrix[0][5] > 0 and matrix[4][9] == 0
+
+
+def test_회전_기준이_없으면_배열을_안_건다(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**C장조로 읽지 않는다** (D-0213). 그렇게 읽은 것이 결함이었다."""
+    import argparse
+
+    from hathor.interfaces.cli.main import _resolve_transition_prior
+
+    monkeypatch.setattr("hathor.shared.config.paths.repo_root", lambda: tmp_path)
+    _write_progression(tmp_path / "s", "곡.flac", 0, (0, 5, 7))
+    args = argparse.Namespace(
+        transitions=True, series=tmp_path / "s", priors=None, stem_set="other"
+    )
+    assert _resolve_transition_prior(args, ["곡.flac"]) == (None, "없음")
+    assert "회전 기준" in capsys.readouterr().err

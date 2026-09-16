@@ -18,7 +18,7 @@ from hathor.infrastructure.chroma_series_store import (
     load_hold_probabilities,
     load_transition_priors,
 )
-from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_degree_priors
+from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_degree_priors, load_tonics
 from hathor.interfaces.cli.tables import parse_key, render_table
 
 if TYPE_CHECKING:
@@ -55,7 +55,9 @@ def run_eval_harmony_order(args: argparse.Namespace) -> int:
     table = load_degree_priors(store, args.stem_set)
     names = sorted(table)[: args.songs]
     priors = [ReferencePrior(name, table[name]) for name in names]
-    transitions = load_transition_priors(series_root, args.stem_set, names)
+    transitions = load_transition_priors(
+        series_root, args.stem_set, names, tonics=load_tonics(store)
+    )
     holds = load_hold_probabilities(series_root, args.stem_set, names) if args.use_hold else None
     references = references_from(priors, transitions, holds)
     if len(references) < 2:

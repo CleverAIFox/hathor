@@ -504,6 +504,13 @@ def write_series(root, names, *, seed=17, hold_windows=1):
     return root
 
 
+def c_major_keys(path, names):
+    """전이 사전의 **회전 기준**. 없으면 생성 경로가 배열을 안 건다 (D-0213)."""
+    rows = [{"source_key": name, "key": "C major"} for name in names]
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows))
+    return path
+
+
 def test_배열_사전을_읽어_생성에_건다(tmp_path, capsys):
     """**어휘만 걸리고 배열이 안 걸린 것을 모르면** "참조곡 반영"을 보고 둘 다 걸렸다고
 
@@ -514,7 +521,8 @@ def test_배열_사전을_읽어_생성에_건다(tmp_path, capsys):
 
     names = ["아티스트-곡000.flac", "아티스트-곡001.flac"]
     root = write_series(tmp_path / "keys-20260823T000000Z.series", names)
-    args = argparse.Namespace(transitions=True, series=root, stem_set="other")
+    priors = c_major_keys(tmp_path / "keys.jsonl", names)
+    args = argparse.Namespace(transitions=True, series=root, priors=priors, stem_set="other")
     matrix, source = _resolve_transition_prior(args, names)
     assert matrix is not None and not is_empty(matrix)
     assert "2곡" in source
@@ -536,7 +544,8 @@ def test_참조곡이_시계열에_없으면_물러난다(tmp_path, capsys):
     from hathor.interfaces.cli.main import _resolve_transition_prior
 
     root = write_series(tmp_path / "keys-20260823T000000Z.series", ["있는곡.flac"])
-    args = argparse.Namespace(transitions=True, series=root, stem_set="other")
+    priors = c_major_keys(tmp_path / "keys.jsonl", ["있는곡.flac", "없는곡.flac"])
+    args = argparse.Namespace(transitions=True, series=root, priors=priors, stem_set="other")
     matrix, source = _resolve_transition_prior(args, ["없는곡.flac"])
     assert matrix is None and source == "없음"
     assert "시계열 저장분에 없다" in capsys.readouterr().err
@@ -546,7 +555,8 @@ def test_일부만_있으면_알린다(tmp_path, capsys):
     from hathor.interfaces.cli.main import _resolve_transition_prior
 
     root = write_series(tmp_path / "keys-20260823T000000Z.series", ["있는곡.flac"])
-    args = argparse.Namespace(transitions=True, series=root, stem_set="other")
+    priors = c_major_keys(tmp_path / "keys.jsonl", ["있는곡.flac", "없는곡.flac"])
+    args = argparse.Namespace(transitions=True, series=root, priors=priors, stem_set="other")
     matrix, _ = _resolve_transition_prior(args, ["있는곡.flac", "없는곡.flac"])
     assert matrix is not None
     assert "2곡 중 1곡만" in capsys.readouterr().err
@@ -606,7 +616,9 @@ def test_빈_전이_사전은_뺀다(tmp_path):
     stamp = __import__("hashlib").sha1("한도수곡.flac".encode()).hexdigest()[:16]
     flat = np.tile(np.eye(DEGREES)[0], (8, 1))
     np.savez_compressed(root / f"{stamp}-other.npz", series=flat, source_key="한도수곡.flac")
-    assert load_transition_priors(root, "other", ["한도수곡.flac"]) == {}
+    assert (
+        load_transition_priors(root, "other", ["한도수곡.flac"], tonics={"한도수곡.flac": 0}) == {}
+    )
 
 
 # ---------------------------------------------------------------- 곡별 유지 (O-37 · D-0123)

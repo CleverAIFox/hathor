@@ -16,7 +16,7 @@ from hathor.domain.services.chord_rhythm import hold_probability
 from hathor.domain.services.transition_prior import is_empty, transition_prior
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
 
@@ -61,21 +61,31 @@ def find_series_root(root: Path, stem_set: str) -> Path | None:
 
 
 def load_transition_priors(
-    root: Path, stem_set: str, source_keys: Sequence[str]
+    root: Path, stem_set: str, source_keys: Sequence[str], *, tonics: Mapping[str, int]
 ) -> dict[str, tuple[tuple[float, ...], ...]]:
-    """곡별 전이 사전을 시계열 폴더에서 읽는다 (O-32 · D-0112).
+    """곡별 전이 사전을 시계열 폴더에서 읽는다 (O-32 · D-0112 · D-0213).
 
     **빈 사전은 뺀다** (D-0107). 창이 둘 미만이거나 한 도수만 나온 곡이며,
     **없는 것을 조건으로 쓰지 않는다.**
+
+    ### 으뜸음으로 회전한다 (D-0213)
+
+    `transition_prior`는 *"들어오는 시계열은 이미 으뜸음으로 회전돼 있어야 한다"*고
+    적었고 **아무도 안 돌렸다.** 시계열은 피치클래스 그대로 저장되므로 사전의 행·열이
+    **절대음**이었고, 생성기는 그것을 **도수**로 읽었다. E장조 곡에서 I의 행은
+    C(♭VI)의 행이었다 — 으뜸화음이 곡에서 사라졌다.
+
+    **으뜸음이 없는 곡은 뺀다.** 0으로 두면 C장조로 읽은 것이 되고 그것이 이 결함이다.
     """
     found: dict[str, tuple[tuple[float, ...], ...]] = {}
     for source_key in source_keys:
         path = series_path(root, source_key, stem_set)
-        if not path.exists():
+        tonic = tonics.get(source_key)
+        if tonic is None or not path.exists():
             continue
         with np.load(path, allow_pickle=False) as bundle:
             series = np.asarray(bundle["series"], dtype=np.float64)
-        matrix = transition_prior(series)
+        matrix = transition_prior(np.roll(series, -tonic, axis=1))
         if not is_empty(matrix):
             found[source_key] = tuple(tuple(float(v) for v in row) for row in matrix)
     return found

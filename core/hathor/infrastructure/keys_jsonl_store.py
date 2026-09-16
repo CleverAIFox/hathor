@@ -136,6 +136,19 @@ def load_degree_priors(path: Path, source: str) -> dict[str, tuple[float, ...]]:
     return found
 
 
+def load_tonics(path: Path) -> dict[str, int]:
+    """`source_key → 으뜸음 피치클래스`. **전체 믹스 추정을 쓴다** (D-0073 · D-0213).
+
+    도수 사전과 전이 사전이 **같은 회전**을 써야 한 곡의 조건이 된다.
+    """
+    found: dict[str, int] = {}
+    for row in iter_rows(path):
+        name, tonic = row.get("source_key"), tonic_index(row)
+        if name is not None and tonic is not None:
+            found[str(name)] = tonic
+    return found
+
+
 def load_key_margins(path: Path) -> dict[str, float]:
     """`source_key → margin`. 조성 추정의 1위-2위 상관 차다 (D-0089)."""
     found: dict[str, float] = {}

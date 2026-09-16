@@ -60,6 +60,7 @@ from hathor.infrastructure.keys_jsonl_store import (
     find_keys_store,
     load_drift_observations,
     load_stem_priors,
+    load_tonics,
 )
 from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzClient,
@@ -1194,11 +1195,8 @@ def _resolve_transition_prior(
 ) -> tuple[tuple[tuple[float, ...], ...] | None, str]:
     """배열 사전을 고른다 (O-32 · D-0110).
 
-    **참조곡이 여럿이면 전이 행렬을 더한다.** 도수 사전을 회전 뒤 평균하는 것과
-    같은 구조다 (D-0063) — 이미 으뜸음 기준이므로 그대로 더하면 된다.
-
-    **없으면 `None`이고 순서는 이전처럼 시드만 따른다.** 조건화가 조용히 반쯤
-    걸리는 것보다 아예 안 걸리는 편이 낫다 (D-0063과 같은 규율).
+    **참조곡이 여럿이면 곡마다 으뜸음으로 돌린 뒤 더한다** (D-0063 · D-0213).
+    *"이미 으뜸음 기준"*이라 적고 안 돌려 절대음을 도수로 읽었다. 없으면 `None`이다.
     """
     import numpy as np
 
@@ -1212,7 +1210,11 @@ def _resolve_transition_prior(
         print("시계열 산출물을 찾지 못했다. 배열 조건화를 건너뛴다.", file=sys.stderr)
         return None, "없음"
 
-    table = load_transition_priors(root, args.stem_set, source_keys)
+    store = getattr(args, "priors", None) or find_keys_store(_root(), args.stem_set)
+    if store is None:
+        print("조성 산출물이 없어 회전 기준이 없다. 배열 조건화를 건너뛴다.", file=sys.stderr)
+        return None, "없음"
+    table = load_transition_priors(root, args.stem_set, source_keys, tonics=load_tonics(store))
     total = np.zeros((DEGREE_COUNT, DEGREE_COUNT), dtype=np.float64)
     for matrix in table.values():
         total += np.asarray(matrix, dtype=np.float64)
