@@ -60,6 +60,10 @@ NETWORK = ("urllib", "requests", "httpx", "socket", "aiohttp", "http.client", "f
 가르려면 호출을 따라가야 하고, 접점 파일이 하나뿐인 지금은 **넓게 잡는 쪽이 싸다.**"""
 
 ALLOWED = {
+    "tools/probe_listenbrainz.py": (
+        "ListenBrainz 대중성 커버리지 탐침 (D-0215). **레코딩 MBID 문자열만 보낸다.** "
+        "응답은 청취 수·청취자 수이며 조사용이고 오디오를 만지지 않는다"
+    ),
     "tools/probe_musicbrainz.py": (
         "MusicBrainz 조회 탐침 (D-0019). **아티스트·제목 문자열만 보낸다.** "
         "제품 경로가 아니라 조사용이며 오디오를 만지지 않는다"
