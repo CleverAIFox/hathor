@@ -31,7 +31,7 @@ def add_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--from-bundles",
         action="store_true",
-        help="`ingest all` 묶음에서 keys.jsonl·series를 다시 쓴다. 음원도 GPU도 안 쓴다 (O-63)",
+        help="`ingest all` 묶음에서 keys.jsonl·series를 다시 쓴다. 음원도 GPU도 안 쓴다 (D-0211)",
     )
 
 
