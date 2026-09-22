@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # 배포가 이 검사를 그대로 부른다 (proposal.yml · D-0222)
+  workflow_call:
 
 env:
   PYTHON_VERSION: "3.12"

@@ -226,3 +226,29 @@ def test_continue_on_error는_선언과_수가_맞아야_한다():
     assert any("continue-on-error" in text for text in parity(MAKE, workflow, HOOKED))
     ok = workflow + "# advisory: pip-audit 우리가 못 고친다\n"
     assert parity(MAKE, ok, HOOKED) == []
+
+
+# ------------------------------------------------------------------ 배포 (D-0222)
+
+PAGES = ROOT / ".github" / "workflows" / "proposal.yml"
+
+
+def test_배포는_검사를_지난다() -> None:
+    """**D-0222의 강제자.** 배포가 CI와 따로 돌면 빨간 커밋의 기획서가 올라간다.
+
+    fire-lane 실측 — 배포 넷에 `needs:`가 0건이었고 검사와 **나란히** 돌았다.
+    검사를 복사하지 않고 `ci.yml`을 그대로 부른다.
+    """
+    pages = PAGES.read_text(encoding="utf-8")
+    assert "workflow_call:" in WORKFLOW.read_text(encoding="utf-8")
+    assert "uses: ./.github/workflows/ci.yml" in pages
+    assert "needs: gate" in pages
+    assert "tools/docx_check.py" in pages
+
+
+def test_배포는_정본을_옮기기만_한다() -> None:
+    """**사본을 커밋하지 않는다.** `site/`에 docx가 있으면 두 벌이 된다."""
+    assert not (ROOT / "site" / "proposal.docx").exists()
+    viewer = (ROOT / "site" / "proposal.html").read_text(encoding="utf-8")
+    assert "./proposal.docx" in viewer
+    assert "cp docs/proposal.docx _site/" in PAGES.read_text(encoding="utf-8")

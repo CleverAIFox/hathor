@@ -1,0 +1,59 @@
+# 기획서를 GitHub Pages로 배포한다 (D-0222).
+#
+# 정본은 docs/MASTER.md Part I ~ III이고 docs/proposal.docx는 그것을 빌드한 판이다 (D-0221).
+# 사본을 커밋하지 않고 배포 직전에 _site/로 옮긴다 — 두 벌이 커밋되면 한쪽만 고쳐진다.
+#
+# 배포는 검사를 지난다. ci.yml을 그대로 부른다 — 푸시가 통과한 것과 같은 검사여야
+# 게이트가 문다 (fire-lane _deploy.yml). 검사를 여기 복사하면 둘이 갈린다.
+#
+# 한 번은 손으로 켠다 — 저장소 설정 → Pages → Source: GitHub Actions
+#   gh api -X POST repos/CleverAIFox/hathor/pages -f build_type=workflow
+name: proposal
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/proposal.docx'
+      - 'docs/MASTER.md'
+      - 'site/**'
+      - 'tools/docx_check.py'
+      - 'tools/proposal_source.py'
+      - '.github/workflows/proposal.yml'
+  workflow_dispatch:
+
+# 재사용 워크플로에는 호출자보다 큰 권한이 안 간다. 배포 권한은 여기서 준다.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: gate
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}proposal.html
+    steps:
+      - uses: actions/checkout@v4
+      - name: Proposal vs sources
+        run: python3 tools/docx_check.py --check
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp site/* _site/
+          cp docs/proposal.docx _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

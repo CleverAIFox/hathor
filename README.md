@@ -1,6 +1,9 @@
 # HATHOR
 
-취향 잠재 표현 기반 종단간 AI 음악 창작 시스템.
+취향 잠재 표현 기반 종단간 AI 음악 창작 시스템. **내 라이브러리로 내 취향의 곡을 만든다.**
+
+기획서 — [`docs/proposal.docx`](docs/proposal.docx) ·
+[웹에서 보기](https://cleveraifox.github.io/hathor/proposal.html) (D-0222)
 
 ## 문서 지도
 
@@ -33,6 +36,7 @@
 | 기호 생성 | 구조 → 화성 → 가락 → 베이스 → 반주를 SMF로 쓴다. 참조곡 조성·화성 사전으로 조건화. **기준선으로 동결** (D-0214) |
 | 생성 엔진 | 서류 관문으로 일곱을 걸러 **ACE-Step 1.5(MIT)** 1순위 (D-0217). 실측 G0에서 **기기가 떨어졌다** — GTX 1660 Ti에서 fp16은 NaN, fp32는 메모리 부족. **VRAM 16GB 이상 장비를 기다린다** |
 | 규약 | `make check` · CI 3잡 · 커밋 훅. 셋이 같은 것을 보는지 차집합으로 대조한다 (D-0219) |
+| 기획서 | `MASTER.md` Part I ~ III에서 빌드한다 — 64쪽 · 그림 28장 (D-0221). main에 들어가면 **검사를 지난 뒤** GitHub Pages로 배포한다 (D-0222) |
 | **다음 작업** | **정본은 [`docs/PLAN.md`](docs/PLAN.md) §1이며 여기 적지 않는다** (D-0130 · D-0202). 여기 옮겨 적었다가 O-57이 닫힌 뒤에도 남아 **지시서가 죽은 작업을 가리켰다.** |
 
 정본 뷰는 **축마다 다르다** — 검색은 `layer00`, 화성은 **`layer03`**이다 (D-0027 · D-0181).
@@ -41,6 +45,19 @@
 
 > **아래 명령 예시 중 `keys-*`를 가리키는 것은 `ingest keys --from-bundles`를 한 번
 > 돌린 뒤에 돈다** (D-0211). 조합·반쪽을 요구하는 것과 `mert-layers`는 아직 안 돈다 (O-62).
+
+## 빠른 실행
+
+```bash
+cd ~/projects/hathor
+make setup                    # 기기를 탐지해 .env를 쓴다. 한 번 (D-0068)
+make doctor                   # 규약 · 설치 · 음원 루트 · 산출물을 본다 (D-0067)
+cd core && uv sync --all-extras --dev && cd ..
+make check                    # CI와 같은 검사 — 문서 · 길이 · 린트 · 타입 · 계약 · 시험
+```
+
+`docker compose up -d`는 DB · 큐 · 오브젝트 저장소를 띄운다. **지금 코드는 쓰지 않는다** —
+산출물은 `var/`의 npz · JSONL이고 DB는 P4에서 붙는다 (MASTER Part III §2).
 
 ## 생성 (D-0052)
 
@@ -53,413 +70,101 @@ uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
     --no-key-estimation          # 음원 없이. C장조 고정
 ```
 
-참조곡 음원에서 **조성을 추정한다** (D-0054). 배치가 필요 없고 그 자리에서
-1~5곡만 디코딩한다. 나란한 장·단조 혼동은 원리적 한계라 격차가 작으면 `(애매)`로
-표시한다. 참조곡 상한은 5개다 (D-0011) — 그 이상은 퓨전이 아니라 코퍼스 평균이 된다.
+참조곡에서 **조성을 추정하고**(D-0054) 가사 반복으로 구조를 뽑는다(D-0049). 화성 도수 사전과
+으뜸음 기준으로 회전한 배열 사전을 걸고(D-0063 · D-0213), 가락이 박마다 화음 구성음을 짚으며
+(D-0141) 성부 진행 · 베이스 · 층별 세기 · 박 분할까지 들어간다(D-0137 ~ D-0207). SMF는 라이브러리
+없이 직접 쓴다 — 같은 시드는 같은 바이트다. 참조곡 상한은 5곡이다 (D-0011).
 
-참조곡 가사에서 반복 패턴을 뽑아 구조를 만들고, 화성을 붙여 마디에 배치한 뒤
-SMF 바이트로 쓴다. **참조를 주지 않으면 코퍼스에서 시드로 고른다.**
+**기준선으로 동결했다** (D-0214). 한 축만 바꾼 두 판을 귀가 가르지 못했다 — 다음은 오디오 엔진이다.
 
-MIDI 라이브러리를 쓰지 않고 직접 인코딩한다 — 외부 라이브러리는 버전마다
-바이트가 달라져 재현성 검증(D-0009)이 깨진다.
-
-가락이 박마다 화음 구성음을 짚고(D-0141), 화음은 성부 진행으로 이어지며(D-0137)
-베이스가 근음을 받친다(D-0139). **반주는 아직 마디 첫 박에만 떨어진다** — 참조곡의
-리듬을 뽑으려면 박이 필요하고, **박은 이제 격자에 안 흔들린다** (O-47, D-0173으로
-닫힘). 남은 것은 발음을 얼마나 성기게 볼지이며 그 자리가 비어 있다 (O-46 · O-48).
-
-## 빠른 실행
-
-```bash
-cp .env.example .env          # 값 수정
-docker compose up -d          # core: postgres · mongo · redis · rabbitmq · minio
-docker compose ps
-
-cd core
-uv sync --all-extras --dev
-uv run python -m hathor.cli generate --seed 42 --dry-run
-make check                    # docs · lint · type · arch · test (CI와 동일)
-```
-
-### 검색 평가 (GPU 불필요, CPU 수 초)
-
-```bash
-cd core
-uv run python -m hathor.cli eval retrieval --out var/ingest            # 혼합 단독
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --keys mixture,drums,bass,other,vocals --label stems-concat        # 스템 concat
-
-# MFCC 베이스라인: 먼저 특징을 뽑고(CPU 배치) 같은 하네스를 --features로 돌린다
-uv run python -m hathor.cli eval mfcc --out var/ingest
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/baseline-mfcc --label mfcc
-
-# MERT 레이어별 추출. 스템 분리 없음 — 1004곡 GPU 약 67분
-uv run python -m hathor.cli eval layers --out var/ingest --layers 0,3,6,9
-
-# 현재 기본 뷰 (D-0026). 마지막 레이어(mixture)는 쓰지 않는다
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/mert-layers --keys layer00 --label mert-layer00
-
-# 두 추출기 결합 (O-8(D-0024)). 서로 다른 추출기는 --block-l2가 필수다
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features mert=var/ingest --features mfcc=var/ingest/baseline-mfcc \
-    --keys mert:mixture,mfcc:mixture --block-l2 --label mert+mfcc
-```
-
-### 시드곡 퓨전 검색
+## 검색 · 퓨전
 
 ```bash
 cd core
 uv run python -m hathor.cli search --like "밤편지" -k 10
-uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10   # 퓨전
-```
-
-`--like`를 여러 번 주면 시드곡들의 조합에 가까운 곡을 찾는다 (D-0011 · D-0029).
-`[반복 m:ss]`는 곡 안에서 반복도가 가장 높은 구간이며 **후렴이라는 보장은 없다**.
-중심화는 기본으로 켜져 있다(D-0031). `--raw`로 끄면 허브 곡이 어떤 질의에도 상위에 온다.
-시드가 둘 이상이면 `--fusion min`으로 결합 규칙을 바꿀 수 있다 (D-0033).
-
-```bash
-uv run python -m hathor.cli eval fusion --out var/ingest   # 규칙 3종 비교 (M4)
-```
-
-### 산출물을 옮긴다 (D-0118)
-
-**`var/`는 커밋하지 않는다.** 외장 SSD가 유일한 사본이다 — **기기가 하나이므로
-교두보가 아니라 백업이다** (D-0122). `.env`에 마운트 지점을 적는다.
-
-```bash
-HATHOR_ARTIFACT_STORE=/mnt/e/hathor-artifacts   # 기기마다 다르다
-```
-
-```bash
-make artifacts          # 양쪽에 무엇이 있는지
-make artifacts-push     # 백업:  var/ingest -> SSD
-make artifacts-pull     # 복원:  SSD -> var/ingest
-```
-
-**복원은 17192개에 4분 12초다** (D-0122 실측). 재추출은 GPU로 1시간 40분이므로
-`doctor`가 사전이 없다고 하면 **묶음부터 본다** — 크로마가 이미 있다 (D-0211).
-
-**덮어쓰지 않는다.** 목적지에 같은 이름이 있으면 건너뛰므로 몇 번을 돌려도 같고,
-양쪽 어느 방향으로도 안전하다 — 산출물 이름에 스탬프가 박혀 있어 서로 다른 실행이
-같은 이름을 낼 수 없다. **정말 갈아치우려면 손으로 지운다.**
-
-**필요한 것만 옮긴다** (D-0119). 실측 산출물이 1.7GB · 17192개인데 화성 작업이 읽는
-것은 `keys-*` 74MB뿐이다. **DrvFs에서는 크기보다 개수가 아프다.**
-
-```bash
-make artifacts-push ONLY=keys    # keys-*.keys.jsonl + keys-*.series (74MB)
-make artifacts-pull  ONLY=keys
-```
-
-`doctor`가 스템 사전이 없고 묶음이 있으면 **`ingest keys --from-bundles`가 먼저다**
-(D-0211). 교두보의 옛 `keys-*`는 D-0203이 밀기로 한 것이라 당겨 오면 되돌린다.
-
-### 내보내기 (D-0147)
-
-```bash
-make ship                 # 규약 · git 상태 · 위생 · 산출물을 한 번에 본다
-make ship PUSH=1          # 통과하면 push하고 교두보까지 보낸다
-```
-
-**손으로 기억하는 목록은 언젠가 하나를 빠뜨린다.** `make check` → `git push` →
-`make artifacts-push`의 순서가 사람 머리에만 있던 것을 코드로 옮겼다.
-
-### 기기를 옮겼다면 (D-0066)
-
-**저장소는 양쪽 기기에서 `~/projects/hathor`다.** 윈도우 드라이브(`/mnt/c`)에 두지 않는다 —
-`uv sync`가 105초에서 105밀리초로 줄었다.
-
-```bash
-cd ~/projects/hathor
-make setup                # 기기를 탐지해 .env를 쓴다. 기기당 한 번
-make doctor               # 규약과 맞는지 검사한다
-```
-
-`make setup`이 윈도우 사용자 이름(광인사 `foxlo` · 리전 `Fox`)과 음원 루트를 찾아
-`.env`에 적는다. **손으로 치지 않는다.** 이미 있는 값은 두고 `--force`로 덮는다.
-후보를 파일 수와 함께 보여주므로 틀렸으면 `.env`를 고치면 된다.
-
-`make doctor`가 위치 규약(D-0004), **설치본이 이 저장소를 가리키는지**, `.env`와 필수 키,
-음원 루트 실재 여부, git 상태, 산출물 현황, **설치 프로파일**을 본다. 광인사(`--dev`)는
-ML 검사를 건너뛰므로 **거기서 초록이어도 리전에서 깨질 수 있다** — `doctor`가 그것을 알린다. 고칠 것이 있으면 고치는 명령까지 낸다.
-`make env`는 경로만 짧게 찍는다.
-
-`make env`가 저장소 루트, `.env` 유무, 음원 루트가 실제로 있는지, 산출물이 몇 건인지를
-찍는다. **경로를 셸에 export하지 않는다** — `.env` 한 곳에만 적는다.
-
-패치는 `HATHOR_PATCH_DIR`에 받아 두고:
-
-```bash
-make apply                    # 가장 최근 .patch
-make apply PATCH=D0067.patch
-```
-
-작업 트리가 깨끗한지 보고, 이미 적용됐으면 아무것도 하지 않는다. 되돌리기는
-`git apply -R`이다 — **별도 백업 디렉터리를 만들지 않는다** (GR-0.7).
-
-### 크로마 대비 개선 실측 (O-27 · D-0064)
-
-```bash
-cd core
-export HATHOR_LIBRARY_ROOT=/mnt/d/노래/노래
-
-# (b) 창별 중앙값. 같은 200곡을 같은 조건으로 다시 뽑는다
-uv run python -m hathor.cli ingest keys --out var/ingest --halves --limit 200 \
-    --aggregate median --window-seconds 10
-
-uv run python -m hathor.cli eval harmony-prior --replay var/ingest/keys-<새 스탬프>.keys.jsonl
-```
-
-**볼 것은 `달성 가능 폭` 한 줄이다.** `mean` 0.0187 · `median` 0.0198 · K-K 장조 0.0616.
-**(b)는 사전 등록 기준 0.031에 못 미쳐 기각했다** (D-0065).
-
-**(a) 타악 분리 — 리전에서만 돈다** (D-0073):
-
-```bash
-cd core
-uv run python -m hathor.cli ingest keys --out var/ingest --halves --separate --limit 200
-for set in other other+bass other+bass+vocals; do
-  uv run python -m hathor.cli eval harmony-prior \
-      --replay var/ingest/keys-<스탬프>.keys.jsonl --stem-set "$set"
-done
-```
-
-스템 조합 셋을 한 번에 뽑으므로 판정은 재분리 없이 돈다. **셋 중 하나도 0.031을 못
-넘으면 (a) 기각이고, 그러면 크로마 경로 자체를 접는다.**
-
-### 스템 사전으로 생성 (O-21 · D-0074 · D-0078)
-
-**Demucs를 생성할 때 돌리지 않는다.** 미리 뽑아 둔 스템 크로마를 조회하므로
-GPU 없는 기기에서도 돈다.
-
-```bash
-cd core
-# 리전에서 한 번 (약 1시간 40분, 1004곡). 끊겨도 이어받고 둘이 동시에 못 돈다
-uv run python -m hathor.cli ingest keys --out var/ingest --separate
-
-# 어느 기기에서든
-uv run python -m hathor.cli generate --seed 7 --midi var/out/a.mid \
-    --reference "10CM-폰서트" --key "C major"
-```
-
-화성 줄에 `(참조곡 반영 · other 스템)`이 찍힌다. `(참조곡 반영 · 전체 믹스)`면
-스템 사전이 없어 물러난 것이고, `make doctor`가 그것을 알린다.
-`--stem-set mix`로 전체 믹스를 강제할 수 있다.
-
-**`other`가 실측으로 고른 값이다** — 달성 가능 폭이 `other` 0.0534 · `other+bass`
-0.0497 · `other+bass+vocals` 0.0373으로 **넣을수록 나빠진다** (D-0074).
-
-### 출력 차이 측정 (O-29 · D-0079)
-
-**음원도 GPU도 필요 없다.** 저장된 크로마만 읽는다. 약 16초.
-
-```bash
-cd core
-# other 스템 사전과 전체 믹스 사전을 같은 곡·같은 쌍·같은 시드로 짝지어 비교한다
-uv run python -m hathor.cli eval harmony-output
-
-# 8마디가 표본인지 확인한다. 실측이 극한으로 내려가야 한다
-uv run python -m hathor.cli eval harmony-output --bar-sweep 8,16,32,64
-
-uv run python -m hathor.cli eval harmony-output --against none --stem-set mix
-```
-
-**`극한` 열이 상한이다.** 사전 가중치 벡터 자체의 거리이며 마디 수를 무한히
-늘렸을 때의 값이다. **8마디 실측은 항상 그보다 크고 초과분은 전달된 정보가
-아니라 유한 표본의 되튐이다** — 1004곡 실측에서 재는 값의 34%였다.
-
-**조건화 이득(교차 엔트로피)과 이 거리(전변동)는 눈금이 다르다.** CE 폭은 균등에서
-벗어난 정도의 **제곱**에, TV 거리는 그 자체에 비례한다. D-0074의 "세 배"는 여기서
-1.77배에 해당하며, **"3배가 안 왔다"로 읽으면 틀린다** (D-0082).
-
-`identical`이 0, `onehot`이 1.0이어야 한다. 아니면 하네스가 고장이므로 나머지
-숫자를 읽지 않는다. `random`은 아무 사전 둘이라 느슨하고, **`shuffled`가 뾰족함을
-맞춘 귀무선이다** — 실측이 그보다 작으면 곡들이 화성 어휘를 공유한다는 뜻이다.
-
-**`마디 환산`이 지난 세션의 "다른 마디 수"와 같은 단위다.** 8마디 한 번을 세는
-것으로는 아무것도 판정할 수 없다 (D-0078).
-
-### 도수 제한 손실 (O-31 · D-0083)
-
-**사전 벡터만 읽는다.** 생성도 음원도 GPU도 필요 없고 1초 이내다.
-
-```bash
-cd core
-uv run python -m hathor.cli eval degree-restriction
-uv run python -m hathor.cli eval degree-restriction --key "A minor"
-```
-
-**칸 수 비율(6/12)을 기준선으로 읽지 않는다.** 사전 질량이 다이어토닉에 몰려 있으면
-몫도 자연히 낮아진다. 그래서 귀무선이 필요한데 **`shuffled`(12칸 전체 치환)는 질량까지
-바꾼다** — 그것이 D-0083의 결함이었다 (D-0084).
-
-**`within`도 0점이 0이 아니다** (D-0086). 온음계 칸에는 코퍼스가 공유하는 조성 모양이
-있어 자리를 뒤섞으면 기여가 크게 늘고, 비음계 칸은 평평해 조금만 는다. **그 비대칭만으로
-부호가 양수가 된다** — 두 조를 똑같이 맞춰도 +0.055다.
-
-**`matched`가 눈금이다.** 온음계 칸의 곡별 편차를 비음계 칸에 이식해 **두 조가 똑같이
-곡 고유한** 사전을 만든다. 조별 질량과 코퍼스 모양은 그대로이므로 **눈금이 자료에서
-나오고 모형 가정이 없다.** 실측이 `matched`보다 크면 더, 작으면 덜 곡 고유하다.
-
-`순위상관`은 진단이다. **판정에 쓰지 않는다** — 곡 고유 성분이 없을 때도 0.54가
-나와 갈리지 않는다.
-
-### 배열 조건화 (O-32 · D-0110)
-
-```bash
-cd core
-uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid --transitions
-```
-
-**어휘만이 아니라 배열이 참조곡을 따른다.** 리포트가 `· 배열 <폴더> (N곡)`을 찍는다 —
-`배열 없음`이면 시계열이 없거나 참조곡이 저장분에 없다는 뜻이고, **그때 순서는
-이전처럼 시드만 따른다.**
-
-**매 마디 바뀐다** (D-0109). 전이 사전은 대각선을 버려 "바뀐다면 어디로"만 알고,
-화음을 얼마나 오래 끄는가는 O-37이다 (닫힘 D-0125).
-
-### 순서 조건화 게이트 (O-32 · D-0098)
-
-**전량 재추출 전에 표본으로 묻는다.** 스템 캐시가 없어 다시 뽑으면 Demucs를 처음부터 돈다.
-
-```bash
-cd core
-uv run python -m hathor.cli ingest keys --halves --separate --limit 200
-uv run python -m hathor.cli eval time-drift --left other --right bass
-```
-
-**두 관측이 겹치면 안 된다** (D-0099). `mix`와 `other`는 오디오를 공유해 잡음도 함께
-움직이고 상관이 부풀려진다 — 첫 실측 0.5572가 **그 겹침만으로 설명 가능한 값이었다.**
-`stems_overlap`이 겹치는 쌍을 거부한다.
-
-**두 독립 관측이 같은 방향을 가리키는가**를 본다. 전체 믹스와 스템은 같은 곡의 두
-관측이고, 추정 잡음은 갈리지만 진짜 시간 변화는 둘 다에 나타난다. 귀무선은 **곡 짝을
-뒤섞은 것**이라 잡음과 코퍼스 공통 변화를 그대로 먹는다 — 초과분만 곡 고유한 변화다.
-
-**문턱 `t > 3`은 관측 문턱보다 높다.** 이 게이트가 통과하면 전량 재추출을 승인한다.
-
-### 반음계 질량의 정체 (O-33 · D-0089)
-
-```bash
-cd core
-uv run python -m hathor.cli eval chromatic-origin --margin-split
-uv run python -m hathor.cli eval chromatic-origin --stem-set mix
-```
-
-**`초과`의 부호 하나가 판정이다.** 음수면 조성 추정 오차가 반음계 질량을 만든 것이고
-(치환), 양수면 첨가다. **뚜렷한 음수일 때만 강한 결론이다** — 검출력이 오차 쪽으로만
-강해서(합성에서 t=-8 대 t=+1.4) 양수는 "오차로 설명되지 않는다"까지다.
-
-**`뭉침 대비`가 누설과 차용을 가른다** (D-0091). 단조 차용은 화음 단위로 오므로
-♭3·♭6·♭7이 한 곡에서 **같이** 오르고, 누설은 반음계 다섯 칸을 **고르게** 올린다.
-합성에서 누설만 있을 때 -0.03~0.00이고 차용이 있으면 +0.79를 넘는다.
-
-**`mix`의 큰 값은 차용의 증거가 아니라 누설의 경고다** — 보컬 비브라토와 타악 광대역이
-전체 믹스에 들어 있다 (D-0090).
-
-### 참조곡 화성 조건화 듣기 (O-21 · D-0063)
-
-```bash
-cd core
-export HATHOR_LIBRARY_ROOT=/mnt/d/노래/노래   # 기기마다 다르다 (D-0009)
-
-# 조성까지 참조곡을 따른다
-uv run python -m hathor.cli generate --seed 7 --midi var/out/a.mid --reference "10CM-폰서트"
-
-# **조성을 고정해 화성만 갈리게 한다.** 통제된 비교는 이쪽이다
-uv run python -m hathor.cli generate --seed 7 --midi var/out/fixed-a.mid \
-    --reference "10CM-폰서트" --key "C major"
-```
-
-CLI가 화성 줄에 `(참조곡 반영)` 또는 `(시드만)`을 찍는다.
-
-**효과는 작다.** 사전이 거의 평평하므로 같은 시드에서 두 참조곡의 진행이 몇 마디만
-다르거나 같을 수도 있다. 결함이 아니라 D-0063이 측정한 크기다.
-
-### 화성 어휘 조건화 판정 (O-21 · D-0062)
-
-```bash
-cd core
-# 1. 리전 — 앞뒤 반쪽 크로마를 뽑는다. CPU이며 200곡이면 판정에 충분하다
-uv run python -m hathor.cli ingest keys --out var/ingest --halves --limit 200
-
-# 2. 광인사 — 음원도 GPU도 필요 없다
-uv run python -m hathor.cli eval harmony-prior --replay var/ingest/keys-<스탬프>.keys.jsonl
-uv run python -m hathor.cli eval harmony-prior --replay <같은 파일> --confident-only
-```
-
-곡을 앞뒤로 갈라 **앞반쪽으로 뒷반쪽을 예측한다.** 뒷반쪽은 어느 비교선도 보지 못한
-자료이므로 네 선(`uniform` · `corpus` · `other` · `self`)이 전부 질 수 있다.
-
-**산출물은 λ\* 하나다.** `(1-λ)·corpus + λ·self`의 중앙값 교차 엔트로피 최소점이며,
-0이면 참조곡이 보탤 것이 없어 O-21(D-0082)의 크로마 접근을 기각한다. 0보다 크면 **그 값이
-그대로 생성기의 혼합 계수다.**
-
-**생성물을 채점하지 않는 이유는 조건화가 질 수 없기 때문이다** — "생성된 진행이
-참조곡 크로마와 맞는가"의 argmax가 곧 조건화 생성기라 코퍼스 베이스라인이 정의상
-진다. 자세한 것은 D-0062에 있다.
-
-### 가사축 (CPU, 수 초)
-
-```bash
-cd core
-uv run python -m hathor.cli lyrics extract --out var/ingest              # 해싱 (기본)
-uv run python -m hathor.cli lyrics extract --out var/ingest \
-    --encoder bge-m3 --features var/ingest/lyrics-bge-m3                # 신경망 CLS (D-0045)
-uv run python -m hathor.cli lyrics extract --out var/ingest \
-    --encoder bge-m3 --pooling mean \
-    --features var/ingest/lyrics-bge-m3-mean                            # 평균 풀링 (D-0046)
+uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10   # 시드 퓨전
 uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/lyrics-hashed --keys mixture --label lyrics-hashed
+    --features var/ingest/mert-layers --keys layer00 --label mert-layer00
 ```
 
-산출물 규격이 오디오축과 같아 **같은 평가 하네스가 그대로 읽는다** (D-0036).
+중심화가 기본이다 (D-0031) — `--raw`로 끄면 허브 곡이 어떤 질의에도 상위에 온다. 시드가 둘
+이상이면 `--fusion min`으로 결합 규칙을 바꾼다 (D-0033). 평가는 M0 게이트(0.95)를 못 넘으면
+M1 · M2를 안 낸다 (D-0023). 리포트는 `var/ingest/eval/<시각>-<라벨>.eval.json`에 쌓인다.
 
-### M0 분할 규칙 (D-0040)
-
-M0는 곡을 두 조각으로 잘라 한쪽으로 나머지를 찾는다. **자르는 방법이 설정이다.**
+## 기획서 (D-0221 · D-0222)
 
 ```bash
-# 오디오축 정본. 기본값
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/mert-layers --keys layer00
-
-# 무작위 균등 분할 5회 (가사축 대조군)
-uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/lyrics-8192 --keys mixture \
-    --split random --split-repeats 5 --force
+sudo apt install graphviz fonts-noto-cjk                 # 한 번
+cd core && uv sync --all-extras --dev --group docs && cd ..   # 한 번. --all-extras를 빼면 GPU 묶음이 지워진다
+make proposal                                            # MASTER Part I ~ III → docs/proposal.docx
 ```
 
-`--split random`은 1회 값이 표본 하나다. **`--split-repeats` 없이 인용하지 않는다.**
-`--force`로 나온 M1/M2는 게이트 미달 상태의 값이므로 인용하지 않는다.
-출력에 top-1과 함께 MRR · R@5 · R@10 · 실패 순위 중앙값이 나온다 (D-0041).
+**`MASTER.md` Part I ~ III를 고치면 다시 빌드한다.** 빌드가 정본 지문을 docx에 적고
+`docx_check.py`가 맞대므로, 안 하면 `make check`이 멈춘다. main에 푸시하면
+`.github/workflows/proposal.yml`이 **CI를 먼저 통과시키고** GitHub Pages에 올린다.
+Pages는 한 번 켠다 — 저장소 설정 → Pages → Source: **GitHub Actions**.
 
-왜 이 축이 필요한지는 D-0040을 본다.
-
-### 취향 라벨 수집 (보조)
+## 패치 파이프 · 내보내기
 
 ```bash
-cd core
-uv run python -m hathor.cli taste compare --out var/ingest --count 30
-uv run python -m hathor.cli taste status --out var/ingest
+make apply                    # HATHOR_PATCH_DIR(윈도 다운로드)의 가장 최근 .patch
+make apply PATCH=D0221.patch
+make check && git push
+make ship                     # 규약 · git 상태 · 위생 · 산출물을 한 번에 (D-0147)
 ```
 
-무작위 쌍을 고정 평가 집합으로 먼저 모은다 (D-0028). 적응적 선택은 모델이 선 뒤다.
+`make apply`는 작업 트리가 깨끗한지 보고, 이미 적용됐으면 아무것도 안 한다. **패치가 선언한
+파일과 실제로 바뀐 파일이 같아야 커밋한다** (D-0072). 커밋 메시지는 패치의 `# hathor-commit:`
+줄이다. 되돌리기는 `git reset --hard HEAD~1` — 별도 백업 폴더를 만들지 않는다 (GR-0.7).
 
-M0(자기일관성)가 0.95 미만이면 M1/M2를 계산하지 않고 비정상 종료한다 (D-0023).
-리포트는 `var/ingest/eval/<시각>-<라벨>.eval.json`에 실행마다 새로 쌓인다.
+## 산출물 백업 (D-0118 · D-0122)
 
-> `make check`의 mypy 단계는 GPU 엑스트라(`transformers`)가 없는 기기에서
-> `mert_feature_extractor.py`의 `type: ignore`를 미사용으로 보고한다.
-> CI는 `uv sync --all-extras`를 쓰므로 통과한다. 환경 차이이며 결함이 아니다.
+**`var/`는 커밋하지 않는다.** 외장 SSD가 유일한 사본이며 기기가 하나라 **백업이다.**
+
+```bash
+make artifacts                # 양쪽에 무엇이 있는지
+make artifacts-push           # var/ingest -> SSD
+make artifacts-pull           # SSD -> var/ingest. 복원 17192개 · 4분 12초 (실측)
+make artifacts-push ONLY=keys # 화성 작업이 읽는 keys-*만 (74MB)
+```
+
+**덮어쓰지 않는다.** 같은 이름은 건너뛰므로 몇 번을 돌려도 같다. `doctor`가 사전이 없다고
+하면 재추출(GPU 1시간 40분) 전에 **묶음부터 본다** — `ingest keys --from-bundles` (D-0211).
+
+## 기기 설정 (D-0066)
+
+저장소는 `~/projects/hathor`다. 윈도 드라이브(`/mnt/c`)에 두지 않는다 — `uv sync`가 105초에서
+105밀리초로 줄었다. **기기마다 다른 값은 `.env` 한 곳에만 적는다** — 음원 루트
+(`HATHOR_LIBRARY_ROOT`) · 패치 폴더(`HATHOR_PATCH_DIR`) · 산출물 백업(`HATHOR_ARTIFACT_STORE`).
+`make setup`이 탐지해 채우고 `make env`가 해석된 값을 찍는다. 셸에 export하지 않는다.
+
+> `mypy`는 GPU 묶음(`transformers`)이 없는 설치에서 `mert_feature_extractor.py`의
+> `type: ignore`를 미사용으로 보고한다. CI는 `--all-extras`라 통과한다. 환경 차이다.
+
+## 실측 재현 — 닫힌 질문
+
+**명령의 정본은 결정 기록의 `재현` 줄이다** (D-0135). 여기에는 무엇을 재는 도구인지만 둔다 —
+같은 명령을 두 곳에 두면 한쪽만 고쳐진다.
+
+| 질문 | 도구 | 결정 |
+|---|---|---|
+| 크로마 대비 — 창별 중앙값 · 타악 분리 (O-27) | `ingest keys --halves` · `eval harmony-prior` | D-0064 · D-0065 · D-0073 · D-0074 |
+| 참조곡이 화성 어휘에 반영되는가 (O-21) | `eval harmony-prior --replay` | D-0062 · D-0063 |
+| 참조곡을 바꾸면 출력이 갈리는가 (O-29) | `eval harmony-output` | D-0079 · D-0082 |
+| 다이어토닉 제한이 버리는 몫 (O-31) | `eval degree-restriction` | D-0083 ~ D-0088 |
+| 반음계 질량의 정체 (O-33 · O-35) | `eval chromatic-origin` | D-0089 ~ D-0093 |
+| 순서 조건화 게이트 · 배열 (O-32) | `eval time-drift` · `generate --transitions` | D-0098 ~ D-0113 |
+| 화성 리듬 (O-37) | `tools/probe_chord_rhythm.py` | D-0123 ~ D-0125 |
+| 박 · 온셋 (O-47) | `tools/probe_onsets.py` | D-0143 ~ D-0173 |
+| 어느 층이 화성을 담는가 (O-52) | `tools/probe_latent.py` | D-0179 ~ D-0181 |
+| 가사축 | `lyrics extract` · `eval retrieval` | D-0036 ~ D-0048 |
+| M0 분할 규칙 | `eval retrieval --split random --split-repeats 5` | D-0040 · D-0041 |
+| 취향 라벨 (보조) | `taste compare` · `taste status` | D-0028 · D-0029 |
+| 참조곡 스템이 층에 줄 수 있는 것 | `tools/probe_stems.py` | D-0214 |
 
 ## Compose 프로파일
 
-문서 §4.4는 10개 서비스 일괄 기동을 전제하지만, 8GB RAM 노드에서는 성립하지 않는다.
-**프로파일로 분리하고 기본은 core만 띄운다.**
+8GB RAM 노드에서 전부 띄우면 안 선다. **기본은 core만 띄운다.**
 
 | 프로파일 | 서비스 | 메모리 상한 합 |
 |---|---|---|
@@ -467,40 +172,44 @@ M0(자기일관성)가 0.95 미만이면 M1/M2를 계산하지 않고 비정상 
 | `ml` | mlflow · prefect · labelstudio | 약 2.3GB |
 | `obs` | prometheus · grafana | 약 0.8GB |
 
-MongoDB는 `--wiredTigerCacheSizeGB 0.25`로 캐시를 제한해 core에 포함한다 (D-0001).
+MongoDB는 `--wiredTigerCacheSizeGB 0.25`로 캐시를 제한해 core에 둔다 (D-0001).
 
 ## 구조
 
 ```text
-MASTER.md     개발 규약 (GROUND RULES)
-docs/MASTER.md      설계 단일 진실 공급원 (기획서 3부작)
-core/hathor/        Python 모노레포 (domain · application · engines · infrastructure · interfaces · shared)
+docs/               MASTER(현재) · PLAN(미래) · DECISIONS(과거) · proposal.docx(빌드 산출물)
+core/hathor/        domain · application · engines · infrastructure · interfaces · shared
 core/tests/         unit · integration
-infra/              postgres init · prometheus 설정
-docker/             mlflow 이미지
-docs/DECISIONS.md   결정 기록 (GR-0.2)
-tools/step0_check.py  환경·라이브러리 실측 스크립트
-tools/check_file_size.py  파일 길이 래칫 · 양방향 (D-0117)
-tools/sync_artifacts.py   산출물 교두보 동기화 · 추가 전용 (D-0118)
-tools/check_decisions.py  부록 A 색인 생성·검증 (D-0042)
-tools/lyrics_language_profile.py  가사 언어 구성 실측 (D-0044)
-tools/lyrics_exclusion_probe.py   가사 제외 곡 원인 진단 (D-0048)
+tools/              검사 · 탐침 · 운영 · 기획서 빌드
+site/               기획서 웹 뷰어 — docx를 브라우저가 그대로 그린다 (D-0222)
+infra/ · docker/    postgres init · prometheus · mlflow 이미지
 ```
 
-`hathor/cli.py`는 문서 §5.3.3의 `python -m hathor.cli` 명령을 유지하기 위한 진입 모듈이며,
-실제 구현은 `hathor/interfaces/cli/main.py`에 있다 (GR-2.2: interfaces에 로직 금지).
+`hathor/cli.py`는 `python -m hathor.cli`의 진입 모듈이고 구현은 `interfaces/cli/main.py`에
+있다 (GR-2.2). **산출물을 읽고 쓰는 것은 인프라에 있다** (D-0116). `main.py`의 길이는 파일 길이
+래칫이 못 박고 있다 — 늘면 빨개진다 (D-0117).
 
-**산출물을 읽고 쓰는 것은 인프라에 있다** (D-0116). `main.py`는 그것을 부를 뿐이다.
-
-| 모듈 | 무엇을 읽는가 |
+| 도구 | 하는 일 |
 |---|---|
-| `infrastructure/keys_jsonl_store.py` | `*.keys.jsonl` — 크로마·조성·margin. 회전(D-0073)이 여기 한 곳에 |
-| `infrastructure/chroma_series_store.py` | `keys-*.series/*.npz` — 시계열. `series_path`가 이름 짓기의 단일 자리 |
-| `domain/services/stem_sets.py` | 스템 조합 어휘와 겹침 판정 (D-0099) |
-
-**`main.py`는 아직 3866줄이고 그 자체가 미해결이다** (D-0116). 저장소 로더까지만 내렸다.
-
-## P0에서 구현된 것과 아닌 것
-
-`engines/compose`의 구조·화성 생성기는 **결정성만 보장하는 스텁**이다. 음악적 타당성은 없다.
-지금 필요한 것은 파이프라인 관통과 재현성 검증 경로지 품질이 아니다 (GR-6.1). P4에서 교체한다.
+| `tools/check_decisions.py` | 결정 기록 · 미해결표 검사, 결정 대장 생성 |
+| `tools/check_issue_mentions.py` | 닫힌 질문을 열린 것처럼 적었는가 |
+| `tools/check_secrets.py` | 추적 중인 비밀정보 |
+| `tools/check_doc_style.py` | 문서 레이아웃 · 여섯 번째 문서 |
+| `tools/check_egress.py` | 망 접점 — 허용 목록 2곳 |
+| `tools/check_model_licenses.py` | 모델 가중치 라이선스 · 상업 불가 집합 |
+| `tools/docx_check.py` | 기획서 ↔ 정본 지문 · 숫자 · 폐기어 |
+| `tools/doc_fsck.py` | 문서가 가리키는 것이 실물로 있는가 |
+| `tools/check_file_size.py` | 파일 길이 래칫 · 양방향 |
+| `tools/check_test_types.py` | 시험 코드 타입 오류 래칫 |
+| `tools/proposal_source.py` | 기획서 정본 구간 · 표 읽기 · 지문 |
+| `tools/build_proposal.py` | 기획서 빌드 (pandoc) |
+| `tools/render_figures.py` | 기획서 구조도 (graphviz) |
+| `tools/render_charts.py` | 기획서 수치 그림 (matplotlib) |
+| `tools/apply_patch.sh` | `make apply` — 패치 적용 · 선언 대조 · 커밋 |
+| `tools/ship.py` | `make ship` — 내보내도 되는가 |
+| `tools/sync_artifacts.py` | 산출물 백업 · 복원 · 추가 전용 |
+| `tools/var_fsck.py` | 산출물이 무엇인지 찍는다 |
+| `tools/step0_check.py` | 환경 · 라이브러리 실측 |
+| `tools/probe_id3.py` · `tools/probe_artist.py` · `tools/probe_musicbrainz.py` | 코퍼스 실측 탐침 (일회성) |
+| `tools/probe_chord_rhythm.py` · `tools/probe_onsets.py` · `tools/probe_latent.py` · `tools/probe_stems.py` | 화성 · 박 · 잠재 표현 · 스템 탐침 |
+| `tools/lyrics_language_profile.py` · `tools/lyrics_exclusion_probe.py` | 가사 언어 구성 · 제외 곡 진단 |

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HATHOR · 기획서</title>
+<style>
+  html,body{background:#0e1116;color:#e6ebf2;margin:0;font:15px/1.7 system-ui,sans-serif}
+  .hd{padding:18px 24px;border-bottom:1px solid #232a35}
+  .hd h1{margin:0;font-size:17px}
+  .hd .sub{color:#8b97a8;font-size:12px;margin-top:4px}
+  .hd a{color:#6fa8dc}
+  /* 본문은 흰 종이로 둔다. 워드에서 보던 것과 같아야 제출본과 화면이 갈리지 않는다. */
+  #doc{background:#fff;color:#111;margin:18px auto;padding:0 0 40px;max-width:900px;border-radius:6px;overflow:auto}
+  #wait{padding:40px 24px;color:#8b97a8;text-align:center}
+</style>
+</head>
+<body>
+<div class="hd">
+  <h1>HATHOR · 기획서</h1>
+  <div class="sub">
+    정본은 <b>docs/MASTER.md</b> Part I ~ III이고 <b>docs/proposal.docx</b>는 그것을 빌드한 판이다 (D-0221).
+    이 화면은 그 docx를 브라우저가 그대로 그린다 — 변환하지 않으므로 제출본과 갈리지 않는다.
+    <a href="./proposal.docx" download>원본 내려받기</a> ·
+    <a href="https://github.com/CleverAIFox/hathor">저장소</a>
+  </div>
+</div>
+<div id="wait">기획서를 여는 중…</div>
+<div id="doc"></div>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<script>
+  // 변환 단계를 두지 않는다 (thoth · fire-lane과 같은 이유). PDF로 구우면
+  // "굽다가 깨졌나"를 의심할 자리가 생기고 그것을 확인할 방법이 없다.
+  fetch("./proposal.docx")
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+    .then(function (b) {
+      return docx.renderAsync(b, document.getElementById("doc"), null,
+        { className: "docx", inWrapper: true, breakPages: true });
+    })
+    .then(function () { document.getElementById("wait").remove(); })
+    .catch(function (e) {
+      document.getElementById("wait").textContent =
+        "기획서를 못 열었다 (" + e.message + "). 원본을 내려받아 워드로 본다.";
+    });
+</script>
+</body>
+</html>

@@ -1664,7 +1664,8 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 
 문서 넷은 시제가 다르다 — `PLAN`(미래) · `MASTER`(현재) · `DECISIONS`(과거, 추가 전용) ·
 `README`(진입). **밖에 내는 기획서(`docs/proposal.docx`)는 시제 밖이며 이 문서의 Part I ~ III에서
-빌드한다** (D-0221). 결정마다 **강제자**(그 결정을 지키는 시험)와 **재현**(명령)을 적는다.
+빌드한다** (D-0221). main에 들어가면 검사를 지난 뒤 GitHub Pages로 배포하고 `site/proposal.html`이
+그 docx를 변환 없이 그린다 (D-0222). 결정마다 **강제자**(그 결정을 지키는 시험)와 **재현**(명령)을 적는다.
 판단이 바뀌면 옛 결정을 고치지 않고 **갱신 배지**를 달고 새 번호로 쓴다.
 
 ### □ 컨테이너 구성
@@ -1684,6 +1685,7 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 | quality | 문서·규약 검사 · ruff / ruff format / mypy --strict / import-linter / pytest + 커버리지 · pip-audit(노란불, D-0219) |
 | secret-scan | gitleaks |
 | reproducibility | 동일 시드 2회 실행 산출물 일치 |
+| **proposal** (배포) | `ci.yml`을 그대로 부른 뒤 기획서 지문 대조 → GitHub Pages. 검사를 지나야 올라간다 (D-0222) |
 
 ## 12. 산출물 목록
 
@@ -2213,6 +2215,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0219 | 관문 대조를 클래스 가드로 바꾼다 | `core/tests/unit/test_ci_parity.py::test_세_관문이_선언과_맞는다` |
 | D-0220 | 기획서를 docx로 다시 낸다 | `core/tests/unit/test_docx_check.py::test_저장소_기획서가_정본과_맞는다` |
 | D-0221 | 기획서를 `MASTER.md`에서 빌드한다 | `core/tests/unit/test_docx_check.py::test_지문이_다르면_낡았다고_말한다` |
+| D-0222 | 기획서를 Pages로 배포한다 | `core/tests/unit/test_ci_parity.py::test_배포는_검사를_지난다` |
 
 <!-- decision-ledger:end -->
 
