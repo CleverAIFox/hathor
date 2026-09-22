@@ -63,6 +63,12 @@ mlops = [
   "prefect>=3.0,<4",
 ]
 
+# 잠금을 리눅스 x86_64 하나로 푼다 (D-0227). 도는 곳이 WSL · CI · 데브 컨테이너 셋이고 전부
+# 리눅스다. 안 좁히면 uv가 macOS · 윈도 · 미래 파이썬까지 한 잠금에 풀고, demucs 4.1이 macOS
+# x86_64에서 numpy<2를 요구해 Dependabot 갱신이 통째로 죽었다 — 우리가 안 도는 칸 때문에.
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

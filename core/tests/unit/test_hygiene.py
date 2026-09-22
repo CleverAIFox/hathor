@@ -154,3 +154,44 @@ def test_core에서_쳐도_뿌리_목표가_돈다() -> None:
     forward = (ROOT / "core" / "Makefile").read_text(encoding="utf-8")
     assert "-C .." in forward
     assert "\ncheck:" not in forward, "목표를 core에 두 벌 두지 않는다"
+
+
+# ------------------------------------------------------------------ 러너 · 잠금 (D-0227)
+
+
+def test_스모크는_라벨을_다_가진_켜진_러너가_있어야_건다() -> None:
+    """**D-0227의 강제자 하나.** 손으로 등록한 러너에 `gpu`가 없어 실행이 대기열에서 멈췄다."""
+    wanted = gh_ops.wanted_labels()
+    assert wanted == {"self-hosted", "linux", "gpu"}
+
+    def runner(name: str, status: str, *labels: str) -> dict[str, object]:
+        return {"name": name, "status": status, "labels": [{"name": x} for x in labels]}
+
+    runners = [
+        runner("bare", "online", "self-hosted", "Linux", "X64"),
+        runner("off", "offline", "self-hosted", "Linux", "gpu"),
+        runner("ok", "online", "self-hosted", "Linux", "X64", "gpu", "1660ti"),
+    ]
+    assert gh_ops.usable(runners, wanted) == ["ok"]
+
+
+def test_잠금은_도는_곳만_푼다() -> None:
+    """**D-0227의 강제자.** macOS 칸의 demucs 제약이 봇 갱신을 통째로 죽였다.
+
+    도는 곳은 WSL · CI · 데브 컨테이너 — 전부 리눅스 x86_64다. 안 도는 칸을 풀면 거기 제약이
+    우리 갱신을 막는다.
+    """
+    project = (ROOT / "core" / "pyproject.toml").read_text(encoding="utf-8")
+    assert (
+        "environments = [\"sys_platform == 'linux' and platform_machine == 'x86_64'\"]" in project
+    )
+    lock = (ROOT / "core" / "uv.lock").read_text(encoding="utf-8")
+    head = lock.split("[[package]]", 1)[0]
+    assert "darwin" not in head and "win32" not in head
+
+
+def test_러너_등록은_다시_쳐도_된다() -> None:
+    """이미 등록된 기기에서 `config.sh`를 다시 부르면 죽는다 — 사용자 기기에서 그랬다."""
+    script = (ROOT / "tools" / "register_runner.sh").read_text(encoding="utf-8")
+    assert "if [ -f .runner ]" in script
+    assert "actions/runners/$id/labels" in script

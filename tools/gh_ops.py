@@ -30,11 +30,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
 BOT = "app/dependabot"
 BOT_WORKFLOW = "Dependabot Updates"
 PAGES = "proposal.yml"
@@ -126,11 +129,51 @@ def dispatch(workflow: str) -> int:
     if run is None:
         print(f"{workflow} 실행 번호를 못 받았다. `gh run list --workflow {workflow}`")
         return 1
-    print(f"{workflow} · 실행 {run}. 러너가 꺼져 있으면 대기열에 머문다")
-    return subprocess.run(["gh", "run", "watch", run, "--exit-status"], check=False).returncode
+    print(f"{workflow} · 실행 {run}. 끊으면(Ctrl-C) 실행을 취소한다")
+    try:
+        return subprocess.run(["gh", "run", "watch", run, "--exit-status"], check=False).returncode
+    except KeyboardInterrupt:
+        # 대기열에 남기면 러너가 뜨는 순간 몰래 돈다.
+        gh("run", "cancel", run, check=False)
+        print(f"\n실행 {run}을 취소했다")
+        return 130
+
+
+def wanted_labels(root: Path = ROOT) -> set[str]:
+    """`gpu-smoke.yml`의 `runs-on`. 라벨을 여기 다시 적지 않는다."""
+    text = (root / ".github" / "workflows" / SMOKE).read_text(encoding="utf-8")
+    found = re.search(r"runs-on: \[([^\]]+)\]", text)
+    if found is None:
+        raise RuntimeError(f"{SMOKE}에서 runs-on을 못 읽었다")
+    return {name.strip().lower() for name in found.group(1).split(",")}
+
+
+def usable(runners: list[dict[str, object]], wanted: set[str]) -> list[str]:
+    """켜져 있고 라벨을 다 가진 러너의 이름. **비었으면 돌려 봐야 대기열에서 멈춘다.**"""
+    picked: list[str] = []
+    for runner in runners:
+        raw = runner.get("labels")
+        names = (
+            {str(label.get("name", "")).lower() for label in raw}
+            if isinstance(raw, list)
+            else set()
+        )
+        if runner.get("status") == "online" and wanted <= names:
+            picked.append(str(runner.get("name")))
+    return picked
 
 
 def smoke() -> int:
+    """러너부터 본다. D-0226 첫 판은 라벨 없는 러너에 걸어 대기열에서 멈췄다."""
+    runners = json.loads(gh("api", "repos/{owner}/{repo}/actions/runners")).get("runners", [])
+    wanted = wanted_labels()
+    ready_ones = usable(runners, wanted)
+    if not ready_ones:
+        seen = [f"{r.get('name')}({r.get('status')})" for r in runners] or ["없음"]
+        print(f"라벨 {sorted(wanted)}을 가진 켜진 러너가 없다 — 등록된 러너: {' · '.join(seen)}")
+        print("`make runner`가 라벨 · 서비스를 맞춘다")
+        return 1
+    print(f"러너: {' · '.join(ready_ones)}")
     return dispatch(SMOKE)
 
 

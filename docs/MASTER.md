@@ -1624,7 +1624,7 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 |---|---|
 | OS | Ubuntu 26.04 (WSL2) — 22.04에서 올렸고 전 검사가 같았다 (D-0122) |
 | Python | 3.12 (`.python-version` 핀 고정) |
-| 패키지 | uv + `uv.lock` · 환경은 `make sync` 하나 — 묶음을 골라 치면 나머지가 지워진다 (D-0225) |
+| 패키지 | uv + `uv.lock` · 환경은 `make sync` 하나 — 묶음을 골라 치면 나머지가 지워진다 (D-0225). 잠금은 도는 곳(리눅스 x86_64)만 푼다 (D-0227) |
 | 컨테이너 | Docker Engine + Compose · 데브 컨테이너(`.devcontainer/`) — CI와 같은 묶음, GPU 없음 (D-0223) |
 | 기기 | 리전 — i5 · RAM 8GB · GTX 1660 Ti 6GB(WSL 가용 4.8GB). **1대다** (D-0122) |
 | 시스템 바이너리 | ffmpeg 8.0.1 |
@@ -2232,6 +2232,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0224 | MLflow · Prefect를 연결하고 러너를 손으로만 건다 | `core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다` |
 | D-0225 | 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다 | `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다` |
 | D-0226 | 웹 화면의 버튼을 `gh` 명령으로 | `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다` |
+| D-0227 | 봇 갱신이 죽은 원인은 안 도는 칸이었다 | `core/tests/unit/test_hygiene.py::test_잠금은_도는_곳만_푼다` |
 
 <!-- decision-ledger:end -->
 

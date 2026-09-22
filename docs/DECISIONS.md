@@ -17233,6 +17233,9 @@ fire-lane `verify.sh`는 800줄에 단계 마흔여 개다. 여기서 같은 자
 
 ## D-0226. 웹 화면의 버튼을 `gh` 명령으로 — PLAN의 손 항목을 지운다
 
+> **갱신됨 — D-0227.** 첫 실행에서 둘이 깨졌다 — 이미 등록된 기기에서 `make runner`가 죽었고,
+> `make smoke`가 `gpu` 라벨 없는 러너에 걸려 대기열에서 멈췄다. 둘 다 고쳤다.
+
 - **갱신**: D-0225 — PLAN에 손 항목을 늘린 것.
 
 - **배경**: 사용자가 D-0225 안내를 `core/`에서 쳤고 `make`가 목표를 못 찾았다. 그리고 물었다 —
@@ -17284,3 +17287,64 @@ D-0222 ~ D-0225가 PLAN §1에 손 항목 **넷**을 쌓았다 — 기획서 첫
     make gh-setup && make bot
 
 강제자  `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다`
+
+---
+
+## D-0227. 봇 갱신이 죽은 원인은 안 도는 칸이었다 — 잠금을 리눅스로 좁힌다
+
+- **갱신**: D-0226 — `make runner` · `make smoke`가 첫 실행에서 깨졌다.
+
+- **배경**: 사용자가 D-0226의 명령을 차례로 쳤다. `make gh-setup`은 기획서를 배포했다(검사 셋 →
+  Pages 초록). `make bot`이 **처음으로 봇 오류의 원인을 찍었다.** `make runner`와 `make smoke`는
+  깨졌다.
+
+### 봇 — macOS 칸이 리눅스 갱신을 막았다
+
+```text
+demucs  dependency_file_not_resolvable
+  split (python >= 3.15 · x86_64 · darwin)
+  demucs>=4.1.0 depends on numpy<2 on x86_64 darwin
+  your project depends on numpy>=2.5.3 → unsatisfiable
+```
+
+uv 잠금은 **보편**이다 — 적지 않으면 macOS · 윈도 · 앞으로 나올 파이썬까지 한 파일에 푼다.
+demucs 4.1이 **macOS x86_64에서만** numpy<2를 요구하고, Dependabot이 묶음을 올리며 numpy 바닥을
+2.5.3으로 올리자 그 칸이 풀리지 않았다. **hathor는 그 칸에서 한 번도 돈 적이 없다** — WSL · CI ·
+데브 컨테이너 셋 다 리눅스 x86_64다.
+
+`[tool.uv] environments`를 리눅스 x86_64 하나로 좁혔다. 여기서 봇이 한 일을 그대로 흉내 냈다
+(numpy>=2.5.3 · demucs==4.1.0) — **좁히기 전 실패, 좁힌 뒤 해소.** 리눅스에서 까는 판은 **하나도
+안 바뀌었다** — 빠진 것은 다른 칸에서만 쓰던 열(demucs 4.0.1 · torchaudio · pywin32 등)이다.
+잠금이 4,941줄에서 3,435줄로 줄었다.
+
+### 러너 — 다시 치면 죽었고, 라벨이 없었다
+
+| 증상 | 원인 | 고침 |
+|---|---|---|
+| `Cannot configure the runner because it is already configured` | 등록된 기기에서 `config.sh`를 또 불렀다 | 등록돼 있으면 건너뛰고 **라벨 · 서비스만** 맞춘다. 다시 등록은 `RUNNER_RECONFIGURE=1` |
+| `make smoke`가 대기열에서 안 끝남 · Ctrl-C에 트레이스백 | 러너에 `gpu` 라벨이 없다 — 손으로 등록하면 기본 라벨뿐이다 | 없는 라벨을 API로 붙인다. 스모크는 **라벨을 다 가진 켜진 러너가 있을 때만** 건다 |
+| Ctrl-C 뒤 실행이 대기열에 남음 | 러너가 뜨는 순간 몰래 돈다 | 끊으면 그 실행을 취소한다 |
+
+`make runner`는 이제 **몇 번 쳐도 같다.** 라벨은 흐름의 `runs-on`에서 읽는다 — 여기 다시 적지 않는다.
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) demucs를 4.0으로 묶는다 | **기각.** 안 도는 칸 때문에 도는 칸의 판을 묶는다 |
+  | (2) numpy 바닥을 안 올리게 봇을 설정한다 | **기각.** 다음 패키지가 같은 칸에서 또 걸린다 |
+  | (3) **잠금을 도는 곳으로 좁힌다** | **채택.** 원인이 칸이다 |
+
+- **선택**: (3) · 러너 등록을 다시 칠 수 있게 · 스모크는 러너부터 본다.
+
+- **결과**: `core/pyproject.toml` `[tool.uv] environments` · `uv.lock` 1,500줄 감소 ·
+  `tools/register_runner.sh` 재작성 · `gh_ops.smoke` 선검사 · 시험 셋.
+
+### 남기는 것
+
+- **로그를 읽을 길이 생기자 원인이 한 줄로 나왔다.** D-0225는 «로그가 말한다»로 미뤘다 — 길을
+  먼저 냈어야 했다.
+- **돌지 않는 곳을 지원한다고 적어 두면 그곳의 제약이 도는 곳을 막는다.**
+
+재현
+    cd core && uv lock && make bot
+
+강제자  `core/tests/unit/test_hygiene.py::test_잠금은_도는_곳만_푼다`
