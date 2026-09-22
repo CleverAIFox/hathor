@@ -45,6 +45,10 @@ jobs:
         working-directory: .
         run: python3 tools/check_model_licenses.py --check
 
+      - name: Proposal vs sources
+        working-directory: .
+        run: python3 tools/docx_check.py --check
+
       - name: Doc reality check
         working-directory: .
         run: python3 tools/doc_fsck.py --check
@@ -75,8 +79,13 @@ jobs:
       - name: Test
         run: uv run pytest --cov=hathor --cov-fail-under=83 -q
 
+      # 상류 패키지의 취약점은 이 저장소가 고칠 수 없다. 막지 않고 노란불로 알린다 (D-0219).
+      # `|| true`였을 때는 취약점이 있어도 초록이라 **알림조차 아니었다.**
+      # ci-only: pip-audit 로컬 `make check`은 망을 안 탄다. 취약점 DB 조회는 CI에서만 한다
+      # advisory: pip-audit 상류 취약점은 우리가 못 고친다. 실패를 노란불로만 본다
       - name: Dependency vulnerabilities
-        run: uv run pip-audit --strict || true
+        continue-on-error: true
+        run: uv run pip-audit --strict
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -97,6 +106,8 @@ jobs:
           enable-cache: true
       - run: uv sync --dev
 
+      # ci-only: hathor.cli 새 환경에 설치한 CLI를 두 번 돌려 산출물을 대조한다.
+      #   로컬 pytest는 함수 단위만 본다 (`test_determinism.py`) — 설치·진입점은 여기서만 탄다
       - name: Deterministic generation check
         run: |
           uv run python -m hathor.cli generate \

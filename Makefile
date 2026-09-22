@@ -20,6 +20,7 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 	python3 tools/check_doc_style.py --check
 	python3 tools/check_egress.py --check
 	python3 tools/check_model_licenses.py --check
+	python3 tools/docx_check.py --check
 	python3 tools/doc_fsck.py --check
 
 size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)

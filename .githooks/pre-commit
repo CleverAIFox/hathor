@@ -9,7 +9,7 @@
 # 커밋마다 99초를 물리면 `--no-verify`를 쓰게 되고, 그러면 훅이 없는 것과 같다 —
 # `doctor`가 *"느려지면 안 돌리게 된다"*고 적은 그 함정이다.
 #
-#   여기        문서 검사 · ruff              2.6초
+#   여기        문서 검사 · 비밀정보 · ruff   2.6초
 #   CI          mypy · pytest · 아키텍처 · 재현성
 #
 # **이 세션에서 걸린 것이 전부 여기 있다** — 대장 불일치, 맨몸 참조, 줄 길이.
@@ -45,7 +45,9 @@ run "결정 기록"   python3 tools/check_decisions.py --check
 run "닫힌 질문"   python3 tools/check_issue_mentions.py --check
 run "문서 레이아웃" python3 tools/check_doc_style.py --check
 run "망 접점"    python3 tools/check_egress.py --check
+run "비밀정보"   python3 tools/check_secrets.py --check
 run "모델 라이선스" python3 tools/check_model_licenses.py --check
+run "기획서"    python3 tools/docx_check.py --check
 run "실물 대조"   python3 tools/doc_fsck.py --check
 run "파일 길이"   python3 tools/check_file_size.py
 

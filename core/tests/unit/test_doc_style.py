@@ -147,10 +147,11 @@ def test_세_축을_다_본다(name):
 
 
 def test_폐기_보관소가_없다():
-    """**git이 이력을 든다** (D-0133). `docs/`에는 축 셋뿐이다 (D-0187)."""
+    """**git이 이력을 든다** (D-0133). `docs/`에는 축 셋과 기획서뿐이다 (D-0187 · D-0220)."""
     assert not (ROOT / "docs" / "archive").exists()
     assert CHECKER.ALLOWED_TREES == ()
-    assert sorted(path.name for path in (ROOT / "docs").iterdir()) == sorted(CHECKER.AXES)
+    expected = sorted(CHECKER.AXES + CHECKER.OUTSIDE_TENSE)
+    assert sorted(path.name for path in (ROOT / "docs").iterdir()) == expected
 
 
 def test_백틱_안의_예시는_경어체가_아니다():
