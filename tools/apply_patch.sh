@@ -76,7 +76,9 @@ MESSAGE="$(grep -m1 '^# hathor-commit:' "$PATCH" | sed 's/^# hathor-commit:[[:sp
 # (D-0072). 패치가 건드린다고 선언한 파일과 실제로 바뀐 파일이 정확히 같아야 한다.
 # 다르면 다른 작업이 섞인 것이고, 그대로 커밋하면 남의 변경이 딸려 들어간다.
 EXPECTED="$(git apply --numstat "$PATCH" | cut -f3- | sort)"
-ACTUAL="$(git status --porcelain | sed 's/^...//' | tr -d '"' | sort)"
+# **새 폴더는 폴더 하나로 접혀 나온다** — `site/`가 생기면 `site/proposal.html` 대신
+# `site/`가 찍혀 선언과 어긋났다 (D-0222). 추적 안 된 파일을 전부 펼친다.
+ACTUAL="$(git status --porcelain --untracked-files=all | sed 's/^...//' | tr -d '"' | sort)"
 
 if [[ "$EXPECTED" != "$ACTUAL" ]]; then
   echo
