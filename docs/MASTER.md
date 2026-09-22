@@ -2015,6 +2015,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0211 | 묶음에서 옛 규격을 다시 쓴다 | `core/tests/unit/test_keys_from_bundles.py::test_생성_경로의_옛_로더가_새_산출물을_읽는다` |
 | D-0213 | 배열 사전이 절대음이었다 | `core/tests/unit/test_keys_from_bundles.py::test_조성이_달라도_같은_진행이면_같은_사전이다` |
 | D-0216 | 대중성 라벨을 접는다 | `core/tests/unit/test_resolve_identities.py::test_끊긴_조회는_정본_이름을_못_받는다` |
+| D-0217 | 엔진 후보를 서류로 거른다 | `core/tests/unit/test_model_licenses.py::test_상업_불가는_MERT_하나다` |
 
 <!-- decision-ledger:end -->
 

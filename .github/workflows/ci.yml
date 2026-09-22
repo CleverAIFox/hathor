@@ -41,6 +41,10 @@ jobs:
         working-directory: .
         run: python3 tools/check_egress.py --check
 
+      - name: Model licenses
+        working-directory: .
+        run: python3 tools/check_model_licenses.py --check
+
       - name: Doc reality check
         working-directory: .
         run: python3 tools/doc_fsck.py --check

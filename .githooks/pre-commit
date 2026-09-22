@@ -45,6 +45,7 @@ run "결정 기록"   python3 tools/check_decisions.py --check
 run "닫힌 질문"   python3 tools/check_issue_mentions.py --check
 run "문서 레이아웃" python3 tools/check_doc_style.py --check
 run "망 접점"    python3 tools/check_egress.py --check
+run "모델 라이선스" python3 tools/check_model_licenses.py --check
 run "실물 대조"   python3 tools/doc_fsck.py --check
 run "파일 길이"   python3 tools/check_file_size.py
 
