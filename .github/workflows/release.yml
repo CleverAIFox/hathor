@@ -1,0 +1,51 @@
+# 결정 하나가 main에 들어가면 그 번호로 태그와 릴리스를 단다 (D-0223).
+#
+# 판이 바뀌는 단위가 결정이다 — 한 번의 푸시가 결정 하나를 싣는다. 번호 체계를 따로
+# 만들지 않는다. 본문은 결정 기록의 «결과» · «남기는 것»이다 (tools/release_notes.py).
+#
+# 태그도 검사를 지난다. ci.yml을 그대로 부른다 (proposal.yml과 같은 게이트 · D-0222).
+# 이미 있는 태그는 건너뛴다 — 결정 없이 고친 푸시는 릴리스를 만들지 않는다.
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/DECISIONS.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag and release the newest decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(python3 tools/release_notes.py --tag)"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag 태그가 이미 있다. 릴리스를 만들지 않는다"
+            exit 0
+          fi
+          previous="$(git tag -l 'D-*' --sort=-v:refname | head -1)"
+          if [ -n "$previous" ]; then
+            python3 tools/release_notes.py --since "$previous" > notes.md
+          else
+            python3 tools/release_notes.py > notes.md
+          fi
+          gh release create "$tag" --target "$GITHUB_SHA" \
+            --title "$(python3 tools/release_notes.py --title)" --notes-file notes.md

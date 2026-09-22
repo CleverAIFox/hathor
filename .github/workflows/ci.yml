@@ -79,7 +79,11 @@ jobs:
         run: uv run lint-imports
 
       - name: Test
-        run: uv run pytest --cov=hathor --cov-fail-under=83 -q
+        run: uv run pytest --cov=hathor -q
+
+      - name: Coverage ratchet
+        working-directory: .
+        run: python3 tools/check_coverage.py
 
       # 상류 패키지의 취약점은 이 저장소가 고칠 수 없다. 막지 않고 노란불로 알린다 (D-0219).
       # `|| true`였을 때는 취약점이 있어도 초록이라 **알림조차 아니었다.**

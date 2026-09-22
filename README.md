@@ -56,6 +56,9 @@ cd core && uv sync --all-extras --dev && cd ..
 make check                    # CI와 같은 검사 — 문서 · 길이 · 린트 · 타입 · 계약 · 시험
 ```
 
+**데브 컨테이너**(`.devcontainer/`)로 열면 위 설치가 자동이다 — CI와 같은 묶음 · 저장소 훅 · 기획서 빌드
+도구까지. GPU는 없으므로 분석 배치는 WSL에서 돈다 (D-0223).
+
 `docker compose up -d`는 DB · 큐 · 오브젝트 저장소를 띄운다. **지금 코드는 쓰지 않는다** —
 산출물은 `var/`의 npz · JSONL이고 DB는 P4에서 붙는다 (MASTER Part III §2).
 
@@ -116,6 +119,14 @@ make ship                     # 규약 · git 상태 · 위생 · 산출물을 �
 `make apply`는 작업 트리가 깨끗한지 보고, 이미 적용됐으면 아무것도 안 한다. **패치가 선언한
 파일과 실제로 바뀐 파일이 같아야 커밋한다** (D-0072). 커밋 메시지는 패치의 `# hathor-commit:`
 줄이다. 되돌리기는 `git reset --hard HEAD~1` — 별도 백업 폴더를 만들지 않는다 (GR-0.7).
+
+## 릴리스 · 커버리지 (D-0223)
+
+**태그는 결정 번호다.** 결정이 main에 들어가면 `release.yml`이 CI를 지난 뒤 `D-0223` 같은 태그와
+GitHub Release를 단다. 본문은 그 결정의 «결과» · «남기는 것»이다 (`tools/release_notes.py`).
+
+**커버리지 바닥은 `core/pyproject.toml` 한 곳에 있다.** 실측이 바닥보다 3%p 넘게 앞서면
+`make check`이 멈추고 `make cov-bump`가 바닥을 실측 - 1로 올린다 — 톱니는 되돌아가지 않는다.
 
 ## 산출물 백업 (D-0118 · D-0122)
 
@@ -201,6 +212,8 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/doc_fsck.py` | 문서가 가리키는 것이 실물로 있는가 |
 | `tools/check_file_size.py` | 파일 길이 래칫 · 양방향 |
 | `tools/check_test_types.py` | 시험 코드 타입 오류 래칫 |
+| `tools/check_coverage.py` | 커버리지 바닥 래칫 · 양방향 |
+| `tools/release_notes.py` | 결정 기록에서 태그 · 릴리스 본문 |
 | `tools/proposal_source.py` | 기획서 정본 구간 · 표 읽기 · 지문 |
 | `tools/build_proposal.py` | 기획서 빌드 (pandoc) |
 | `tools/render_figures.py` | 기획서 구조도 (graphviz) |

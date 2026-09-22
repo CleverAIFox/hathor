@@ -30,6 +30,8 @@ import os
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 MAKEFILE = ROOT / "Makefile"
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
@@ -233,17 +235,21 @@ def test_continue_on_error는_선언과_수가_맞아야_한다():
 PAGES = ROOT / ".github" / "workflows" / "proposal.yml"
 
 
-def test_배포는_검사를_지난다() -> None:
-    """**D-0222의 강제자.** 배포가 CI와 따로 돌면 빨간 커밋의 기획서가 올라간다.
+@pytest.mark.parametrize("name", ["proposal.yml", "release.yml"])
+def test_배포는_검사를_지난다(name: str) -> None:
+    """**D-0222의 강제자.** 배포가 CI와 따로 돌면 빨간 커밋이 밖으로 나간다.
 
     fire-lane 실측 — 배포 넷에 `needs:`가 0건이었고 검사와 **나란히** 돌았다.
-    검사를 복사하지 않고 `ci.yml`을 그대로 부른다.
+    검사를 복사하지 않고 `ci.yml`을 그대로 부른다. 릴리스 태그도 같다 (D-0223).
     """
-    pages = PAGES.read_text(encoding="utf-8")
+    flow = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
     assert "workflow_call:" in WORKFLOW.read_text(encoding="utf-8")
-    assert "uses: ./.github/workflows/ci.yml" in pages
-    assert "needs: gate" in pages
-    assert "tools/docx_check.py" in pages
+    assert "uses: ./.github/workflows/ci.yml" in flow
+    assert "needs: gate" in flow
+
+
+def test_기획서_배포는_지문을_본다() -> None:
+    assert "tools/docx_check.py" in PAGES.read_text(encoding="utf-8")
 
 
 def test_배포는_정본을_옮기기만_한다() -> None:

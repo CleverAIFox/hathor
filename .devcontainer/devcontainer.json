@@ -1,0 +1,16 @@
+{
+  // 새 기기 · Codespaces에서 `make check`이 바로 도는 환경 (D-0223).
+  // 묶음은 CI와 같다(--all-extras). GPU는 없으므로 분석 배치는 WSL(리전)에서 돈다.
+  // 여기서 도는 것은 검사 · 시험 · 기획서 빌드다.
+  "name": "hathor",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": ["charliermarsh.ruff", "ms-python.python", "ms-python.mypy-type-checker"]
+    }
+  }
+}

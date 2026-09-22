@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
+.PHONY: up down logs ps check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -37,7 +37,11 @@ type:
 arch:
 	cd core && uv run lint-imports
 test:
-	cd core && uv run pytest --cov=hathor --cov-fail-under=83 -q
+	cd core && uv run pytest --cov=hathor -q
+	python3 tools/check_coverage.py
+
+cov-bump:      ## 커버리지 바닥을 실측 - 1로 올린다. 숫자는 core/pyproject.toml 하나 (D-0223)
+	python3 tools/check_coverage.py --update
 
 setup:         ## 기기를 탐지해 .env를 쓴다. 새 기기에서 한 번 (D-0068)
 	cd core && uv run python -m hathor.cli setup
