@@ -43,6 +43,13 @@ dev = [
   "import-linter>=2.1",
   "pip-audit>=2.7",
 ]
+# 기획서 빌드 (D-0221). `make proposal`만 쓴다 — 검사와 시험은 이것 없이 돈다.
+# 시스템에 graphviz(`dot`)와 한글 글꼴이 더 필요하다.
+docs = [
+  "matplotlib>=3.9",
+  "python-docx>=1.1",
+  "pypandoc-binary>=1.13",
+]
 
 [build-system]
 requires = ["hatchling"]

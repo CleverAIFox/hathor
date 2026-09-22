@@ -1,4 +1,4 @@
-.PHONY: up down logs ps check lint type arch test cov docs size resize clean clean-all setup env doctor apply artifacts-push artifacts-pull artifacts
+.PHONY: up down logs ps check lint type arch test cov docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -62,6 +62,9 @@ artifacts-pull:  ## 교두보에서 가져온다. ONLY=keys 로 74MB만 (D-0119)
 
 ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
 	python3 tools/ship.py $(if $(PUSH),--push,) $(if $(FIX),--fix,)
+
+proposal:      ## 기획서를 MASTER Part I ~ III에서 빌드한다. graphviz · 한글 글꼴 필요 (D-0221)
+	cd core && uv run --group docs python ../tools/build_proposal.py
 
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [NOCOMMIT=1] (D-0070)
 	@bash tools/apply_patch.sh $(PATCH)

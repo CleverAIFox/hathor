@@ -1,4 +1,4 @@
-"""기획서 대조 검사의 단위 검사 (D-0220).
+"""기획서 대조 검사의 단위 검사 (D-0220 · D-0221).
 
 **기획서는 밖이 읽는 유일한 문서다.** 강제자 없이 두면 fire-lane처럼 갱신표까지 같이 낡는다.
 """
@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def _module() -> ModuleType:
+    sys.path.insert(0, str(ROOT / "tools"))
     path = ROOT / "tools" / "docx_check.py"
     spec = importlib.util.spec_from_file_location("docx_check", path)
     assert spec is not None and spec.loader is not None
@@ -28,13 +29,21 @@ def _module() -> ModuleType:
 
 
 CHECKER = _module()
+SOURCE = sys.modules["proposal_source"]
 
 
-def _docx(path: Path, *paragraphs: str) -> None:
+def _docx(path: Path, *paragraphs: str, stamp: str | None = "auto") -> None:
+    """합성 기획서. `stamp="auto"`면 합성 저장소의 지금 지문을 적는다."""
     body = "".join(f"<w:p><w:r><w:t>{text}</w:t></w:r></w:p>" for text in paragraphs)
     path.parent.mkdir(parents=True, exist_ok=True)
+    root = path.parent.parent
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("word/document.xml", f"<w:document><w:body>{body}</w:body></w:document>")
+        if stamp is not None:
+            value = SOURCE.fingerprint(root) if stamp == "auto" else stamp
+            note = f"<dc:description>{SOURCE.FINGERPRINT} {value}</dc:description>"
+            core = f"<cp:coreProperties>{note}</cp:coreProperties>"
+            archive.writestr("docProps/core.xml", core)
 
 
 def _tree(tmp_path: Path) -> Path:
@@ -103,3 +112,38 @@ def test_정본의_모양이_바뀌면_도구가_죽었다고_말한다(tmp_path
     plan.write_text(plan.read_text(encoding="utf-8").replace("재개 조건", "재개"), encoding="utf-8")
     with pytest.raises(LookupError):
         CHECKER.truths(root)
+
+
+# ------------------------------------------------------------------ 지문 (D-0221)
+
+
+def test_지문이_다르면_낡았다고_말한다(tmp_path: Path) -> None:
+    """**D-0221의 강제자.** Part I ~ III를 고치고 다시 빌드하지 않으면 멈춘다."""
+    root = _tree(tmp_path)
+    _docx(root / CHECKER.DOCX, *_good())
+    master = root / "docs/MASTER.md"
+    text = master.read_text(encoding="utf-8")
+    master.write_text(
+        text.replace("# Part I. 프로젝트 제안서", "# Part I. 프로젝트 제안서\n\n고쳤다."),
+        encoding="utf-8",
+    )
+    problems = CHECKER.check(root)
+    assert any("낡았다" in problem for problem in problems)
+
+
+def test_지문이_없으면_손으로_만든_판이다(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    _docx(root / CHECKER.DOCX, *_good(), stamp=None)
+    assert any("지문이 없다" in problem for problem in CHECKER.check(root))
+
+
+def test_Part_밖을_고치면_지문이_그대로다(tmp_path: Path) -> None:
+    """**결정 대장 · 작업 원칙은 기획서가 아니다.**
+
+    거기를 고칠 때마다 빌드를 요구하면 검사를 끈다.
+    """
+    root = _tree(tmp_path)
+    before = SOURCE.fingerprint(root)
+    master = root / "docs/MASTER.md"
+    master.write_text(master.read_text(encoding="utf-8") + "\n추가\n", encoding="utf-8")
+    assert SOURCE.fingerprint(root) == before

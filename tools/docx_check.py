@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""기획서가 정본과 어긋나지 않는가 (D-0220).
+"""기획서가 정본과 어긋나지 않는가 (D-0220 · D-0221).
 
 ### 왜 필요한가
 
@@ -24,7 +24,14 @@ fire-lane이 그렇게 낡았고 — *"대상 222구간"*을 고치라는 갱신
 결정 하나 쓸 때마다 기획서를 다시 뽑아야 하고, 그러면 검사를 끈다. **판이 바뀌어야 하는
 사건**에만 건다 — 상업 불가 모델이 바뀌었다 · 엔진 재개 조건이 바뀌었다 · 코퍼스가 바뀌었다.
 
-docx는 표준 라이브러리로 연다(zip + XML). 의존이 없다.
+### 지문 — 기획서 전체를 본다 (D-0221)
+
+기획서는 `MASTER.md` Part I ~ III에서 **빌드한다** (`build_proposal.py`). 빌드가 정본 구간의
+sha256을 docx 속성에 적고, 여기서 지금 구간의 지문과 맞댄다. **Part I ~ III의 한 글자라도
+바뀌고 다시 빌드하지 않았으면 빨개진다** — 숫자 다섯 개만 보던 D-0220보다 넓다.
+
+docx는 표준 라이브러리로 연다(zip + XML). 의존이 없다. 지문 계산은 `proposal_source.py`가
+한다 — 빌드와 검사가 **같은 자리를 같은 방식으로** 자른다.
 
     python3 tools/docx_check.py            # 검사한다. 위반 1 · 도구 고장 2
 """
@@ -36,6 +43,8 @@ import re
 import sys
 import zipfile
 from pathlib import Path
+
+from proposal_source import FINGERPRINT, SourceError, fingerprint
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCX = "docs/proposal.docx"
@@ -92,12 +101,33 @@ def truths(root: Path) -> list[tuple[str, str]]:
     return found
 
 
+def stamped(path: Path) -> str | None:
+    """빌드가 docx 속성(`dc:description`)에 적은 지문. 없으면 `None`."""
+    with zipfile.ZipFile(path) as archive:
+        if "docProps/core.xml" not in archive.namelist():
+            return None
+        core = archive.read("docProps/core.xml").decode("utf-8")
+    found = re.search(re.escape(FINGERPRINT) + r"\s*([0-9a-f]{64})", core)
+    return found.group(1) if found else None
+
+
 def check(root: Path = ROOT) -> list[str]:
     path = root / DOCX
     if not path.is_file():
         return [f"{DOCX}가 없다"]
     text = text_of(path)
-    problems = [
+    problems: list[str] = []
+    written = stamped(path)
+    if written is None:
+        problems.append(
+            "기획서에 정본 지문이 없다 — 손으로 만든 판이다. `make proposal`로 빌드한다"
+        )
+    elif written != fingerprint(root):
+        problems.append(
+            "기획서가 `MASTER.md` Part I ~ III보다 낡았다 (지문 불일치). "
+            "`make proposal`로 다시 빌드한다"
+        )
+    problems += [
         f"기획서에 `{value}`이 없다 — 출처: {source}"
         for value, source in truths(root)
         if value not in text
@@ -116,7 +146,7 @@ def main() -> int:
     parser.parse_args()
     try:
         problems = check()
-    except (LookupError, KeyError, zipfile.BadZipFile) as error:
+    except (SourceError, LookupError, KeyError, zipfile.BadZipFile) as error:
         print(f"기획서 검사 도구가 죽었다: {error}", file=sys.stderr)
         return 2
     if problems:

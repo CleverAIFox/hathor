@@ -12,7 +12,7 @@
 | **미래** | [`docs/PLAN.md`](docs/PLAN.md) | 다음에 무엇을 하는가 | 착수할 때 |
 | **결정** | [`docs/DECISIONS.md`](docs/DECISIONS.md) | 왜 그렇게 골랐는가 | "이건 왜 이렇게 됐지"가 나올 때 |
 | **진입** | 이 문서 | 지금 무엇을 할 수 있는가 | 처음 열었을 때, 명령이 필요할 때 |
-| **기획서** | [`docs/proposal.docx`](docs/proposal.docx) | 무엇을 왜 만드는가 — 밖에 내는 판 | 제출·면접·소개할 때 |
+| **기획서** | [`docs/proposal.docx`](docs/proposal.docx) | 무엇을 왜 만드는가 — 밖에 내는 판. `MASTER.md` Part I ~ III에서 `make proposal`로 빌드한다 (D-0221) | 제출·면접·소개할 때 |
 
 - `docs/MASTER.md`가 **설계의 단일 진실 공급원**이다. 뿌리의 `MASTER.md`는 **없다** — D-0189가 흡수했다.
 - `DECISIONS.md`는 **추가 전용**이다. 판단이 바뀌면 고쳐 쓰지 않고 새 번호로 정정한다.
