@@ -6,21 +6,21 @@ requires-python = ">=3.12"
 dependencies = [
     "mutagen>=1.48.1",
     # 도메인 포트가 파형·임베딩 타입에 쓴다 (D-0021). 선택적일 수 없다.
-    "numpy>=2.0",
+    "numpy>=2.5.3",
 ]
 
 [project.optional-dependencies]
 music = [
   "mutagen>=1.47",
-  "numpy>=2.0",
+  "numpy>=2.5.3",
 ]
 # 리전(GPU)에서만 설치한다. 광인사는 코드 작성용이며 2GB를 받을 이유가 없다.
 # 구현체가 메서드 안에서 임포트하므로 없어도 모듈 임포트와 게이트가 돈다.
 gpu = [
-  "torch>=2.5",
+  "torch>=2.14.0",
   "demucs>=4.0",
-  "transformers>=4.46",
-  "scipy>=1.14",
+  "transformers>=5.17.0",
+  "scipy>=1.18.1",
   # 음고 추적 (D-0203). `numba`·`scikit-learn`이 딸려 오므로 가볍지 않지만,
   # CQ 격자 argmax는 **음고 추적이 아니라 우세 격자 찾기**이며 옥타브 오류를
   # 거르지 못한다. 실측으로 곡당 8초라 감당된다.
@@ -28,19 +28,19 @@ gpu = [
 ]
 api = [
   "fastapi>=0.115",
-  "uvicorn[standard]>=0.32",
-  "sqlalchemy>=2.0",
-  "psycopg[binary]>=3.2",
+  "uvicorn[standard]>=0.53.0",
+  "sqlalchemy>=2.0.54",
+  "psycopg[binary]>=3.3.6",
   "pydantic-settings>=2.6",
 ]
 
 [dependency-groups]
 dev = [
-  "ruff>=0.8",
-  "mypy>=1.13",
+  "ruff>=0.16.8",
+  "mypy>=2.3.1",
   "pytest>=8.3",
   "pytest-cov>=6.0",
-  "import-linter>=2.1",
+  "import-linter>=2.15",
   "pip-audit>=2.7",
   # 워크플로 린트 (D-0225). YAML 문법 너머 — 표현식 · 액션 참조 · 러너 라벨 · 셸 인젝션.
   "actionlint-py>=1.7",
