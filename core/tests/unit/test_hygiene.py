@@ -1,4 +1,4 @@
-"""환경 한 곳 · 봇 갱신 · 로컬 찌꺼기 (D-0225)."""
+"""환경 한 곳 · 봇 갱신 · 로컬 찌꺼기 (D-0225) · 웹 화면 대신 명령 (D-0226)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
+import gh_ops  # noqa: E402
 import tidy  # noqa: E402
 
 # ------------------------------------------------------------------ 환경은 한 명령
@@ -118,3 +121,36 @@ def test_적용된_패치는_제목이_로그에_있는_것이다(tmp_path: Path
 def test_보고는_셋까지만_이름을_찍는다() -> None:
     found = [tidy.Finding("봇 브랜치 추적 참조", tuple(f"r{i}" for i in range(5)), ())]
     assert tidy.report(found) == ["봇 브랜치 추적 참조 5: r0 · r1 · r2 외 2"]
+
+
+# ------------------------------------------------------------------ 웹 화면 대신 명령 (D-0226)
+
+
+def test_웹_화면_안내는_명령으로_바꾼다() -> None:
+    """**D-0226의 강제자.** 버튼 안내는 PLAN에 손 항목으로 쌓이고 누를 자리를 잊는다."""
+    places = ["README.md", "docs/PLAN.md", "docs/MASTER.md", ".github/workflows/gpu-smoke.yml"]
+    places += [f"tools/{name}" for name in ("register_runner.sh", "gh_ops.py", "tidy.py")]
+    for name in places:
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert "Settings →" not in text and "Run workflow" not in text, name
+
+
+def test_봇_실행_중_실패만_고른다() -> None:
+    runs = [
+        {"workflowName": "Dependabot Updates", "conclusion": "failure", "databaseId": 1},
+        {"workflowName": "Dependabot Updates", "conclusion": "success", "databaseId": 2},
+        {"workflowName": "Copilot", "conclusion": "failure", "databaseId": 3},
+    ]
+    assert [run["databaseId"] for run in gh_ops.failed(runs)] == [1]
+
+
+def test_gh가_없으면_까는_법을_말한다(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gh_ops.shutil, "which", lambda name: None)
+    reason = gh_ops.ready()
+    assert reason is not None and "gh auth login" in reason
+
+
+def test_core에서_쳐도_뿌리_목표가_돈다() -> None:
+    forward = (ROOT / "core" / "Makefile").read_text(encoding="utf-8")
+    assert "-C .." in forward
+    assert "\ncheck:" not in forward, "목표를 core에 두 벌 두지 않는다"

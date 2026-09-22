@@ -2231,6 +2231,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0223 | 커버리지 래칫 · 결정 번호 릴리스 · 의존성 갱신 · 데브 컨테이너 | `core/tests/unit/test_release_and_ratchet.py::test_커버리지_바닥은_한_곳에만_산다` |
 | D-0224 | MLflow · Prefect를 연결하고 러너를 손으로만 건다 | `core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다` |
 | D-0225 | 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다 | `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다` |
+| D-0226 | 웹 화면의 버튼을 `gh` 명령으로 | `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다` |
 
 <!-- decision-ledger:end -->
 

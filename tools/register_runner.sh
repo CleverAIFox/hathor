@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# 셀프호스티드 러너 등록 (D-0224). WSL에서 기기당 한 번.
+# 셀프호스티드 러너 등록 (D-0224 · D-0226). WSL에서 기기당 한 번.
 #
-# 토큰: GitHub → 저장소 Settings → Actions → Runners → New self-hosted runner
-#       화면의 `./config.sh ... --token XXXX`에서 XXXX. 한 시간 뒤 만료된다.
-#
-#   bash tools/register_runner.sh <토큰>
+#   make runner                          # 토큰은 gh가 받는다 (gh auth login 된 상태)
+#   bash tools/register_runner.sh <토큰>  # gh가 없으면 웹 화면(Linux · x64)의 --token 값
 #
 # 러너는 `gpu-smoke.yml`만 받는다 — 손으로 누를 때만 돈다 (D-0224).
 # 장비를 바꾸면 같은 명령을 새 기기에서 다시 친다. `--replace`가 같은 이름을 갈아 끼운다.
@@ -14,10 +12,15 @@
 #   RUNNER_NAME    러너 이름       (기본 <호스트>-gpu)
 #   RUNNER_LABELS  추가 라벨       (기본 gpu,1660ti — 장비를 바꾸면 뒤 라벨을 바꾼다)
 set -euo pipefail
+cd "$(dirname "$0")/.."   # gh가 저장소를 알아보는 자리
 
 token="${1:-}"
+if [ -z "$token" ] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  # 한 시간짜리 등록권. 화면에 찍지 않는다.
+  token="$(gh api -X POST 'repos/{owner}/{repo}/actions/runners/registration-token' --jq .token)"
+fi
 if [ -z "$token" ]; then
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 fi
 
@@ -62,4 +65,7 @@ else
   echo "systemd가 없다. 창을 열어 둔 동안만 돈다:  $dir/run.sh"
   echo "상시로 두려면 /etc/wsl.conf에 [boot] systemd=true → wsl --shutdown → 이 명령 다시."
 fi
-echo "확인: GitHub → Settings → Actions → Runners에 $name (Idle)"
+if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  echo "등록된 러너:"
+  (cd "$here" && gh api 'repos/{owner}/{repo}/actions/runners' --jq '.runners[] | "  \(.name) \(.status)"')
+fi

@@ -1,4 +1,4 @@
-.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
+.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy gh-setup bot runner smoke check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -26,6 +26,18 @@ sync:          ## 환경을 맞춘다. **이것만 친다** — 묶음을 골라
 
 tidy:          ## 로컬 찌꺼기 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치. YES=1 이면 치운다 (D-0225)
 	python3 tools/tidy.py $(if $(YES),--yes,)
+
+gh-setup:      ## GitHub 설정 — 머지 뒤 브랜치 자동 삭제 · 기획서 배포. gh 필요 · 몇 번 쳐도 같다 (D-0226)
+	python3 tools/gh_ops.py setup
+
+bot:           ## 봇 PR · 실행 · 실패 로그. CLOSE=1 이면 열린 봇 PR을 닫고 브랜치를 지운다 (D-0226)
+	python3 tools/gh_ops.py bot $(if $(CLOSE),--close,)
+
+runner:        ## GPU 러너 등록 — 토큰은 gh가 받는다 (D-0224 · D-0226)
+	bash tools/register_runner.sh
+
+smoke:         ## gpu-smoke를 돌리고 끝날 때까지 본다 (D-0226)
+	python3 tools/gh_ops.py smoke
 
 docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대조 (D-0129 · D-0189)
 	python3 tools/check_decisions.py --check

@@ -119,7 +119,17 @@ make tidy YES=1               # 치운다. 패치는 지우지 않고 applied/�
 ```
 
 **WSL 파이프 한 바퀴는 `make apply && make ship PUSH=1`이다.** `ship`이 `make check`을 부르고
-git 상태 · 위생(`tidy`가 센 것 포함) · 산출물을 본 뒤 통과하면 push한다.
+git 상태 · 위생(`tidy`가 센 것 포함) · 산출물을 본 뒤 통과하면 push한다. `core/`에서 쳐도 된다 —
+`core/Makefile`이 뿌리로 넘긴다 (D-0226).
+
+### GitHub 쪽 일 — 웹 화면 대신 `gh` (D-0226)
+
+```bash
+sudo apt install gh && gh auth login   # 한 번
+make gh-setup                          # 머지 뒤 브랜치 자동 삭제 · 기획서 배포. 몇 번 쳐도 같다
+make bot                               # 열린 봇 PR · 최근 봇 실행 · 실패 로그 끝 40줄
+make bot CLOSE=1                       # 열린 봇 PR을 닫고 브랜치까지 지운다
+```
 
 `make apply`는 작업 트리가 깨끗한지 보고, 이미 적용됐으면 아무것도 안 한다. **패치가 선언한
 파일과 실제로 바뀐 파일이 같아야 커밋한다** (D-0072). 커밋 메시지는 패치의 `# hathor-commit:`
@@ -146,17 +156,14 @@ make flow DRY=1                                      # 명령만 찍는다
 **정본은 JSON과 CLI다.** MLflow · Prefect는 보는 창이며 지워도 결과가 선다. 둘 다 **로컬 주소만**
 받고 사용 통계를 끈다 — 망 접점 검사가 센다.
 
-**GPU 러너는 손으로만 돈다.** Settings → Actions → Runners → New self-hosted runner에서 토큰을
-받아 WSL에서 한 번 등록한다.
+**GPU 러너는 손으로만 돈다.** 등록 토큰은 `gh`가 받는다 — 웹 화면이 필요 없다.
 
 ```bash
-bash tools/register_runner.sh <토큰>     # ~/actions-runner · 라벨 gpu,1660ti · systemd면 서비스
+make runner      # ~/actions-runner · 라벨 gpu,1660ti · systemd면 서비스
+make smoke       # gpu-smoke를 돌리고 끝날 때까지 본다
 ```
 
-등록 화면의 OS는 **Linux · x64**를 고른다 — 러너는 WSL(리눅스) 안에서 돈다. 화면의 명령은 안 치고
-`--token` 값만 쓴다. 토큰은 한 시간짜리 등록권이니 남에게 보이지 않는다.
-
-Actions → **gpu-smoke** → Run workflow가 드라이버 · 환경 · 엔진 재개 조건을 잰다. push · PR에는
+`gpu-smoke`가 드라이버 · 환경 · 엔진 재개 조건을 잰다. push · PR에는
 안 걸린다 — 공개 저장소에서 남의 PR이 이 기기에서 돌지 않게 시험이 막는다. 장비를 바꾸면 새
 기기에서 같은 명령을 다시 치고 `RUNNER_LABELS`의 뒤 라벨만 바꾼다.
 
@@ -258,7 +265,8 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/mlflow_sync.py` | `make mlflow-sync` — 평가 리포트 → 로컬 MLflow |
 | `tools/prefect_flow.py` | `make flow` — 인제스트 → 평가 → MLflow 흐름 |
 | `tools/gpu_smoke.py` | 엔진 재개 조건(VRAM · bf16) 판정 — 러너가 돈다 |
-| `tools/register_runner.sh` | 셀프호스티드 러너 등록 |
+| `tools/register_runner.sh` | 셀프호스티드 러너 등록 — 토큰은 `gh`가 받는다 |
+| `tools/gh_ops.py` | GitHub 설정 · 봇 PR · 봇 로그 · 스모크를 터미널에서 |
 | `tools/probe_id3.py` · `tools/probe_artist.py` · `tools/probe_musicbrainz.py` | 코퍼스 실측 탐침 (일회성) |
 | `tools/probe_chord_rhythm.py` · `tools/probe_onsets.py` · `tools/probe_latent.py` · `tools/probe_stems.py` | 화성 · 박 · 잠재 표현 · 스템 탐침 |
 | `tools/lyrics_language_profile.py` · `tools/lyrics_exclusion_probe.py` | 가사 언어 구성 · 제외 곡 진단 |

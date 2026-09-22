@@ -17137,6 +17137,9 @@ D-0223이 짚은 위험은 그대로다 — 공개 저장소에서 러너를 pus
 
 ## D-0225. 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다
 
+> **갱신됨 — D-0226.** PLAN에 남긴 손 항목 셋(봇 로그 · 브랜치 자동 삭제 · 러너 토큰)을 지웠다.
+> 전부 `gh`로 된다 — `make bot` · `make gh-setup` · `make runner`.
+
 - **갱신**: D-0224 — 설치 안내가 docs 묶음을 지웠다.
 
 - **배경**: D-0224를 적용한 로그에서 `uv sync --all-extras --dev --group mlops`가
@@ -17225,3 +17228,59 @@ fire-lane `verify.sh`는 800줄에 단계 마흔여 개다. 여기서 같은 자
     make sync && make lint && make tidy
 
 강제자  `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다`
+
+---
+
+## D-0226. 웹 화면의 버튼을 `gh` 명령으로 — PLAN의 손 항목을 지운다
+
+- **갱신**: D-0225 — PLAN에 손 항목을 늘린 것.
+
+- **배경**: 사용자가 D-0225 안내를 `core/`에서 쳤고 `make`가 목표를 못 찾았다. 그리고 물었다 —
+  *"PLAN을 줄여도 뭐할 판에 왜 늘리고 있어? «Automatically delete head branches» 이게 어딨어,
+  그냥 터미널로 하면 안 되나? 봇 로그도 워크플로도 싹 다 CLI로 못 하냐?"*
+
+### PLAN이 버튼 목록이 되고 있었다
+
+D-0222 ~ D-0225가 PLAN §1에 손 항목 **넷**을 쌓았다 — 기획서 첫 배포 · 러너 등록 · 봇 로그 ·
+브랜치 자동 삭제. **넷 다 웹 화면의 버튼이었다.** PLAN의 항목 형식은 *무엇을 · 왜 지금 · 무엇이
+막고 있나*인데 이것들은 막힌 것이 없다 — 누르기만 하면 끝나는 일이 앞으로 할 일처럼 줄을 차지했다.
+버튼은 다시 누를 때 어디 있는지 잊는다.
+
+| 버튼 | 명령 |
+|---|---|
+| Actions → proposal → Run workflow | `make gh-setup` (`gh workflow run`) |
+| Settings → 브랜치 자동 삭제 | `make gh-setup` (`gh repo edit --delete-branch-on-merge`) |
+| Dependabot 로그 페이지 | `make bot` (`gh run list --event dynamic` → `--log-failed`) |
+| Runners → New runner → 토큰 복사 | `make runner` (`gh api …/registration-token`) |
+| Actions → gpu-smoke → Run workflow | `make smoke` |
+
+`gh-setup`은 **몇 번 쳐도 같다.** 봇 로그는 Dependabot이 Actions 위에서 돌 때만 CLI로 읽힌다 —
+옛 갱신기로 돌았으면 `make bot`이 그렇다고 말한다. `make bot CLOSE=1`은 쌓인 봇 PR을 닫고 브랜치까지
+지운다 — 월 1회 설정 뒤로는 한 PR로 다시 온다. 토큰은 화면에 찍지 않고 등록 명령으로 바로 넘긴다
+— 지난번 토큰이 스크린샷으로 대화에 올라왔다.
+
+### `core/`에서 친 `make`
+
+셸이 `cd core && …` 뒤에 `core/`에 남는 일이 잦다. `core/Makefile`이 **모든 목표를 뿌리로 넘긴다** —
+목표를 두 벌 두지 않고 넘기기만 한다.
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) 손 항목을 PLAN에 둔다 | **기각.** 막힌 것이 없는 일이 할 일처럼 쌓인다 |
+  | (2) **`gh` 명령으로 바꾸고 PLAN에서 지운다** | **채택** |
+  | (3) 설정을 워크플로가 바꾸게 한다 | **기각.** 저장소 설정은 관리자 권한이고 `GITHUB_TOKEN`에 없다 |
+
+- **선택**: (2).
+
+- **결과**: `tools/gh_ops.py` · `make gh-setup` · `make bot` · `make runner` · `make smoke` ·
+  `core/Makefile`. PLAN §1에서 손 항목 넷을 뺐다. 시험 넷.
+
+### 남기는 것
+
+- **PLAN은 막힌 일의 목록이다.** 누르면 끝나는 일은 명령이 되어 README에 산다.
+- **웹 화면 안내는 명령의 빚이다.** 버튼 위치를 적은 줄은 검사가 막는다.
+
+재현
+    make gh-setup && make bot
+
+강제자  `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다`

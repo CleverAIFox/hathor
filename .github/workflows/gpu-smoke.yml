@@ -4,8 +4,8 @@
 # 이 기기에서 돈다. 방문자가 없어도 구조가 그렇다.
 #   강제자  core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다
 #
-# 러너 등록: bash tools/register_runner.sh <토큰>
-# 실행: Actions → gpu-smoke → Run workflow. 러너가 꺼져 있으면 대기열에 머문다.
+# 러너 등록: make runner
+# 실행: make smoke (gh). 러너가 꺼져 있으면 대기열에 머문다.
 
 name: gpu-smoke
 
