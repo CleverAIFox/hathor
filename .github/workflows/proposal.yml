@@ -43,7 +43,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}proposal.html
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Proposal vs sources
         run: python3 tools/docx_check.py --check
       - name: Stage site
@@ -51,9 +51,9 @@ jobs:
           mkdir -p _site
           cp site/* _site/
           cp docs/proposal.docx _site/
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
