@@ -108,5 +108,5 @@ def test_데브_컨테이너는_CI와_같은_묶음을_깐다() -> None:
     config = json.loads(re.sub(r"^\s*//.*$", "", raw, flags=re.M))
     assert "post-create.sh" in config["postCreateCommand"]
     script = (ROOT / ".devcontainer" / "post-create.sh").read_text(encoding="utf-8")
-    assert "uv sync --all-extras --dev" in script
+    assert "make sync" in script
     assert "--all-extras" in (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")

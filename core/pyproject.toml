@@ -42,6 +42,11 @@ dev = [
   "pytest-cov>=6.0",
   "import-linter>=2.1",
   "pip-audit>=2.7",
+  # 워크플로 린트 (D-0225). YAML 문법 너머 — 표현식 · 액션 참조 · 러너 라벨 · 셸 인젝션.
+  "actionlint-py>=1.7",
+  # actionlint가 `run:` 셸을 이것으로 본다. CI 러너에는 시스템에 있고 WSL에는 없다 —
+  # 묶음에 넣어야 로컬과 CI가 같은 것을 본다.
+  "shellcheck-py>=0.10",
 ]
 # 기획서 빌드 (D-0221). `make proposal`만 쓴다 — 검사와 시험은 이것 없이 돈다.
 # 시스템에 graphviz(`dot`)와 한글 글꼴이 더 필요하다.

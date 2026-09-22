@@ -152,7 +152,7 @@ def main() -> int:
 
     raw = _mypy()
     if raw is None:
-        print("타입 검사를 못 돌렸다. `cd core && uv sync --group dev`", file=sys.stderr)
+        print("타입 검사를 못 돌렸다. `make sync`", file=sys.stderr)
         return 1
     counts = tally(raw)
     found = sum(counts.values())

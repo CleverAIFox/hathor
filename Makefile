@@ -1,4 +1,4 @@
-.PHONY: up up-ml down logs ps mlflow-sync flow check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
+.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -21,6 +21,12 @@ ps:
 
 check: docs size lint type arch test  ## CI와 동일한 검사를 로컬에서 수행
 
+sync:          ## 환경을 맞춘다. **이것만 친다** — 묶음을 골라 치면 나머지가 지워진다 (D-0225)
+	cd core && uv sync --all-extras --all-groups
+
+tidy:          ## 로컬 찌꺼기 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치. YES=1 이면 치운다 (D-0225)
+	python3 tools/tidy.py $(if $(YES),--yes,)
+
 docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대조 (D-0129 · D-0189)
 	python3 tools/check_decisions.py --check
 	python3 tools/check_issue_mentions.py --check
@@ -37,8 +43,10 @@ size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117
 resize:        ## 래칫을 내린다. 올리려면 GROW=1 + 결정 기록 (D-0118)
 	python3 tools/check_file_size.py --update $(if $(GROW),--allow-growth,)
 
-lint:
+lint:          ## ruff · 워크플로(actionlint) · 셸(shellcheck) (D-0225)
 	cd core && uv run ruff check . ../tools && uv run ruff format --check . ../tools
+	cd core && uv run actionlint
+	cd core && uv run shellcheck -S warning ../tools/*.sh ../.githooks/pre-commit ../.devcontainer/*.sh
 type:
 	cd core && uv run mypy hathor --strict
 	python3 tools/check_test_types.py --check

@@ -17042,6 +17042,9 @@ README 507줄 → 215줄. **같은 명령을 두 곳에 두면 한쪽만 고쳐�
 
 ## D-0224. MLflow · Prefect를 연결하고 러너를 손으로만 건다
 
+> **갱신됨 — D-0225.** 설치 안내 `uv sync --all-extras --dev --group mlops`가 **docs 묶음을
+> 지웠다** — D-0222와 같은 함정이다. 환경은 이제 `make sync` 하나다.
+
 - **갱신**: D-0223 — «안 한 것» 표의 러너 · MLOps 두 행.
 
 - **배경**: 사용자가 D-0223의 «사용자 결정 대기»에 답했다 — *"언젠간 쓸 거라면 mlflow · prefect
@@ -17129,3 +17132,96 @@ D-0223이 짚은 위험은 그대로다 — 공개 저장소에서 러너를 pus
     make up-ml && make mlflow-sync && make flow DRY=1
 
 강제자  `core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다`
+
+---
+
+## D-0225. 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다
+
+- **갱신**: D-0224 — 설치 안내가 docs 묶음을 지웠다.
+
+- **배경**: D-0224를 적용한 로그에서 `uv sync --all-extras --dev --group mlops`가
+  **matplotlib · python-docx · pypandoc을 지웠다.** 같은 날 사용자가 물었다 — *"의존성 봇 때문에 임시
+  브랜치로 더럽혀지고 PR도 많이 열린다. 재현적 도구로 알아서 바큠해야 하나? 봇 CI 에러가 나는데
+  CI 쪽도 검사 도구가 필요한 거 아닌가? fire-lane의 verify.sh를 반영해야 하는 거 아닌가?"*
+
+### 환경 명령이 셋이었고 서로를 지웠다
+
+| 자리 | 안내 | 치면 지워지는 것 |
+|---|---|---|
+| README 빠른 실행 | `uv sync --all-extras --dev` | docs · mlops |
+| README 기획서 | `… --group docs` | mlops |
+| README 실험 추적 (D-0224) | `… --group mlops` | docs |
+
+uv는 **정확 동기화**다 — 적지 않은 묶음을 뺀다. D-0222가 GPU 묶음으로 겪었고 그때 고친 것은
+**안내 한 줄**이었다. 묶음이 늘자 안내가 늘었고 같은 사고가 났다. **숫자가 두 곳에 있으면
+결함이다(D-0223) — 명령도 같다.** `make sync`(`--all-extras --all-groups`) 하나로 모으고, 도구의
+오류 안내 · 데브 컨테이너 · `doctor`까지 전부 그것을 가리킨다. `uv sync --…`는 Makefile · CI ·
+결정 기록 밖에 적을 수 없다.
+
+### 봇 — 오류와 쌓임은 다른 문제다
+
+**«Dependabot encountered an error»는 CI 실패가 아니다.** GitHub 쪽 갱신기가 PR을 만들기 전에
+죽은 것이고 로그는 쓰기 권한자만 본다. 여기서 재현할 수 있는 것은 해 봤다 — `uv lock --upgrade`가
+227개를 풀고 39개를 올린다. **해가 없는 것이 아니다.** 원인은 로그가 말하며 PLAN에 손 항목으로 둔다.
+
+쌓임은 설정 문제다. fire-lane이 먼저 겪었다(§212-3) — 주 1회 · 개별 PR로 받았더니 월요일마다
+아홉이 열리고 아무도 안 머지했다. **신호로 쓰려면 적어야 읽힌다.** 월 1회 · 생태계마다 PR 하나 ·
+보안 갱신도 한 PR로 묶었다.
+
+### 찌꺼기 — 세고, 말하면 치운다
+
+`tools/tidy.py`(`make tidy [YES=1]`) — fire-lane `tidy.py`의 규율(기본은 안 지운다)을 가져왔다.
+
+| 무엇 | 치우는 법 |
+|---|---|
+| 원격이 사라진 로컬 브랜치 | `git branch -D` — **지금 선 브랜치는 뺀다** |
+| 봇 브랜치 추적 참조 | `git branch -rd` |
+| 봇 브랜치를 받아 오는 설정 | 음수 refspec `^refs/heads/dependabot/*` — 다음 fetch부터 안 온다 |
+| 끊긴 작업 트리 | `git worktree prune` |
+| 적용된 패치 | 제목이 로그에 있으면 `applied/`로 **옮긴다.** 지우지 않는다 |
+
+임시 저장소로 실측했다 — 첫 판이 **지금 선 브랜치를 지우려다 실패하고 나머지를 못 치웠다.**
+지금 브랜치를 빼고, 한 종이 막혀도 나머지는 치우게 고쳤다. **원격에는 쓰지 않는다** — 머지된
+PR 브랜치는 저장소 설정 «Automatically delete head branches»가 지운다. `make ship`이 이 목록을
+위생 칸에 같이 찍는다.
+
+### verify.sh는 이미 있다 — `make ship`이다
+
+fire-lane `verify.sh`는 800줄에 단계 마흔여 개다. 여기서 같은 자리는 **`make ship`**(D-0147)이다 —
+`make check` · git 상태 · 위생 · 산출물. 새로 하나 더 만들면 파이프라인이 둘이 된다. 가져온 것은
+그 안의 **검사 둘**이다.
+
+| verify.sh 단계 | 여기 |
+|---|---|
+| 워크플로 린트 (actionlint) | `make lint` · CI · 훅. 러너 라벨은 `.github/actionlint.yaml` |
+| 셸 검사 | `shellcheck -S warning` — 저장소 셸 넷 |
+| 로컬 찌꺼기 (`tidy.py`) | `make tidy` · `make ship`의 위생 칸 |
+
+**shellcheck는 dev 묶음에 넣었다.** CI 러너에는 시스템에 있고 WSL에는 없다 — actionlint가
+`run:` 셸을 그것으로 보므로 **없으면 로컬은 초록 · CI는 빨강**이 된다. 관문 대조(D-0219)의
+토큰에 `actionlint` · `shellcheck`를 넣어 셋 중 하나에서 빠지면 빨개진다.
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) README 안내를 한 번 더 고친다 | **기각.** 묶음이 늘 때마다 같은 사고가 난다 |
+  | (2) **`make sync` 하나 + 다른 자리의 `uv sync --` 금지** | **채택** |
+  | (3) 봇 PR을 자동 머지한다 | **기각.** GPU 묶음은 CI 초록이 실기기 초록이 아니다 (D-0223) |
+  | (4) **월 1회 · 생태계마다 하나 + 로컬 `tidy`** | **채택** |
+  | (5) `verify.sh`를 따로 만든다 | **기각.** `make ship`과 두 벌이 된다 |
+
+- **선택**: (2) · (4) · verify.sh의 검사 둘과 `tidy`를 `make`와 `ship`에 넣는다.
+
+- **결과**: `make sync` · `make tidy` · `tools/tidy.py` · `.github/actionlint.yaml` · 월 1회 봇 ·
+  dev 묶음에 `actionlint-py` · `shellcheck-py`. 시험 여덟.
+
+### 남기는 것
+
+- **안내를 고치는 것은 고치는 것이 아니다.** 안내가 셋이면 넷째가 온다. 명령을 한 곳에 두고
+  나머지 자리를 검사로 막아야 닫힌다.
+- **봇의 오류는 CI 밖이다.** 로컬 검사로 잡을 수 있는 것(설정 · 폴더 · 잠금 해소)만 잡고, 나머지는
+  로그를 읽는 손 항목으로 둔다.
+
+재현
+    make sync && make lint && make tidy
+
+강제자  `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다`

@@ -1,16 +1,27 @@
-# 의존성 갱신 제안 (D-0223). 잠금(`uv.lock`)이 재현성을 지키고, 이것이 낡음을 알린다.
+# 의존성 갱신 제안 (D-0223 · D-0225). 잠금(`uv.lock`)이 재현성을 지키고, 이것이 낡음을 알린다.
 #
-# 한 주에 한 번, 묶어서 낸다. PR마다 CI가 돌고 초록일 때만 받는다 — 판단은 사람이 한다.
-# GPU 묶음(torch · demucs · transformers)은 CI가 GPU 없이 도는 만큼 초록이어도
-# 실기기에서 깨질 수 있다. 그 셋은 주 버전을 자동으로 올리지 않는다.
+# **한 달에 한 번 · 생태계마다 PR 하나.** 주 1회로 받았더니 봇 PR과 브랜치가 쌓였다(D-0225).
+# fire-lane이 같은 길을 먼저 갔다 — 주 1회 · 개별 PR에서 월요일마다 아홉이 열리고 아무도 안
+# 머지한 채 쌓였다. **신호로 쓰려면 적어야 읽힌다.** 보안 갱신은 따로 오되 같은 PR로 묶는다.
+#
+# PR마다 CI가 돌고 초록일 때만 받는다 — 판단은 사람이 한다. GPU 묶음(torch · demucs ·
+# transformers)은 CI가 GPU 없이 도는 만큼 초록이어도 실기기에서 깨질 수 있다. 그 셋은 주 버전을
+# 자동으로 올리지 않는다. 받은 뒤 로컬 브랜치 찌꺼기는 `make tidy YES=1`이 치운다.
 version: 2
 updates:
   - package-ecosystem: "uv"
     directory: "/core"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "deps"
     groups:
       python:
+        applies-to: version-updates
+        patterns: ["*"]
+      python-security:
+        applies-to: security-updates
         patterns: ["*"]
     ignore:
       - dependency-name: "torch"
@@ -19,12 +30,14 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "transformers"
         update-types: ["version-update:semver-major"]
-    open-pull-requests-limit: 3
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "deps(actions)"
     groups:
       actions:
         patterns: ["*"]

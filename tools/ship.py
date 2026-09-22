@@ -39,6 +39,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import tidy
+
 ROOT = Path(__file__).resolve().parent.parent
 
 GREEN = "\033[32m"
@@ -131,9 +133,12 @@ def main() -> int:
         print(f"{GREEN}   통과{OFF}  미푸시 커밋 {ahead or '0'}개")
 
     print(f"{DIM}── 위생 (세기만 한다){OFF}")
-    leftovers = count_leftovers()
+    # git 찌꺼기는 `tidy.py`가 센다. 규칙을 여기 다시 적지 않는다 (D-0225).
+    leftovers = count_leftovers() + tidy.report(tidy.survey())
     for line in leftovers or ["깨끗하다"]:
         print(f"{DIM}   {line}{OFF}")
+    if leftovers:
+        print(f"{DIM}   치우려면 `make tidy YES=1` · 바이트코드는 `FIX=1`{OFF}")
 
     print(f"{DIM}── 산출물 (교두보){OFF}")
     code, text = _run("python3", "tools/sync_artifacts.py", "status")

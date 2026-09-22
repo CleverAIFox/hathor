@@ -43,7 +43,7 @@ FAST_TARGETS = ("docs", "size")
 
 TOKEN = re.compile(
     r"tools/([\w/]+\.py)"
-    r"|uv run (ruff|mypy|lint-imports|pytest|pip-audit)\b"
+    r"|uv run (ruff|mypy|lint-imports|pytest|pip-audit|actionlint|shellcheck)\b"
     r"|python3? -m ([\w.]+)"
 )
 DECLARE = re.compile(r"^\s*#\s*(ci-only|hook-skip|advisory):\s*(\S+)\s+(\S.*)$", re.M)

@@ -1,0 +1,6 @@
+# actionlint 설정 (D-0225). 셀프호스티드 러너의 사용자 라벨.
+# `tools/register_runner.sh`의 RUNNER_LABELS 기본값과 같아야 한다 — 시험이 맞댄다.
+self-hosted-runner:
+  labels:
+    - gpu
+    - 1660ti

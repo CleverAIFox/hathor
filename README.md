@@ -52,7 +52,7 @@
 cd ~/projects/hathor
 make setup                    # 기기를 탐지해 .env를 쓴다. 한 번 (D-0068)
 make doctor                   # 규약 · 설치 · 음원 루트 · 산출물을 본다 (D-0067)
-cd core && uv sync --all-extras --dev && cd ..
+make sync                     # 환경. **이것만 친다** — 묶음을 골라 치면 나머지가 지워진다 (D-0225)
 make check                    # CI와 같은 검사 — 문서 · 길이 · 린트 · 타입 · 계약 · 시험
 ```
 
@@ -98,7 +98,7 @@ M1 · M2를 안 낸다 (D-0023). 리포트는 `var/ingest/eval/<시각>-<라벨>
 
 ```bash
 sudo apt install graphviz fonts-noto-cjk                 # 한 번
-cd core && uv sync --all-extras --dev --group docs && cd ..   # 한 번. --all-extras를 빼면 GPU 묶음이 지워진다
+make sync                                                # 한 번 (docs 묶음 포함)
 make proposal                                            # MASTER Part I ~ III → docs/proposal.docx
 ```
 
@@ -114,7 +114,12 @@ make apply                    # HATHOR_PATCH_DIR(윈도 다운로드)의 가장 
 make apply PATCH=D0221.patch
 make check && git push
 make ship                     # 규약 · git 상태 · 위생 · 산출물을 한 번에 (D-0147)
+make tidy                     # 로컬 찌꺼기를 센다 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치
+make tidy YES=1               # 치운다. 패치는 지우지 않고 applied/로 옮긴다 (D-0225)
 ```
+
+**WSL 파이프 한 바퀴는 `make apply && make ship PUSH=1`이다.** `ship`이 `make check`을 부르고
+git 상태 · 위생(`tidy`가 센 것 포함) · 산출물을 본 뒤 통과하면 push한다.
 
 `make apply`는 작업 트리가 깨끗한지 보고, 이미 적용됐으면 아무것도 안 한다. **패치가 선언한
 파일과 실제로 바뀐 파일이 같아야 커밋한다** (D-0072). 커밋 메시지는 패치의 `# hathor-commit:`
@@ -131,7 +136,7 @@ GitHub Release를 단다. 본문은 그 결정의 «결과» · «남기는 것�
 ## 실험 추적 · 흐름 · GPU 러너 (D-0224)
 
 ```bash
-cd core && uv sync --all-extras --dev --group mlops   # 한 번. --all-extras를 빼면 GPU 묶음이 지워진다
+make sync                                            # 한 번 (mlops 묶음 포함)
 make up-ml                                           # mlflow :5000 · prefect :4200
 make mlflow-sync                                     # var/ingest/eval/*.eval.json → MLflow. 몇 번 돌려도 같다
 make flow LIMIT=20                                   # scan → all(GPU) → eval retrieval → MLflow
@@ -147,6 +152,9 @@ make flow DRY=1                                      # 명령만 찍는다
 ```bash
 bash tools/register_runner.sh <토큰>     # ~/actions-runner · 라벨 gpu,1660ti · systemd면 서비스
 ```
+
+등록 화면의 OS는 **Linux · x64**를 고른다 — 러너는 WSL(리눅스) 안에서 돈다. 화면의 명령은 안 치고
+`--token` 값만 쓴다. 토큰은 한 시간짜리 등록권이니 남에게 보이지 않는다.
 
 Actions → **gpu-smoke** → Run workflow가 드라이버 · 환경 · 엔진 재개 조건을 잰다. push · PR에는
 안 걸린다 — 공개 저장소에서 남의 PR이 이 기기에서 돌지 않게 시험이 막는다. 장비를 바꾸면 새

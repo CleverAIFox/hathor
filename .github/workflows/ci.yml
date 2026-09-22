@@ -72,6 +72,13 @@ jobs:
           uv run ruff check . ../tools
           uv run ruff format --check . ../tools
 
+      # D-0225. 워크플로는 머지되기 전에 문법조차 안 보였다. shellcheck는 dev 묶음에서 온다 —
+      # 러너의 시스템 판이 아니라 로컬과 같은 판을 쓴다.
+      - name: Workflow & shell lint
+        run: |
+          uv run actionlint
+          uv run shellcheck -S warning ../tools/*.sh ../.githooks/pre-commit ../.devcontainer/*.sh
+
       - name: Type check
         run: uv run mypy hathor --strict
 

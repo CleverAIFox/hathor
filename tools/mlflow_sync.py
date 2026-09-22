@@ -185,7 +185,7 @@ def main() -> int:
         logged, skipped = sync(reports, args.uri)
     except ImportError:
         print(
-            "mlflow가 없다. `cd core && uv sync --all-extras --dev --group mlops`",
+            "mlflow가 없다. `make sync`",
             file=sys.stderr,
         )
         return 2

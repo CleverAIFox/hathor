@@ -17,8 +17,8 @@ Part I ~ III를 고치고 다시 빌드하지 않으면 **검사가 멈춘다.**
 
 ### 필요한 것
 
-`cd core && uv sync --all-extras --dev --group docs`(matplotlib · python-docx · pandoc 동봉) ·
-graphviz(`dot`) · 한글 글꼴. **`--all-extras`를 빼면 uv가 GPU 묶음을 지운다** (D-0222).
+`make sync`(docs 묶음 — matplotlib · python-docx · pandoc 동봉) · graphviz(`dot`) · 한글 글꼴.
+묶음을 골라 `uv sync`를 치면 **나머지 묶음이 지워진다** (D-0222 · D-0225).
 
     make proposal
 """
@@ -201,9 +201,7 @@ def _pandoc() -> str:
     except (ImportError, OSError):
         found = shutil.which("pandoc")
         if not found:
-            raise SourceError(
-                "pandoc이 없다. `cd core && uv sync --all-extras --dev --group docs`"
-            ) from None
+            raise SourceError("pandoc이 없다. `make sync`") from None
         return found
 
 

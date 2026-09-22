@@ -1624,7 +1624,7 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 |---|---|
 | OS | Ubuntu 26.04 (WSL2) — 22.04에서 올렸고 전 검사가 같았다 (D-0122) |
 | Python | 3.12 (`.python-version` 핀 고정) |
-| 패키지 | uv + `uv.lock` |
+| 패키지 | uv + `uv.lock` · 환경은 `make sync` 하나 — 묶음을 골라 치면 나머지가 지워진다 (D-0225) |
 | 컨테이너 | Docker Engine + Compose · 데브 컨테이너(`.devcontainer/`) — CI와 같은 묶음, GPU 없음 (D-0223) |
 | 기기 | 리전 — i5 · RAM 8GB · GTX 1660 Ti 6GB(WSL 가용 4.8GB). **1대다** (D-0122) |
 | 시스템 바이너리 | ffmpeg 8.0.1 |
@@ -1657,7 +1657,7 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 | 기획서 | 기획서와 정본의 어긋남 | D-0220 · D-0221 |
 | 문서 대조 | 문서가 없는 파일 · 명령을 가리키기 | D-0189 |
 | 파일 길이 | 코드 600 · 시험 700줄 래칫 | D-0117 |
-| 린트 · 타입 | ruff · mypy strict · 시험 코드 타입 래칫 | D-0149 · D-0150 |
+| 린트 · 타입 | ruff · mypy strict · 시험 코드 타입 래칫 · 워크플로(actionlint) · 셸(shellcheck) | D-0149 · D-0150 · D-0225 |
 | 계층 계약 | import-linter 5종 | D-0134 |
 | 시험 · 커버리지 | pytest · 커버리지 바닥 래칫 — 숫자는 `core/pyproject.toml` 하나, 실측이 3%p 넘게 앞서면 바닥을 올린다 | D-0223 |
 
@@ -1696,7 +1696,7 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 | reproducibility | 동일 시드 2회 실행 산출물 일치 |
 | **proposal** (배포) | `ci.yml`을 그대로 부른 뒤 기획서 지문 대조 → GitHub Pages. 검사를 지나야 올라간다 (D-0222) |
 | **release** | 결정이 main에 들어가면 `ci.yml`을 지난 뒤 결정 번호(`D-0223`)로 태그 · 릴리스. 본문은 결정의 결과 · 남기는 것 (D-0223) |
-| Dependabot | uv(`core/`) · GitHub Actions 주 1회 묶음 제안. GPU 묶음은 주 버전 자동 상향 안 함 (D-0223) |
+| Dependabot | uv(`core/`) · GitHub Actions **월 1회 · 생태계마다 PR 하나.** GPU 묶음은 주 버전 자동 상향 안 함. 로컬 찌꺼기는 `make tidy` (D-0223 · D-0225) |
 | **gpu-smoke** | 셀프호스티드 러너(GTX 1660 Ti)에서 **손으로만.** 드라이버 · 환경 · 엔진 재개 조건(VRAM · bf16) 판정. push · PR에 걸면 시험이 빨개진다 (D-0224) |
 
 ## 12. 산출물 목록
@@ -2230,6 +2230,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0222 | 기획서를 Pages로 배포한다 | `core/tests/unit/test_ci_parity.py::test_배포는_검사를_지난다` |
 | D-0223 | 커버리지 래칫 · 결정 번호 릴리스 · 의존성 갱신 · 데브 컨테이너 | `core/tests/unit/test_release_and_ratchet.py::test_커버리지_바닥은_한_곳에만_산다` |
 | D-0224 | MLflow · Prefect를 연결하고 러너를 손으로만 건다 | `core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다` |
+| D-0225 | 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다 | `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다` |
 
 <!-- decision-ledger:end -->
 

@@ -57,6 +57,8 @@ run "파일 길이"   python3 tools/check_file_size.py
 if command -v uv >/dev/null 2>&1; then
   run "ruff 검사" bash -c 'cd core && uv run ruff check . ../tools'
   run "ruff 서식" bash -c 'cd core && uv run ruff format --check . ../tools'
+  run "워크플로" bash -c 'cd core && uv run actionlint'
+  run "셸" bash -c 'cd core && uv run shellcheck -S warning ../tools/*.sh ../.githooks/pre-commit ../.devcontainer/*.sh'
 else
   printf '! uv가 없어 ruff를 건너뛴다. CI가 잡는다\n'
 fi

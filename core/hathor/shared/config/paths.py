@@ -65,7 +65,7 @@ def parse_dotenv(text: str) -> dict[str, str]:
     """`KEY=VALUE` 줄을 읽는다. 주석과 빈 줄은 건너뛴다.
 
     의존성을 쓰지 않는다. `pydantic-settings`는 `api` 추가 의존성에만 있어
-    `uv sync --dev`만 한 기기에서는 없다 — 그 기기가 광인사다.
+    dev 묶음만 깐 기기에서는 없다 — 그 기기가 광인사다.
     """
     values: dict[str, str] = {}
     for line in text.splitlines():

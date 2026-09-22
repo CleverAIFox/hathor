@@ -44,7 +44,7 @@ def main() -> int:
     try:
         import torch
     except ImportError:
-        print("torch가 없다. `cd core && uv sync --all-extras --dev`", file=sys.stderr)
+        print("torch가 없다. `make sync`", file=sys.stderr)
         return 2
     if not torch.cuda.is_available():
         print("CUDA를 못 본다 — 드라이버 · WSL GPU 지원을 먼저 본다", file=sys.stderr)

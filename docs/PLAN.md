@@ -48,7 +48,9 @@
 | **§3의 빚** — 크기는 §3 표가 든다. 여기 옮겨 적지 않는다 | GPU가 필요 없다 |
 | **기획서 첫 배포** — Pages는 켰다. Actions → proposal → Run workflow를 한 번 · 손 | 켜기 전에 돈 배포가 실패로 남아 있다 (D-0222) |
 | **O-56 — DTO를 도메인으로** | 작다. 예외 다섯이 목록이다 |
-| **러너 등록** — `bash tools/register_runner.sh <토큰>` · 손 | 토큰은 GitHub 화면에서만 나온다. 등록하면 gpu-smoke 한 번 (D-0224) |
+| **러너 등록** — 화면은 Linux · x64, `bash tools/register_runner.sh <토큰>` · 손 | 토큰은 GitHub 화면에서만 나온다. 등록하면 gpu-smoke 한 번 (D-0224) |
+| **봇 오류 원인** — Dependabot 로그 두 건을 읽는다 · 손 | 쓰기 권한이 있어야 보인다. 설정은 월 1회로 줄였고 원인은 로그가 말한다 (D-0225) |
+| **머지 뒤 브랜치 자동 삭제** — Settings → General → Automatically delete head branches · 손 | 원격 쪽 찌꺼기는 저장소 설정이 지운다. `tidy`는 원격에 안 쓴다 (D-0225) |
 
 **O-68이 먼저다.** 엔진이 돌아도 조건을 재는 자(G3)가 MERT면 제품에 못 가는 자로 판정한
 셈이다 (D-0217). 장비가 오기 전에 자를 바꿔 두면 G3이 바로 선다.

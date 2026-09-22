@@ -140,8 +140,7 @@ def run_doctor(args: argparse.Namespace) -> int:
         same,
         "설치본",
         str(installed),
-        "**다른 저장소를 실행하고 있다.** 고쳐도 결과가 안 바뀐다. "
-        "`cd core && rm -rf .venv && uv sync --dev`"
+        "**다른 저장소를 실행하고 있다.** 고쳐도 결과가 안 바뀐다. `rm -rf core/.venv && make sync`"
         if not same
         else "",
     )

@@ -126,7 +126,7 @@ def main() -> int:
         pipeline = build(args.limit, args.skip_gpu, args.mlflow)
     except ImportError:
         print(
-            "prefect가 없다. `cd core && uv sync --all-extras --dev --group mlops`",
+            "prefect가 없다. `make sync`",
             file=sys.stderr,
         )
         return 2
