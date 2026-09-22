@@ -2233,6 +2233,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0225 | 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다 | `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다` |
 | D-0226 | 웹 화면의 버튼을 `gh` 명령으로 | `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다` |
 | D-0227 | 봇 갱신이 죽은 원인은 안 도는 칸이었다 | `core/tests/unit/test_hygiene.py::test_잠금은_도는_곳만_푼다` |
+| D-0228 | 러너 폴더를 저장소마다 나눈다 | `core/tests/unit/test_hygiene.py::test_다른_저장소의_러너는_안_건드린다` |
 
 <!-- decision-ledger:end -->
 

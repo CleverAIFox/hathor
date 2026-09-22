@@ -8,13 +8,15 @@
 # 이미 등록돼 있으면 등록은 건너뛰고 **라벨 · 서비스만 맞춘다.** 손으로 등록한 러너는 `gpu` 라벨이
 # 없어 gpu-smoke가 대기열에서 영원히 기다린다 — 그 라벨을 API로 붙인다.
 #
-# 환경 변수: RUNNER_DIR (기본 ~/actions-runner) · RUNNER_NAME (기본 <호스트>-gpu) ·
+# **러너는 저장소 하나에 묶인다.** 개인 계정에는 여러 저장소가 나눠 쓰는 러너가 없다 — 그래서
+# 설치 폴더를 저장소마다 따로 둔다. 다른 저장소의 러너 폴더는 건드리지 않는다 (D-0228).
+#
+# 환경 변수: RUNNER_DIR (기본 ~/actions-runner-<저장소>) · RUNNER_NAME (기본 <호스트>-gpu) ·
 #           RUNNER_LABELS (기본 gpu,1660ti — 장비를 바꾸면 뒤 라벨을 바꾼다)
 set -euo pipefail
 cd "$(dirname "$0")/.."   # gh가 저장소를 알아보는 자리
 
 here="$(pwd)"
-dir="${RUNNER_DIR:-$HOME/actions-runner}"
 name="${RUNNER_NAME:-$(hostname)-gpu}"
 labels="${RUNNER_LABELS:-gpu,1660ti}"
 has_gh() { command -v gh >/dev/null && gh auth status >/dev/null 2>&1; }
@@ -39,6 +41,7 @@ case "$slug" in
   *) echo "origin이 GitHub 저장소가 아니다: $remote" >&2; exit 1 ;;
 esac
 url="https://github.com/$slug"
+dir="${RUNNER_DIR:-$HOME/actions-runner-${slug#*/}}"
 
 if ! command -v nvidia-smi >/dev/null; then
   echo "경고: nvidia-smi가 없다. 등록은 하지만 gpu-smoke가 첫 단계에서 멈춘다." >&2
@@ -68,8 +71,15 @@ if [ -f .runner ] && [ -n "${RUNNER_RECONFIGURE:-}" ]; then
   ./config.sh remove --token "$(api -X POST 'repos/{owner}/{repo}/actions/runners/remove-token' --jq .token)"
 fi
 
+field() { python3 -c "import json; print(json.load(open('.runner', encoding='utf-8-sig'))['$1'])"; }
+if [ -f .runner ] && [ "$(field gitHubUrl)" != "$url" ]; then
+  # D-0228 — 첫 판은 이 폴더를 이 저장소 것으로 여겼고 seshat 러너의 서비스를 올렸다.
+  echo "$dir 는 다른 저장소($(field gitHubUrl))의 러너다. 건드리지 않는다." >&2
+  echo "이 저장소 러너는 RUNNER_DIR을 비워 두면 ~/actions-runner-${slug#*/} 에 따로 선다." >&2
+  exit 1
+fi
 if [ -f .runner ]; then
-  name="$(python3 -c 'import json; print(json.load(open(".runner", encoding="utf-8-sig"))["agentName"])')"
+  name="$(field agentName)"
   echo "이미 등록돼 있다: $name — 등록은 건너뛰고 라벨 · 서비스만 맞춘다"
 else
   fresh_token
@@ -101,7 +111,8 @@ else
   echo "상시로 두려면 /etc/wsl.conf에 [boot] systemd=true → wsl --shutdown → 이 명령 다시."
 fi
 if has_gh; then
-  echo "등록된 러너:"
-  api 'repos/{owner}/{repo}/actions/runners' \
-    --jq '.runners[] | "  \(.name) \(.status) [\([.labels[].name] | join(","))]"'
+  echo "이 저장소에 등록된 러너:"
+  listed="$(api 'repos/{owner}/{repo}/actions/runners' \
+    --jq '.runners[] | "  \(.name) \(.status) [\([.labels[].name] | join(","))]"')"
+  echo "${listed:-  없음 — 등록이 안 됐다}"
 fi

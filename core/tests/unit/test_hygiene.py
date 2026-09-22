@@ -195,3 +195,13 @@ def test_러너_등록은_다시_쳐도_된다() -> None:
     script = (ROOT / "tools" / "register_runner.sh").read_text(encoding="utf-8")
     assert "if [ -f .runner ]" in script
     assert "actions/runners/$id/labels" in script
+
+
+def test_다른_저장소의_러너는_안_건드린다() -> None:
+    """**D-0228의 강제자.** 기본 폴더에 seshat 러너가 있었고 첫 판이 그 서비스를 올렸다.
+
+    개인 계정의 러너는 저장소 하나에 묶인다 — 폴더를 저장소마다 나누고, 남의 폴더면 멈춘다.
+    """
+    script = (ROOT / "tools" / "register_runner.sh").read_text(encoding="utf-8")
+    assert 'dir="${RUNNER_DIR:-$HOME/actions-runner-${slug#*/}}"' in script
+    assert '"$(field gitHubUrl)" != "$url"' in script

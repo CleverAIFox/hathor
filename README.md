@@ -159,7 +159,7 @@ make flow DRY=1                                      # 명령만 찍는다
 **GPU 러너는 손으로만 돈다.** 등록 토큰은 `gh`가 받는다 — 웹 화면이 필요 없다.
 
 ```bash
-make runner      # 등록 · 라벨 · 서비스를 맞춘다. 이미 등록돼 있으면 라벨 · 서비스만. 몇 번 쳐도 같다
+make runner      # ~/actions-runner-hathor 에 등록 · 라벨 · 서비스. 몇 번 쳐도 같다. 남의 저장소 러너는 안 건드린다
 make smoke       # 켜진 GPU 러너가 있을 때만 건다. 끝날 때까지 보고, Ctrl-C면 실행을 취소한다
 ```
 
