@@ -75,17 +75,27 @@ def test_넘파이는_망이_아니다(tmp_path, monkeypatch):
 # ------------------------------------------------------------------ 저장소
 
 
-def test_접점이_전부_metabrainz다():
+def test_접점을_이름으로_못_박는다():
     """**구멍을 못 박아 두면 다음 구멍은 이 검사를 지나야 생긴다.**
 
     D-0146이 `tools`를 훑기 시작하며 하나가 늘었다 — `probe_musicbrainz.py`가
     `urllib`을 쓰는데 **검사 밖이었다.** D-0215가 셋으로 늘렸고 **D-0216이 도로 둘로
-    줄였다** — 쓰지 않을 탐침을 위해 구멍을 열어 두지 않는다. 목록을 이름으로 못 박는다.
+    줄였다** — 쓰지 않을 탐침을 위해 구멍을 열어 두지 않는다. D-0224가 로컬 서버에만 붙는
+    둘(MLflow · Prefect)을 더했다. **밖으로 가는 것은 여전히 MusicBrainz 둘이다.**
     """
     assert set(CHECKER.ALLOWED) == {
         "core/hathor/infrastructure/musicbrainz_lookup.py",
         "tools/probe_musicbrainz.py",
+        "tools/mlflow_sync.py",
+        "tools/prefect_flow.py",
     }
+    outward = {name for name, reason in CHECKER.ALLOWED.items() if "로컬 주소" not in reason}
+    assert all("musicbrainz" in name for name in outward)
+
+
+def test_이름에_망이_안_보이는_클라이언트도_센다():
+    """**D-0224.** `mlflow` · `prefect`는 HTTP 클라이언트인데 `requests`가 이름에 없다."""
+    assert {"mlflow", "prefect"} <= set(CHECKER.NETWORK)
 
 
 def test_도구도_훑는다():

@@ -55,9 +55,23 @@ TREES = ("core/hathor", "tools")
 D-0134는 `core/hathor`만 봤다. 전수로 훑으니 `tools/probe_musicbrainz.py`가 `urllib`을
 쓰고 있었고 **검사 밖이었다.** 도구도 이 기기에서 돈다."""
 
-NETWORK = ("urllib", "requests", "httpx", "socket", "aiohttp", "http.client", "ftplib", "smtplib")
+NETWORK = (
+    "urllib",
+    "requests",
+    "httpx",
+    "socket",
+    "aiohttp",
+    "http.client",
+    "ftplib",
+    "smtplib",
+    "mlflow",
+    "prefect",
+)
 """망 라이브러리. **`urllib.parse`만 쓰는 것도 잡는다** — 파서만 쓰는지 요청도 보내는지
-가르려면 호출을 따라가야 하고, 접점 파일이 하나뿐인 지금은 **넓게 잡는 쪽이 싸다.**"""
+가르려면 호출을 따라가야 하고, 접점 파일이 하나뿐인 지금은 **넓게 잡는 쪽이 싸다.**
+
+**`mlflow` · `prefect`도 센다** (D-0224). 둘 다 서버에 HTTP로 붙는 클라이언트인데 이름에
+`requests`가 안 보인다 — 여기 없으면 새 구멍이 검사를 그냥 지난다."""
 
 ALLOWED = {
     "tools/probe_musicbrainz.py": (
@@ -68,10 +82,19 @@ ALLOWED = {
         "MusicBrainz 조회 (D-0006). **아티스트·제목 문자열만 보낸다.** "
         "응답은 MBID와 재생시간이며 오디오는 어느 방향으로도 흐르지 않는다"
     ),
+    "tools/mlflow_sync.py": (
+        "평가 리포트 → MLflow (D-0224). **평가 숫자와 라벨만 보낸다.** "
+        "로컬 주소가 아니면 거절하고 사용 통계를 끈다"
+    ),
+    "tools/prefect_flow.py": (
+        "인제스트 흐름 → Prefect (D-0224). **단계 이름 · 상태 · 로그만 보낸다.** "
+        "로컬 주소가 아니면 거절하고 사용 통계를 끈다"
+    ),
 }
 """망을 타도 되는 자리. **사유와 보내는 것을 함께 적는다.**
 
 **늘리지 않는 것이 목표다.** 한 줄이 늘면 오디오가 나갈 수 있는 자리가 하나 는다.
+**밖으로 가는 것은 MusicBrainz 둘이다.** MLflow · Prefect 둘은 로컬 서버에만 붙는다 (D-0224).
 서버를 붙이는 날 여기에 줄이 생기고, 그때 D-0015의 스키마가 함께 와야 한다."""
 
 IMPORT = re.compile(r"^\s*(?:import|from)\s+([\w.]+)", re.M)

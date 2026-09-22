@@ -1,0 +1,45 @@
+# GPU 스모크 (D-0224). 셀프호스티드 러너(1660 Ti)에서 **손으로만** 돈다.
+#
+# push · pull_request에 걸지 않는다 — 공개 저장소에서 러너를 거기 걸면 남의 PR 코드가
+# 이 기기에서 돈다. 방문자가 없어도 구조가 그렇다.
+#   강제자  core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다
+#
+# 러너 등록: bash tools/register_runner.sh <토큰>
+# 실행: Actions → gpu-smoke → Run workflow. 러너가 꺼져 있으면 대기열에 머문다.
+
+name: gpu-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, gpu]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Driver
+        run: nvidia-smi
+
+      - name: Environment
+        run: python3 tools/step0_check.py
+
+      - name: Install (GPU extras)
+        working-directory: core
+        run: uv sync --all-extras --dev
+
+      - name: Engine resume condition
+        working-directory: core
+        run: uv run --no-sync python ../tools/gpu_smoke.py

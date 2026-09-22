@@ -98,6 +98,7 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-hathor}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-hathor-dev-secret}
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      MLFLOW_DISABLE_TELEMETRY: "true"   # 기본으로 사용 통계를 밖으로 보낸다 (D-0224)
     ports: ["5000:5000"]
     mem_limit: 768m
     depends_on:
@@ -111,6 +112,7 @@ services:
     command: ["prefect", "server", "start", "--host", "0.0.0.0"]
     environment:
       PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://${POSTGRES_USER:-hathor}:${POSTGRES_PASSWORD:-hathor}@postgres:5432/prefect
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"   # 위와 같다 (D-0224)
     ports: ["4200:4200"]
     mem_limit: 768m
     depends_on:

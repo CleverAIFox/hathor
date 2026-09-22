@@ -128,6 +128,30 @@ GitHub Release를 단다. 본문은 그 결정의 «결과» · «남기는 것�
 **커버리지 바닥은 `core/pyproject.toml` 한 곳에 있다.** 실측이 바닥보다 3%p 넘게 앞서면
 `make check`이 멈추고 `make cov-bump`가 바닥을 실측 - 1로 올린다 — 톱니는 되돌아가지 않는다.
 
+## 실험 추적 · 흐름 · GPU 러너 (D-0224)
+
+```bash
+cd core && uv sync --all-extras --dev --group mlops   # 한 번. --all-extras를 빼면 GPU 묶음이 지워진다
+make up-ml                                           # mlflow :5000 · prefect :4200
+make mlflow-sync                                     # var/ingest/eval/*.eval.json → MLflow. 몇 번 돌려도 같다
+make flow LIMIT=20                                   # scan → all(GPU) → eval retrieval → MLflow
+make flow DRY=1                                      # 명령만 찍는다
+```
+
+**정본은 JSON과 CLI다.** MLflow · Prefect는 보는 창이며 지워도 결과가 선다. 둘 다 **로컬 주소만**
+받고 사용 통계를 끈다 — 망 접점 검사가 센다.
+
+**GPU 러너는 손으로만 돈다.** Settings → Actions → Runners → New self-hosted runner에서 토큰을
+받아 WSL에서 한 번 등록한다.
+
+```bash
+bash tools/register_runner.sh <토큰>     # ~/actions-runner · 라벨 gpu,1660ti · systemd면 서비스
+```
+
+Actions → **gpu-smoke** → Run workflow가 드라이버 · 환경 · 엔진 재개 조건을 잰다. push · PR에는
+안 걸린다 — 공개 저장소에서 남의 PR이 이 기기에서 돌지 않게 시험이 막는다. 장비를 바꾸면 새
+기기에서 같은 명령을 다시 치고 `RUNNER_LABELS`의 뒤 라벨만 바꾼다.
+
 ## 산출물 백업 (D-0118 · D-0122)
 
 **`var/`는 커밋하지 않는다.** 외장 SSD가 유일한 사본이며 기기가 하나라 **백업이다.**
@@ -180,7 +204,7 @@ make artifacts-push ONLY=keys # 화성 작업이 읽는 keys-*만 (74MB)
 | 프로파일 | 서비스 | 메모리 상한 합 |
 |---|---|---|
 | (기본) core | postgres · mongo · redis · rabbitmq · minio | 약 2.8GB |
-| `ml` | mlflow · prefect · labelstudio | 약 2.3GB |
+| `ml` | mlflow · prefect · labelstudio — 앞의 둘은 연결됨 (D-0224) | 약 2.3GB |
 | `obs` | prometheus · grafana | 약 0.8GB |
 
 MongoDB는 `--wiredTigerCacheSizeGB 0.25`로 캐시를 제한해 core에 둔다 (D-0001).
@@ -206,7 +230,7 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/check_issue_mentions.py` | 닫힌 질문을 열린 것처럼 적었는가 |
 | `tools/check_secrets.py` | 추적 중인 비밀정보 |
 | `tools/check_doc_style.py` | 문서 레이아웃 · 여섯 번째 문서 |
-| `tools/check_egress.py` | 망 접점 — 허용 목록 2곳 |
+| `tools/check_egress.py` | 망 접점 — 허용 목록 4곳 (밖 2 · 로컬 2) |
 | `tools/check_model_licenses.py` | 모델 가중치 라이선스 · 상업 불가 집합 |
 | `tools/docx_check.py` | 기획서 ↔ 정본 지문 · 숫자 · 폐기어 |
 | `tools/doc_fsck.py` | 문서가 가리키는 것이 실물로 있는가 |
@@ -223,6 +247,10 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/sync_artifacts.py` | 산출물 백업 · 복원 · 추가 전용 |
 | `tools/var_fsck.py` | 산출물이 무엇인지 찍는다 |
 | `tools/step0_check.py` | 환경 · 라이브러리 실측 |
+| `tools/mlflow_sync.py` | `make mlflow-sync` — 평가 리포트 → 로컬 MLflow |
+| `tools/prefect_flow.py` | `make flow` — 인제스트 → 평가 → MLflow 흐름 |
+| `tools/gpu_smoke.py` | 엔진 재개 조건(VRAM · bf16) 판정 — 러너가 돈다 |
+| `tools/register_runner.sh` | 셀프호스티드 러너 등록 |
 | `tools/probe_id3.py` · `tools/probe_artist.py` · `tools/probe_musicbrainz.py` | 코퍼스 실측 탐침 (일회성) |
 | `tools/probe_chord_rhythm.py` · `tools/probe_onsets.py` · `tools/probe_latent.py` · `tools/probe_stems.py` | 화성 · 박 · 잠재 표현 · 스템 탐침 |
 | `tools/lyrics_language_profile.py` · `tools/lyrics_exclusion_probe.py` | 가사 언어 구성 · 제외 곡 진단 |

@@ -258,3 +258,49 @@ def test_배포는_정본을_옮기기만_한다() -> None:
     viewer = (ROOT / "site" / "proposal.html").read_text(encoding="utf-8")
     assert "./proposal.docx" in viewer
     assert "cp docs/proposal.docx _site/" in PAGES.read_text(encoding="utf-8")
+
+
+SELF_HOSTED_TRIGGERS = {"workflow_dispatch"}
+"""셀프호스티드 러너가 받아도 되는 방아쇠. **손으로 누르는 것 하나다.**"""
+
+
+def triggers(flow: str) -> set[str]:
+    """`on:` 아래 한 단계 들여 쓴 키. 한 줄 목록(`on: [push]`)도 편다."""
+    head = re.search(r"^on:[ \t]*(\[[^\]]*\]|\w+)?[ \t]*$", flow, re.M)
+    if head is None:
+        return set()
+    if head.group(1):
+        return {name.strip() for name in head.group(1).strip("[]").split(",") if name.strip()}
+    block = re.match(r"((?:[ \t]+.*\n|\s*\n)*)", flow[head.end() + 1 :])
+    assert block is not None
+    return set(re.findall(r"^  (\w+):", block.group(1), re.M))
+
+
+def test_셀프호스티드는_손으로만_돈다() -> None:
+    """**D-0224의 강제자.** 공개 저장소에서 러너를 push · PR에 걸면 남의 코드가 이 기기에서 돈다."""
+    flows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    hosted = [path for path in flows if "self-hosted" in path.read_text(encoding="utf-8")]
+    assert hosted, "셀프호스티드 흐름이 없다 — 러너를 뺐으면 이 시험도 뺀다"
+    for path in hosted:
+        found = triggers(path.read_text(encoding="utf-8"))
+        assert found == SELF_HOSTED_TRIGGERS, f"{path.name}: {sorted(found)}"
+
+
+def test_방아쇠를_읽는다() -> None:
+    assert triggers("on:\n  push:\n    branches: [main]\n  pull_request:\n\njobs:\n") == {
+        "push",
+        "pull_request",
+    }
+    assert triggers("on: [push, workflow_dispatch]\n") == {"push", "workflow_dispatch"}
+    assert triggers("on:\n  workflow_dispatch:\n\npermissions:\n") == {"workflow_dispatch"}
+
+
+def test_러너_라벨이_흐름과_맞는다() -> None:
+    """등록 도구가 붙이는 라벨을 흐름이 찾는다. 어긋나면 작업이 영원히 대기열에 선다."""
+    script = (ROOT / "tools" / "register_runner.sh").read_text(encoding="utf-8")
+    flow = (ROOT / ".github" / "workflows" / "gpu-smoke.yml").read_text(encoding="utf-8")
+    labels = re.search(r"RUNNER_LABELS:-([\w,]+)", script)
+    wanted = re.search(r"runs-on: \[([^\]]+)\]", flow)
+    assert labels is not None and wanted is not None
+    given = {"self-hosted", "linux", *labels.group(1).split(",")}
+    assert {name.strip().lower() for name in wanted.group(1).split(",")} <= given

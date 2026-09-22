@@ -50,6 +50,13 @@ docs = [
   "python-docx>=1.1",
   "pypandoc-binary>=1.13",
 ]
+# 실험 추적 · 흐름 (D-0224). `make mlflow-sync` · `make flow`만 쓴다 — 검사와 시험은 이것
+# 없이 돈다. 서버는 Compose `ml` 프로파일이다. 클라이언트와 서버 이미지(`docker/mlflow`)의
+# 주 버전을 맞춘다. 2.x는 `packaging`을 24로 끌어내려 3으로 간다.
+mlops = [
+  "mlflow-skinny>=3.0,<4",
+  "prefect>=3.0,<4",
+]
 
 [build-system]
 requires = ["hatchling"]

@@ -1,9 +1,17 @@
-.PHONY: up down logs ps check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
+.PHONY: up up-ml down logs ps mlflow-sync flow check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
-up-ml:
+up-ml:         ## mlflow · prefect · labelstudio 기동. 약 2.3GB (D-0224)
 	docker compose --profile ml up -d
+
+mlflow-sync:   ## 평가 리포트를 로컬 MLflow(:5000)로 옮긴다. 몇 번 돌려도 같다 (D-0224)
+	cd core && uv run --group mlops python ../tools/mlflow_sync.py
+
+flow:          ## 인제스트 → 평가 → MLflow를 Prefect(:4200)로. DRY=1 LIMIT=20 SKIPGPU=1 (D-0224)
+	cd core && PREFECT_API_URL=$${PREFECT_API_URL:-http://localhost:4200/api} \
+	  uv run --group mlops python ../tools/prefect_flow.py \
+	  $(if $(DRY),--plan,) $(if $(LIMIT),--limit $(LIMIT),) $(if $(SKIPGPU),--skip-gpu,)
 down:
 	docker compose down
 logs:
