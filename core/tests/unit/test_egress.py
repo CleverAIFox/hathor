@@ -79,13 +79,12 @@ def test_접점이_전부_metabrainz다():
     """**구멍을 못 박아 두면 다음 구멍은 이 검사를 지나야 생긴다.**
 
     D-0146이 `tools`를 훑기 시작하며 하나가 늘었다 — `probe_musicbrainz.py`가
-    `urllib`을 쓰는데 **검사 밖이었다.** D-0215가 ListenBrainz 탐침으로 하나 더 늘렸다 —
-    둘 다 MetaBrainz 재단이고 **MBID·문자열만 보낸다.** 목록을 이름으로 못 박는다.
+    `urllib`을 쓰는데 **검사 밖이었다.** D-0215가 셋으로 늘렸고 **D-0216이 도로 둘로
+    줄였다** — 쓰지 않을 탐침을 위해 구멍을 열어 두지 않는다. 목록을 이름으로 못 박는다.
     """
     assert set(CHECKER.ALLOWED) == {
         "core/hathor/infrastructure/musicbrainz_lookup.py",
         "tools/probe_musicbrainz.py",
-        "tools/probe_listenbrainz.py",
     }
 
 

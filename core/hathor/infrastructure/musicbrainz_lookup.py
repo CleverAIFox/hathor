@@ -70,9 +70,12 @@ class MusicBrainzClient:
                 with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                     decoded: Any = json.loads(response.read().decode("utf-8"))
                     return dict(decoded) if isinstance(decoded, dict) else {}
-            except (urllib.error.URLError, OSError, json.JSONDecodeError):
+            except (urllib.error.URLError, OSError, json.JSONDecodeError) as error:
                 if attempt == MAX_ATTEMPTS:
-                    raise MusicBrainzUnavailableError(url) from None
+                    # **원인을 남긴다** (D-0216). `from None`이 연쇄를 지워 *"주소를
+                    # 못 얻었다"*인지 *"503"*인지 가릴 수 없었고, 첫 요청부터 죽은
+                    # 실측에서 무엇을 고쳐야 하는지 알 수 없었다.
+                    raise MusicBrainzUnavailableError(f"{url} ({error})") from error
                 time.sleep(self._interval * attempt * 2)
         raise MusicBrainzUnavailableError(url)
 

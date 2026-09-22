@@ -478,6 +478,7 @@ D는 제외한다. 현행 생성 모델 품질로 전문가 요구를 충족할 
 | O-57 | 배음 감산 기각이 장조에 가려져 있었다 → **뒤집었다** (D-0201) | D-0191 · D-0197 · D-0201 |
 | O-60 | 패치 도구를 안 쓴 것이 아니라 **죽어 있었다** | D-0070 · D-0196 |
 | O-63 | 묶음 산출물을 `generate`가 못 읽었다 → 옛 규격 재생성 · 분포가 소수점까지 재현됐다 | D-0203 · D-0211 · D-0212 |
+| O-66 | 대중성 라벨을 무엇으로 세우나 → **밖에서는 못 구한다.** 세 출처가 라이선스·커버리지에 막혔다 | D-0215 · D-0216 |
 
 <!-- closed-issues:end -->
 
@@ -2013,6 +2014,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0209 | 정상을 잔해로 찍고 있었다 | `core/tests/unit/test_var_fsck.py::test_한_실행이_낸_파일_셋을_한_묶음으로_센다` |
 | D-0211 | 묶음에서 옛 규격을 다시 쓴다 | `core/tests/unit/test_keys_from_bundles.py::test_생성_경로의_옛_로더가_새_산출물을_읽는다` |
 | D-0213 | 배열 사전이 절대음이었다 | `core/tests/unit/test_keys_from_bundles.py::test_조성이_달라도_같은_진행이면_같은_사전이다` |
+| D-0216 | 대중성 라벨을 접는다 | `core/tests/unit/test_resolve_identities.py::test_끊긴_조회는_정본_이름을_못_받는다` |
 
 <!-- decision-ledger:end -->
 

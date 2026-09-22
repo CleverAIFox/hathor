@@ -128,3 +128,47 @@ def test_요약이_상태별로_누적된다():
 
     assert use_case.summary.total == 2
     assert use_case.summary.ratio_of(ResolutionState.RESOLVED) == 1.0
+
+
+# ---------------------------------------------- 끊긴 조회가 정본을 가린다 (D-0216)
+
+
+def test_끊긴_조회는_정본_이름을_못_받는다(tmp_path):
+    """**MB가 첫 곡에서 죽자 0줄짜리가 남아 1004곡 산출물을 가렸다.**
+
+    `read_records`가 이름 순 마지막을 읽으므로 **새 빈 파일이 언제나 이긴다.**
+    """
+    import contextlib
+
+    from hathor.application.resolution_summary import ResolutionSummary
+    from hathor.infrastructure.jsonl_resolution_store import (
+        RESOLUTION_SUFFIX,
+        JsonlResolutionStore,
+    )
+
+    store = JsonlResolutionStore(tmp_path)
+
+    def dies():
+        raise RuntimeError("MusicBrainz가 죽었다")
+        yield
+
+    with contextlib.suppress(RuntimeError):
+        store.write(dies(), ResolutionSummary())
+
+    assert list(tmp_path.glob(f"*{RESOLUTION_SUFFIX}")) == []
+    assert list(store.read_records()) == []
+
+
+def test_끝난_조회는_정본_이름을_받는다(tmp_path):
+    """**스트리밍은 그대로다** — 꼬리표만 붙였다가 끝에서 뗀다."""
+    from hathor.application.resolution_summary import ResolutionSummary
+    from hathor.infrastructure.jsonl_resolution_store import (
+        PARTIAL_SUFFIX,
+        JsonlResolutionStore,
+    )
+
+    store = JsonlResolutionStore(tmp_path)
+    store.write(iter(()), ResolutionSummary())
+
+    assert list(tmp_path.glob(f"*{PARTIAL_SUFFIX}")) == []
+    assert list(store.read_records()) == []

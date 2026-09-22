@@ -74,3 +74,35 @@ def test_resolved면_mbid가_정규_식별자가_된다():
 
     assert result.recording_mbid == "mbid-1"
     assert result.identity == "mbid-1"
+
+
+# ------------------------------------------------ 실패의 원인을 남긴다 (D-0216)
+
+
+def test_통신_실패가_원인을_들고_올라온다():
+    """**`from None`이 연쇄를 지웠다.**
+
+    첫 요청부터 죽은 실측에서 *"주소를 못 얻었다"*인지 *"503"*인지 못 가렸다.
+    """
+    import urllib.error
+
+    import pytest
+
+    from hathor.infrastructure.musicbrainz_lookup import (
+        MusicBrainzClient,
+        MusicBrainzUnavailableError,
+    )
+
+    client = MusicBrainzClient("hathor-test/0.1", interval=0.0)
+    reason = urllib.error.URLError("Name or service not known")
+
+    def dies(*args: object, **kwargs: object) -> None:
+        raise reason
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr("urllib.request.urlopen", dies)
+        with pytest.raises(MusicBrainzUnavailableError) as caught:
+            client.search("artist", "아이유")
+
+    assert "Name or service not known" in str(caught.value)
+    assert caught.value.__cause__ is reason

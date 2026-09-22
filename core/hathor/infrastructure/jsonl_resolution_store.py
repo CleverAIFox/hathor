@@ -20,6 +20,12 @@ if TYPE_CHECKING:
 from hathor.domain.entities.resolved_identity import ResolutionState
 
 RESOLUTION_SUFFIX = ".resolve.jsonl"
+PARTIAL_SUFFIX = ".partial"
+"""끝나지 않은 조회가 쓰는 꼬리표 (D-0216).
+
+**`read_records`의 glob에 안 걸린다.** 스트리밍은 그대로 두고 — 20분짜리라 중간
+결과가 디스크에 남아야 한다 — **이름만** 가린다. 끝나야 정본 이름을 받는다.
+"""
 RESOLUTION_SUMMARY_SUFFIX = ".resolve.summary.json"
 
 
@@ -57,11 +63,16 @@ class JsonlResolutionStore:
         self._root.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         tracks_path = self._root / f"resolve-{stamp}{RESOLUTION_SUFFIX}"
-        with tracks_path.open("w", encoding="utf-8") as stream:
+        # **끝나기 전에는 정본 이름을 안 준다** (D-0216). MB가 첫 곡에서 죽자 0줄짜리
+        # 파일이 남았고, `read_records`가 **이름 순 마지막**을 읽으므로 그 빈 파일이
+        # 멀쩡한 1004곡 산출물을 가렸다. 스트리밍은 그대로다 — 꼬리표만 붙인다.
+        partial = self._root / f"{tracks_path.name}{PARTIAL_SUFFIX}"
+        with partial.open("w", encoding="utf-8") as stream:
             for record in records:
                 line = json.dumps(resolution_as_record(record), ensure_ascii=False)
                 stream.write(line + "\n")
                 stream.flush()
+        partial.replace(tracks_path)
 
         summary_path = self._root / f"resolve-{stamp}{RESOLUTION_SUMMARY_SUFFIX}"
         payload = {
