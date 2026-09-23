@@ -2240,6 +2240,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0229 | 웹에서 보여 주는 것은 구운 PDF다 | `core/tests/unit/test_ci_parity.py::test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다` |
 | D-0230 | 검사를 검사한다 | `core/tests/unit/test_hygiene.py::test_프로브는_심은_결함에_운다` |
 | D-0231 | 상업 가능한 취향 축을 잴 길을 놓는다 | `core/tests/unit/test_clap_feature_extractor.py::test_청크마다_임베딩_하나를_쌓는다` |
+| D-0232 | 가짜는 실물의 서명을 따른다 | `core/tests/unit/test_clap_feature_extractor.py::test_처리기_인자_이름을_실물에서_확인한다` |
 
 <!-- decision-ledger:end -->
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
@@ -114,10 +115,12 @@ def _extractor(monkeypatch: pytest.MonkeyPatch, seen: list[int]) -> ClapFeatureE
             return _FakeTensor(np.ones((1, DIMENSION), dtype=np.float32))
 
     transformers.ClapModel = SimpleNamespace(from_pretrained=lambda name: _Model())  # type: ignore[attr-defined]
+    # **가짜의 서명이 실물과 같아야 한다** (D-0232). 첫 판은 `audios`를 받게 만들어
+    # 놓고 그 이름으로 불렀고, 시험은 초록이었는데 1004곡이 전부 떨어졌다.
     transformers.AutoProcessor = SimpleNamespace(  # type: ignore[attr-defined]
         from_pretrained=lambda name: (
-            lambda audios, sampling_rate, return_tensors: {
-                "input_features": _FakeTensor(np.asarray(audios).reshape(1, -1))
+            lambda audio, sampling_rate, return_tensors: {
+                "input_features": _FakeTensor(np.asarray(audio).reshape(1, -1))
             }
         )
     )
@@ -151,3 +154,22 @@ def test_1초_미만_곡은_빈_배열이다(monkeypatch: pytest.MonkeyPatch) ->
 def test_레이어를_안_뽑는다(monkeypatch: pytest.MonkeyPatch) -> None:
     """포트를 만족시키려고 둔 자리다. 비어 있어야 `ExtractLayerFeatures`가 그대로 돈다."""
     assert _extractor(monkeypatch, []).layers == ()
+
+
+def test_처리기_인자_이름을_실물에서_확인한다() -> None:
+    """**D-0232의 강제자.** 가짜만 보면 내가 틀린 이름으로 부른 것을 못 잡는다.
+
+    `audios`는 transformers 5에서 죽었다. 깔린 판의 서명을 직접 읽어 우리가 쓰는 이름이
+    거기 있는지 본다 — 상류가 또 바꾸면 **배치가 아니라 여기가 먼저 빨개진다.**
+    """
+    transformers = pytest.importorskip("transformers", reason="GPU 묶음에만 있다")
+    import inspect
+
+    from hathor.infrastructure import clap_feature_extractor as module
+
+    names = set(inspect.signature(transformers.ClapProcessor.__call__).parameters)
+    assert "audio" in names, f"처리기 인자가 바뀌었다: {sorted(names)}"
+    wanted = set(inspect.signature(transformers.ClapModel.get_audio_features).parameters)
+    assert "input_features" in wanted, f"모델 인자가 바뀌었다: {sorted(wanted)}"
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    assert "audio=chunk" in source and "audios=" not in source

@@ -102,8 +102,10 @@ class ClapFeatureExtractor:
         vectors: list[Any] = []
         with torch.no_grad():
             for chunk in chunks:
+                # 인자 이름은 `audio`다. `audios`는 transformers 5에서 죽었고 **1004곡이
+                # 전부 여기서 떨어졌다** (D-0232). 시험이 실물 서명을 본다.
                 inputs = self._processor(
-                    audios=chunk, sampling_rate=CLAP_SAMPLE_RATE, return_tensors="pt"
+                    audio=chunk, sampling_rate=CLAP_SAMPLE_RATE, return_tensors="pt"
                 )
                 moved = {key: value.to(self._device) for key, value in inputs.items()}
                 vectors.append(self._model.get_audio_features(**moved)[0])
