@@ -48,6 +48,8 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 	python3 tools/check_model_licenses.py --check
 	python3 tools/docx_check.py --check
 	python3 tools/doc_fsck.py --check
+	python3 tools/encoding_check.py --check
+	python3 tools/deadcheck.py --ratchet
 
 size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)
 	python3 tools/check_file_size.py

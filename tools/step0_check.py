@@ -281,12 +281,10 @@ def scan_library(root: Path) -> dict:
             for n in names:
                 if n in keys:
                     return True
-                try:
-                    v = tags.get(n)
-                    if v:
+                # 태그 구현마다 던지는 것이 달라 넓게 받는다. 삼키는 것이 아니라 적어 둔다.
+                with contextlib.suppress(Exception):
+                    if tags.get(n):
                         return True
-                except Exception:
-                    pass
             return False
 
         if present("TIT2", "TITLE", "\xa9NAM"):

@@ -225,6 +225,7 @@ def test_batch_lock_blocks_second_holder(tmp_path: Path) -> None:
 
 
 def test_batch_lock_releases_on_exit(tmp_path: Path) -> None:
+    # deadcheck: ok 두 번째 진입이 막히면 여기서 던진다 — 예외가 판정이다
     store = NpzFeatureStore(tmp_path)
     with store.batch_lock():
         pass
@@ -234,6 +235,7 @@ def test_batch_lock_releases_on_exit(tmp_path: Path) -> None:
 
 def test_batch_lock_releases_on_exception(tmp_path: Path) -> None:
     """절전·발열로 죽어도 잠금이 남으면 안 된다. flock을 쓰는 이유다."""
+    # deadcheck: ok 잠금이 남으면 두 번째 진입이 던진다 — 예외가 판정이다
     store = NpzFeatureStore(tmp_path)
     with contextlib.suppress(RuntimeError), store.batch_lock():
         raise RuntimeError("배치 중단")

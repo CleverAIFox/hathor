@@ -253,6 +253,8 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/check_file_size.py` | 파일 길이 래칫 · 양방향 |
 | `tools/check_test_types.py` | 시험 코드 타입 오류 래칫 |
 | `tools/check_coverage.py` | 커버리지 바닥 래칫 · 양방향 |
+| `tools/deadcheck.py` | 검사가 죽었는가 — 프로브 넷 · 양방향 래칫 |
+| `tools/encoding_check.py` | BOM · CRLF · 비 UTF-8 · 끝 개행 (`--fix`) |
 | `tools/release_notes.py` | 결정 기록에서 태그 · 릴리스 본문 |
 | `tools/proposal_source.py` | 기획서 정본 구간 · 표 읽기 · 지문 |
 | `tools/build_proposal.py` | 기획서 빌드 (pandoc) |

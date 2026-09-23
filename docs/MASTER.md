@@ -1657,6 +1657,8 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 | 기획서 | 기획서와 정본의 어긋남 | D-0220 · D-0221 |
 | 문서 대조 | 문서가 없는 파일 · 명령을 가리키기 | D-0189 |
 | 파일 길이 | 코드 600 · 시험 700줄 래칫 | D-0117 |
+| **죽은 검사** | 무검증 시험 · 건너뛴 시험 · 삼킨 예외 · 빈 그물을 세는 래칫. 생사는 합성 트리에서 묻는다 | D-0230 |
+| **글자 · 개행** | BOM · CRLF · 비 UTF-8 · 끝 개행 없음 | D-0230 |
 | 린트 · 타입 | ruff · mypy strict · 시험 코드 타입 래칫 · 워크플로(actionlint) · 셸(shellcheck) | D-0149 · D-0150 · D-0225 |
 | 계층 계약 | import-linter 5종 | D-0134 |
 | 시험 · 커버리지 | pytest · 커버리지 바닥 래칫 — 숫자는 `core/pyproject.toml` 하나, 실측이 3%p 넘게 앞서면 바닥을 올린다 | D-0223 |
@@ -2236,6 +2238,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0227 | 봇 갱신이 죽은 원인은 안 도는 칸이었다 | `core/tests/unit/test_hygiene.py::test_잠금은_도는_곳만_푼다` |
 | D-0228 | 러너 폴더를 저장소마다 나눈다 | `core/tests/unit/test_hygiene.py::test_다른_저장소의_러너는_안_건드린다` |
 | D-0229 | 웹에서 보여 주는 것은 구운 PDF다 | `core/tests/unit/test_ci_parity.py::test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다` |
+| D-0230 | 검사를 검사한다 | `core/tests/unit/test_hygiene.py::test_프로브는_심은_결함에_운다` |
 
 <!-- decision-ledger:end -->
 

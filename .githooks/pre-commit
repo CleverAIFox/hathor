@@ -49,6 +49,8 @@ run "비밀정보"   python3 tools/check_secrets.py --check
 run "모델 라이선스" python3 tools/check_model_licenses.py --check
 run "기획서"    python3 tools/docx_check.py --check
 run "실물 대조"   python3 tools/doc_fsck.py --check
+run "글자·개행"   python3 tools/encoding_check.py --check
+run "죽은 검사"   python3 tools/deadcheck.py --ratchet
 run "파일 길이"   python3 tools/check_file_size.py
 
 # **`core`에서 돌린다.** 설정이 `core/pyproject.toml`에 있어 뿌리에서 부르면

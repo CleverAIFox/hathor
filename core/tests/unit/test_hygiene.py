@@ -1,4 +1,4 @@
-"""환경 한 곳 · 봇 갱신 · 로컬 찌꺼기 (D-0225) · 웹 화면 대신 명령 (D-0226)."""
+"""환경 · 봇 · 찌꺼기 (D-0225) · 명령 (D-0226) · 죽은 검사와 글자 (D-0230)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
+import deadcheck  # noqa: E402
+import encoding_check  # noqa: E402
 import gh_ops  # noqa: E402
 import tidy  # noqa: E402
 
@@ -205,3 +207,47 @@ def test_다른_저장소의_러너는_안_건드린다() -> None:
     script = (ROOT / "tools" / "register_runner.sh").read_text(encoding="utf-8")
     assert 'dir="${RUNNER_DIR:-$HOME/actions-runner-${slug#*/}}"' in script
     assert '"$(field gitHubUrl)" != "$url"' in script
+
+
+# ------------------------------------------------------------------ 죽은 검사 · 글자 (D-0230)
+
+
+def test_프로브는_심은_결함에_운다() -> None:
+    """**D-0230의 강제자.** 실제 트리의 0건은 «깨끗하다»이지 «프로브가 산다»가 아니다.
+
+    fire-lane은 이 둘을 섞어 «결함이 많을수록 확실히 통과하는» 관문을 돌렸다. 생사는 합성
+    트리에서 묻고, 저장소의 수는 래칫이 본다.
+    """
+    assert deadcheck.positive_control() == []
+
+
+def test_죽은_검사_래칫은_양방향이다() -> None:
+    top = {"무검증 시험": 0, "건너뛴 시험": 2}
+    assert deadcheck.verdict({"무검증 시험": 0, "건너뛴 시험": 2}, top) == []
+    assert len(deadcheck.verdict({"무검증 시험": 1, "건너뛴 시험": 2}, top)) == 1
+    assert len(deadcheck.verdict({"무검증 시험": 0, "건너뛴 시험": 1}, top)) == 1
+
+
+def test_면제는_선언으로만_된다() -> None:
+    """선언 없는 면제는 없다 (D-0219와 같은 규율)."""
+    lines = ["def test_x():", "    pass  # deadcheck: ok 사유", "def test_y():", "    pass"]
+    assert deadcheck.exempt(lines, 1, 2)
+    assert not deadcheck.exempt(lines, 3, 4)
+    assert deadcheck.exempt(lines, 2, 2), "한 줄짜리도 그 줄의 선언을 받는다"
+
+
+def test_글자_규격을_어긴_바이트를_전부_센다() -> None:
+    assert encoding_check.faults(b"\xef\xbb\xbfhi\n", ".md") == ["BOM"]
+    assert encoding_check.faults(b"hi\r\nthere\n", ".py") == ["CRLF"]
+    assert encoding_check.faults(b"hi\r\n", ".bat") == []
+    assert encoding_check.faults(b"\xc7\xd1\n", ".md") == ["비 UTF-8"]
+    assert encoding_check.faults(b"hi", ".md") == ["끝 개행 없음"]
+    assert encoding_check.faults(b"", ".md") == []
+    assert encoding_check.faults("한글\n".encode(), ".md") == []
+
+
+def test_고치면_규격에_맞고_다시_고쳐도_같다() -> None:
+    raw = b"\xef\xbb\xbf\xed\x95\x9c\r\n\xea\xb8\x80"
+    fixed = encoding_check.repaired(raw, ".md")
+    assert encoding_check.faults(fixed, ".md") == []
+    assert encoding_check.repaired(fixed, ".md") == fixed

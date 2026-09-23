@@ -59,6 +59,15 @@ jobs:
         working-directory: .
         run: python3 tools/check_secrets.py --check
 
+      - name: Encoding & newlines
+        working-directory: .
+        run: python3 tools/encoding_check.py --check
+
+      # D-0230. 검사가 죽었는지 세는 래칫. 양성 대조는 pytest가 돈다 — 관문은 이 수다.
+      - name: Dead check ratchet
+        working-directory: .
+        run: python3 tools/deadcheck.py --ratchet
+
       - name: File size ratchet
         working-directory: .
         run: python3 tools/check_file_size.py

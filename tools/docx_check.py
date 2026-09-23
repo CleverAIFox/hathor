@@ -51,7 +51,7 @@ DOCX = "docs/proposal.docx"
 
 RETIRED: list[tuple[str, str]] = [
     ("유닛 1/4", "P1 인제스트는 끝났다 (D-0203)"),
-    ("docs/archive", "보관소를 없앴다 (D-0186)"),
+    ("docs/archive", "보관소를 없앴다 (D-0186)"),  # deadcheck: ok 없어야 할 말이라 없는 것이 맞다
     ("사업화를 전제하지 않는다", "목표가 제품으로 바뀌었다 (D-0215)"),
     ("휴면", "장비가 필요한 일만 멈춘다 (D-0218)"),
 ]

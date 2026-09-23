@@ -33,6 +33,7 @@ BUILD = _load("build_proposal")
 
 def test_그림_자리가_전부_정본에_있다() -> None:
     """**제목을 바꾸면 그림이 조용히 빠진다** — 그래서 제목 줄로 건다."""
+    # deadcheck: ok `_span`이 제목을 못 찾으면 던진다 — 예외가 판정이다
     lines = SOURCE.source().splitlines()
     for heading, _name, _caption, _where in BUILD.FIGURES:
         BUILD._span(lines, heading)

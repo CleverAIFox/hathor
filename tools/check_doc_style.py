@@ -58,9 +58,6 @@ DOCUMENTS = (
     "docs/MASTER.md",
     "docs/DECISIONS.md",
 )
-DOCUMENT_TREES = ("docs/decisions",)
-"""훑을 하위 나무. `docs/`에는 축 셋과 조각뿐이다 (D-0130 · D-0133)."""
-
 WIDTH = 100
 """본문 줄 상한. 실측 중앙 48 · 90% 62 · 최대 103이라 **거의 지켜지고 있던 값이다.**"""
 
@@ -147,12 +144,8 @@ RECORD = re.compile(r"^## (D-\d{4})\.", re.M)
 
 def targets() -> list[Path]:
     """검사할 문서. 정렬해 낸다 — **문제 순서가 기기마다 달라지면 못 읽는다.**"""
-    found = [ROOT / name for name in DOCUMENTS if (ROOT / name).exists()]
-    for tree in DOCUMENT_TREES:
-        base = ROOT / tree
-        if base.is_dir():
-            found.extend(sorted(base.glob("*.md")))
-    return found
+    # D-0230 — `docs/decisions/`를 훑는 가지가 있었고 **그 폴더는 없다.** 빈 그물이었다.
+    return [ROOT / name for name in DOCUMENTS if (ROOT / name).exists()]
 
 
 def _above(lines: list[str], number: int) -> bool:
