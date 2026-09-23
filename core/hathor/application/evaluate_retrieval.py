@@ -166,7 +166,11 @@ class EvaluationConfig:
     seed: int = DEFAULT_SEED
     gate: float = DEFAULT_GATE
     force: bool = False
-    """M0 미달에도 라벨 지표를 계산한다. 실패 원인 조사용이며 기본은 False."""
+    """**붕괴 판정에도** 라벨 지표를 계산한다. 조사용이며 그 수치는 인용하지 않는다.
+
+    D-0234 전에는 «top-1 미달»이 곧 계산 중단이었고 이 깃발이 그것을 뚫는 유일한 길이었다.
+    이제 근접 실패는 표식을 달고 계산되므로, 이 깃발이 뚫는 것은 **붕괴**뿐이다.
+    """
 
     label: str = "unnamed"
     """실험 이름. 여러 조건의 산출 JSON을 나중에 구분하기 위한 것뿐이다."""
@@ -320,7 +324,39 @@ class EvaluationReport:
 
     @property
     def gate_passed(self) -> bool:
+        """**식별 판정.** 곡이 자기 나머지 반쪽을 1등으로 찾는가."""
         return self.self_consistency >= self.config.gate
+
+    @property
+    def collapsed(self) -> bool:
+        """**붕괴 판정.** 표현이 무너졌는가 — top-1과 다른 질문이다 (D-0234).
+
+        D-0044가 이미 두 상황이 다르다는 것을 실측으로 보였다. 정답이 2~5등에 있는 것과
+        800등에 흩어진 것은 **처방이 정반대**인데 옛 규칙은 둘 다 «M1/M2 계산 안 함»으로
+        묶었다. 그래서 CLAP(top-1 0.9313 · R@10 0.9811 · 실패 중앙값 5)의 M1/M2를
+        **잴 수가 없었고**, 상업 축 판정이 통째로 막혔다.
+
+        판정 기준은 D-0046이 쓰던 것을 그대로 옮긴 것이다 — 새 문턱을 만들지 않는다.
+        다만 **k로 하는 말은 무작위가 k 밖일 때만 뜻이 있다.** 곡이 열뿐인 코퍼스에서는
+        찍어도 중앙값이 5.5등이고 R@10이 1.0이다 — 순수 잡음이 «정답은 상위권에 있다»로
+        분류된다. 실측 코퍼스에서 무작위는 502.5등이었다. 그래서 **k가 뜻을 갖는
+        코퍼스에서만 근접 실패를 인정하고**, 아니면 붕괴로 본다.
+        """
+        if self.gate_passed:
+            # **붕괴는 미달의 «성격»이다.** 1등으로 찾고 있으면 가를 것이 없다.
+            return False
+        consistency = self.consistency
+        ranked = consistency.random_median_rank > self.config.k
+        near = ranked and (
+            consistency.recall_at_10 >= self.config.gate
+            or 0 < consistency.miss_median_rank <= self.config.k
+        )
+        return not near
+
+    @property
+    def citable(self) -> bool:
+        """정본 지표로 인용할 수 있는가. **식별까지 통과해야 한다.**"""
+        return self.gate_passed and not self.collapsed
 
     def as_record(self) -> dict[str, object]:
         return {
@@ -335,6 +371,10 @@ class EvaluationReport:
                 **self.consistency.as_record(),
                 "gate": self.config.gate,
                 "passed": self.gate_passed,
+                # **산출물이 자기 자격을 들고 다닌다** (D-0234). 리포트를 나중에 읽는
+                # 사람이 «이 수치를 인용해도 되는가»를 출력 로그에서 찾지 않아도 된다.
+                "collapsed": self.collapsed,
+                "citable": self.citable,
             },
             "metrics": [metric.as_record() for metric in self.metrics],
         }
@@ -367,7 +407,9 @@ class EvaluateRetrieval:
             consistency=consistency,
             anisotropy=anisotropy(vectors),
         )
-        if not report.gate_passed and not self._config.force:
+        # **붕괴일 때만 멈춘다** (D-0234). 식별 미달은 표식을 달고 계산한다 —
+        # 정답이 2~5등에 있는 표현의 M1/M2는 «못 잴 것»이 아니라 «비교용»이다.
+        if report.collapsed and not self._config.force:
             return report
 
         similarity = cosine_similarity(vectors, vectors)

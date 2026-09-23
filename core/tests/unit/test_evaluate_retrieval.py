@@ -393,3 +393,96 @@ def test_m0_reports_analytic_baseline():
     record = report.as_record()["m0_self_consistency"]
     assert record["random_top1"] == pytest.approx(1.0 / report.tracks)
     assert record["random_median_rank"] == pytest.approx((report.tracks + 1) / 2.0)
+
+
+def _twinned_corpus(pairs: int = 8, singles: int = 40) -> list[TrackRecord]:
+    """쌍둥이 곡을 심는다 — **top-1은 놓치고 2등에서 맞히는** 코퍼스다 (D-0234).
+
+    실물에서 이 모양이 나왔다. CLAP은 청크 절반이 자기 나머지 반쪽 대신 «거의 같은 곡»을
+    1등으로 집었고 정답은 5등쯤에 있었다. 무작위 잡음(붕괴)과 전혀 다른 상황이다.
+    """
+    generator = np.random.default_rng(17)
+    tracks: list[TrackRecord] = []
+    for index in range(singles):
+        middle = generator.normal(0.0, 1.0, size=(1, DIM))
+        tracks.append(make_track(index, f"앨범{index % 3}", "가수", center=middle))
+    for index in range(pairs):
+        middle = generator.normal(0.0, 1.0, size=(1, DIM))
+        for twin in range(2):
+            # 두 곡이 거의 같다. 잡음이 곡 사이 거리보다 크면 반쪽끼리 못 찾는다.
+            tracks.append(
+                make_track(
+                    1000 + index * 2 + twin,
+                    f"앨범{index % 3}",
+                    "가수",
+                    center=middle + generator.normal(0.0, 0.001, size=(1, DIM)),
+                    noise=0.01,
+                )
+            )
+    return tracks
+
+
+def test_근접_실패는_계산하고_표식을_단다():
+    """**D-0234의 강제자.** top-1 미달이라고 M1/M2를 안 내면 판정 자체를 못 한다."""
+    config = EvaluationConfig(view=ViewSpec(keys=("mixture",)), k=10)
+    report = EvaluateRetrieval(config).run(_twinned_corpus())
+
+    assert not report.gate_passed, "쌍둥이가 top-1을 뺏어야 이 시험이 뜻이 있다"
+    assert not report.collapsed, "정답이 상위권에 있으면 무너진 것이 아니다"
+    assert len(report.metrics) == 2, "근접 실패에서도 지표를 낸다"
+    assert not report.citable, "그러나 정본으로 인용하지 않는다"
+    consistency = report.as_record()["m0_self_consistency"]
+    assert isinstance(consistency, dict)
+    assert consistency["citable"] is False, "자격은 산출물이 들고 다닌다"
+
+
+def test_붕괴는_여전히_계산하지_않는다():
+    """무작위 잡음은 정답이 수십·수백 등에 흩어진다. 그 M1/M2는 볼 값이 아니다."""
+    generator = np.random.default_rng(3)
+    tracks = [
+        TrackRecord(
+            source_key=f"{index}.mp3",
+            album="같은앨범",
+            artist="같은아티스트",
+            embeddings={
+                "mixture": np.asarray(generator.normal(size=(CHUNKS, DIM)), dtype=np.float32)
+            },
+        )
+        for index in range(60)
+    ]
+    report = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(tracks)
+    assert report.collapsed
+    assert report.metrics == ()
+    assert not report.citable
+
+
+def test_통과한_실행은_인용할_수_있다():
+    corpus = build_corpus(albums=4, per_album=4)
+    report = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(corpus)
+    assert report.citable
+    consistency = report.as_record()["m0_self_consistency"]
+    assert isinstance(consistency, dict)
+    assert consistency["collapsed"] is False
+
+
+def test_작은_코퍼스에서_잡음을_근접실패로_읽지_않는다():
+    """**무작위 중앙값이 k 안이면 k로 하는 말이 무의미하다** (D-0234).
+
+    곡 12개면 찍어도 6등이고 R@10도 저절로 높다. 두 조건 다 참이 되어 순수 잡음이
+    «정답이 상위권»으로 분류된다.
+    """
+    generator = np.random.default_rng(3)
+    tracks = [
+        TrackRecord(
+            source_key=f"{index}.mp3",
+            album="같은앨범",
+            artist="같은아티스트",
+            embeddings={
+                "mixture": np.asarray(generator.normal(size=(CHUNKS, DIM)), dtype=np.float32)
+            },
+        )
+        for index in range(12)
+    ]
+    report = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(tracks)
+    assert report.consistency.random_median_rank <= report.config.k, "이 시험의 전제"
+    assert report.collapsed

@@ -403,7 +403,7 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval.add_argument(
         "--force",
         action="store_true",
-        help="M0 미달에도 M1/M2를 계산한다. 조사용이며 그 수치를 인용하면 안 된다",
+        help="붕괴 판정에도 M1/M2를 계산한다. 조사용이며 그 수치를 인용하면 안 된다",
     )
     retrieval.add_argument("--label", default=None, help="실험 이름 (미지정 시 뷰에서 생성)")
     retrieval.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
@@ -2142,20 +2142,15 @@ def _gate_failure_message(report: EvaluationReport) -> str:
     **처방이 정반대인 두 상황을 같은 말로 보고하고 있었다.**
     """
     consistency = report.consistency
-    gate = report.config.gate
-    # **R@10 하나로 가르면 경계에서 틀린다.** BGE-M3 홀짝 조건이 실패 순위 중앙값
-    # 5.5인데 R@10 0.9442로 0.95에 못 미쳐 "상위권에도 없다"로 보고됐다 (D-0046).
-    # 순위 중앙값이 k 안에 있으면 그것만으로 근접 실패다.
-    near_miss = consistency.recall_at_10 >= gate or 0 < consistency.miss_median_rank <= (
-        report.config.k
-    )
-    if near_miss:
+    # **가르는 규칙은 유스케이스가 든다** (D-0234). 여기서 다시 계산하면 두 곳이
+    # 갈라진다 — D-0046이 세운 판정을 `report.collapsed`가 그대로 옮겨 갖고 있다.
+    if not report.collapsed:
         return (
-            f"M0 게이트 미달 (top-1 {report.self_consistency:.4f}). "
+            f"M0 식별 미달 (top-1 {report.self_consistency:.4f}). "
             f"다만 R@10 {consistency.recall_at_10:.4f}, 실패 순위 중앙값 "
             f"{consistency.miss_median_rank:.1f}(무작위 {consistency.random_median_rank:.1f})다. "
             "정답이 상위권에 있으므로 표현이 무너진 것이 아니라 top-1을 못 넘는 것이다. "
-            "추출 설정을 갈아엎기 전에 무엇이 부족한지부터 본다."
+            "**M1/M2는 계산했고 비교용으로만 쓴다** — 정본 지표로 인용하지 않는다 (D-0234)."
         )
     return (
         f"M0 게이트 미달 (top-1 {report.self_consistency:.4f}, "
@@ -2206,7 +2201,10 @@ def _print_report(report: EvaluationReport) -> None:
             f"({metric.precision_lift:.1f}배)"
         )
     if not report.metrics:
-        print("  M1/M2는 계산하지 않았다 (M0 게이트).")
+        print("  M1/M2는 계산하지 않았다 (**붕괴 판정** · D-0234).")
+    elif not report.citable:
+        # 표를 옮겨 적는 사람이 이 줄을 같이 가져가게 **지표 바로 옆에** 둔다.
+        print("  ↑ **식별 미달이라 비교용이다.** 정본 지표로 인용하지 않는다 (D-0234).")
 
 
 def _run_eval_mfcc(args: argparse.Namespace) -> int:

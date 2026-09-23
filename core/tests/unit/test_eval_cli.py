@@ -403,28 +403,34 @@ def test_gate_failure_still_flags_real_collapse_with_low_recall():
     assert "상위권에도 없다" in message
 
 
-def _report_with(*, top1: float, recall10: float, miss: float):
-    """지정한 순위 진단을 갖는 최소 리포트. 코퍼스를 만들지 않는다."""
-    from dataclasses import dataclass
+def _report_with(*, top1: float, recall10: float, miss: float, queries: int = 1004):
+    """지정한 순위 진단을 갖는 리포트. **실물 자료형으로 짓는다** (D-0233의 교훈).
 
-    from hathor.application.evaluate_retrieval import EvaluationConfig
+    옛 판은 필드 셋짜리 가짜였고, D-0234가 `collapsed`를 읽자 **CLI가 아니라 가짜가
+    깨졌다.** 코퍼스를 만들지 않으면서 실물을 쓰는 길이 있으면 그 길로 간다.
+    """
+    from hathor.application.evaluate_retrieval import (
+        ConsistencyRun,
+        EvaluationConfig,
+        EvaluationReport,
+        SplitSpec,
+    )
+    from hathor.domain.services.retrieval_metrics import ConsistencyScore
 
-    @dataclass(frozen=True)
-    class _Consistency:
-        recall_at_10: float
-        miss_median_rank: float
-        random_median_rank: float = 502.0
-
-    @dataclass(frozen=True)
-    class _Report:
-        consistency: _Consistency
-        self_consistency: float
-        config: EvaluationConfig
-
-    return _Report(
-        consistency=_Consistency(recall_at_10=recall10, miss_median_rank=miss),
-        self_consistency=top1,
+    score = ConsistencyScore(
+        queries=queries,
+        top1=top1,
+        mrr=top1,
+        recall_at_5=recall10,
+        recall_at_10=recall10,
+        miss_median_rank=miss,
+    )
+    return EvaluationReport(
         config=EvaluationConfig(),
+        tracks=queries,
+        skipped=(),
+        dimension=768,
+        consistency=ConsistencyRun(split=SplitSpec(), scores=(score,)),
     )
 
 
