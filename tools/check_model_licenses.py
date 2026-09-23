@@ -53,6 +53,11 @@ LICENSES: dict[str, tuple[str, str, str]] = {
         "no",
         "검색(D-0027) · 화성 layer03(D-0181)의 기반. **제품 경로에 못 간다** (O-68)",
     ),
+    "laion/larger_clap_music": (
+        "Apache-2.0",
+        "yes",
+        "MERT 대체 후보 — 같은 하네스로 나란히 잰다 (O-68 · D-0231)",
+    ),
     "BAAI/bge-m3": ("MIT", "yes", "가사 임베딩 (D-0048)"),
     "htdemucs": (
         "코드 MIT · 가중치 미명시",

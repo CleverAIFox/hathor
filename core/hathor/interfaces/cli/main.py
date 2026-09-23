@@ -69,6 +69,8 @@ from hathor.infrastructure.musicbrainz_lookup import (
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
 from hathor.interfaces.cli import ingest_keys_bundles
 from hathor.interfaces.cli.doctor import run_doctor
+from hathor.interfaces.cli.eval_clap import add_parser as add_clap_parser
+from hathor.interfaces.cli.eval_clap import run as run_eval_clap
 from hathor.interfaces.cli.eval_order import run_eval_harmony_order
 from hathor.interfaces.cli.eval_output import report_harmonic_sweep, run_eval_harmony_output
 from hathor.interfaces.cli.eval_vocabulary import (
@@ -611,6 +613,8 @@ def build_parser() -> argparse.ArgumentParser:
     layers.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
     layers.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
 
+    add_clap_parser(eval_sub)
+
     taste = sub.add_parser("taste", help="취향 라벨 수집")
     taste_sub = taste.add_subparsers(dest="taste_command", required=True)
 
@@ -757,6 +761,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_eval_mfcc(args)
         if args.eval_command == "layers":
             return _run_eval_layers(args)
+        if args.eval_command == "clap":
+            return run_eval_clap(args, _resolve_root(args.root))
         if args.eval_command == "fusion":
             return _run_eval_fusion(args)
         if args.eval_command == "harmony-prior":

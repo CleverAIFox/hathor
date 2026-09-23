@@ -597,7 +597,7 @@ HATHOR
 | REQ-ANL-006 | 가사축: 주제·어휘·정서가·운율 패턴을 산출한다 | M | P2 | 완료 | BGE-M3 임베딩. 축 탐색 종료 (D-0048) |
 | REQ-ANL-007 | 가창축: 음역·비브라토·발성 밝기·표현 강도를 산출한다 | M | P2 | 미착수 | 보컬 스템은 있다 |
 | REQ-ANL-008 | 한국어 강제정렬로 가사-오디오 시간 정보를 생성한다 | M | P2 | 미착수 | SYLT 전량 부재 |
-| REQ-ANL-009 | 사전학습 모델(MERT·CLAP) 임베딩을 산출한다 | M | P2 | 부분 | MERT 13층 × 5소스 완료. **MERT 비상업** — CLAP 대체 실측 (O-68) |
+| REQ-ANL-009 | 사전학습 모델(MERT·CLAP) 임베딩을 산출한다 | M | P2 | 부분 | MERT 13층 × 5소스 완료. **MERT 비상업** — CLAP(`larger_clap_music` · Apache-2.0) 추출 경로가 섰고 배치·비교가 남았다 (O-68 · D-0231) |
 | REQ-ANL-010 | 모델 입력 직전에만 리샘플하고 원본 샘플레이트를 유지한다 | M | P2 | 완료 | D-0007 · D-0021 |
 | REQ-ANL-011 | 분석 실패 곡을 분류하여 기록하고 전체를 중단시키지 않는다 | M | P2 | 완료 | 곡마다 예외 타입·메시지 (D-0203) |
 
@@ -2239,6 +2239,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0228 | 러너 폴더를 저장소마다 나눈다 | `core/tests/unit/test_hygiene.py::test_다른_저장소의_러너는_안_건드린다` |
 | D-0229 | 웹에서 보여 주는 것은 구운 PDF다 | `core/tests/unit/test_ci_parity.py::test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다` |
 | D-0230 | 검사를 검사한다 | `core/tests/unit/test_hygiene.py::test_프로브는_심은_결함에_운다` |
+| D-0231 | 상업 가능한 취향 축을 잴 길을 놓는다 | `core/tests/unit/test_clap_feature_extractor.py::test_청크마다_임베딩_하나를_쌓는다` |
 
 <!-- decision-ledger:end -->
 

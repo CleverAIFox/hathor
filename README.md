@@ -88,6 +88,12 @@ uv run python -m hathor.cli search --like "밤편지" -k 10
 uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10   # 시드 퓨전
 uv run python -m hathor.cli eval retrieval --out var/ingest \
     --features var/ingest/mert-layers --keys layer00 --label mert-layer00
+
+# 상업 가능한 축으로 같은 하네스 (O-68 · D-0231)
+uv run python -m hathor.cli eval clap --limit 20        # 배치. 빼면 전량
+uv run python -m hathor.cli eval retrieval --out var/ingest \
+    --features mert=var/ingest --features clap=var/ingest/clap \
+    --keys mert:mixture,clap:mixture --label clap-vs-mert
 ```
 
 중심화가 기본이다 (D-0031) — `--raw`로 끄면 허브 곡이 어떤 질의에도 상위에 온다. 시드가 둘
