@@ -1668,8 +1668,9 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 
 문서 넷은 시제가 다르다 — `PLAN`(미래) · `MASTER`(현재) · `DECISIONS`(과거, 추가 전용) ·
 `README`(진입). **밖에 내는 기획서(`docs/proposal.docx`)는 시제 밖이며 이 문서의 Part I ~ III에서
-빌드한다** (D-0221). main에 들어가면 검사를 지난 뒤 GitHub Pages로 배포하고 `site/proposal.html`이
-그 docx를 변환 없이 그린다 (D-0222). 결정마다 **강제자**(그 결정을 지키는 시험)와 **재현**(명령)을 적는다.
+빌드한다** (D-0221). main에 들어가면 검사를 지난 뒤 GitHub Pages로 배포한다 (D-0222).
+**웹에서 보여 주는 것은 배포가 구운 PDF다** — 브라우저가 docx를 직접 그리던 판은 표와 글꼴이
+무너졌다. 구운 판이 깨졌는지는 쪽수와 본문 글자로 본다 (D-0229). 결정마다 **강제자**(그 결정을 지키는 시험)와 **재현**(명령)을 적는다.
 판단이 바뀌면 옛 결정을 고치지 않고 **갱신 배지**를 달고 새 번호로 쓴다.
 
 ### □ 컨테이너 구성
@@ -2234,6 +2235,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0226 | 웹 화면의 버튼을 `gh` 명령으로 | `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다` |
 | D-0227 | 봇 갱신이 죽은 원인은 안 도는 칸이었다 | `core/tests/unit/test_hygiene.py::test_잠금은_도는_곳만_푼다` |
 | D-0228 | 러너 폴더를 저장소마다 나눈다 | `core/tests/unit/test_hygiene.py::test_다른_저장소의_러너는_안_건드린다` |
+| D-0229 | 웹에서 보여 주는 것은 구운 PDF다 | `core/tests/unit/test_ci_parity.py::test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다` |
 
 <!-- decision-ledger:end -->
 

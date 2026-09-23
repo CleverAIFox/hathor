@@ -253,11 +253,25 @@ def test_기획서_배포는_지문을_본다() -> None:
 
 
 def test_배포는_정본을_옮기기만_한다() -> None:
-    """**사본을 커밋하지 않는다.** `site/`에 docx가 있으면 두 벌이 된다."""
-    assert not (ROOT / "site" / "proposal.docx").exists()
+    """**사본을 커밋하지 않는다.** `site/`에 docx나 PDF가 있으면 두 벌이 된다."""
+    for name in ("proposal.docx", "proposal.pdf"):
+        assert not (ROOT / "site" / name).exists()
     viewer = (ROOT / "site" / "proposal.html").read_text(encoding="utf-8")
     assert "./proposal.docx" in viewer
     assert "cp docs/proposal.docx _site/" in PAGES.read_text(encoding="utf-8")
+
+
+def test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다() -> None:
+    """**D-0229의 강제자.** 브라우저가 docx를 직접 그리던 판은 웹에서 무너졌다.
+
+    굽는 단계가 생기면 «굽다가 깨졌나»를 의심할 자리가 생긴다 — 그래서 쪽수와 본문 글자를 본다.
+    """
+    viewer = (ROOT / "site" / "proposal.html").read_text(encoding="utf-8")
+    assert "./proposal.pdf" in viewer
+    assert "docx-preview" not in viewer, "브라우저가 docx를 그리던 판이 남았다"
+    flow = PAGES.read_text(encoding="utf-8")
+    assert "soffice --headless --convert-to pdf" in flow
+    assert "pdfinfo" in flow and "pdftotext" in flow
 
 
 SELF_HOSTED_TRIGGERS = {"workflow_dispatch"}

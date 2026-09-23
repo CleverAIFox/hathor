@@ -105,7 +105,8 @@ make proposal                                            # MASTER Part I ~ III �
 **`MASTER.md` Part I ~ III를 고치면 다시 빌드한다.** 빌드가 정본 지문을 docx에 적고
 `docx_check.py`가 맞대므로, 안 하면 `make check`이 멈춘다. main에 푸시하면
 `.github/workflows/proposal.yml`이 **CI를 먼저 통과시키고** GitHub Pages에 올린다.
-Pages는 한 번 켠다 — 저장소 설정 → Pages → Source: **GitHub Actions**.
+배포는 docx를 **PDF로 구워** 웹에 보여 주고 docx도 같이 올린다 — 브라우저가 docx를 직접 그리면
+표와 글꼴이 무너진다 (D-0229). Pages 켜기와 첫 배포는 `make gh-setup`이 한다.
 
 ## 패치 파이프 · 내보내기
 

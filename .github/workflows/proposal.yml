@@ -2,6 +2,7 @@
 #
 # 정본은 docs/MASTER.md Part I ~ III이고 docs/proposal.docx는 그것을 빌드한 판이다 (D-0221).
 # 사본을 커밋하지 않고 배포 직전에 _site/로 옮긴다 — 두 벌이 커밋되면 한쪽만 고쳐진다.
+# 웹에서 보여 주는 것은 여기서 구운 PDF다 (D-0229). 구운 판이 깨졌는지는 쪽수와 본문 글자로 본다.
 #
 # 배포는 검사를 지난다. ci.yml을 그대로 부른다 — 푸시가 통과한 것과 같은 검사여야
 # 게이트가 문다 (fire-lane _deploy.yml). 검사를 여기 복사하면 둘이 갈린다.
@@ -46,9 +47,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Proposal vs sources
         run: python3 tools/docx_check.py --check
+      # D-0229. 브라우저가 docx를 직접 그리던 판은 웹에서 표와 글꼴이 무너졌다.
+      # 여기서 한 번 구워 PDF로 보여 준다. 제출본(docx)은 그대로 같이 올린다.
+      - name: Install converter
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libreoffice-writer fonts-noto-cjk poppler-utils
+      - name: Bake PDF
+        run: soffice --headless --convert-to pdf docs/proposal.docx --outdir _site
+      - name: PDF is not broken
+        run: |
+          pages=$(pdfinfo _site/proposal.pdf | awk '/^Pages/ {print $2}')
+          test "$pages" -ge 50 || { echo "쪽이 $pages장뿐이다 — 굽다가 깨졌다"; exit 1; }
+          pdftotext _site/proposal.pdf - | grep -q '취향 잠재 표현' \
+            || { echo "PDF에 본문 글자가 없다 — 글꼴이 깨졌다"; exit 1; }
+          echo "PDF $pages쪽 · 본문 확인"
       - name: Stage site
         run: |
-          mkdir -p _site
           cp site/* _site/
           cp docs/proposal.docx _site/
       - uses: actions/configure-pages@v5
