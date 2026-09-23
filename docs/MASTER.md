@@ -597,7 +597,7 @@ HATHOR
 | REQ-ANL-006 | 가사축: 주제·어휘·정서가·운율 패턴을 산출한다 | M | P2 | 완료 | BGE-M3 임베딩. 축 탐색 종료 (D-0048) |
 | REQ-ANL-007 | 가창축: 음역·비브라토·발성 밝기·표현 강도를 산출한다 | M | P2 | 미착수 | 보컬 스템은 있다 |
 | REQ-ANL-008 | 한국어 강제정렬로 가사-오디오 시간 정보를 생성한다 | M | P2 | 미착수 | SYLT 전량 부재 |
-| REQ-ANL-009 | 사전학습 모델(MERT·CLAP) 임베딩을 산출한다 | M | P2 | 부분 | MERT 13층 × 5소스 완료. **MERT 비상업** — CLAP(`larger_clap_music` · Apache-2.0) 추출 경로가 섰고 배치·비교가 남았다 (O-68 · D-0231) |
+| REQ-ANL-009 | 사전학습 모델(MERT·CLAP) 임베딩을 산출한다 | M | P2 | 부분 | MERT 13층 × 5소스 완료. **MERT 비상업** — CLAP(`larger_clap_music` · Apache-2.0) 경로가 섰다. **첫 배치는 임베딩이 아니라 은닉 상태를 쌓았고 6GB를 버렸다** (D-0233). 다시 뽑아 비교하면 O-68이 닫힌다 |
 | REQ-ANL-010 | 모델 입력 직전에만 리샘플하고 원본 샘플레이트를 유지한다 | M | P2 | 완료 | D-0007 · D-0021 |
 | REQ-ANL-011 | 분석 실패 곡을 분류하여 기록하고 전체를 중단시키지 않는다 | M | P2 | 완료 | 곡마다 예외 타입·메시지 (D-0203) |
 
@@ -985,7 +985,8 @@ HATHOR
 
 | 산출물 | 형태 | 내용 |
 |---|---|---|
-| 곡 묶음 | `var/ingest/audio/<해시>.npz` + manifest | MERT 13층 × 5소스 · 크로마 · 온셋 · 음고 · 무음. 추출 조건을 manifest에 적는다 (D-0211) |
+| 곡 묶음 | `var/ingest/audio/<해시>.npz` + manifest | MERT 13층 × 5소스 · 크로마 · 온셋 · 음고 · 무음. 추출 조건을 manifest에 적는다 (D-0211). 검색 하네스는 `BundleFeatureSource`로 읽는다 — `--keys mert/mixture/layer00` (D-0233) |
+| CLAP 임베딩 | `var/ingest/clap/features/` + `clap.manifest.json` | 곡당 (청크, 512) 하나. **2차원이 아니면 저장소가 거부한다** (D-0233) |
 | 스캔 · 조회 | JSONL | 스캔 이벤트 · MusicBrainz 조회 결과 · 조성 · 온셋 · 쌍대비교 응답 |
 | 백업 | 외장 SSD (`HATHOR_ARTIFACT_STORE`) | push가 백업, pull이 복원. 덮어쓰지 않는다 (D-0118 · D-0122) |
 
@@ -2241,6 +2242,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0230 | 검사를 검사한다 | `core/tests/unit/test_hygiene.py::test_프로브는_심은_결함에_운다` |
 | D-0231 | 상업 가능한 취향 축을 잴 길을 놓는다 | `core/tests/unit/test_clap_feature_extractor.py::test_청크마다_임베딩_하나를_쌓는다` |
 | D-0232 | 가짜는 실물의 서명을 따른다 | `core/tests/unit/test_clap_feature_extractor.py::test_처리기_인자_이름을_실물에서_확인한다` |
+| D-0233 | 임베딩인 줄 알았던 6GB는 은닉 상태였다 | `core/tests/unit/test_clap_feature_extractor.py::test_은닉_상태가_아니라_임베딩을_쌓는다` |
 
 <!-- decision-ledger:end -->
 

@@ -41,6 +41,9 @@ DEFAULT_DEVICE = "cuda"
 CLAP_SAMPLE_RATE = 48000
 """CLAP의 입력 규격. **포트의 24kHz와 다르다** — 여기서만 쓰는 값이라 포트에 넣지 않는다."""
 
+CLAP_DIMENSION = 512
+"""`larger_clap_music`의 투영 차원. **여기 적어 두고 모델이 다른 값을 내면 죽는다** (D-0233)."""
+
 CHUNK_SAMPLES = CHUNK_SECONDS * CLAP_SAMPLE_RATE
 MIN_CHUNK_SAMPLES = CLAP_SAMPLE_RATE
 MIXTURE_OUTPUT_KEY = "mixture"
@@ -63,6 +66,18 @@ def split_chunks(waveform: Waveform) -> list[Waveform]:
     return [chunk for chunk in chunks if len(chunk) >= MIN_CHUNK_SAMPLES]
 
 
+def audio_vector(found: Any) -> Any:
+    """`get_audio_features`의 반환에서 **임베딩만** 집어낸다 (D-0233).
+
+    transformers 5는 텐서가 아니라 `BaseModelOutputWithPooling`을 낸다. 그래서 `[0]`은
+    임베딩이 아니라 `last_hidden_state`(은닉 상태 · 청크당 (1024, 2, 32))이고,
+    **1004곡 6GB가 전부 그것이었다.** 임베딩은 `pooler_output`에 있다 — 투영 뒤 L2 정규화까지
+    된 512차원이다. 4에서는 텐서를 그대로 냈으므로 둘 다 받는다.
+    """
+    pooled = getattr(found, "pooler_output", None)
+    return found if pooled is None else pooled
+
+
 class ClapFeatureExtractor:
     """모델과 처리기를 한 번 적재하고 재사용한다.
 
@@ -78,6 +93,10 @@ class ClapFeatureExtractor:
         self._model: Any = model.to(device).eval()
         self._processor: Any = AutoProcessor.from_pretrained(model_name)  # type: ignore[no-untyped-call]
         self._device = device
+        if self.dimension != CLAP_DIMENSION:
+            # 체크포인트를 바꾸면 여기서 먼저 죽는다. 조용히 다른 차원을 쌓으면
+            # MERT와 나란히 못 놓는데 산출물은 그럴듯하게 쌓인다.
+            raise ValueError(f"CLAP 투영 차원이 {CLAP_DIMENSION}이 아니다: {self.dimension}")
 
     @property
     def layers(self) -> tuple[int, ...]:
@@ -108,6 +127,14 @@ class ClapFeatureExtractor:
                     audio=chunk, sampling_rate=CLAP_SAMPLE_RATE, return_tensors="pt"
                 )
                 moved = {key: value.to(self._device) for key, value in inputs.items()}
-                vectors.append(self._model.get_audio_features(**moved)[0])
-        stacked = torch.stack(vectors).cpu().numpy()
-        return {MIXTURE_OUTPUT_KEY: np.asarray(stacked, dtype=np.float32)}
+                # **`[0]`을 바로 집지 않는다** (D-0233). 반환이 출력 객체라 그것은
+                # 은닉 상태이며, 1004곡이 그 상태로 6GB가 됐다.
+                vectors.append(audio_vector(self._model.get_audio_features(**moved))[0])
+        stacked = np.asarray(torch.stack(vectors).cpu().numpy(), dtype=np.float32)
+        if stacked.ndim != 2 or stacked.shape[1] != self.dimension:
+            # **첫 곡에서 죽는다.** 모양을 안 보면 70분을 돌고 6GB를 쌓은 뒤에야 안다.
+            raise ValueError(
+                f"CLAP 임베딩이 (청크, {self.dimension})이 아니다: {stacked.shape}. "
+                "상류가 반환 모양을 바꿨다 — `audio_vector`를 본다"
+            )
+        return {MIXTURE_OUTPUT_KEY: stacked}

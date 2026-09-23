@@ -36,6 +36,8 @@ VECTORS_DIRNAME = "vectors"
 KEY_HASH_LENGTH = 16
 BACKUP_SUFFIX = ".bak"
 BATCH_LOCK_NAME = ".batch.lock"
+MANIFEST_SUFFIX = ".manifest.json"
+"""산출물이 자기를 설명하는 자리. **묶음 저장소와 같은 이름을 쓴다** (D-0203 · `var_fsck`)."""
 
 
 class BatchAlreadyRunningError(RuntimeError):
@@ -257,6 +259,12 @@ class NpzFeatureStore:
         self.vectors_dir.mkdir(parents=True, exist_ok=True)
         target = self.vectors_dir / vector_filename(features.source_key)
         arrays = {MIXTURE_KEY: features.mixture, **features.stems}
+        for name, matrix in arrays.items():
+            # **(청크, 차원)이 아닌 것은 임베딩이 아니다** (D-0233). CLAP 배치가
+            # 은닉 상태 (청크, 1024, 2, 32)를 그대로 쌓아 6GB를 만들었고, 저장소는
+            # 그것을 받아 적었다. 여기서 막으면 어느 추출기가 무엇을 내든 첫 곡에서 죽는다.
+            if matrix.ndim != 2:
+                raise ValueError(f"임베딩 {name}이 2차원이 아니다: {matrix.shape}")
         temporary = target.with_suffix(".npz.tmp")
         with temporary.open("wb") as stream:
             np.savez(stream, **arrays)  # type: ignore[arg-type]  # 스텁이 2번째 위치를 allow_pickle로 본다
@@ -269,6 +277,27 @@ class NpzFeatureStore:
             line = json.dumps(features_as_record(features), ensure_ascii=False, sort_keys=False)
             stream.write(line + "\n")
         return target
+
+    def write_manifest(self, name: str, manifest: dict[str, object]) -> Path:
+        """이 산출물이 무엇인지 한 파일에 적는다 (D-0203의 규약을 npz 저장소에도).
+
+        묶음 저장소는 곡마다 manifest를 쓰지만 여기는 **저장소 하나에 한 장**이다 —
+        같은 배치가 같은 모델로 전 곡을 뽑기 때문이다. `var_fsck`가 이 파일을 읽는다.
+        """
+        from hathor.infrastructure.track_bundle_store import repo_revision
+
+        self._root.mkdir(parents=True, exist_ok=True)
+        path = self._root / f"{name}{MANIFEST_SUFFIX}"
+        written = {
+            **manifest,
+            "revision": repo_revision(),
+            "written_at": datetime.now(UTC).isoformat(),
+        }
+        path.write_text(
+            json.dumps(written, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return path
 
     def write_summary(self, summary: dict[str, object]) -> Path:
         """실행별 요약. 인덱스와 달리 덮어쓰지 않고 실행마다 남긴다."""

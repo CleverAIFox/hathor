@@ -306,3 +306,29 @@ def test_iter_vectors_exposes_duplicates(tmp_path):
 
 def test_iter_vectors_on_empty_store(tmp_path):
     assert list(NpzFeatureStore(tmp_path).iter_vectors()) == []
+
+
+def test_2차원이_아닌_임베딩을_거부한다(tmp_path: Path) -> None:
+    """**저장소가 마지막 관문이다** (D-0233).
+
+    CLAP 배치가 은닉 상태 (청크, 768, 2, 32)를 쌓아 올렸고 저장소는 그것을 받아 적어
+    6GB를 만들었다. 어느 추출기가 무엇을 내든 여기서 막으면 첫 곡에서 죽는다.
+    """
+    store = NpzFeatureStore(tmp_path)
+    features = TrackFeatures(
+        source_key="가수/노래.mp3",
+        mixture=np.zeros((3, 768, 2, 32), dtype=np.float32),
+        stems={},
+    )
+    with pytest.raises(ValueError, match="2차원"):
+        store.write_track(features)
+    assert not store.index_path.exists(), "거부한 곡이 인덱스에 남으면 안 된다"
+
+
+def test_산출물이_자기를_설명한다(tmp_path: Path) -> None:
+    """`var_fsck`가 «정체 불명»이라 부르지 않게 한 장을 쓴다 (D-0203 · D-0233)."""
+    path = NpzFeatureStore(tmp_path).write_manifest("clap", {"model": "laion/larger_clap_music"})
+    found = json.loads(path.read_text(encoding="utf-8"))
+    assert path.name == "clap.manifest.json"
+    assert found["model"] == "laion/larger_clap_music"
+    assert found["revision"] and found["written_at"], "무엇으로 언제 뽑았는지가 정체다"

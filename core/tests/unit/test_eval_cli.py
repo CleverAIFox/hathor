@@ -538,3 +538,84 @@ def test_ingest_keys_sweep_is_wired():
     )
     assert args.harmonic_sweep is True
     assert build_parser().parse_args(["ingest", "keys"]).harmonic_sweep is False
+
+
+def build_bundles(tmp_path, root, albums=4, per_album=4, key="mert/mixture/layer00"):
+    """같은 코퍼스를 **묶음 형식**으로 만든다 (D-0203). MERT 산출물이 이 모양이다."""
+    from hathor.infrastructure.track_bundle_store import TrackBundleStore
+
+    generator = np.random.default_rng(11)
+    store = TrackBundleStore(root)
+    entries = []
+    for album_index in range(albums):
+        center = generator.normal(0.0, 1.0, size=(1, DIM))
+        artist = f"아티스트{album_index // 2}"
+        album = f"앨범{album_index}"
+        for track_index in range(per_album):
+            identity = generator.normal(0.0, 0.35, size=(1, DIM))
+            noise = generator.normal(0.0, 0.02, size=(CHUNKS, DIM))
+            source_key = f"{artist}/{album}/{track_index:02d}.mp3"
+            entries.append((source_key, artist, album))
+            store.write(
+                source_key,
+                {
+                    key: np.asarray(center + identity + noise, dtype=np.float32),
+                    "chroma/mixture": np.zeros((12,), dtype=np.float32),
+                },
+                {"model": "m-a-p/MERT-v1-95M", "dtype": "float32"},
+            )
+    write_scan(tmp_path, entries)
+    return entries
+
+
+def test_eval_retrieval_reads_bundles(tmp_path):
+    """**O-68이 여기서 막혀 있었다** (D-0233).
+
+    MERT 산출물은 묶음이고 CLAP은 인덱스 저장소다. 하네스가 묶음을 못 읽으면
+    «MERT vs CLAP»에서 CLAP만 재게 된다.
+    """
+    bundles = tmp_path / "audio"
+    build_bundles(tmp_path, bundles)
+    code = main(
+        [
+            "eval",
+            "retrieval",
+            "--out",
+            str(tmp_path),
+            "--features",
+            str(bundles),
+            "--keys",
+            "mert/mixture/layer00",
+            "--label",
+            "mert-bundle",
+            "--k",
+            "3",
+        ]
+    )
+    assert code == 0
+    assert latest_report(tmp_path)["config"]["label"] == "mert-bundle"
+
+
+def test_eval_retrieval_reports_missing_bundle_folder(tmp_path, capsys):
+    build_corpus(tmp_path)
+    assert main(["eval", "retrieval", "--out", str(tmp_path), "--features", str(tmp_path / "없음")])
+    assert "없다" in capsys.readouterr().err
+
+
+def test_features_argument_resolves_against_repo_root(monkeypatch, tmp_path):
+    """**`core/`에서 돌려도 같은 곳을 본다** (D-0069 · D-0233).
+
+    `--features var/ingest/clap`이 `Path()`로 들어가 실행 폴더 기준이 됐다. 사용자는
+    `core/`에서 돌렸고, CLI는 없는 곳을 가리킨 채 «특징 인덱스가 없다»고 말했다.
+    """
+    from hathor.interfaces.cli.feature_sources import parse_feature_stores
+    from hathor.shared.config.paths import repo_root
+
+    monkeypatch.chdir(tmp_path)
+    ((name, path),) = parse_feature_stores(["var/ingest/clap"], tmp_path)
+    assert name == ""
+    assert path == repo_root() / "var" / "ingest" / "clap"
+
+    named = parse_feature_stores(["clap=var/ingest/clap", "mert=var/ingest/audio"], tmp_path)
+    assert [entry[0] for entry in named] == ["clap", "mert"]
+    assert all(entry[1].is_absolute() for entry in named)

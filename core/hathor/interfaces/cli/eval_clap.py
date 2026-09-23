@@ -54,7 +54,13 @@ def add_parser(commands: argparse._SubParsersAction) -> None:  # type: ignore[ty
 
 def run(args: argparse.Namespace, library_root: Path) -> int:
     from hathor.application.extract_features import ExtractLayerFeatures
-    from hathor.infrastructure.clap_feature_extractor import ClapFeatureExtractor
+    from hathor.domain.ports.audio_analysis import CHUNK_SECONDS
+    from hathor.infrastructure.clap_feature_extractor import (
+        CLAP_DIMENSION,
+        CLAP_SAMPLE_RATE,
+        DEFAULT_MODEL,
+        ClapFeatureExtractor,
+    )
     from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
     from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
     from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
@@ -69,6 +75,21 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
         return 2
 
     store = NpzFeatureStore(args.features or Path(args.out) / DIRNAME)
+    # **산출물이 자기를 설명한다** (D-0203). 모델을 적재하기 전에 쓴다 — 곡이 하나도
+    # 안 남은 재실행에서도 `var_fsck`가 «정체 불명»을 면한다.
+    store.write_manifest(
+        DIRNAME,
+        {
+            "model": DEFAULT_MODEL,
+            "license": "Apache-2.0",
+            "sample_rate": CLAP_SAMPLE_RATE,
+            "chunk_seconds": CHUNK_SECONDS,
+            "dimension": CLAP_DIMENSION,
+            "layers": [],
+            "dtype": "float32",
+            "stems": [],
+        },
+    )
     try:
         with store.batch_lock():
             if not args.force:

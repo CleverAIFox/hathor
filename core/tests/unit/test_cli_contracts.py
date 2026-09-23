@@ -70,7 +70,10 @@ def test_경로_인자는_저장소_루트로_풀린다(label, action):
     다른 곳을 보게 된다. 실제로 `ingest scan`이 쓴 것을 `ingest keys`가 못 찾았다.
     """
     if action.dest in {"profile", "features"}:
-        pytest.skip("이름만 경로처럼 보이고 경로가 아니다")
+        # 값이 `이름=경로` 복합이라 argparse `type`을 못 붙인다. **대신 푸는 자리가 있고**
+        # 그것을 `test_eval_cli.py::test_features_argument_resolves_against_repo_root`가
+        # 지킨다 — 이 건너뜀이 D-0233의 결함을 가렸다.
+        pytest.skip("이름만 경로처럼 보이거나 `이름=경로` 복합이다 (D-0233)")
     assert action.type is resolve_path, (
         f"`{label}`에 type=resolve_path가 없다. "
         "경로 인자는 저장소 루트 기준으로 풀려야 한다 (D-0069)"

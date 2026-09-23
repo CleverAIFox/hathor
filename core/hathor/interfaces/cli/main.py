@@ -77,6 +77,12 @@ from hathor.interfaces.cli.eval_vocabulary import (
     run_eval_chromatic_origin,
     run_eval_degree_restriction,
 )
+from hathor.interfaces.cli.feature_sources import (
+    namespaced,
+    open_feature_source,
+    parse_feature_stores,
+    store_keys,
+)
 from hathor.interfaces.cli.ingest_onsets import add_parser as add_onset_parser
 from hathor.interfaces.cli.ingest_onsets import run as run_ingest_onsets
 from hathor.interfaces.cli.tables import ambiguity_report, parse_key, render_table, replay_refusal
@@ -2006,34 +2012,6 @@ def _default_label(view: ViewSpec, split: SplitSpec | None = None) -> str:
     return "-".join(parts)
 
 
-def _parse_feature_stores(raw: list[str] | None, fallback: Path) -> list[tuple[str, Path]]:
-    """`--features` 값을 (이름, 경로) 목록으로 만든다.
-
-    하나뿐이면 이름을 비워 키를 그대로 쓴다. 기존 단일 저장소 사용법이 그대로
-    유지된다. 둘 이상이면 두 저장소가 모두 `mixture` 키를 갖고 있어 충돌하므로
-    이름을 강제하고 키를 `이름:mixture`로 네임스페이스한다.
-    """
-    if not raw:
-        return [("", fallback)]
-    parsed: list[tuple[str, Path]] = []
-    for entry in raw:
-        name, separator, path = entry.partition("=")
-        if separator:
-            parsed.append((name.strip(), Path(path)))
-        else:
-            parsed.append(("", Path(entry)))
-    if len(parsed) > 1 and any(not name for name, _ in parsed):
-        raise SystemExit("저장소를 둘 이상 줄 때는 전부 `이름=경로` 형식이어야 한다")
-    names = [name for name, _ in parsed]
-    if len(set(names)) != len(names):
-        raise SystemExit("저장소 이름이 중복됐다")
-    return parsed
-
-
-def _namespaced(name: str, key: str) -> str:
-    return f"{name}:{key}" if name else key
-
-
 def _run_eval_retrieval(args: argparse.Namespace) -> int:
     """M0/M1/M2를 재고 리포트를 남긴다.
 
@@ -2041,7 +2019,6 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
     CPU에서 수 초다. 광인사에서 도는 것이 요건이다.
     """
     from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
-    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
     keys = tuple(token.strip() for token in args.keys.split(",") if token.strip())
     if not keys:
@@ -2083,11 +2060,11 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
         print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
         return 2
 
-    stores = _parse_feature_stores(args.features, args.out)
+    stores = parse_feature_stores(args.features, args.out)
     merged: dict[str, dict[str, object]] = {}
     coverage: dict[str, int] = {}
     for name, root in stores:
-        store = NpzFeatureStore(root)
+        store = open_feature_source(root, store_keys(name, keys))
         if not store.index_path.exists():
             print(f"특징 인덱스가 없다: {store.index_path}", file=sys.stderr)
             return 2
@@ -2102,7 +2079,7 @@ def _run_eval_retrieval(args: argparse.Namespace) -> int:
             seen.add(source_key)
             slot = merged.setdefault(source_key, {})
             for key, vector in vectors.items():
-                slot[_namespaced(name, key)] = vector
+                slot[namespaced(name, key)] = vector
         coverage[name or str(root)] = len(seen)
 
     if len(stores) > 1:
