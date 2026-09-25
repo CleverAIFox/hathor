@@ -2263,6 +2263,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0235 | O-68 판정 | `core/tests/unit/test_model_licenses.py` |
 | D-0236 | O-56 | `core/tests/unit/test_layering.py::test_계층_계약에_예외가_없다` |
 | D-0237 | 패치 검사가 이름 바꾸기를 못 읽었다 | `core/tests/unit/test_hygiene.py::test_패치_검사가_이름_바꾸기를_읽는다` |
+| D-0238 | 검사가 9분이다 | `core/tests/unit/test_hygiene.py::test_시험_이름에_메모리_주소가_없다` |
 
 <!-- decision-ledger:end -->
 

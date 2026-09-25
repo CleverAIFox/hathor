@@ -56,13 +56,23 @@ def _path_like_actions() -> list[tuple[str, argparse.Action]]:
     return hits
 
 
+def _case_id(value: object) -> str:
+    """시험 이름은 **라벨만** 쓴다 (D-0238).
+
+    `str(action)`은 `type=<function resolve_path at 0x7f...>`를 물고 온다. 주소는 프로세스마다
+    다르므로 **이름이 실행마다 달라진다** — 병렬 실행(`-n`)이 «워커마다 다른 시험을 모았다»며
+    죽고, 로그의 이름으로는 같은 시험을 두 번 못 부른다.
+    """
+    return value if isinstance(value, str) else ""
+
+
 def test_경로_인자를_실제로_찾는다():
     """검사가 아무것도 안 잡으면 통과해도 뜻이 없다."""
     found = _path_like_actions()
     assert len(found) >= 20, f"경로 인자를 {len(found)}개밖에 못 찾았다. 탐지가 망가졌다"
 
 
-@pytest.mark.parametrize("label,action", _path_like_actions(), ids=lambda value: str(value))
+@pytest.mark.parametrize("label,action", _path_like_actions(), ids=_case_id)
 def test_경로_인자는_저장소_루트로_풀린다(label, action):
     """**어느 디렉터리에서 실행하든 같은 곳을 가리켜야 한다** (D-0066 · D-0069).
 
@@ -80,7 +90,7 @@ def test_경로_인자는_저장소_루트로_풀린다(label, action):
     )
 
 
-@pytest.mark.parametrize("label,action", _path_like_actions(), ids=lambda value: str(value))
+@pytest.mark.parametrize("label,action", _path_like_actions(), ids=_case_id)
 def test_경로_기본값은_문자열이어야_한다(label, action):
     """**argparse는 기본값이 문자열일 때만 `type`을 적용한다** (D-0069).
 

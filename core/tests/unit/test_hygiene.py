@@ -277,3 +277,16 @@ def test_패치_검사가_이름_바꾸기를_읽는다(tmp_path: Path) -> None:
     assert source.stdout.split() == ["kept.py", "new/thing.py", "old/thing.py"], (
         "떠난 곳이 빠지면 커밋에 삭제가 안 들어가고 검사가 정상을 막는다"
     )
+
+
+def test_시험_이름에_메모리_주소가_없다(request: pytest.FixtureRequest) -> None:
+    """**D-0238의 강제자.** 이름이 실행마다 달라지면 병렬 실행이 죽는다.
+
+    `_StoreAction` 객체를 `str()`로 이름에 넣어 `type=<function resolve_path at 0x7f...>`가
+    박혀 있었다. 주소는 프로세스마다 다르므로 `pytest -n`이 **«워커마다 다른 시험을 모았다»**며
+    수집 단계에서 죽었다. 이름이 안 고정되면 `--lf`도, 로그의 이름으로 다시 부르기도 안 된다.
+    """
+    unstable = [
+        item.nodeid for item in request.session.items if re.search(r"at 0x[0-9a-f]+", item.nodeid)
+    ]
+    assert not unstable, f"시험 이름에 주소가 박혔다: {unstable[:3]}"

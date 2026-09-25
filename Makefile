@@ -1,4 +1,4 @@
-.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy gh-setup bot runner smoke check lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
+.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -67,8 +67,12 @@ type:
 arch:
 	cd core && uv run lint-imports
 test:
-	cd core && uv run pytest --cov=hathor -q
+	cd core && uv run pytest --cov=hathor -q -n auto
 	python3 tools/check_coverage.py
+
+quick:         ## 고치는 동안 도는 고리. **관문이 아니다** — 커버리지·문서·타입은 `make check` (D-0238)
+	cd core && uv run ruff check . ../tools
+	cd core && uv run pytest -q -n auto --no-cov
 
 cov-bump:      ## 커버리지 바닥을 실측 - 1로 올린다. 숫자는 core/pyproject.toml 하나 (D-0223)
 	python3 tools/check_coverage.py --update
