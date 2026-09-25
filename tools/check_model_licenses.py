@@ -51,12 +51,12 @@ LICENSES: dict[str, tuple[str, str, str]] = {
     "m-a-p/MERT-v1-95M": (
         "CC-BY-NC-4.0",
         "no",
-        "검색(D-0027) · 화성 layer03(D-0181)의 기반. **제품 경로에 못 간다** (O-68)",
+        "검색(D-0027) · 화성 layer03(D-0181)의 기반. **제품 경로에 못 간다** (O-68 · D-0235)",
     ),
     "laion/larger_clap_music": (
         "Apache-2.0",
         "yes",
-        "MERT 대체 후보 — 같은 하네스로 나란히 잰다 (O-68 · D-0231)",
+        "대체 후보였다 — MERT의 27%로 판정됐다 (O-68 · D-0235)",
     ),
     "BAAI/bge-m3": ("MIT", "yes", "가사 임베딩 (D-0048)"),
     "htdemucs": (

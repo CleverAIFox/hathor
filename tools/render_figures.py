@@ -253,7 +253,7 @@ def axes(out: Path, font: str) -> Path:
 song [label="원곡 (mp3)", fillcolor="{GRAY}"]; tag [label="USLT 가사 태그", fillcolor="{GRAY}"];
 dem [label="htdemucs\\n44.1kHz", fillcolor="{AMBER}"];
 v [label="보컬"]; d [label="드럼"]; b [label="베이스"]; o [label="기타"];
-mert [label="MERT-v1-95M · 24kHz\\n13층 × 5소스\\n(비상업 — O-68)", fillcolor="{ROSE}"];
+mert [label="MERT-v1-95M · 24kHz\\n13층 × 5소스\\n(비상업 — O-68 · D-0235)", fillcolor="{ROSE}"];
 chroma [label="크로마 · 조성 · 온셋 · 템포"]; bge [label="BGE-M3\\n(MIT)", fillcolor="{GREEN}"];
 m [label="음악축", fillcolor="{NAVY}", fontcolor="white"];
 a [label="편곡축", fillcolor="{NAVY}", fontcolor="white"];

@@ -39,7 +39,7 @@ SECONDS_PER_TRACK = 4.0
 
 def add_parser(commands: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """`eval clap` 인자. **기본값은 문자열이다** (D-0069)."""
-    parser = commands.add_parser("clap", help="CLAP 임베딩 추출 (GPU · 상업 가능 · O-68)")
+    parser = commands.add_parser("clap", help="CLAP 임베딩 추출 (GPU · 상업 가능 · O-68 · D-0235)")
     parser.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
     parser.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 위치")
     parser.add_argument(

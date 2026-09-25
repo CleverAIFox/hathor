@@ -4,7 +4,7 @@
 
 D-0027의 하네스는 `NpzFeatureStore`(인덱스 한 줄 + `vectors/<해시>.npz`)를 읽는다. 그런데
 **지금 MERT 산출물은 묶음이다** — `var/ingest/audio/<해시>.npz`에 `mert/<소스>/<층>` 꼴로
-들어 있고 곡마다 manifest가 붙는다. 형식이 갈린 채로 O-68(«MERT vs CLAP»)을 재려 하면
+들어 있고 곡마다 manifest가 붙는다. 형식이 갈린 채로 O-68(«MERT vs CLAP» · 닫힘 D-0235)을 재려 하면
 **CLAP만 재고 MERT는 못 재는** 자리에 선다.
 
 두 길이 있었다. 옛 `mert-layers` 산출물을 백업에서 끌어오는 것과, 묶음을 읽는 어댑터를
