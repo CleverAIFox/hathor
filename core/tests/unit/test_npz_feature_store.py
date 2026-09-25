@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hathor.application.extract_features import TrackFeatures
+from hathor.domain.entities.track_features import TrackFeatures
 from hathor.infrastructure.npz_feature_store import (
     MIXTURE_KEY,
     BatchAlreadyRunningError,

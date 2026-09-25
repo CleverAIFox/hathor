@@ -251,3 +251,29 @@ def test_고치면_규격에_맞고_다시_고쳐도_같다() -> None:
     fixed = encoding_check.repaired(raw, ".md")
     assert encoding_check.faults(fixed, ".md") == []
     assert encoding_check.repaired(fixed, ".md") == fixed
+
+
+def test_패치_검사가_이름_바꾸기를_읽는다(tmp_path: Path) -> None:
+    """**D-0237의 강제자.** `git apply --numstat`은 **간 곳만** 찍는다.
+
+    D-0236이 파일 다섯을 옮기자 트리에는 삭제 둘이 더 있었고, 검사가 «다른 작업이 섞였다»며
+    막았다. 섞인 것은 없었다 — **검사가 이름 바꾸기를 못 읽은 것이다.**
+    """
+    patch = tmp_path / "rename.patch"
+    patch.write_text(
+        "diff --git a/old/thing.py b/new/thing.py\n"
+        "similarity index 100%\n"
+        "rename from old/thing.py\n"
+        "rename to new/thing.py\n"
+        "diff --git a/kept.py b/kept.py\n"
+        "--- a/kept.py\n"
+        "+++ b/kept.py\n",
+        encoding="utf-8",
+    )
+    script = ROOT / "tools" / "apply_patch.sh"
+    # 스크립트 전체를 돌리지 않고 **그 함수만** 떼어 부른다 — 붙이기는 여기서 할 일이 아니다.
+    shell = f'source <(sed -n "/^declared_paths()/,/^}}/p" {script}); declared_paths "{patch}"'
+    source = subprocess.run(["bash", "-c", shell], capture_output=True, text=True, check=True)
+    assert source.stdout.split() == ["kept.py", "new/thing.py", "old/thing.py"], (
+        "떠난 곳이 빠지면 커밋에 삭제가 안 들어가고 검사가 정상을 막는다"
+    )

@@ -57,7 +57,7 @@ TREES = {
 EXCEPTIONS: dict[str, int] = {
     "core/hathor/application/evaluate_harmony_output.py": 663,
     "core/hathor/domain/services/key_estimation.py": 808,
-    "core/hathor/interfaces/cli/main.py": 2945,
+    "core/hathor/interfaces/cli/main.py": 2946,
     "core/tests/unit/test_key_estimation.py": 708,
 }
 # ---------------------------------------------------------------- 예외표 끝

@@ -26,7 +26,7 @@ import numpy as np
 from hathor.domain.ports.audio_analysis import Embedding
 
 if TYPE_CHECKING:
-    from hathor.application.extract_features import TrackFeatures
+    from hathor.domain.entities.track_features import TrackFeatures
 
 FEATURES_DIRNAME = "features"
 INDEX_SUFFIX = ".features.jsonl"

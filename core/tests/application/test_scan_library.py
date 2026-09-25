@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from hathor.application.scan_library import ScanLibrary, Snapshot
+from hathor.application.scan_library import ScanLibrary
 from hathor.domain.entities.scan_event import ScanEventKind
+from hathor.domain.entities.scan_record import Snapshot
 from hathor.domain.entities.scanned_track import ScannedTrack
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor

@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from hathor.application.extract_features import TrackFeatures
 from hathor.application.search_similar import SearchSimilar, SearchTrack
+from hathor.domain.entities.track_features import TrackFeatures
 from hathor.domain.services.seed_search import chunk_timestamp, fuse, representative_chunk
 from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 from hathor.interfaces.cli.main import main

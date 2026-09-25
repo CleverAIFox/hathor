@@ -10,23 +10,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
 
-from hathor.application.resolution_summary import ResolutionSummary
+from hathor.domain.entities.resolution_record import ResolutionRecord
+from hathor.domain.entities.resolution_summary import ResolutionSummary
 from hathor.domain.entities.resolved_identity import ResolutionState, ResolvedRecording
 from hathor.domain.entities.scanned_track import ScannedTrack
 from hathor.domain.ports.music_metadata_lookup import ArtistLookup, RecordingLookup
 from hathor.domain.services.artist_name_parser import parse_artist_field
 from hathor.domain.services.title_annotation import strip_annotations
-
-
-@dataclass(frozen=True, slots=True)
-class ResolutionRecord:
-    """곡 1건의 확정 결과와 조회에 쓴 질의."""
-
-    recording: ResolvedRecording
-    queried_artist: str
-    queried_title: str
 
 
 class ResolveIdentities:

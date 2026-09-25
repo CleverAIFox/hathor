@@ -13,8 +13,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from typing import Protocol
 
-from hathor.application.extract_features import TrackFeatures
 from hathor.domain.entities.scanned_track import ScannedTrack
+from hathor.domain.entities.track_features import TrackFeatures
 from hathor.domain.ports.audio_analysis import Embedding
 from hathor.domain.services.lyrics_segmentation import split_segments
 

@@ -16,8 +16,8 @@ from hathor.domain.entities.track_tags import TrackTags
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-    from hathor.application.scan_library import ScanRecord, Snapshot
-    from hathor.application.scan_summary import ScanSummary
+    from hathor.domain.entities.scan_record import ScanRecord, Snapshot
+    from hathor.domain.entities.scan_summary import ScanSummary
 
 TRACKS_SUFFIX = ".jsonl"
 FAILURES_SUFFIX = ".failures.jsonl"

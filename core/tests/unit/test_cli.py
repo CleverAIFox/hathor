@@ -105,7 +105,7 @@ def _seed_features(root, keys, *, duplicates=()):
     """인덱스와 npz를 갖춘 산출물 디렉터리를 만든다."""
     import numpy as np
 
-    from hathor.application.extract_features import TrackFeatures
+    from hathor.domain.entities.track_features import TrackFeatures
     from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
     store = NpzFeatureStore(root)

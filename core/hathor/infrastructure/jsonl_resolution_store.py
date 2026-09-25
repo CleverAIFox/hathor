@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-    from hathor.application.resolution_summary import ResolutionSummary
-    from hathor.application.resolve_identities import ResolutionRecord
+    from hathor.domain.entities.resolution_record import ResolutionRecord
+    from hathor.domain.entities.resolution_summary import ResolutionSummary
 
 from hathor.domain.entities.resolved_identity import ResolutionState
 

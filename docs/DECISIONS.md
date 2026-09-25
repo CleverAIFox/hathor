@@ -5026,6 +5026,9 @@ FAILED test_doctor는_설정이_없으면_1이다 — 0이 나온다
 
 ## D-0072. 커밋 대상을 패치와 대조한다 — `git add -A`는 트리를 믿는 것이었다
 
+> **갱신됨 — D-0237.** 목록을 `--numstat`에서 읽고 있었다. 이름을 바꾼 파일은
+> **간 곳만 찍혀** 정상적인 리팩터링을 «다른 작업이 섞였다»로 막았다.
+
 - **배경**: D-0070이 손으로 적던 파일 목록을 `git add -A`로 바꿨다. **한쪽 신뢰를
   다른 쪽 신뢰로 옮겼을 뿐이다.**
 
@@ -14484,6 +14487,9 @@ O-30이 분할 조건을 **6000줄 또는 100건**으로 뒀다.
 
 ## D-0190. 빈 자리가 말을 하게 한다 — 그리고 계층 계약에 구멍이 있었다
 
+> **갱신됨 — D-0236.** 예외 다섯 줄을 다 갚았다. 저장소가 담는 DTO를 도메인으로
+> 내려 `ignore_imports`를 통째로 지웠다 — **계약 다섯이 예외 0으로 선다.**
+
 - **갱신**: D-0188 — 기록 길이 상한의 근거를 정정한다.
 
 - **배경**: 사용자가 *"디렉 구조가 엉망 같다, 계층 제대로 돼 있다고 보냐"*고 물었다.
@@ -17819,3 +17825,99 @@ M2 3.6배가 같은 사실의 두 얼굴이다 — 아티스트 검색이 앨범
     cd core && uv run python -m hathor.cli eval retrieval --features var/ingest/clap --keys mixture --label clap-solo
 
 강제자  `core/tests/unit/test_model_licenses.py`
+
+---
+
+## D-0236. O-56 — 저장소가 담는 것을 도메인으로 내린다. 계층 계약에 예외가 없어졌다
+
+- **갱신**: D-0190 — 계약에 `infrastructure`를 넣고 예외 다섯 줄을 «빚이 보이게» 적어 둔 결정.
+
+- **배경**: D-0190이 계약을 세우며 예외 다섯 줄을 남겼다. 전부 **저장소가 담는 DTO의 타입을
+  응용에서 빌리는** 것이었다 — `TYPE_CHECKING` 안이라 런타임 역전은 아니지만, **예외 한 줄은
+  계약 한 줄을 지운다.**
+
+### 옮긴 것 다섯
+
+| DTO | 어디서 | 어디로 | 누가 담나 |
+|---|---|---|---|
+| `TrackFeatures` | `application/extract_features` | `domain/entities/track_features` | `NpzFeatureStore` |
+| `ScanRecord` · `Snapshot` | `application/scan_library` | `domain/entities/scan_record` | `JsonlScanStore` |
+| `ScanSummary` | `application/scan_summary` | `domain/entities/scan_summary` | `JsonlScanStore` |
+| `ResolutionRecord` | `application/resolve_identities` | `domain/entities/resolution_record` | `JsonlResolutionStore` |
+| `ResolutionSummary` | `application/resolution_summary` | `domain/entities/resolution_summary` | `JsonlResolutionStore` |
+
+**판단 기준은 «누가 담나»다.** 저장소가 담는 것은 응용의 산물이 아니라 도메인의 것이다.
+유스케이스는 이제 도메인에서 빌려 쓰고, 저장소도 도메인에서 빌린다 — **둘 다 아래를 본다.**
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) 예외 다섯 줄을 그대로 둔다 | **기각.** `TYPE_CHECKING`이라 «괜찮다»는 것은 계약이 아니라 습관이다 |
+  | (2) 응용에 얇은 재수출을 남긴다 | **기각.** 정본이 둘이 된다 (D-0193과 같은 이유) |
+  | (3) **도메인으로 내리고 부르는 곳을 전부 고친다** | **채택.** 옮긴 파일 다섯 · 고친 곳 열여덟 |
+
+- **선택**: (3). `ignore_imports`를 **통째로 지웠다.**
+
+### 예외가 다시 생기지 않게
+
+`lint-imports`는 계약과 **예외 목록을 같이** 지킨다. 그래서 목록이 비었는지는 아무도 안 본다.
+`test_layering.py`가 셋을 본다 — `pyproject.toml`에 `ignore_imports`가 없을 것, 옮긴 DTO가
+도메인에 있을 것, **저장소가 `TYPE_CHECKING` 안에서도 응용을 안 볼 것.** 마지막 것은 AST로 센다.
+
+- **결과**: 계약 다섯이 **예외 0으로** 통과한다. 시험 셋. `main.py`는 임포트가 한 줄 갈라져
+  2945 → 2946줄이며 **래칫을 한 줄 올렸다** (D-0118의 GROW).
+
+### 남기는 것
+
+- **«어디에 두나»는 «누가 담나»로 푼다.** 저장소가 담으면 도메인이다.
+- **예외 목록은 비어 있는지 누가 봐야 한다.** 검사 도구가 자기 예외를 감시하지는 않는다.
+
+재현
+    cd core && uv run lint-imports && uv run pytest tests/unit/test_layering.py -q
+
+강제자  `core/tests/unit/test_layering.py::test_계층_계약에_예외가_없다`
+
+---
+
+## D-0237. 패치 검사가 이름 바꾸기를 못 읽었다 — 정상을 막았다
+
+- **갱신**: D-0072 — 패치가 선언한 파일과 실제 변경을 대조하는 그 검사다.
+
+- **배경**: D-0236이 파일 다섯을 옮겼다. 사용자가 붙이자 **검사가 막았다.**
+
+```text
+패치가 건드린 파일과 실제 변경이 다르다.
+  트리에만:  core/hathor/application/resolution_summary.py
+  트리에만:  core/hathor/application/scan_summary.py
+```
+
+**섞인 것은 없었다.** `git apply --numstat`은 이름 바꾸기를 **한 줄**로 내고 그 줄에는
+**간 곳만** 있다 — 떠난 곳은 안 찍힌다. 트리에는 삭제 둘이 있으니 목록이 어긋난다.
+
+### 왜 이것이 위험한가
+
+**정상을 막는 검사는 꺼진다.** D-0209가 같은 부류를 이미 적었다 — *"정상을 잔해로 부르는
+검사는 진짜 잔해를 가린다."* 이번에는 «다른 작업이 섞였다»는 무거운 경고가 **정상적인
+리팩터링마다** 뜬다. 두 번만 겪으면 사람은 `git add -A`로 돌아간다. 그것이 D-0072가 막으려던
+바로 그것이다.
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) 패치를 늘 `--no-renames`로 만든다 | **기각.** 사람의 습관에 기대는 규약이다. 잊으면 또 막힌다 |
+  | (2) numstat의 `a => b`를 갈라 읽는다 | **기각.** git은 `x/{a => b}/y.py` 꼴도 낸다. 파싱이 두 벌이다 |
+  | (3) **패치의 `diff --git` 머리에서 읽는다** | **채택.** 거기에는 떠난 곳(`a/`)과 간 곳(`b/`)이 **둘 다** 있다 |
+
+- **선택**: (3). `declared_paths()` 하나가 목록을 내고 **대조와 `git add`가 같은 목록을 쓴다.**
+  떠난 곳을 담아야 삭제가 커밋에 들어간다는 점도 같이 고쳐진다.
+
+- **결과**: 셸 함수 하나 · 시험 하나. 시험은 합성 패치에 **이름 바꾸기 한 건과 보통 한 건**을
+  넣고 세 경로가 다 나오는지 본다.
+
+### 남기는 것
+
+- **검사가 정상을 막으면 그것은 검사의 결함이다.** 사람을 탓하면 다음엔 검사를 끈다.
+- **같은 사실을 두 곳에서 읽지 않는다.** 대조와 담기가 다른 목록을 쓰면 언젠가 갈린다.
+
+재현
+    cd core && uv run pytest tests/unit/test_hygiene.py -k 이름_바꾸기 -q
+
+강제자  `core/tests/unit/test_hygiene.py::test_패치_검사가_이름_바꾸기를_읽는다`

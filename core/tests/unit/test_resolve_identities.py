@@ -140,7 +140,7 @@ def test_끊긴_조회는_정본_이름을_못_받는다(tmp_path):
     """
     import contextlib
 
-    from hathor.application.resolution_summary import ResolutionSummary
+    from hathor.domain.entities.resolution_summary import ResolutionSummary
     from hathor.infrastructure.jsonl_resolution_store import (
         RESOLUTION_SUFFIX,
         JsonlResolutionStore,
@@ -161,7 +161,7 @@ def test_끊긴_조회는_정본_이름을_못_받는다(tmp_path):
 
 def test_끝난_조회는_정본_이름을_받는다(tmp_path):
     """**스트리밍은 그대로다** — 꼬리표만 붙였다가 끝에서 뗀다."""
-    from hathor.application.resolution_summary import ResolutionSummary
+    from hathor.domain.entities.resolution_summary import ResolutionSummary
     from hathor.infrastructure.jsonl_resolution_store import (
         PARTIAL_SUFFIX,
         JsonlResolutionStore,

@@ -14,6 +14,16 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 die() { printf '\033[31m실패:\033[0m %s\n' "$1" >&2; exit 1; }
+
+# 패치가 건드린다고 선언한 경로 전부. **이름 바꾸기는 두 줄이 된다** (D-0237).
+declared_paths() {
+  awk '/^diff --git /{
+         from = $3; to = $4
+         sub(/^a\//, "", from); sub(/^b\//, "", to)
+         print from
+         if (to != from) print to
+       }' "$1" | sort -u
+}
 ok()  { printf '\033[32m%s\033[0m\n' "$1"; }
 
 # **`.env`를 읽는 자리는 하나다** (D-0199). 예전에는 여기서 `grep`으로 직접
@@ -75,7 +85,11 @@ MESSAGE="$(grep -m1 '^# hathor-commit:' "$PATCH" | sed 's/^# hathor-commit:[[:sp
 # **패치가 목록을 갖고 있으므로 손으로 적지도, 눈감고 `add -A` 하지도 않는다**
 # (D-0072). 패치가 건드린다고 선언한 파일과 실제로 바뀐 파일이 정확히 같아야 한다.
 # 다르면 다른 작업이 섞인 것이고, 그대로 커밋하면 남의 변경이 딸려 들어간다.
-EXPECTED="$(git apply --numstat "$PATCH" | cut -f3- | sort)"
+# **이름을 바꾼 파일은 `--numstat`에 한 줄로 온다** — 간 곳만 찍히고 **떠난 곳은 안 찍힌다**
+# (D-0237). D-0236이 파일 다섯을 옮기자 트리에는 삭제 둘이 더 있었고 검사가 «다른 작업이
+# 섞였다»며 막았다. 섞인 것이 없었다. 그래서 목록은 **패치의 `diff --git` 머리**에서 읽는다 —
+# 거기에는 떠난 곳(`a/`)과 간 곳(`b/`)이 둘 다 있다.
+EXPECTED="$(declared_paths "$PATCH")"
 # **새 폴더는 폴더 하나로 접혀 나온다** — `site/`가 생기면 `site/proposal.html` 대신
 # `site/`가 찍혀 선언과 어긋났다 (D-0222). 추적 안 된 파일을 전부 펼친다.
 ACTUAL="$(git status --porcelain --untracked-files=all | sed 's/^...//' | tr -d '"' | sort)"
@@ -90,8 +104,8 @@ if [[ "$EXPECTED" != "$ACTUAL" ]]; then
   exit 1
 fi
 
-# 검증했으므로 선언된 목록으로만 담는다.
-git apply --numstat "$PATCH" | cut -f3- | while IFS= read -r file; do git add -- "$file"; done
+# 검증했으므로 선언된 목록으로만 담는다. 떠난 곳을 담아야 삭제가 커밋에 들어간다.
+declared_paths "$PATCH" | while IFS= read -r file; do git add -- "$file"; done
 git commit -q -m "$MESSAGE"
 ok "커밋: ${MESSAGE}"
 printf "  파일 %s개 · 패치 선언과 일치\n" "$(echo "$EXPECTED" | wc -l)"

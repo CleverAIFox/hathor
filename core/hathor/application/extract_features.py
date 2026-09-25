@@ -10,32 +10,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
 from pathlib import Path
 
 from hathor.domain.entities.scanned_track import ScannedTrack
+from hathor.domain.entities.track_features import TrackFeatures
 from hathor.domain.ports.audio_analysis import (
     AudioDecoder,
-    Embedding,
     FeatureExtractor,
     LayeredFeatureExtractor,
     StemSeparator,
 )
 
 MIXTURE_KEY = "mixture"
-
-
-@dataclass(frozen=True, slots=True)
-class TrackFeatures:
-    """곡 하나의 특징. 스템별 임베딩과 혼합 임베딩을 갖는다."""
-
-    source_key: str
-    mixture: Embedding
-    stems: dict[str, Embedding]
-
-    @property
-    def chunk_count(self) -> int:
-        return int(self.mixture.shape[0])
+"""`TrackFeatures.mixture`가 저장소에서 갖는 키 이름."""
 
 
 class ExtractFeatures:

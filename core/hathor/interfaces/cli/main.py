@@ -27,10 +27,11 @@ from hathor.application.evaluate_retrieval import (
 )
 from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
 from hathor.application.orchestrator.generation_pipeline import DEFAULT_SECTIONS, run_dry
-from hathor.application.resolve_identities import ResolutionRecord, ResolveIdentities
+from hathor.application.resolve_identities import ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
 from hathor.application.search_similar import SearchSimilar, SearchTrack
 from hathor.domain.entities.generation_job import GenerationJob, Stage
+from hathor.domain.entities.resolution_record import ResolutionRecord
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
 from hathor.domain.services.key_estimation import (
