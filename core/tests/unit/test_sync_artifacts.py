@@ -189,3 +189,46 @@ def test_part_는_목록에_안_들어간다(tmp_path):
     (base / "a.npz").write_bytes(b"x")
     (base / ("b.npz" + tool.PART)).write_bytes(b"y")
     assert set(tool.walk(base)) == {"a.npz"}
+
+
+# ------------------------------------------------------------------ 훑기 (D-0239)
+
+
+def test_흘려보내며_훑는다(tmp_path: Path) -> None:
+    """**전량을 세우지 않는다.** 만 이천 개를 세우다 교두보에서 메모리가 터졌다."""
+    base = tmp_path / "ingest"
+    (base / "audio" / "깊은곳").mkdir(parents=True)
+    (base / "audio" / "a.npz").write_bytes(b"12345")
+    (base / "audio" / "깊은곳" / "b.npz").write_bytes(b"67")
+    (base / "audio" / "c.npz.part").write_bytes(b"half")
+
+    found = dict(tool.iter_files(base))
+
+    assert found == {"audio/a.npz": 5, "audio/깊은곳/b.npz": 2}, "`.part`는 세지 않는다"
+    assert tool.walk(base) == found
+
+
+def test_못_읽는_폴더에서_멈추지_않는다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**DrvFs는 한 폴더에서 토라진다** — 거기서 죽으면 나머지도 못 본다 (D-0239)."""
+    base = tmp_path / "ingest"
+    (base / "막힌곳").mkdir(parents=True)
+    (base / "보이는곳").mkdir()
+    (base / "보이는곳" / "a.npz").write_bytes(b"1")
+
+    real = tool.os.scandir
+
+    def hostile(path):  # type: ignore[no-untyped-def]
+        if str(path).endswith("막힌곳"):
+            raise OSError(12, "Cannot allocate memory")
+        return real(path)
+
+    monkeypatch.setattr(tool.os, "scandir", hostile)
+
+    assert dict(tool.iter_files(base)) == {"보이는곳/a.npz": 1}
+    assert "읽지 못했다" in capsys.readouterr().err
+
+
+def test_없는_곳은_빈손이다(tmp_path: Path) -> None:
+    assert dict(tool.iter_files(tmp_path / "없음")) == {}

@@ -36,6 +36,7 @@ import argparse
 import os
 import shutil
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -112,15 +113,38 @@ def probe(store: Path | None) -> tuple[str, str]:
     return ATTACHED, str(store)
 
 
+def iter_files(base: Path) -> Iterator[tuple[str, int]]:
+    """`(상대경로, 바이트)`를 **흘려보낸다** (D-0239).
+
+    옛 판은 `sorted(base.rglob("*"))`였다. 그것은 **전량을 세운 뒤에야** 첫 항목을 내고,
+    그동안 모든 깊이의 디렉터리 핸들을 쥔다. DrvFs 교두보(만 이천 개)에서 그러다
+    **`OSError: [Errno 12] Cannot allocate memory`**로 죽었다 — `git push`가 끝난 뒤에
+    `make ship`이 넘어졌다. 여기서는 폴더 하나를 열고 **바로 닫는다.**
+
+    **못 읽는 폴더에서 멈추지 않는다.** 한 폴더가 막히면 알리고 지나간다 — 교두보가
+    반쯤 읽히는 것이 아예 안 읽히는 것보다 낫고, 무엇이 막혔는지는 화면에 남는다.
+    """
+    if not base.is_dir():
+        return
+    pending = [base]
+    while pending:
+        current = pending.pop()
+        try:
+            with os.scandir(current) as entries:
+                rows = list(entries)
+        except OSError as failure:
+            print(f"  읽지 못했다: {current} — {failure.strerror or failure}", file=sys.stderr)
+            continue
+        for entry in rows:
+            if entry.is_dir(follow_symlinks=False):
+                pending.append(Path(entry.path))
+            elif entry.is_file(follow_symlinks=False) and not entry.name.endswith(PART):
+                yield Path(entry.path).relative_to(base).as_posix(), entry.stat().st_size
+
+
 def walk(base: Path) -> dict[str, int]:
     """`상대경로 → 바이트`. **경로 구분자는 항상 `/`다** (D-0009)."""
-    if not base.is_dir():
-        return {}
-    return {
-        path.relative_to(base).as_posix(): path.stat().st_size
-        for path in sorted(base.rglob("*"))
-        if path.is_file() and not path.name.endswith(PART)
-    }
+    return dict(iter_files(base))
 
 
 def human(size: int) -> str:

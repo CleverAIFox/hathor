@@ -162,7 +162,12 @@ def main() -> int:
         return 1
     code, text = _run("python3", "tools/sync_artifacts.py", "push", "--only", args.only)
     print(text.strip().splitlines()[-1] if text else "")
-    return code
+    if code != 0:
+        # **교두보가 배를 가라앉히지 않는다** (D-0068 · D-0239). `git push`는 이미 끝났고,
+        # 외장 드라이브가 빠졌거나 DrvFs가 토라진 것으로 «내보내기 실패»를 찍으면
+        # 사람은 무엇이 밀려갔는지 모른 채 다시 친다.
+        print("   **교두보로 못 보냈다.** 고친 뒤 `make artifacts-push` (커밋은 이미 밀었다)")
+    return 0
 
 
 if __name__ == "__main__":

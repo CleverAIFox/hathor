@@ -12,6 +12,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 
+# **`ship.py`가 `tidy`를 임포트한다.** 이 줄이 없으면 이 파일만 따로 돌릴 때 수집에서
+# 죽고, 전체를 돌릴 때는 *다른 시험이 먼저 넣어 준 덕에* 통과한다 — 순서에 기댄 초록이다.
+# 병렬 실행은 순서를 안 지켜 준다 (D-0238 · D-0239).
+if str(ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools"))
+
 
 def _module():
     path = ROOT / "tools" / "ship.py"
@@ -130,3 +136,15 @@ def test_clean이_venv를_지나친다():
     body = makefile.split("clean:")[1].split("\nclean-all:")[0]
     assert "-prune" in body
     assert ".venv" in body
+
+
+def test_교두보가_배를_가라앉히지_않는다():
+    """**`git push`는 이미 끝났다** (D-0068 · D-0239).
+
+    외장이 빠졌거나 DrvFs가 토라진 것으로 «내보내기 실패»를 찍으면, 사람은 무엇이
+    밀려갔는지 모른 채 다시 친다. 실제로 `make ship`이 push 뒤에 역추적을 뿜고 죽었다.
+    """
+    source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
+    tail = source.split('"push", "--only"', 1)[1]
+    assert "교두보로 못 보냈다" in tail
+    assert "return code" not in tail, "교두보 실패가 종료 코드를 잡으면 배가 가라앉는다"
