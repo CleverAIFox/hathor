@@ -286,3 +286,80 @@ def test_다른_실패는_반쪽을_지우고_올린다(tmp_path: Path, monkeypa
     with pytest.raises(OSError, match="No space"):
         tool.copy_one(source, target)
     assert not list(tmp_path.rglob("*")) or not list(tmp_path.rglob(f"*{tool.PART}"))
+
+
+# ------------------------------------------------------------------ 대조 (D-0242)
+
+
+@pytest.fixture
+def pair(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """양쪽이 선 교두보와 저장소. 봉인지는 시험마다 따로 둔다."""
+    local = tmp_path / "repo" / "var" / "ingest"
+    store = tmp_path / "ssd"
+    (local / "audio").mkdir(parents=True)
+    (store / tool.SUBTREE / "audio").mkdir(parents=True)
+    monkeypatch.setattr(tool, "SEAL", tmp_path / "seal.jsonl")
+    return local, store
+
+
+def _put(local: Path, store: Path, name: str, mine: bytes, yours: bytes | None) -> None:
+    (local / name).write_bytes(mine)
+    if yours is not None:
+        (store / tool.SUBTREE / name).write_bytes(yours)
+
+
+def test_크기가_다르면_다르다고_말한다(
+    pair: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**이름만 보던 옛 판은 이것을 «이미 있음»으로 셌다** — 영원히 안 고쳐진다."""
+    local, store = pair
+    _put(local, store, "audio/a.npz", b"1234", b"1234")
+    _put(local, store, "audio/b.npz", b"short", b"much longer")
+
+    assert tool.verify(local, store, full=False) == 1
+    said = capsys.readouterr()
+    assert "audio/b.npz" in said.err
+    assert "audio" in said.out
+
+
+def test_크기가_같아도_내용이_다르면_잡는다(
+    pair: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """크기 대조는 싸고 내용 대조는 비싸다. **비싼 것은 `--full`이 한다.**"""
+    local, store = pair
+    _put(local, store, "audio/c.npz", b"ABCD", b"WXYZ")
+
+    assert tool.verify(local, store, full=False) == 0, "크기만 보면 같아 보인다"
+    assert tool.verify(local, store, full=True) == 1
+    assert "내용이 다르다" in capsys.readouterr().err
+
+
+def test_봉인한_것은_다시_안_읽는다(
+    pair: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**이것이 CDC다.** `(크기, mtime)`이 양쪽 다 그대로면 해시를 다시 안 뜬다."""
+    local, store = pair
+    _put(local, store, "audio/a.npz", b"1234", b"1234")
+    assert tool.verify(local, store, full=True) == 0
+
+    seen: list[Path] = []
+    real = tool.digest
+
+    def watched(path: Path) -> str:
+        seen.append(path)
+        return str(real(path))
+
+    monkeypatch.setattr(tool, "digest", watched)
+    assert tool.verify(local, store, full=True) == 0
+    assert seen == [], "봉인이 있으면 안 읽는다"
+
+    (local / "audio" / "a.npz").write_bytes(b"5678")
+    assert tool.verify(local, store, full=True) == 1, "바뀌면 다시 읽고 다름을 잡는다"
+    assert seen, "바뀐 것은 읽어야 한다"
+
+
+def test_계열로_접어_보여_준다() -> None:
+    """9240개를 열두 줄로. **스탬프는 별표로 접는다.**"""
+    assert tool.series("keys-20260823T091233Z.series/x.npz") == "keys-*.series"
+    assert tool.series("audio/f40090f19f984895.npz") == "audio"
+    assert tool.series("scan-20260916T115536Z.jsonl") == "scan-*.jsonl"

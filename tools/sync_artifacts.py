@@ -34,7 +34,10 @@ from __future__ import annotations
 
 import argparse
 import errno
+import hashlib
+import json
 import os
+import re
 import shutil
 import sys
 from collections.abc import Iterator
@@ -120,17 +123,8 @@ def probe(store: Path | None) -> tuple[str, str]:
     return ATTACHED, str(store)
 
 
-def iter_files(base: Path) -> Iterator[tuple[str, int]]:
-    """`(상대경로, 바이트)`를 **흘려보낸다** (D-0239).
-
-    옛 판은 `sorted(base.rglob("*"))`였다. 그것은 **전량을 세운 뒤에야** 첫 항목을 내고,
-    그동안 모든 깊이의 디렉터리 핸들을 쥔다. DrvFs 교두보(만 이천 개)에서 그러다
-    **`OSError: [Errno 12] Cannot allocate memory`**로 죽었다 — `git push`가 끝난 뒤에
-    `make ship`이 넘어졌다. 여기서는 폴더 하나를 열고 **바로 닫는다.**
-
-    **못 읽는 폴더에서 멈추지 않는다.** 한 폴더가 막히면 알리고 지나간다 — 교두보가
-    반쯤 읽히는 것이 아예 안 읽히는 것보다 낫고, 무엇이 막혔는지는 화면에 남는다.
-    """
+def iter_stats(base: Path) -> Iterator[tuple[str, int, int]]:
+    """`(상대경로, 바이트, mtime_ns)`. 봉인이 «안 바뀌었다»를 판정할 재료다 (D-0242)."""
     if not base.is_dir():
         return
     pending = [base]
@@ -146,7 +140,27 @@ def iter_files(base: Path) -> Iterator[tuple[str, int]]:
             if entry.is_dir(follow_symlinks=False):
                 pending.append(Path(entry.path))
             elif entry.is_file(follow_symlinks=False) and not entry.name.endswith(PART):
-                yield Path(entry.path).relative_to(base).as_posix(), entry.stat().st_size
+                stamp = entry.stat()
+                yield (
+                    Path(entry.path).relative_to(base).as_posix(),
+                    stamp.st_size,
+                    stamp.st_mtime_ns,
+                )
+
+
+def iter_files(base: Path) -> Iterator[tuple[str, int]]:
+    """`(상대경로, 바이트)`를 **흘려보낸다** (D-0239).
+
+    옛 판은 `sorted(base.rglob("*"))`였다. 그것은 **전량을 세운 뒤에야** 첫 항목을 내고,
+    그동안 모든 깊이의 디렉터리 핸들을 쥔다. DrvFs 교두보(만 이천 개)에서 그러다
+    **`OSError: [Errno 12] Cannot allocate memory`**로 죽었다 — `git push`가 끝난 뒤에
+    `make ship`이 넘어졌다. 여기서는 폴더 하나를 열고 **바로 닫는다.**
+
+    **못 읽는 폴더에서 멈추지 않는다.** 한 폴더가 막히면 알리고 지나간다 — 교두보가
+    반쯤 읽히는 것이 아예 안 읽히는 것보다 낫고, 무엇이 막혔는지는 화면에 남는다.
+    """
+    for name, size, _stamp in iter_stats(base):
+        yield name, size
 
 
 def walk(base: Path) -> dict[str, int]:
@@ -285,11 +299,121 @@ def status(local: Path, store: Path | None) -> int:
     return 0
 
 
+STAMP = re.compile(r"\d{8}T\d{6}Z")
+"""실행 스탬프. 계열로 접을 때 별표로 바꾼다 — `keys-20260823T091233Z.series` → `keys-*.series`."""
+
+SEAL = ROOT / "var" / "seal" / "artifacts.verify.jsonl"
+"""**봉인지.** 양쪽을 대조해 같다고 확인한 것만 적는다 (D-0242).
+
+`(크기, mtime)`이 양쪽 다 그대로면 다시 안 읽는다 — 그것이 CDC다. **읽기에만 붙인다**:
+`push`·`pull`은 이 파일을 보지 않는다 (D-0240).
+"""
+
+HASH_CHUNK = 1 << 20
+
+
+def series(name: str) -> str:
+    """이름을 계열로 접는다. **9240개를 사람이 읽을 수 있는 열두 줄로 만든다.**"""
+    head = name.split("/", 1)[0]
+    return STAMP.sub("*", head)
+
+
+def digest(path: Path) -> str:
+    """내용 해시. **잘게 읽는다** — 300MB짜리를 통째로 안 올린다 (D-0240과 같은 이유)."""
+    found = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(HASH_CHUNK):
+            found.update(chunk)
+    return found.hexdigest()
+
+
+def load_seal() -> dict[str, list[int | str]]:
+    if not SEAL.exists():
+        return {}
+    sealed: dict[str, list[int | str]] = {}
+    for line in SEAL.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            row = json.loads(line)
+            sealed[str(row["name"])] = row["mark"]
+    return sealed
+
+
+def save_seal(sealed: dict[str, list[int | str]]) -> None:
+    SEAL.parent.mkdir(parents=True, exist_ok=True)
+    body = "".join(
+        json.dumps({"name": name, "mark": mark}, ensure_ascii=False) + "\n"
+        for name, mark in sorted(sealed.items())
+    )
+    SEAL.write_text(body, encoding="utf-8")
+
+
+def verify(local: Path, store: Path | None, full: bool) -> int:
+    """양쪽이 **정말 같은가**. 크기로 먼저, `--full`이면 내용까지 (D-0242).
+
+    옛 `status`는 **이름만** 봤다. 이름이 같고 내용이 다르면 «이미 있음»으로 영원히
+    건너뛴다 — 추가 전용 규약(D-0118)이 그 자리를 고칠 길을 막는다. 그래서 대조가 필요하다.
+    """
+    state, note = probe(store)
+    if state != ATTACHED or store is None:
+        print(f"교두보를 못 읽었다: {note}", file=sys.stderr)
+        return 2
+
+    here = {name: (size, stamp) for name, size, stamp in iter_stats(local)}
+    there = {name: (size, stamp) for name, size, stamp in iter_stats(store / SUBTREE)}
+    sealed = load_seal()
+
+    rows: dict[str, list[int]] = {}
+    broken: list[str] = []
+    checked = 0
+    for name in sorted(set(here) | set(there)):
+        row = rows.setdefault(series(name), [0, 0, 0, 0])
+        mine, yours = here.get(name), there.get(name)
+        if mine is None or yours is None:
+            row[2 if yours is None else 3] += 1
+            continue
+        if mine[0] != yours[0]:
+            row[1] += 1
+            broken.append(f"{name}  여기 {human(mine[0])} · 교두보 {human(yours[0])}")
+            continue
+        row[0] += 1
+        if not full:
+            continue
+        mark = [mine[0], mine[1], yours[1]]
+        if sealed.get(name, [None])[:3] == mark:
+            continue
+        checked += 1
+        if digest(local / name) != digest(store / SUBTREE / name):
+            row[1] += 1
+            row[0] -= 1
+            broken.append(f"{name}  크기는 같은데 **내용이 다르다**")
+            sealed.pop(name, None)
+            continue
+        sealed[name] = [*mark, "same"]
+
+    print(f"{'계열':<30}{'같음':>8}{'다름':>8}{'여기만':>8}{'교두보만':>10}")
+    print("-" * 66)
+    for name, (same, differ, only_here, only_there) in sorted(rows.items()):
+        mark = "  ← **다르다**" if differ else ""
+        print(f"{name:<30}{same:>8}{differ:>8}{only_here:>8}{only_there:>10}{mark}")
+    for line in broken[:10]:
+        print(f"  {line}", file=sys.stderr)
+    if len(broken) > 10:
+        print(f"  ... {len(broken) - 10}개 더", file=sys.stderr)
+
+    if full:
+        save_seal(sealed)
+        print(f"\n내용까지 {checked}개를 읽었다. 봉인 {len(sealed)}개 · {SEAL}")
+    else:
+        print("\n크기만 봤다. 내용까지 보려면 `--full` (봉인이 있어 두 번째부터 빠르다)")
+    return 1 if broken else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="산출물 교두보 동기화 (D-0118 · D-0119)")
-    parser.add_argument("action", choices=("push", "pull", "status"))
+    parser.add_argument("action", choices=("push", "pull", "status", "verify"))
     parser.add_argument("--store", type=Path, default=None, help=f"교두보 경로. 없으면 {STORE_ENV}")
     parser.add_argument("--dry-run", action="store_true", help="쓰지 않고 무엇이 갈지만 본다")
+    parser.add_argument("--full", action="store_true", help="verify에서 내용까지 읽는다 (sha256)")
     parser.add_argument(
         "--only",
         action="append",
@@ -304,6 +428,8 @@ def main() -> int:
 
     if args.action == "status":
         return status(local, store)
+    if args.action == "verify":
+        return verify(local, store, args.full)
 
     # **파일을 하나도 쓰기 전에 교두보를 본다** (D-0119). D-0118은 17192개 목록을
     # 다 찍은 뒤 첫 복사에서 죽었다.

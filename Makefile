@@ -1,4 +1,4 @@
-.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts
+.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -91,6 +91,9 @@ var-fsck:      ## 산출물이 무엇인지 찍는다. 판정하지 않는다 (D
 
 artifacts:     ## 교두보와 저장소에 무엇이 있는지 (D-0118)
 	python3 tools/sync_artifacts.py status
+
+artifacts-verify: ## 교두보와 여기가 정말 같은가. FULL=1 이면 내용까지 (D-0242)
+	python3 tools/sync_artifacts.py verify $(if $(FULL),--full,)
 
 artifacts-push:  ## 교두보로 보낸다. ONLY=keys 로 O-37 세트만 (D-0119)
 	python3 tools/sync_artifacts.py push $(if $(ONLY),--only $(ONLY),)
