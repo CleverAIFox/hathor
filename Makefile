@@ -91,7 +91,7 @@ hygiene:       ## 위생 한 벌 — 기기(doctor) · 저장소(tidy) · 산출
 	@echo
 	@$(MAKE) --no-print-directory tidy $(if $(YES),YES=1,) $(if $(FIX),FIX=1,)
 	@echo
-	@$(MAKE) --no-print-directory var-fsck
+	@python3 tools/var_fsck.py --ratchet
 
 var-fsck:      ## 산출물이 무엇인지 찍는다. 판정하지 않는다 (D-0203)
 	python3 tools/var_fsck.py

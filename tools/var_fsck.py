@@ -108,7 +108,13 @@ def runs(files: list[Path]) -> dict[str, tuple[set[str], int]]:
     return table
 
 
-def report(root: Path) -> int:
+def report(root: Path, ratchet: bool = False) -> int:
+    """찍는다. `--ratchet`이면 **옛 실행이 남아 있을 때 실패한다** (O-62 닫힘 · D-0245).
+
+    옛 판은 «남았다»를 알리고 0으로 끝났다. 알리기만 하는 경고는 **다음 주에도 그대로
+    있다** — 실측으로 `keys` 13회 · `scan` 4회가 쌓여 있었다. 정체 불명(`manifest 없음`)은
+    관문으로 안 만든다: 그것은 D-0203 이전 산출물이고 **다시 뽑는 것 말고는 길이 없다.**
+    """
     if not root.exists():
         print(f"산출물 루트가 없다: {root}", file=sys.stderr)
         return 2
@@ -135,17 +141,23 @@ def report(root: Path) -> int:
         print(f"  {label:<22} 실행 {len(stamps)}회 · {human(size):>6}{mark}")
 
     if stale:
-        print(f"\n**{stale}개 이름에 실행이 여럿 남았다.** 최신만 남긴다 (O-62).")
+        print(f"\n**{stale}개 이름에 실행이 여럿 남았다.** 최신만 남긴다 (O-62 · D-0245).")
     if unnamed:
         print(f"\n**{unnamed}개 묶음이 자기를 설명하지 않는다.** 정체를 추측해야 한다 (D-0203).")
+    if ratchet and stale:
+        print("  최신만 남기고 옛 실행은 지운다. 교두보에 있으면 거기서도 지운다.", file=sys.stderr)
+        return 1
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="산출물 정체 검사 (D-0203)")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="산출물 루트")
+    parser.add_argument(
+        "--ratchet", action="store_true", help="옛 실행이 남아 있으면 실패한다 (O-62 · D-0245)"
+    )
     args = parser.parse_args()
-    return report(args.root)
+    return report(args.root, args.ratchet)
 
 
 if __name__ == "__main__":

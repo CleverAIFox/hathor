@@ -82,3 +82,22 @@ def test_한_단계_아래_manifest도_읽는다(tmp_path: Path) -> None:
 
     assert "manifest 1건" in said and "manifest 없음" not in said
     assert "float32" in said and "abc" in said
+
+
+def test_옛_실행이_남으면_관문이_막는다(tmp_path: Path) -> None:
+    """**D-0245의 강제자.** 알리기만 하는 경고는 다음 주에도 그대로 있다.
+
+    실측으로 `keys` 13회 · `scan` 4회가 교두보에 쌓여 있었다 — O-62(닫힘 D-0245)가 말한 그것이다.
+    """
+    _touch(tmp_path, "keys-20260101T000000Z.jsonl", "keys-20260202T000000Z.jsonl")
+
+    assert CHECKER.report(tmp_path) == 0, "찍기만 할 때는 막지 않는다"
+    assert CHECKER.report(tmp_path, ratchet=True) == 1
+
+
+def test_정체_불명은_관문이_아니다(tmp_path: Path) -> None:
+    """D-0203 이전 산출물이다. **다시 뽑는 것 말고 길이 없으니** 관문으로 두면 영원히 빨갛다."""
+    (tmp_path / "옛묶음").mkdir()
+    (tmp_path / "옛묶음" / "a.npz").write_text("", encoding="utf-8")
+
+    assert CHECKER.report(tmp_path, ratchet=True) == 0
