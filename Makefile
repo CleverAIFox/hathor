@@ -62,7 +62,7 @@ lint:          ## ruff · 워크플로(actionlint) · 셸(shellcheck) (D-0225)
 	cd core && uv run actionlint
 	cd core && uv run shellcheck -S warning ../tools/*.sh ../.githooks/pre-commit ../.devcontainer/*.sh
 type:
-	cd core && uv run mypy hathor --strict
+	cd core && uv run mypy hathor --strict --cache-dir .mypy_cache_src
 	python3 tools/check_test_types.py --check
 arch:
 	cd core && uv run lint-imports
@@ -112,7 +112,7 @@ clean:         ## 저장소의 파이썬 바이트코드만 지운다. **.venv/�
 	     -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 
 clean-all: clean  ## 검사 도구 캐시까지 지운다. **var/과 .venv/는 남긴다** (D-0067)
-	rm -rf core/.ruff_cache core/.mypy_cache core/.pytest_cache \
+	rm -rf core/.ruff_cache core/.mypy_cache core/.mypy_cache_src core/.mypy_cache_tests core/.pytest_cache \
 	       core/.import_linter_cache core/.coverage
 	@echo "캐시를 지웠다. var/(산출물)과 .venv/(환경)는 그대로다."
 	@echo "산출물은 다시 만드는 데 수십 분, 환경은 수 분 걸린다. 지우려면 손으로 지운다."

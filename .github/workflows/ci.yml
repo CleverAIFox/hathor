@@ -89,7 +89,7 @@ jobs:
           uv run shellcheck -S warning ../tools/*.sh ../.githooks/pre-commit ../.devcontainer/*.sh
 
       - name: Type check
-        run: uv run mypy hathor --strict
+        run: uv run mypy hathor --strict --cache-dir .mypy_cache_src
 
       - name: Architecture boundary
         run: uv run lint-imports

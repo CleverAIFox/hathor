@@ -2266,6 +2266,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0238 | 검사가 9분이다 | `core/tests/unit/test_hygiene.py::test_시험_이름에_메모리_주소가_없다` |
 | D-0239 | 교두보를 훑다 메모리가 터졌다 | `core/tests/unit/test_sync_artifacts.py::test_못_읽는_폴더에서_멈추지_않는다` |
 | D-0240 | 복사가 커널에 맡겨져 있었다 | `core/tests/unit/test_sync_artifacts.py::test_메모리가_모자라면_더_잘게_다시_쓴다` |
+| D-0241 | 캐시 하나를 둘이 나눠 쓰고 있었다 | `core/tests/unit/test_test_types.py::test_제_캐시를_따로_쓴다` |
 
 <!-- decision-ledger:end -->
 

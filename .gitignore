@@ -4,6 +4,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
+.mypy_cache_src/
+.mypy_cache_tests/
 .ruff_cache/
 .coverage
 .import_linter_cache/

@@ -6,8 +6,11 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -47,6 +50,9 @@ def test_오류_수를_읽는다(monkeypatch):
     """**요약 줄이 아니라 오류 줄을 센다** (D-0150). 요약은 환경 의존까지 포함한다."""
 
     class Done:
+        # **가짜도 `returncode`를 든다** — 실물 `CompletedProcess`가 그것을 갖고,
+        # D-0241이 그 값을 읽는다. 가짜가 실물을 안 닮으면 또 한 판 잃는다 (D-0232).
+        returncode = 1
         stdout = (
             "tests/x.py:1: error: 뭐가 틀렸다  [arg-type]\n"
             "tests/x.py:2: error: 또  [index]\n"
@@ -60,6 +66,7 @@ def test_오류_수를_읽는다(monkeypatch):
 
 def test_없으면_0이다(monkeypatch):
     class Done:
+        returncode = 0
         stdout = "Success: no issues found in 61 source files\n"
         stderr = ""
 
@@ -136,3 +143,51 @@ def test_못을_정렬해_쓴다():
     """**차례가 기기마다 달라지면 못 읽는다.**"""
     source = (ROOT / "tools" / "check_test_types.py").read_text(encoding="utf-8")
     assert "sorted(counts.items()" in source
+
+
+# ------------------------------------------------------------------ 캐시와 진단 (D-0241)
+
+
+def test_제_캐시를_따로_쓴다() -> None:
+    """**깃발이 다른 두 실행이 한 캐시를 나눠 쓰면 서로를 무효화한다** (D-0241).
+
+    실측: 따뜻한 재실행이 `hathor` 100초 · `tests` 93초였고, 캐시를 가르니 **각각 25초**다.
+    """
+    assert "--cache-dir" in RATCHET.COMMAND and RATCHET.CACHE in RATCHET.COMMAND
+    for text in (
+        (ROOT / "Makefile").read_text(encoding="utf-8"),
+        (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"),
+    ):
+        assert "mypy hathor --strict --cache-dir .mypy_cache_src" in text
+
+
+def test_시간_초과를_환경_탓으로_말하지_않는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**틀린 처방을 내는 검사는 안 하느니만 못하다** (D-0209 · D-0241).
+
+    실제로 상한을 넘겼는데 화면에는 *"`make sync`"*가 떴고, 사람은 환경을 다시 맞췄다.
+    """
+
+    def slow(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd="mypy", timeout=RATCHET.TIMEOUT)
+
+    monkeypatch.setattr(RATCHET.subprocess, "run", slow)
+    assert RATCHET._mypy() is None
+    said = capsys.readouterr().err
+    assert "넘겼다" in said and "make sync" not in said
+
+
+def test_검사기가_죽으면_초록으로_안_센다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """mypy는 오류가 있으면 1, **죽으면 2 이상**이다. 죽은 것을 «0건»으로 세면 안 된다."""
+
+    class _Dead:
+        returncode = 2
+        stdout = ""
+        stderr = "error: unrecognized arguments"
+
+    monkeypatch.setattr(RATCHET.subprocess, "run", lambda *a, **k: _Dead())
+    assert RATCHET._mypy() is None
+    assert "죽었다" in capsys.readouterr().err

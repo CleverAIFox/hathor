@@ -62,12 +62,24 @@ def total(counts: dict[str, int]) -> int:
     return sum(counts.values())
 
 
+CACHE = ".mypy_cache_tests"
+"""**제 캐시를 따로 쓴다** (D-0241).
+
+`mypy hathor --strict`와 이 실행은 **깃발이 다르다.** 한 캐시를 나눠 쓰면 서로의 모듈을
+무효화해 **둘 다 영원히 차갑다** — 실측으로 따뜻한 재실행이 100초였고, 캐시를 가르니 25초다.
+"""
+
+TIMEOUT = 1800
+"""상한 30분. 옛 600초는 **바쁜 기기에서 넘겼고**, 그때 화면에 뜬 말이 틀렸다 (D-0241)."""
+
 COMMAND = (
     "mypy",
     "tests",
     "--explicit-package-bases",
     "--allow-untyped-defs",
     "--allow-untyped-calls",
+    "--cache-dir",
+    CACHE,
 )
 
 CODE = re.compile(r"error: .*\[([a-z-]+)\]\s*$")
@@ -90,19 +102,38 @@ def measure() -> int | None:
 
 
 def _mypy() -> str | None:
-    """`mypy` 출력 그대로."""
+    """`mypy` 출력 그대로. **못 돌렸으면 왜 못 돌렸는지 찍는다** (D-0241).
+
+    옛 판은 무엇이 터지든 `None`을 냈고 화면에는 *"`make sync`"*가 떴다. 실제로 터진 것은
+    **10분 상한 초과**였다 — 사람이 환경을 다시 맞추는 엉뚱한 심부름을 했다.
+    **틀린 처방을 내는 검사는 안 하느니만 못하다** (D-0209와 같은 부류).
+    """
     try:
         done = subprocess.run(
             ("uv", "run", *COMMAND),
             cwd=CORE,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=TIMEOUT,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError):
+    except subprocess.TimeoutExpired:
+        print(f"타입 검사가 {TIMEOUT}초를 넘겼다. 기기가 바쁘거나 캐시가 비었다.", file=sys.stderr)
+        print(f"  손으로: cd core && uv run {' '.join(COMMAND)}", file=sys.stderr)
         return None
-    return done.stdout + done.stderr
+    except OSError as failure:
+        print(f"타입 검사기를 못 띄웠다: {failure.strerror or failure}", file=sys.stderr)
+        print("  환경을 맞춘다: make sync", file=sys.stderr)
+        return None
+    text = done.stdout + done.stderr
+    if done.returncode > 1 and not tally(text):
+        # mypy는 오류가 있으면 1, **죽으면 2 이상**이다. 죽은 것을 «오류 0건»으로 세면
+        # 래칫이 조용히 초록이 된다.
+        print(f"타입 검사기가 죽었다 (종료 {done.returncode}).", file=sys.stderr)
+        for line in text.strip().splitlines()[-5:]:
+            print(f"    {line}", file=sys.stderr)
+        return None
+    return text
 
 
 def tally(text: str) -> dict[str, int]:
@@ -152,7 +183,7 @@ def main() -> int:
 
     raw = _mypy()
     if raw is None:
-        print("타입 검사를 못 돌렸다. `make sync`", file=sys.stderr)
+        # 이유는 `_mypy`가 이미 찍었다. 여기서 덮어쓰지 않는다.
         return 1
     counts = tally(raw)
     found = sum(counts.values())
