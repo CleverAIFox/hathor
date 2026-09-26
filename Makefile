@@ -1,4 +1,4 @@
-.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
+.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy hygiene gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -85,6 +85,13 @@ env:           ## 해석된 경로와 설정을 찍는다 (D-0066)
 
 doctor:        ## 기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)
 	cd core && uv run python -m hathor.cli doctor
+
+hygiene:       ## 위생 한 벌 — 기기(doctor) · 저장소(tidy) · 산출물(var-fsck) (D-0243)
+	@$(MAKE) --no-print-directory doctor
+	@echo
+	@$(MAKE) --no-print-directory tidy $(if $(YES),YES=1,) $(if $(FIX),FIX=1,)
+	@echo
+	@$(MAKE) --no-print-directory var-fsck
 
 var-fsck:      ## 산출물이 무엇인지 찍는다. 판정하지 않는다 (D-0203)
 	python3 tools/var_fsck.py

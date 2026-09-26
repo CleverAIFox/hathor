@@ -990,7 +990,7 @@ HATHOR
 | 곡 묶음 | `var/ingest/audio/<해시>.npz` + manifest | MERT 13층 × 5소스 · 크로마 · 온셋 · 음고 · 무음. 추출 조건을 manifest에 적는다 (D-0211). 검색 하네스는 `BundleFeatureSource`로 읽는다 — `--keys mert/mixture/layer00` (D-0233) |
 | CLAP 임베딩 | `var/ingest/clap/features/` + `clap.manifest.json` | 곡당 (청크, 512) 하나. **2차원이 아니면 저장소가 거부한다** (D-0233) |
 | 스캔 · 조회 | JSONL | 스캔 이벤트 · MusicBrainz 조회 결과 · 조성 · 온셋 · 쌍대비교 응답 |
-| 백업 | 외장 SSD (`HATHOR_ARTIFACT_STORE`) | push가 백업, pull이 복원. 덮어쓰지 않는다 (D-0118 · D-0122). **같은지는 `make artifacts-verify`가 내용으로 본다** — 이름 대조는 답이 아니다 (D-0242) |
+| 백업 | 외장 SSD (`HATHOR_ARTIFACT_STORE`) | push가 백업, pull이 복원. 덮어쓰지 않는다 (D-0118 · D-0122). **같은지는 `make artifacts-verify`가 내용으로 본다** — 이름 대조는 답이 아니다 (D-0242). **실측 2026-09-26: 양쪽에 있는 8060개 중 8059개가 내용까지 같고 나머지 하나는 잠금 파일이었다** (D-0243) |
 
 **쓰다 끊긴 파일은 정본 이름을 못 받는다** — `.partial`로 쓰고 끝나야 이름을 준다 (D-0216).
 
@@ -2268,6 +2268,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0240 | 복사가 커널에 맡겨져 있었다 | `core/tests/unit/test_sync_artifacts.py::test_메모리가_모자라면_더_잘게_다시_쓴다` |
 | D-0241 | 캐시 하나를 둘이 나눠 쓰고 있었다 | `core/tests/unit/test_test_types.py::test_제_캐시를_따로_쓴다` |
 | D-0242 | 교두보가 «같다»를 이름으로만 말하고 있었다 | `core/tests/unit/test_sync_artifacts.py::test_봉인한_것은_다시_안_읽는다` |
+| D-0243 | 잠금 하나가 «다르다»를 만들었다 | `core/tests/unit/test_sync_artifacts.py::test_잠금과_반쪽은_산출물이_아니다` |
 
 <!-- decision-ledger:end -->
 

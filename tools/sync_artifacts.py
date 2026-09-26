@@ -53,6 +53,14 @@ SUBTREE = Path("var") / "ingest"
 
 PART = ".part"
 
+TRANSIENT = (PART, ".lock")
+"""**산출물이 아닌 것** (D-0243).
+
+`.part`는 받다 만 것이고 `.batch.lock`은 **지금 도는 배치의 표식**이다(`NpzFeatureStore`).
+옮길 것도 대조할 것도 아니다 — 실제로 교두보에 `.batch.lock` 하나가 밀려가 있었고,
+`verify --full`이 그것 하나 때문에 **8059개가 같은데도 «다르다»로 종료**했다.
+"""
+
 CHUNK = 1 << 20
 """복사 버퍼 1MB. 파일이 6MB든 300MB든 **메모리에 뜨는 것은 이만큼이다** (D-0240)."""
 
@@ -139,7 +147,7 @@ def iter_stats(base: Path) -> Iterator[tuple[str, int, int]]:
         for entry in rows:
             if entry.is_dir(follow_symlinks=False):
                 pending.append(Path(entry.path))
-            elif entry.is_file(follow_symlinks=False) and not entry.name.endswith(PART):
+            elif entry.is_file(follow_symlinks=False) and not entry.name.endswith(TRANSIENT):
                 stamp = entry.stat()
                 yield (
                     Path(entry.path).relative_to(base).as_posix(),

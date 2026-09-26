@@ -24,6 +24,8 @@ sys.path.insert(0, str(repo_root() / "tools"))
 
 import sync_artifacts as tool
 
+ROOT = repo_root()
+
 
 @pytest.fixture
 def store(tmp_path) -> Path:
@@ -363,3 +365,21 @@ def test_계열로_접어_보여_준다() -> None:
     assert tool.series("keys-20260823T091233Z.series/x.npz") == "keys-*.series"
     assert tool.series("audio/f40090f19f984895.npz") == "audio"
     assert tool.series("scan-20260916T115536Z.jsonl") == "scan-*.jsonl"
+
+
+def test_잠금과_반쪽은_산출물이_아니다(tmp_path: Path) -> None:
+    """**D-0243의 강제자.** 교두보에 밀려간 `.batch.lock` 하나가 8059개의 «같음»을 덮었다."""
+    base = tmp_path / "ingest"
+    (base / "features").mkdir(parents=True)
+    (base / "features" / "a.npz").write_bytes(b"1")
+    (base / "features" / ".batch.lock").write_bytes(b"")
+    (base / "features" / "b.npz.part").write_bytes(b"half")
+
+    assert dict(tool.iter_files(base)) == {"features/a.npz": 1}
+
+
+def test_위생은_한_이름으로_모인다() -> None:
+    """기기 · 저장소 · 산출물이 목표 셋에 흩어져 있어 **무엇을 돌릴지부터 헷갈렸다** (D-0243)."""
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    block = makefile.split("hygiene:", 1)[1].split("\n\n", 1)[0]
+    assert all(name in block for name in ("doctor", "tidy", "var-fsck"))
