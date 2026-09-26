@@ -11,6 +11,7 @@ D-0118은 합성 자료로 왕복만 확인하고 냈다. **왕복은 전부 통
 
 from __future__ import annotations
 
+import errno
 import pathlib
 import sys
 from pathlib import Path
@@ -232,3 +233,56 @@ def test_못_읽는_폴더에서_멈추지_않는다(
 
 def test_없는_곳은_빈손이다(tmp_path: Path) -> None:
     assert dict(tool.iter_files(tmp_path / "없음")) == {}
+
+
+# ------------------------------------------------------------------ 복사 (D-0240)
+
+
+def test_버퍼_하나만_쓰고_옮긴다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**`shutil.copyfile`은 `sendfile`로 간다** — DrvFs가 거기서 ENOMEM을 낸다."""
+    source, target = tmp_path / "a.npz", tmp_path / "밖" / "a.npz"
+    source.write_bytes(b"x" * (3 << 20))
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("copyfile을 쓰면 안 된다 (D-0240)")
+
+    monkeypatch.setattr(tool.shutil, "copyfile", forbidden)
+    tool.copy_one(source, target)
+
+    assert target.read_bytes() == source.read_bytes()
+    assert not list(tmp_path.rglob(f"*{tool.PART}")), "반쪽을 안 남긴다"
+
+
+def test_메모리가_모자라면_더_잘게_다시_쓴다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """드라이브가 큰 덩어리를 못 받는 순간이 있다. **포기하지 않고 잘게 나눈다.**"""
+    source, target = tmp_path / "a.npz", tmp_path / "밖" / "a.npz"
+    source.write_bytes(b"y" * 4096)
+    real, seen = tool.shutil.copyfileobj, []
+
+    def flaky(reading: object, writing: object, size: int) -> None:
+        seen.append(size)
+        if len(seen) == 1:
+            raise OSError(errno.ENOMEM, "Cannot allocate memory")
+        real(reading, writing, size)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(tool.shutil, "copyfileobj", flaky)
+    tool.copy_one(source, target)
+
+    assert seen == [tool.CHUNK, tool.SMALL_CHUNK]
+    assert target.read_bytes() == source.read_bytes()
+
+
+def test_다른_실패는_반쪽을_지우고_올린다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ENOMEM이 아니면 다시 안 쓴다 — 디스크가 찼는데 또 쓰면 더 나쁘다."""
+    source, target = tmp_path / "a.npz", tmp_path / "밖" / "a.npz"
+    source.write_bytes(b"z" * 16)
+
+    def full(reading: object, writing: object, size: int) -> None:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(tool.shutil, "copyfileobj", full)
+    with pytest.raises(OSError, match="No space"):
+        tool.copy_one(source, target)
+    assert not list(tmp_path.rglob("*")) or not list(tmp_path.rglob(f"*{tool.PART}"))

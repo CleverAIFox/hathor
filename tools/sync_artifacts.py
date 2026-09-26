@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import os
 import shutil
 import sys
@@ -48,6 +49,12 @@ SUBTREE = Path("var") / "ingest"
 """
 
 PART = ".part"
+
+CHUNK = 1 << 20
+"""복사 버퍼 1MB. 파일이 6MB든 300MB든 **메모리에 뜨는 것은 이만큼이다** (D-0240)."""
+
+SMALL_CHUNK = 1 << 16
+"""ENOMEM을 만났을 때 다시 쓰는 버퍼. 64KB."""
 
 
 def dotenv() -> dict[str, str]:
@@ -168,8 +175,26 @@ def copy_one(source: Path, target: Path) -> None:
     """
     target.parent.mkdir(parents=True, exist_ok=True)
     staging = target.with_name(target.name + PART)
-    shutil.copyfile(source, staging)
+    try:
+        _copy_chunks(source, staging, CHUNK)
+    except OSError as failure:
+        staging.unlink(missing_ok=True)
+        if failure.errno != errno.ENOMEM:
+            raise
+        # **한 번 더, 더 잘게** (D-0240). DrvFs가 큰 덩어리를 못 받는 순간이 있다.
+        _copy_chunks(source, staging, SMALL_CHUNK)
     staging.replace(target)
+
+
+def _copy_chunks(source: Path, staging: Path, size: int) -> None:
+    """버퍼 하나만 메모리에 둔다. **`shutil.copyfile`을 안 쓴다** (D-0240).
+
+    그것은 리눅스에서 `sendfile`로 간다. 커널이 옮기므로 빠르지만 **DrvFs가 중간에
+    `ENOMEM`을 내면 그대로 올라온다** — `shutil`은 «한 바이트도 못 옮겼을 때»만 느린
+    길로 물러난다. 만 이천 개를 보내던 `make ship`이 거기서 죽었다.
+    """
+    with source.open("rb") as reading, staging.open("wb") as writing:
+        shutil.copyfileobj(reading, writing, size)
 
 
 def keep(names: dict[str, int], only: list[str] | None) -> dict[str, int]:
