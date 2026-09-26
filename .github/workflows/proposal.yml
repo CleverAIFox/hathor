@@ -55,13 +55,16 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libreoffice-writer fonts-noto-cjk poppler-utils
       - name: Bake PDF
-        run: soffice --headless --convert-to pdf docs/proposal.docx --outdir _site
+        # **목차에 쪽 번호를 박는다** (D-0246). 두 판을 굽고 쪽이 밀리지 않았는지 확인한다.
+        run: python3 tools/bake_proposal.py --docx docs/proposal.docx --out _site/proposal.pdf
       - name: PDF is not broken
         run: |
           pages=$(pdfinfo _site/proposal.pdf | awk '/^Pages/ {print $2}')
           test "$pages" -ge 50 || { echo "쪽이 $pages장뿐이다 — 굽다가 깨졌다"; exit 1; }
           pdftotext _site/proposal.pdf - | grep -q '취향 잠재 표현' \
             || { echo "PDF에 본문 글자가 없다 — 글꼴이 깨졌다"; exit 1; }
+          pdftotext -f 3 -l 3 -layout _site/proposal.pdf - | grep -qE '\.{5,} *[0-9]+' \
+            || { echo "목차에 쪽 번호가 없다 (D-0246)"; exit 1; }
           echo "PDF $pages쪽 · 본문 확인"
       - name: Stage site
         run: |

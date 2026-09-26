@@ -2272,6 +2272,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0243 | 잠금 하나가 «다르다»를 만들었다 | `core/tests/unit/test_sync_artifacts.py::test_잠금과_반쪽은_산출물이_아니다` |
 | D-0244 | «고쳤다»가 안 고쳐져 있었다 | `core/tests/unit/test_var_fsck.py::test_한_단계_아래_manifest도_읽는다` |
 | D-0245 | O-62 판정 | `core/tests/unit/test_var_fsck.py::test_옛_실행이_남으면_관문이_막는다` |
+| D-0246 | 목차에 쪽 번호가 없었다 | `core/tests/unit/test_bake_proposal.py::test_목차_쪽이_아니라_본문_쪽을_센다` |
 
 <!-- decision-ledger:end -->
 

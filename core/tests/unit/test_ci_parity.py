@@ -270,8 +270,12 @@ def test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다() -> None
     assert "./proposal.pdf" in viewer
     assert "docx-preview" not in viewer, "브라우저가 docx를 그리던 판이 남았다"
     flow = PAGES.read_text(encoding="utf-8")
-    assert "soffice --headless --convert-to pdf" in flow
+    # 굽는 일은 도구로 옮겼다 — 목차 쪽 번호 때문에 두 판을 굽는다 (D-0246).
+    assert "tools/bake_proposal.py" in flow
+    baker = (ROOT / "tools" / "bake_proposal.py").read_text(encoding="utf-8")
+    assert '"soffice"' in baker and '"--headless"' in baker
     assert "pdfinfo" in flow and "pdftotext" in flow
+    assert "목차에 쪽 번호가 없다" in flow, "구운 판에 쪽 번호가 있는지 CI가 본다"
 
 
 SELF_HOSTED_TRIGGERS = {"workflow_dispatch"}
