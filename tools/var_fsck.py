@@ -58,8 +58,14 @@ def folder_size(path: Path) -> tuple[int, int]:
 
 
 def describe(path: Path) -> str:
-    """이 묶음이 무엇인가. **추측이면 추측이라고 적는다.**"""
-    manifests = sorted(path.glob(f"*{MANIFEST_SUFFIX}"))
+    """이 묶음이 무엇인가. **추측이면 추측이라고 적는다.**
+
+    **manifest는 한 단계 아래에도 있다** (D-0244). `NpzFeatureStore`는 `<루트>/features/`에
+    쓰므로 `clap/clap.manifest.json`이 아니라 `clap/features/clap.manifest.json`이다.
+    옛 판은 manifest를 `glob`으로, 옛 인덱스를 `rglob`으로 찾았다 — **그 비대칭 때문에
+    D-0233이 manifest를 쓰기 시작한 뒤에도 «자기를 설명하지 않는다»가 그대로 떴다.**
+    """
+    manifests = sorted(path.rglob(f"*{MANIFEST_SUFFIX}"))
     if manifests:
         found = json.loads(manifests[0].read_text(encoding="utf-8"))
         layers = found.get("layers") or []

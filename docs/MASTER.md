@@ -2269,6 +2269,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0241 | 캐시 하나를 둘이 나눠 쓰고 있었다 | `core/tests/unit/test_test_types.py::test_제_캐시를_따로_쓴다` |
 | D-0242 | 교두보가 «같다»를 이름으로만 말하고 있었다 | `core/tests/unit/test_sync_artifacts.py::test_봉인한_것은_다시_안_읽는다` |
 | D-0243 | 잠금 하나가 «다르다»를 만들었다 | `core/tests/unit/test_sync_artifacts.py::test_잠금과_반쪽은_산출물이_아니다` |
+| D-0244 | «고쳤다»가 안 고쳐져 있었다 | `core/tests/unit/test_var_fsck.py::test_한_단계_아래_manifest도_읽는다` |
 
 <!-- decision-ledger:end -->
 

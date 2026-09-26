@@ -63,3 +63,22 @@ def test_시각이_없는_파일은_한_실행으로_센다(tmp_path: Path) -> N
     stamps, _size = CHECKER.runs(files)["all"]
 
     assert stamps == {""}
+
+
+def test_한_단계_아래_manifest도_읽는다(tmp_path: Path) -> None:
+    """**D-0244의 강제자.** `NpzFeatureStore`는 `<루트>/features/`에 쓴다.
+
+    D-0233이 `eval clap`에 manifest를 달았는데 `var_fsck`는 여전히 «정체 불명»이라 찍었다 —
+    쓰는 자리와 찾는 자리가 한 단계 달랐고 **아무도 그 초록을 확인하지 않았다.**
+    """
+    store = tmp_path / "clap" / "features"
+    store.mkdir(parents=True)
+    (store / "clap.manifest.json").write_text(
+        '{"model": "laion/larger_clap_music", "layers": [], "dtype": "float32", "revision": "abc"}',
+        encoding="utf-8",
+    )
+
+    said = CHECKER.describe(tmp_path / "clap")
+
+    assert "manifest 1건" in said and "manifest 없음" not in said
+    assert "float32" in said and "abc" in said
