@@ -19497,3 +19497,52 @@ D-0254가 붙인 CI 줄이 **초록 3개**를 찍었다. 직전 커밋은 빨갰
     cd core && uv run pytest tests/unit/test_gate_tools.py tests/unit/test_gate_ratchets.py -q
 
 강제자  `core/tests/unit/test_gate_tools.py` · `tools/mutate_gate.py`
+
+---
+
+## D-0260. `eval` 보고를 `main.py`에서 뗀다 — 555줄 → 27줄
+
+- **배경**: §3의 남은 빚이다. `main.py`가 *"CLI 진입점. 비즈니스 로직은 두지 않는다
+  (GR-2.2)"*라고 첫 줄에 적어 놓고 **2922줄이었다.** 그중 `eval` 계열이 507줄이다.
+
+### 넷으로 가른다
+
+한 파일로 모으면 620줄이라 **코드 상한 600을 넘는다** (D-0117). 크기가 아니라 **뜻으로**
+가른다.
+
+| 새 모듈 | 무엇 | 줄 |
+|---|---|---|
+| `roots.py` | 경로 기본값 셋 + `resolve_root` | 36 |
+| `eval_retrieval.py` | `retrieval` + 보고 헬퍼 셋 + `load_search_tracks` | 268 |
+| `eval_extract.py` | `mfcc` · `layers` — 이름은 평가지만 **하는 일은 추출 배치다** | 120 |
+| `eval_priors.py` | `harmony-prior` · `time-drift` · `fusion` — 산출물만 읽는 보고 | 267 |
+
+**`roots.py`가 먼저다.** 여섯 명령이 전부 `_resolve_root`와 경로 상수를 보고 있어서,
+그것을 남겨 두면 **떼어낸 쪽이 `main`을 도로 보게 된다** — 순환이다. 공유하는 것을 먼저
+공유하는 자리로 옮겨야 나머지가 떨어진다.
+
+- **결과**: `main.py` **2922 → 2297줄.** `eval` 계열은 **507 → 27줄**(라우팅만).
+  커버리지 87.81%. 열린 질문은 그대로 36이다.
+
+### 옮기는 동안 셋이 걸렸다
+
+| 잡은 것 | 무엇 |
+|---|---|
+| `ruff` F811 | **내가 `"HATHOR_LIBRARY_ROOT"`를 손으로 다시 적었다.** 정본은 `paths.LIBRARY_ROOT_ENV`다 — 글자를 두 곳에 두면 한쪽만 고쳐진다 (D-0199) |
+| 시험 | `TrackRecord`를 `TYPE_CHECKING` 안에 넣었는데 **런타임에 생성한다.** `mypy`는 통과했다 — 타입 검사에는 보이기 때문이다 |
+| `ruff` F821 | `STEM_SETS` · `stems_overlap` · `load_drift_observations`가 따라오지 않았다 |
+
+**`mypy`가 통과한 것을 시험이 잡았다.** D-0257이 «세 그물의 구멍이 한 자리에서 겹쳤다»고
+적었는데, 이번에는 **겹치지 않아서** 잡혔다.
+
+### 남기는 것
+
+- **떼어내기는 공유하는 것부터다.** 큰 덩이를 먼저 잡으면 그 덩이가 남은 쪽을 붙들고
+  안 떨어진다. `roots.py` 36줄이 507줄을 풀었다.
+- **«평가»라는 이름이 하는 일과 달랐다.** `eval mfcc` · `eval layers`는 판정이 아니라
+  추출이다. 이름이 뜻을 가리고 있으면 어디로 옮길지도 안 보인다.
+
+재현
+    cd core && uv run pytest tests/unit -q
+
+강제자  `core/tests/unit/test_file_size.py` · `core/tests/unit/test_eval_cli.py`

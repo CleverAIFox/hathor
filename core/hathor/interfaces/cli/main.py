@@ -11,21 +11,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hathor.application.evaluate_fusion import EvaluateFusion
 from hathor.application.evaluate_retrieval import (
     DEFAULT_GATE,
     DEFAULT_K,
     DEFAULT_SEED,
     DEFAULT_SPLIT_SEED,
-    EvaluateRetrieval,
-    EvaluationConfig,
-    EvaluationReport,
     SplitMode,
-    SplitSpec,
-    TrackRecord,
-    ViewSpec,
 )
-from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
+from hathor.application.extract_features import ExtractFeatures
 from hathor.application.orchestrator.generation_pipeline import DEFAULT_SECTIONS, run_dry
 from hathor.application.resolve_identities import ResolveIdentities
 from hathor.application.scan_library import ScanLibrary
@@ -45,7 +38,6 @@ from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
     STEM_SETS,
-    stems_overlap,
 )
 from hathor.domain.value_objects.key import Key
 from hathor.infrastructure.chroma_series_store import (
@@ -59,7 +51,6 @@ from hathor.infrastructure.jsonl_resolution_store import JsonlResolutionStore
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
 from hathor.infrastructure.keys_jsonl_store import (
     find_keys_store,
-    load_drift_observations,
     load_stem_priors,
     load_tonics,
 )
@@ -72,23 +63,31 @@ from hathor.interfaces.cli import ingest_keys_bundles
 from hathor.interfaces.cli.doctor import run_doctor
 from hathor.interfaces.cli.eval_clap import add_parser as add_clap_parser
 from hathor.interfaces.cli.eval_clap import run as run_eval_clap
+from hathor.interfaces.cli.eval_extract import run_eval_layers, run_eval_mfcc
 from hathor.interfaces.cli.eval_log import recorded
 from hathor.interfaces.cli.eval_order import run_eval_harmony_order
 from hathor.interfaces.cli.eval_output import report_harmonic_sweep, run_eval_harmony_output
+from hathor.interfaces.cli.eval_priors import (
+    run_eval_fusion,
+    run_eval_harmony_prior,
+    run_eval_time_drift,
+)
+from hathor.interfaces.cli.eval_retrieval import load_search_tracks, run_eval_retrieval
 from hathor.interfaces.cli.eval_vocabulary import (
     run_eval_chromatic_origin,
     run_eval_degree_restriction,
 )
 from hathor.interfaces.cli.extraction import drive_extraction
-from hathor.interfaces.cli.feature_sources import (
-    namespaced,
-    open_feature_source,
-    parse_feature_stores,
-    store_keys,
-)
 from hathor.interfaces.cli.ingest_onsets import add_parser as add_onset_parser
 from hathor.interfaces.cli.ingest_onsets import run as run_ingest_onsets
-from hathor.interfaces.cli.tables import ambiguity_report, parse_key, render_table, replay_refusal
+from hathor.interfaces.cli.roots import (
+    DEFAULT_LAYERS_DIRNAME,
+    DEFAULT_LIBRARY_ROOT_ENV,
+    DEFAULT_MFCC_DIRNAME,
+    DEFAULT_OUTPUT_ROOT,
+    resolve_root,
+)
+from hathor.interfaces.cli.tables import ambiguity_report, parse_key, replay_refusal
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
     load_dotenv,
@@ -99,18 +98,8 @@ from hathor.shared.config.paths import (
 if TYPE_CHECKING:
     from hathor.domain.entities.track_tags import TrackTags
 
-DEFAULT_LIBRARY_ROOT_ENV = LIBRARY_ROOT_ENV
 
-DEFAULT_OUTPUT_ROOT = "var/ingest"
-"""산출물 기본 위치. **문자열이어야 한다** (D-0069).
-
-argparse는 기본값이 문자열일 때만 `type`을 적용한다. `Path("var/ingest")`로 두면
-`type=resolve_path`를 붙여도 기본값에는 안 걸려 현재 디렉터리 기준으로 남는다.
-`--out`을 명시했을 때와 안 했을 때가 다른 곳을 가리키게 된다.
-"""
 DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
-DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
-DEFAULT_LAYERS_DIRNAME = "mert-layers"
 DEFAULT_LAYERS = "0,1,2,6"
 DEFAULT_SEARCH_KEY = "layer00"
 DEFAULT_LYRICS_DIRNAME = "lyrics-hashed"
@@ -782,7 +771,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.ingest_command == "features":
             return _run_ingest_features(args)
         if args.ingest_command == "onsets":
-            return run_ingest_onsets(args, _resolve_root(args.root))
+            return run_ingest_onsets(args, resolve_root(args.root))
         if args.ingest_command == "compact":
             return _run_ingest_compact(args)
         return _run_ingest_scan(args)
@@ -827,7 +816,7 @@ def _estimate_key(
         return fallback, {}
 
     try:
-        root = _resolve_root(args.root)
+        root = resolve_root(args.root)
     except (SystemExit, ValueError, KeyError):
         print("라이브러리 루트를 찾지 못해 C장조를 쓴다.", file=sys.stderr)
         return fallback, {}
@@ -1319,7 +1308,7 @@ def _run_ingest_keys(args: argparse.Namespace) -> int:
         )
         print(f"재분석: {args.replay} ({len(rows)}곡){note}. 디코딩하지 않는다.\n")
     else:
-        root = _resolve_root(args.root)
+        root = resolve_root(args.root)
         tracks = list(JsonlScanStore(out_root).read_tracks())
         if args.limit is not None:
             tracks = tracks[: args.limit]
@@ -1696,22 +1685,6 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
     return 0
 
 
-def _resolve_root(raw: Path | None) -> Path:
-    """라이브러리 루트를 결정한다.
-
-    노트북마다 드라이브 문자가 다르므로(리전 /mnt/f, 광인사 /mnt/d)
-    경로를 코드에 하드코딩하지 않고 환경변수로 외부화한다(D-0009).
-    """
-    if raw is not None:
-        return raw
-    from os import environ
-
-    value = environ.get(DEFAULT_LIBRARY_ROOT_ENV)
-    if not value:
-        raise SystemExit(f"--root를 지정하거나 {DEFAULT_LIBRARY_ROOT_ENV} 환경변수를 설정해야 한다")
-    return Path(value)
-
-
 def _run_ingest_resolve(args: argparse.Namespace) -> int:
     """스캔 산출물을 읽어 MusicBrainz로 정규 신원을 확정한다 (D-0019).
 
@@ -1752,7 +1725,7 @@ def _run_ingest_resolve(args: argparse.Namespace) -> int:
 
 
 def _run_ingest_scan(args: argparse.Namespace) -> int:
-    root = _resolve_root(args.root)
+    root = resolve_root(args.root)
     if not root.is_dir():
         print(f"라이브러리 루트가 없다: {root}", file=sys.stderr)
         return 2
@@ -1829,7 +1802,7 @@ def _run_ingest_all(args: argparse.Namespace) -> int:
         separator=DemucsStemSeparator(),
         extractor=extractor,
         pitch=LibrosaPitchTracker(),
-        library_root=_resolve_root(args.root),
+        library_root=resolve_root(args.root),
     )
     print(f"곡 {len(pending)}개 · 산출물 {store.root}\n")
 
@@ -1898,7 +1871,7 @@ def _extract_features_locked(args: argparse.Namespace) -> int:
         FfmpegAudioDecoder(),
         DemucsStemSeparator(),
         MertFeatureExtractor(),
-        _resolve_root(args.root),
+        resolve_root(args.root),
     )
     return drive_extraction(use_case, store, tracks, seconds_per_track=18.0)
 
@@ -1940,24 +1913,6 @@ def _run_ingest_compact(args: argparse.Namespace) -> int:
     return 0
 
 
-def _default_label(view: ViewSpec, split: SplitSpec | None = None) -> str:
-    """뷰·분할 설정에서 실험 이름을 만든다. 산출 파일명이 조건을 말하게 한다.
-
-    분할이 기본값(홀짝)이면 이름에 넣지 않는다. 넣으면 D-0038까지 쌓인 리포트
-    파일명과 어긋나 같은 조건의 수치를 나란히 놓을 수 없다.
-    """
-    parts = ["+".join(view.keys), view.combine.value, view.pool.value]
-    if view.chunk_l2:
-        parts.append("chunkl2")
-    if view.block_l2:
-        parts.append("blockl2")
-    if not view.centered:
-        parts.append("raw")
-    if split is not None and split.mode is not SplitMode.ODD_EVEN:
-        parts.append(f"{split.mode.value}{split.ratio:g}x{split.repeats}")
-    return "-".join(parts)
-
-
 def _eval_log_root(args: argparse.Namespace) -> Path:
     """평가 기록을 둘 곳. `--out`이 있으면 그 옆이고, 없으면 기본 산출물 루트다."""
     out = getattr(args, "out", None)
@@ -1967,15 +1922,15 @@ def _eval_log_root(args: argparse.Namespace) -> Path:
 def _dispatch_eval(args: argparse.Namespace) -> int:
     """`eval` 하위 명령을 고른다. **떨어지는 기본이 `retrieval`이다.**"""
     if args.eval_command == "mfcc":
-        return _run_eval_mfcc(args)
+        return run_eval_mfcc(args)
     if args.eval_command == "layers":
-        return _run_eval_layers(args)
+        return run_eval_layers(args)
     if args.eval_command == "clap":
-        return run_eval_clap(args, _resolve_root(args.root))
+        return run_eval_clap(args, resolve_root(args.root))
     if args.eval_command == "fusion":
-        return _run_eval_fusion(args)
+        return run_eval_fusion(args)
     if args.eval_command == "harmony-prior":
-        return _run_eval_harmony_prior(args)
+        return run_eval_harmony_prior(args)
     if args.eval_command == "harmony-output":
         return run_eval_harmony_output(args)
     if args.eval_command == "degree-restriction":
@@ -1983,309 +1938,10 @@ def _dispatch_eval(args: argparse.Namespace) -> int:
     if args.eval_command == "chromatic-origin":
         return run_eval_chromatic_origin(args)
     if args.eval_command == "time-drift":
-        return _run_eval_time_drift(args)
+        return run_eval_time_drift(args)
     if args.eval_command == "harmony-order":
         return run_eval_harmony_order(args)
-    return _run_eval_retrieval(args)
-
-
-def _run_eval_retrieval(args: argparse.Namespace) -> int:
-    """M0/M1/M2를 재고 리포트를 남긴다.
-
-    GPU도 외부 조회도 쓰지 않는다. 1004x768 행렬에 1004x1004 코사인이면
-    CPU에서 수 초다. 광인사에서 도는 것이 요건이다.
-    """
-    from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
-
-    keys = tuple(token.strip() for token in args.keys.split(",") if token.strip())
-    if not keys:
-        print("--keys에 임베딩 키를 최소 하나 지정해야 한다", file=sys.stderr)
-        return 2
-
-    view = ViewSpec(
-        keys=keys,
-        combine=CombineMode(args.combine),
-        pool=PoolMode(args.pool),
-        chunk_l2=args.chunk_l2,
-        block_l2=args.block_l2,
-        centered=not args.raw,
-    )
-    try:
-        split = SplitSpec(
-            mode=SplitMode(args.split),
-            ratio=args.split_ratio,
-            repeats=args.split_repeats,
-            seed=args.split_seed,
-        )
-    except ValueError as error:
-        print(f"분할 설정이 잘못됐다: {error}", file=sys.stderr)
-        return 2
-
-    label = args.label or _default_label(view, split)
-    config = EvaluationConfig(
-        view=view,
-        split=split,
-        k=args.k,
-        seed=args.seed,
-        gate=args.gate,
-        force=args.force,
-        label=label,
-    )
-
-    tags = {track.source_key: track.tags for track in JsonlScanStore(args.out).read_tracks()}
-    if not tags:
-        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
-        return 2
-
-    stores = parse_feature_stores(args.features, args.out)
-    merged: dict[str, dict[str, object]] = {}
-    coverage: dict[str, int] = {}
-    for name, root in stores:
-        store = open_feature_source(root, store_keys(name, keys))
-        if not store.index_path.exists():
-            print(f"특징 인덱스가 없다: {store.index_path}", file=sys.stderr)
-            return 2
-        seen: set[str] = set()
-        for source_key, vectors in store.iter_vectors():
-            if source_key in seen:
-                # O-7(D-0022)의 재발이다. 중복을 조용히 흡수하면 유사도 행렬에 같은 곡이
-                # 여러 번 들어가 지표가 틀어진 채로 그럴듯한 숫자를 낸다.
-                print(f"인덱스에 중복 키가 있다: {source_key} ({root})", file=sys.stderr)
-                print("먼저 `hathor ingest compact`로 정리한다.", file=sys.stderr)
-                return 2
-            seen.add(source_key)
-            slot = merged.setdefault(source_key, {})
-            for key, vector in vectors.items():
-                slot[namespaced(name, key)] = vector
-        coverage[name or str(root)] = len(seen)
-
-    if len(stores) > 1:
-        print(
-            "저장소별 곡 수: " + ", ".join(f"{label} {count}" for label, count in coverage.items()),
-            flush=True,
-        )
-
-    records: list[TrackRecord] = []
-    orphans: list[str] = []
-    partial: list[str] = []
-    for source_key in sorted(merged):
-        tag = tags.get(source_key)
-        if tag is None:
-            orphans.append(source_key)
-            continue
-        # 저장소가 여럿일 때 한쪽에만 있는 곡은 뺀다. 남기면 뷰 조립에서
-        # 키가 없다고 터지거나, 유스케이스가 조용히 건너뛰어 저장소마다
-        # 다른 곡 집합을 비교하게 된다.
-        if any(key not in merged[source_key] for key in keys):
-            partial.append(source_key)
-            continue
-        records.append(
-            TrackRecord(
-                source_key=source_key,
-                album=tag.album,
-                artist=tag.artist,
-                embeddings=merged[source_key],  # type: ignore[arg-type]
-            )
-        )
-
-    if orphans:
-        print(f"경고: 스캔 산출물에 없는 곡 {len(orphans)}건을 제외했다", file=sys.stderr)
-    if partial:
-        print(f"경고: 일부 저장소에만 있는 곡 {len(partial)}건을 제외했다", file=sys.stderr)
-    if args.limit is not None:
-        records = records[: args.limit]
-    if not records:
-        print("평가할 곡이 없다", file=sys.stderr)
-        return 2
-
-    report = EvaluateRetrieval(config).run(records)
-    path = JsonEvaluationStore(args.out).write(report.as_record(), label)
-    _print_report(report)
-    print(f"리포트: {path}")
-
-    if not report.gate_passed:
-        print(_gate_failure_message(report), file=sys.stderr)
-        return 1
-    return 0
-
-
-def _gate_failure_message(report: EvaluationReport) -> str:
-    """게이트 미달의 성격을 순위 진단으로 갈라 말한다 (D-0044).
-
-    옛 문구는 미달을 하나로 묶어 "임베딩이 곡 정체성조차 담지 못한 것"이라고
-    단정했다. **실측이 이를 반증했다.** 가사 8192 조건은 top-1 0.9174로 미달이나
-    R@10이 0.9715이고 실패 순위 중앙값이 3.8이다(무작위 502). 정답은 4등쯤에 있다.
-    같은 문구가 damp 조건(R@10 0.4688, 실패 순위 831)에도 붙어 있었으므로,
-    **처방이 정반대인 두 상황을 같은 말로 보고하고 있었다.**
-    """
-    consistency = report.consistency
-    # **가르는 규칙은 유스케이스가 든다** (D-0234). 여기서 다시 계산하면 두 곳이
-    # 갈라진다 — D-0046이 세운 판정을 `report.collapsed`가 그대로 옮겨 갖고 있다.
-    if not report.collapsed:
-        return (
-            f"M0 식별 미달 (top-1 {report.self_consistency:.4f}). "
-            f"다만 R@10 {consistency.recall_at_10:.4f}, 실패 순위 중앙값 "
-            f"{consistency.miss_median_rank:.1f}(무작위 {consistency.random_median_rank:.1f})다. "
-            "정답이 상위권에 있으므로 표현이 무너진 것이 아니라 top-1을 못 넘는 것이다. "
-            "**M1/M2는 계산했고 비교용으로만 쓴다** — 정본 지표로 인용하지 않는다 (D-0234)."
-        )
-    return (
-        f"M0 게이트 미달 (top-1 {report.self_consistency:.4f}, "
-        f"R@10 {consistency.recall_at_10:.4f}). 실패 순위 중앙값 "
-        f"{consistency.miss_median_rank:.1f}(무작위 {consistency.random_median_rank:.1f})로 "
-        "정답이 상위권에도 없다. 표현이 곡을 특정하지 못한다. 추출 설정부터 다시 본다."
-    )
-
-
-def _print_report(report: EvaluationReport) -> None:
-    view = report.config.view
-    print(
-        f"곡 {report.tracks}개 (제외 {len(report.skipped)}) / "
-        f"뷰 {'+'.join(view.keys)} {view.combine.value}·{view.pool.value}"
-        f"{'·chunk-l2' if view.chunk_l2 else ''}"
-        f"{'·block-l2' if view.block_l2 else ''}"
-        f"{'·centered' if view.centered else '·raw'} / {report.dimension}차원"
-    )
-    print(f"  전체 쌍 평균 코사인 {report.anisotropy:.4f} (1에 가까울수록 허브 곡이 생긴다)")
-    verdict = "통과" if report.gate_passed else "미달"
-    consistency = report.consistency
-    split = consistency.split
-    spread = f" ±{consistency.top1_std:.4f}" if len(consistency.scores) > 1 else ""
-    detail = (
-        f"{split.mode.value}"
-        if split.mode is SplitMode.ODD_EVEN
-        else f"{split.mode.value} {split.ratio:g} x{split.repeats}회"
-    )
-    print(
-        f"  M0 자기일관성  top-1 {report.self_consistency:.4f}{spread} "
-        f"(기준 {report.config.gate:.2f}) {verdict}  [분할 {detail}]"
-    )
-    # top-1만 보면 실패의 성격을 모른다. 실패가 순위 2~3에 몰려 있으면 표현이
-    # 아니라 관문이 문제이고, 수백 등에 흩어져 있으면 표현이 없는 것이다.
-    print(
-        f"     MRR {consistency.mrr:.4f}  "
-        f"R@5 {consistency.recall_at_5:.4f}  "
-        f"R@10 {consistency.recall_at_10:.4f}  "
-        f"실패 순위 중앙값 {consistency.miss_median_rank:.1f} "
-        f"(무작위 {consistency.random_median_rank:.1f})"
-    )
-    for metric in report.metrics:
-        print(
-            f"  {metric.name:<10} P@{report.config.k} {metric.measured.precision_at_k:.4f}  "
-            f"MAP@{report.config.k} {metric.measured.map_at_k:.4f}  "
-            f"쿼리 {metric.measured.queries:>4}  "
-            f"| 무작위 {metric.random.precision_at_k:.4f} "
-            f"({metric.precision_lift:.1f}배)"
-        )
-    if not report.metrics:
-        print("  M1/M2는 계산하지 않았다 (**붕괴 판정** · D-0234).")
-    elif not report.citable:
-        # 표를 옮겨 적는 사람이 이 줄을 같이 가져가게 **지표 바로 옆에** 둔다.
-        print("  ↑ **식별 미달이라 비교용이다.** 정본 지표로 인용하지 않는다 (D-0234).")
-
-
-def _run_eval_mfcc(args: argparse.Namespace) -> int:
-    """MFCC 베이스라인 특징을 뽑는다. CPU 전용이며 스템 분리를 하지 않는다.
-
-    MERT 산출물과 같은 (청크, 차원) 규격으로 별도 루트에 쌓는다.
-    같은 `eval retrieval`을 `--features`만 바꿔 돌리면 비교가 된다.
-    """
-    from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
-    from hathor.infrastructure.mfcc_feature_extractor import MfccFeatureExtractor
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
-
-    tracks = list(JsonlScanStore(args.out).read_tracks())
-    if not tracks:
-        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
-        return 2
-
-    store = NpzFeatureStore(args.features or args.out / DEFAULT_MFCC_DIRNAME)
-    try:
-        with store.batch_lock():
-            if not args.force:
-                done = store.completed_keys()
-                skipped = sum(1 for track in tracks if track.source_key in done)
-                tracks = [track for track in tracks if track.source_key not in done]
-                if skipped:
-                    print(f"이미 추출된 {skipped}곡을 건너뛴다", flush=True)
-            if args.limit is not None:
-                tracks = tracks[: args.limit]
-            if not tracks:
-                print("처리할 곡이 없다")
-                return 0
-
-            use_case = ExtractFeatures(
-                FfmpegAudioDecoder(),
-                None,
-                MfccFeatureExtractor(),
-                _resolve_root(args.root),
-            )
-            return drive_extraction(use_case, store, tracks, seconds_per_track=2.0)
-    except BatchAlreadyRunningError as exc:
-        print(str(exc), file=sys.stderr)
-        return 3
-
-
-def _run_eval_layers(args: argparse.Namespace) -> int:
-    """MERT 은닉 레이어별 특징을 뽑는다 (O-8, D-0025).
-
-    스템 분리를 하지 않으므로 1004곡 배치가 6~7시간이 아니라 1시간 안팎이다.
-    레이어별로 추출을 반복하지 않는다. 한 번의 추론에서 전 레이어가 나온다.
-    """
-    from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
-    from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
-
-    try:
-        indices = tuple(int(token) for token in args.layers.split(",") if token.strip())
-    except ValueError:
-        print("--layers는 쉼표로 구분한 정수여야 한다", file=sys.stderr)
-        return 2
-    if not indices:
-        print("--layers에 레이어를 최소 하나 지정해야 한다", file=sys.stderr)
-        return 2
-
-    tracks = list(JsonlScanStore(args.out).read_tracks())
-    if not tracks:
-        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
-        return 2
-
-    store = NpzFeatureStore(args.features or args.out / DEFAULT_LAYERS_DIRNAME)
-    try:
-        with store.batch_lock():
-            if not args.force:
-                done = store.completed_keys()
-                skipped = sum(1 for track in tracks if track.source_key in done)
-                tracks = [track for track in tracks if track.source_key not in done]
-                if skipped:
-                    print(f"이미 추출된 {skipped}곡을 건너뛴다", flush=True)
-            if args.limit is not None:
-                tracks = tracks[: args.limit]
-            if not tracks:
-                print("처리할 곡이 없다")
-                return 0
-
-            extractor = MertFeatureExtractor(layers=indices)
-            invalid = [index for index in indices if not 0 <= index < extractor.layer_count]
-            if invalid:
-                print(
-                    f"레이어 인덱스가 범위를 벗어났다: {invalid} (0 ~ {extractor.layer_count - 1})",
-                    file=sys.stderr,
-                )
-                return 2
-            print(
-                f"레이어 {','.join(str(index) for index in indices)} + mixture(마지막) 저장",
-                flush=True,
-            )
-            use_case = ExtractLayerFeatures(
-                FfmpegAudioDecoder(),
-                extractor,
-                _resolve_root(args.root),
-            )
-            return drive_extraction(use_case, store, tracks, seconds_per_track=4.0)
-    except BatchAlreadyRunningError as exc:
-        print(str(exc), file=sys.stderr)
-        return 3
+    return run_eval_retrieval(args)
 
 
 def _format_track(source_key: str, tags: Mapping[str, TrackTags]) -> str:
@@ -2396,34 +2052,6 @@ def _run_taste_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def _load_search_tracks(args: argparse.Namespace, keys: tuple[str, ...]) -> list[SearchTrack]:
-    """스캔 태그와 임베딩을 합쳐 검색 대상을 만든다."""
-    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
-
-    tags = {track.source_key: track.tags for track in JsonlScanStore(args.out).read_tracks()}
-    if not tags:
-        raise FileNotFoundError(f"스캔 산출물이 없다: {args.out}")
-
-    store = NpzFeatureStore(args.features or args.out / DEFAULT_LAYERS_DIRNAME)
-    if not store.index_path.exists():
-        raise FileNotFoundError(f"특징 인덱스가 없다: {store.index_path}")
-
-    tracks: list[SearchTrack] = []
-    for source_key, vectors in store.iter_vectors():
-        tag = tags.get(source_key)
-        if tag is None or any(key not in vectors for key in keys):
-            continue
-        tracks.append(
-            SearchTrack(
-                source_key=source_key,
-                artist=tag.artist,
-                title=tag.title,
-                embeddings=vectors,
-            )
-        )
-    return tracks
-
-
 def _resolve_seed(query: str, tracks: list[SearchTrack]) -> str:
     """검색어로 시드곡 하나를 특정한다.
 
@@ -2466,7 +2094,7 @@ def _run_search(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        tracks = _load_search_tracks(args, keys)
+        tracks = load_search_tracks(args, keys)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -2504,258 +2132,6 @@ def _run_search(args: argparse.Namespace) -> int:
         print(f"  {hit.rank:>2}. {hit.similarity:.4f}  {hit.label}  [반복 {hit.highlight}]{detail}")
     print()
     print("[반복 m:ss]는 곡 안에서 반복도가 가장 높은 구간이다. 후렴이라는 보장은 없다.")
-    return 0
-
-
-def _run_eval_fusion(args: argparse.Namespace) -> int:
-    """시드 결합 규칙을 같은 쌍으로 비교한다 (M4, D-0033).
-
-    한 사례를 눈으로 보고 규칙을 고르면 다른 조합에서 더 나빠져도 알 수 없다.
-    """
-    from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
-
-    keys = tuple(token.strip() for token in args.keys.split(",") if token.strip())
-    if not keys:
-        print("--keys에 임베딩 키를 최소 하나 지정해야 한다", file=sys.stderr)
-        return 2
-    try:
-        tracks = _load_search_tracks(args, keys)
-    except FileNotFoundError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
-
-    use_case = EvaluateFusion(
-        keys,
-        centered=not args.raw,
-        k=args.k,
-        pairs=args.pairs,
-        seed=args.seed,
-        penalty=args.penalty,
-    )
-    try:
-        report = use_case.run(tracks, list(FusionMode))
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
-
-    print(f"곡 {report.tracks}개 / 시드 쌍 {report.scores[0].pairs}개 / 상위 {report.k}")
-    print("  규칙        시드아티스트비율  아티스트불균형  코사인불균형  평균유사도")
-    for score in report.scores:
-        cosine = (
-            "     —"
-            if score.cosine_imbalance != score.cosine_imbalance
-            else (f"{score.cosine_imbalance:>13.4f}")
-        )
-        similarity = (
-            "     —"
-            if score.mean_similarity != score.mean_similarity
-            else (f"{score.mean_similarity:>12.4f}")
-        )
-        print(
-            f"  {score.mode:<11} {score.coverage:>13.4f} {score.artist_imbalance:>15.4f}"
-            f" {cosine} {similarity}"
-        )
-    print()
-    print("불균형은 낮을수록, 시드아티스트비율은 높을수록 좋다.")
-    print("균형만 좋고 비율이 낮으면 두 시드 모두에서 먼 밋밋한 곡을 고른 것이다.")
-    print("random은 하한, oracle은 코퍼스 구성상 도달 가능한 상한이다.")
-    path = JsonEvaluationStore(args.out).write(report.as_record(), f"fusion-k{args.k}")
-    print(f"리포트: {path}")
-    return 0
-
-
-def _run_eval_harmony_prior(args: argparse.Namespace) -> int:
-    """화성 도수 사전이 참조곡 고유 정보를 담는지 판정한다 (O-21 · D-0062).
-
-    **생성물을 채점하지 않는다.** "생성된 진행이 참조곡 크로마와 맞는가"는 조건화가
-    질 수 없는 지표이며, 코퍼스 전역 베이스라인이 정의상 진다. 곡을 앞뒤로 갈라
-    뒷반쪽을 홀드아웃으로 두면 네 선이 전부 질 수 있다.
-
-    저장된 반쪽 크로마만 읽으므로 **음원도 GPU도 필요 없다** — 광인사에서 돈다.
-    """
-    import json
-
-    from hathor.domain.services.harmony_prior import (
-        HalfChroma,
-        PriorCondition,
-        compare_priors,
-    )
-    from hathor.domain.value_objects.key import PITCH_CLASSES
-
-    with args.replay.open(encoding="utf-8") as stream:
-        rows = [json.loads(line) for line in stream if line.strip()]
-
-    observations: list[HalfChroma] = []
-    for row in rows:
-        key_text = row.get("key_head")
-        if args.stem_set:
-            # **조성은 전체 믹스에서 추정한 것을 그대로 쓴다** (D-0073). 스템에서
-            # 다시 추정하면 조합마다 회전 기준이 달라져 비교가 성립하지 않는다.
-            bundle = row.get("stems") or {}
-            picked = bundle.get(args.stem_set)
-            if picked is None:
-                continue
-            head, tail = picked.get("head"), picked.get("tail")
-        else:
-            head, tail = row.get("chroma_head"), row.get("chroma_tail")
-        if head is None or tail is None or key_text is None:
-            continue
-        tonic = str(key_text).rsplit(" ", 1)[0]
-        observations.append(
-            HalfChroma(
-                source_key=str(row.get("source_key", "")),
-                tonic_pitch_class=PITCH_CLASSES.index(tonic),
-                margin=float(row.get("margin_head", 0.0)),
-                head=tuple(float(value) for value in head),
-                tail=tuple(float(value) for value in tail),
-            )
-        )
-
-    if len(observations) < 2:
-        hint = (
-            f"`ingest keys --halves --separate`로 먼저 추출하고 --stem-set은 "
-            f"{sorted(STEM_SETS)} 중에서 고른다."
-            if args.stem_set
-            else "`ingest keys --halves`로 먼저 추출한다."
-        )
-        print(f"반쪽 크로마가 있는 곡이 {len(observations)}개다. {hint}", file=sys.stderr)
-        return 1
-
-    condition = PriorCondition(
-        harmonic=args.harmonic,
-        smoothing=args.smoothing,
-        margin_floor=args.margin_floor,
-        confident_only=args.confident_only,
-        seed=args.seed,
-        blend_steps=args.blend_steps,
-    )
-    result = compare_priors(observations, condition)
-
-    print(
-        f"곡 {result.song_count}개 · 스템 {args.stem_set or '전체 믹스'}"
-        f" · 배음 {condition.harmonic:g} · 평활 {condition.smoothing:g}"
-        f" · 애매 {result.ambiguous_count}곡(격차<{condition.margin_floor:g})"
-        f"{' · 애매 제외' if condition.confident_only else ''}\n"
-    )
-
-    header = f"{'선':<10}{'중앙값 CE':>12}{'코퍼스 대비':>14}{'포착 비율':>12}{'곡 단위 승률':>14}"
-    print(header)
-    print("-" * 64)
-    lines = (
-        ("uniform", result.uniform_score, None),
-        ("corpus", result.corpus_score, None),
-        ("other", result.other_score, result.other_win_rate),
-        ("self", result.self_score, result.self_win_rate),
-        ("oracle", result.oracle_score, None),
-    )
-    for name, score, win_rate in lines:
-        gap = score - result.corpus_score
-        share = "-" if win_rate is None else f"{win_rate:.1%}"
-        captured = result.captured_share(score)
-        print(f"{name:<10}{score:>12.4f}{gap:>+14.4f}{captured:>12.1%}{share:>14}")
-    print(f"\n달성 가능 폭 (uniform → oracle): {result.uniform_score - result.oracle_score:.4f}")
-
-    print("\nλ 곡선 (자기 반쪽 혼합 비율 → 중앙값 CE)")
-    for weight, score in zip(result.lambdas, result.self_curve, strict=True):
-        marker = "  ←" if weight == result.best_lambda else ""
-        print(f"  {weight:>4.2f}  {score:.4f}{marker}")
-
-    verdict = "정보 있음" if result.is_conditioning_informative else "정보 없음"
-    ratio = result.null_gain / result.self_gain if result.self_gain > 0 else float("inf")
-    print(f"\nλ*      = {result.best_lambda:.2f}  낙폭 {result.self_gain:.4f}")
-    print(
-        f"귀무 λ* = {result.null_lambda:.2f}  낙폭 {result.null_gain:.4f}  (자기선의 {ratio:.1%})"
-    )
-    print(f"판정: **{verdict}**")
-
-    print("\n--- 읽는 법 ---")
-    print("λ*가 판정이다. 0이면 참조곡이 코퍼스 평균에 보탤 것이 없고 O-21(D-0082)의 크로마")
-    print("접근을 기각한다. 0보다 크면 그 값이 곧 생성기의 혼합 계수다.")
-    print("**귀무 λ*가 0이 아닌 것 자체는 이상이 아니다** (D-0065). 곡끼리 독립인 합성")
-    print("자료에서도 0.1이 나온다. 볼 것은 위치가 아니라 낙폭이며, 자기선의 낙폭에 비해")
-    print("작아야 한다. 비율이 크면 자기선의 이득도 곡 고유성이 아닐 수 있다.")
-    print("`uniform`은 천장이 아니다. 구조가 없으면 균등이 최적이라 코퍼스가 진다.")
-    print("**포착 비율이 크기다** (D-0063). 격차의 절대값은 크로마가 평평하면 어차피 작다.")
-    print("`oracle`은 뒷반쪽으로 뒷반쪽을 맞힌 값이며 어떤 선도 이보다 낮을 수 없다.")
-    print("중앙값이라 절대값의 부호는 뜻이 없다. 같은 곡 집합 안의 선끼리만 비교한다.")
-    return 0
-
-
-def _run_eval_time_drift(args: argparse.Namespace) -> int:
-    """곡마다 다른 시간 변화가 실재하는지 잰다 (O-32 게이트 · D-0098).
-
-    **이 게이트가 통과해야 전량 재추출을 한다.** 스템 캐시가 없어 Demucs를 처음부터
-    다시 도는 작업이며, 게이트 없이 그것을 하는 것은 D-0058 계열의 형태다.
-    """
-    from hathor.application.evaluate_time_drift import GATE_T, EvaluateTimeDrift
-    from hathor.shared.config.paths import repo_root as _root
-
-    if stems_overlap(args.left, args.right):
-        print(
-            f"`{args.left}`과 `{args.right}`이 오디오를 공유한다. "
-            "**겹치는 두 관측은 잡음도 함께 움직여 상관이 부풀려진다** (D-0099).",
-            file=sys.stderr,
-        )
-        return 2
-
-    store = args.priors
-    if store is None:
-        store = find_keys_store(_root(), args.left)
-    if store is None or not store.exists():
-        print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
-        return 1
-
-    observations = load_drift_observations(store, args.left, args.right)
-    if len(observations) < 10:
-        print(
-            f"반쪽 크로마가 두 출처에 다 있는 곡이 {len(observations)}개다. "
-            f"`ingest keys --halves --separate --limit 200`으로 표본을 먼저 뽑는다. "
-            f"`{args.left}`과 `{args.right}`이 둘 다 있어야 한다.",
-            file=sys.stderr,
-        )
-        return 1
-
-    report = EvaluateTimeDrift(seed=args.seed).run(observations, args.left)
-    print(f"곡 {report.song_count}개 · 출처 {args.left} 대 {args.right}\n사전: {store.name}\n")
-    for text in render_table(
-        (
-            ("실측", ">10.4f"),
-            ("귀무", ">10.4f"),
-            ("초과", ">10.4f"),
-            ("표준오차", ">10.4f"),
-            ("t", ">8.2f"),
-            ("칸비율", ">9.0%"),
-        ),
-        [
-            (
-                report.observed,
-                report.null,
-                report.excess,
-                report.standard_error,
-                report.t_statistic,
-                report.cell_share,
-            )
-        ],
-    ):
-        print(text)
-    passed = report.time_drift_is_song_specific
-    print(
-        f"\n판정: **{'곡마다 다른 시간 변화가 있다' if passed else '게이트를 못 넘는다'}**"
-        f"  (문턱 t > {GATE_T:g} · 칸 과반)\n"
-    )
-    print("--- 읽는 법 ---")
-    print("**두 독립 관측이 같은 방향을 가리키는가**를 본다. 전체 믹스와 스템은 같은 곡의")
-    print("두 관측이고, 크로마 추정 잡음은 두 출처에서 갈리지만 **진짜 시간 변화는 둘 다에**")
-    print("나타난다. 귀무선은 **곡 짝을 뒤섞은 것**이라 잡음 구조와 코퍼스 공통 변화를")
-    print("그대로 갖고 있다 — **초과분만 곡 고유한 시간 변화다.**")
-    print("**문턱이 t > 3으로 높다.** 이 게이트가 통과하면 전량 재추출과 시계열 파이프라인을")
-    print("승인한다 — **승인 문턱은 관측 문턱보다 높아야 한다** (D-0095에서 51%를 통과로")
-    print("읽을 뻔한 뒤 정한 규율이다).")
-    print("**두 관측이 겹치면 안 된다** (D-0099). `mix`와 `other`는 오디오를 공유해 잡음도")
-    print("함께 움직이고 상관이 부풀려진다 — 실측 0.5572가 그 겹침만으로 설명 가능했다.")
-    print("기본값 `other` 대 `bass`는 서로 다른 악기이고 오디오가 겹치지 않는다.")
-    print("**그래도 못 가르는 것**: 뒷반쪽이 그냥 더 시끄러운 식의 곡별 인공물은 두 스템에")
-    print("함께 나타날 수 있고 그것은 화성이 아니다.")
     return 0
 
 
