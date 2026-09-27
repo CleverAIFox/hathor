@@ -235,6 +235,15 @@ def main() -> int:
         for line in text.splitlines()[-3:]:
             print(f"{DIM}   {line.strip()}{OFF}")
 
+    # **대장 판정을 수로 찍는다** (D-0269). 가리키기만 하면 안 본다 — 작성자가 대장을
+    # 네 판 연속 틀린 채 내보냈고, 그 넷 다 `--audit` 한 번이면 그 자리에서 드러났다.
+    # 막지는 않는다. `--audit`이 판정하고 여기는 **숫자를 눈앞에 둔다.**
+    _, verdict = _run("python3", "tools/check_artifacts.py", "--audit")
+    summary = next((line for line in verdict.splitlines() if "정상" in line), "")
+    if summary:
+        print(f"{DIM}   대장 {summary.strip()}{OFF}")
+        print(f"{DIM}   어긋나면: make artifacts-audit{OFF}")
+
     if problems:
         return 1
     if not args.push:

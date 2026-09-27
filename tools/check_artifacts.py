@@ -64,7 +64,17 @@ REQUIRED = ("what", "made", "regen", "reads", "store", "state")
 UNMADE = "미생성"
 """아직 한 번도 안 만들었다. **실물이 없는 것이 정상이다.**"""
 
-STATES = ("있음", UNMADE, "폐기")
+UNDER_STUDY = "조사중"
+"""정체가 덜 풀렸다 (D-0269). **모른다고 세는 것이 추론을 하나 더 얹는 것보다 낫다.**
+
+작성자가 이 대장에서 네 판 연속 정체를 추론하고 네 번 다 틀렸다 (D-0266 ~ D-0269).
+그래서 «모른다»에 자리를 준다 — 대신 **천장이 있다.** «재현 불명»에 D-0250이 한 것과
+같은 모양이다.
+
+`why`에 **무엇을 확인했고 무엇이 남았는지**를 적는 것이 필수다. 그것이 없으면
+«조사중»은 그냥 «안 봤다»의 다른 이름이다."""
+
+STATES = ("있음", UNMADE, "폐기", UNDER_STUDY)
 """계열의 상태 (D-0266). 파이어레인 `lakecheck` L1 — *"reserved인데 파일이 있나 ·
 active인데 0건인가"* — 와 같은 자리다.
 
@@ -91,6 +101,17 @@ CANNOT = "불가"
 
 STAMP = re.compile(r"\d{8}T\d{6}Z")
 """실행 스탬프. 계열 이름의 `*`가 이것을 가린다 — `sync_artifacts.STAMP`와 같은 값이다."""
+
+UNKNOWN = "불명"
+"""`regen`이 이것이면 어떻게 만들었는지 모른다. `state = "조사중"`과 짝이다."""
+
+UNDER_STUDY_CEILING = 1
+"""`조사중`의 천장 (D-0269). **지금 1이다** — `keys-*.keys.jsonl.mix-other`.
+
+무엇을 확인했는지는 그 계열의 `why`에 있다. **늘리려면 결정 기록이 필요하다** (D-0118) —
+모르는 것을 여기 쌓는 길이 열려 있으면 이 칸이 두 번째 쓰레기통이 된다.
+
+`해당 없음`이 첫 번째였다 (D-0265에서 18건을 되돌렸다)."""
 
 QUARANTINE_CEILING = 0
 """대장에 없는 계열의 천장 (D-0266). **0이다** — R3가 «없는 산출물»이라 부르는 것이다.
@@ -124,6 +145,13 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
         state = entry.get("state")
         if state is not None and state not in STATES:
             problems.append(f"{name}의 `state`가 규약 밖이다: {state!r} (쓸 수 있는 것: {STATES})")
+        if state == UNDER_STUDY:
+            if entry.get("regen") != UNKNOWN:
+                problems.append(f'{name}은 조사중인데 `regen`이 "{UNKNOWN}"이 아니다')
+            if not entry.get("why"):
+                problems.append(f"{name}은 조사중인데 `why`가 없다. **무엇을 확인했는지를 적는다**")
+            elif "남은 것" not in str(entry["why"]):
+                problems.append(f"{name}의 `why`에 «남은 것»이 없다. 다음 손이 어디를 볼지 적는다")
         if entry.get("regen") == RETIRED and not entry.get("why"):
             problems.append(f"{name}은 폐기인데 `why`가 없다. **왜 지웠는지가 그 파일의 뜻이다**")
         if entry.get("regen") == CANNOT:
@@ -181,9 +209,16 @@ def skeleton(name: str, detail: str) -> str:
     )
 
 
-def folded(base: Path) -> set[str]:
-    """`var/ingest` 바로 아래 이름을 계열로 접는다. **없으면 빈 집합이 아니라 호출자가 가른다.**"""
-    return {STAMP.sub("*", path.name) for path in base.iterdir()}
+def folded(base: Path) -> dict[str, str]:
+    """`접힌 이름 → 실물 이름 하나` (D-0269).
+
+    **접힌 이름은 경로가 아니다.** `keys-*.keys.jsonl.mix-other`의 `*`는 리터럴이고
+    그런 파일은 없다. 첫 판은 접힌 이름을 그대로 `measure()`에 넘겨 **스탬프가 있는
+    계열마다 «못 쟀다»를 찍었다** — 스탬프 없는 계열만 우연히 통했다.
+
+    재려면 실물 이름이 필요하므로 접기와 함께 보기 하나를 든다.
+    """
+    return {STAMP.sub("*", path.name): path.name for path in base.iterdir()}
 
 
 def store_side() -> Path | None:
@@ -215,6 +250,8 @@ class Verdict(NamedTuple):
     stale: list[str]
     """선언이 낡았다 — `미생성`이라 적혀 있는데 실물이 있다. **고칠 것은 선언이다.**"""
     normal: int
+    examples: dict[str, str]
+    """`접힌 이름 → 실물 이름 하나`. **재려면 실물 이름이 필요하다** (D-0269)."""
 
 
 def audit(entries: dict[str, dict[str, object]], base: Path, store: Path | None = None) -> Verdict:
@@ -226,15 +263,21 @@ def audit(entries: dict[str, dict[str, object]], base: Path, store: Path | None 
 
     `state`가 `미생성`·`폐기`인 계열은 실물이 없어도 결손이 아니다.
     """
-    found = folded(base) | (folded(store) if store is not None else set())
+    found = dict(folded(base))
+    if store is not None:
+        found = {**folded(store), **found}
+    seen = set(found)
     declared = set(entries)
     return Verdict(
         missing=sorted(
-            name for name in declared - found if entries[name].get("state") not in (UNMADE, RETIRED)
+            name
+            for name in declared - seen
+            if entries[name].get("state") not in (UNMADE, RETIRED, UNDER_STUDY)
         ),
-        orphan=sorted(found - declared),
-        stale=sorted(name for name in declared & found if entries[name].get("state") == UNMADE),
-        normal=len(declared & found),
+        orphan=sorted(seen - declared),
+        stale=sorted(name for name in declared & seen if entries[name].get("state") == UNMADE),
+        normal=len(declared & seen),
+        examples=found,
     )
 
 
@@ -279,8 +322,8 @@ def main() -> int:
     sides = [side for side in (args.root, store) if side is not None and side.is_dir()]
 
     def detail_of(name: str) -> str:
-        plain = name.split(" (", 1)[0]
-        return next((measure(side, plain) for side in sides if (side / plain).exists()), "못 쟀다")
+        real = seen.examples.get(name, name)
+        return next((measure(side, real) for side in sides if (side / real).exists()), "못 쟀다")
 
     for name in seen.orphan:
         print(f"  격리    {name}\n            {detail_of(name)}", file=sys.stderr)

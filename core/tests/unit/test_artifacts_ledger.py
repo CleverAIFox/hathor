@@ -130,7 +130,10 @@ def test_스탬프를_계열로_접는다(tmp_path: Path) -> None:
     for stamp in ("20260101T000000Z", "20260102T111111Z", "20260103T222222Z"):
         (tmp_path / f"keys-{stamp}.series").mkdir()
 
-    assert LEDGER.folded(tmp_path) == {"keys-*.series"}
+    seen = LEDGER.folded(tmp_path)
+
+    assert set(seen) == {"keys-*.series"}
+    assert seen["keys-*.series"].endswith(".series"), "**재려면 실물 이름이 필요하다** (D-0269)"
 
 
 def test_못_쟀으면_0건이_아니다() -> None:
@@ -283,3 +286,71 @@ def test_TODO가_남으면_거부한다() -> None:
     problems = LEDGER.check_ledger(pasted)
 
     assert [line for line in problems if LEDGER.TODO in line]
+
+
+# ------------------------------------- 모른다고 세는 자리 (D-0269)
+
+
+def test_접힌_이름으로는_못_잰다(tmp_path: Path) -> None:
+    """**접힌 이름은 경로가 아니다** (D-0269).
+
+    `keys-*.keys.jsonl.mix-other`의 `*`는 리터럴이고 그런 파일은 없다. 첫 판은 접힌
+    이름을 그대로 `measure()`에 넘겨 **스탬프가 있는 계열마다 «못 쟀다»를 찍었다** —
+    스탬프 없는 계열만 우연히 통했다.
+    """
+    (tmp_path / "keys-20260101T000000Z.keys.jsonl.mix-other").write_bytes(b"x" * 16)
+
+    seen = LEDGER.folded(tmp_path)
+
+    assert seen == {"keys-*.keys.jsonl.mix-other": "keys-20260101T000000Z.keys.jsonl.mix-other"}
+    assert LEDGER.measure(tmp_path, seen["keys-*.keys.jsonl.mix-other"]) != "못 쟀다"
+
+
+def test_조사중은_결손이_아니고_천장이_있다() -> None:
+    """**모른다고 세는 것이 추론을 하나 더 얹는 것보다 낫다** (D-0269).
+
+    작성자가 이 대장에서 네 판 연속 정체를 추론하고 네 번 다 틀렸다. 그래서 «모른다»에
+    자리를 주되 **천장을 둔다** — `해당 없음`이 첫 번째 쓰레기통이 된 것을 봤다 (D-0265).
+    """
+    studying = [
+        name for name, entry in LEDGER.load().items() if entry.get("state") == LEDGER.UNDER_STUDY
+    ]
+
+    assert len(studying) <= LEDGER.UNDER_STUDY_CEILING
+    assert LEDGER.UNDER_STUDY_CEILING == 1, "늘리려면 결정 기록이 필요하다 (D-0118)"
+
+
+def test_조사중은_무엇을_확인했는지_적는다() -> None:
+    """**그것이 없으면 «조사중»은 «안 봤다»의 다른 이름이다** (D-0269)."""
+    for name, entry in LEDGER.load().items():
+        if entry.get("state") != LEDGER.UNDER_STUDY:
+            continue
+        assert entry["regen"] == LEDGER.UNKNOWN, name
+        assert "남은 것" in str(entry["why"]), f"{name}이 다음 손이 볼 자리를 안 적는다"
+
+
+def test_조사중인데_사유가_없으면_잡는다() -> None:
+    """**양성 대조.** 이 검사가 무엇을 잡는지 본다 (D-0230)."""
+    base = {
+        "what": "무엇",
+        "made": "core/hathor/infrastructure/keys_jsonl_store.py",
+        "regen": LEDGER.UNKNOWN,
+        "reads": ["미투입 — 정체가 풀리면"],
+        "store": True,
+        "state": LEDGER.UNDER_STUDY,
+    }
+    assert [line for line in LEDGER.check_ledger({"x": base}) if "무엇을 확인했는지" in line]
+    with_why = {"x": {**base, "why": "확인했다"}}
+    assert [line for line in LEDGER.check_ledger(with_why) if "남은 것" in line]
+
+
+def test_ship이_대장_판정을_수로_찍는다() -> None:
+    """**가리키기만 하면 안 본다** (D-0269).
+
+    작성자가 대장을 네 판 연속 틀린 채 내보냈고 **넷 다 `--audit` 한 번이면 그 자리에서
+    드러났다.** 막지는 않는다 — 숫자를 눈앞에 두는 것이 요점이다.
+    """
+    source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
+
+    assert "check_artifacts.py" in source
+    assert "--audit" in source
