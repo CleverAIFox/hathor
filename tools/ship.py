@@ -127,8 +127,11 @@ def only_flags(raw: str) -> list[str]:
     return flags
 
 
-GREEN = ("success", "skipped", "neutral")
+PASSING = ("success", "skipped", "neutral")
 """**초록으로 칠 결론.** 나머지는 전부 빨강이다 (D-0255).
+
+이름이 `GREEN`이었다가 **48행의 색 코드를 덮었다** (D-0257). `make ship`이 섹션
+제목마다 `('success', 'skipped', 'neutral')`을 찍는 채로 통과했다.
 
 `failure`만 거르는 차단 목록을 썼다가 `timed_out` · `cancelled` · `action_required`가
 새는 것을 확인했다. **모르는 값을 통과시키는 그물은 모르는 사고를 통과시킨다.**"""
@@ -168,7 +171,7 @@ def ci_verdict() -> list[str]:
     latest = [run for run in runs if run.get("headSha") == newest]
     # **모르는 결론은 빨강이다** (D-0255). `failure`만 걸렀더니 `timed_out` ·
     # `cancelled` · `action_required`가 초록으로 샜다 — 차단 목록은 모르는 것을 통과시킨다.
-    failed = [run for run in latest if run.get("conclusion") not in (*GREEN, None, "")]
+    failed = [run for run in latest if run.get("conclusion") not in (*PASSING, None, "")]
     if failed:
         names = " · ".join(str(run.get("name", "?")) for run in failed)
         return [

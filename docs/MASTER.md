@@ -2283,6 +2283,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0254 | 로컬 초록이 CI 빨강이었다 | `core/tests/unit/test_ci_parity.py` |
 | D-0255 | 봉인은 «같다»가 아니라 «그때 읽어서 같았다»이다 | `core/tests/unit/test_ship.py` |
 | D-0256 | 워크플로가 묶음 없이 도구를 불렀다 | `core/tests/unit/test_tool_deps.py` |
+| D-0257 | 검사가 자기를 안 봤다 | `core/tests/unit/test_gate_tools.py` |
 
 <!-- decision-ledger:end -->
 
