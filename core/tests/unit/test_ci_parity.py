@@ -322,3 +322,28 @@ def test_러너_라벨이_흐름과_맞는다() -> None:
     assert labels is not None and wanted is not None
     given = {"self-hosted", "linux", *labels.group(1).split(",")}
     assert {name.strip().lower() for name in wanted.group(1).split(",")} <= given
+
+
+SYNC_TARGET = "sync"
+
+
+def _uv_sync_flags(text: str) -> list[str]:
+    """`uv sync` 뒤에 붙은 깃발들. 줄바꿈 없이 한 줄로 적힌 것만 본다."""
+    return [
+        line.split("uv sync", 1)[1].strip()
+        for line in text.splitlines()
+        if "uv sync" in line and not line.lstrip().startswith("#")
+    ]
+
+
+def test_CI가_로컬과_같은_묶음을_설치한다() -> None:
+    """**같은 검사를 돌려도 깔린 것이 다르면 결과가 갈린다** (D-0254).
+
+    `python-docx`는 `docs` 그룹인데 CI가 `--dev`만 깔았다. D-0246의 시험 둘이 로컬에서
+    초록이고 CI에서 `ModuleNotFoundError`로 죽었다 — **`make check`가 «CI와 동일»이라고
+    적어 둔 그 자리가 거짓이었다.**
+    """
+    (local,) = _uv_sync_flags(MAKEFILE.read_text(encoding="utf-8"))
+    assert local in _uv_sync_flags(WORKFLOW.read_text(encoding="utf-8")), (
+        f"CI가 `uv sync {local}`을 안 돈다. 로컬과 다른 것이 깔리면 로컬 초록이 CI 빨강이 된다"
+    )

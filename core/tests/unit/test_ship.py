@@ -7,8 +7,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -165,3 +168,44 @@ def test_세트를_쉼표로_나눠_넘긴다() -> None:
     assert SHIP.only_flags("keys,eval") == ["--only", "keys", "--only", "eval"]
     assert SHIP.only_flags("keys") == ["--only", "keys"]
     assert SHIP.only_flags("") == []
+
+
+def test_gh가_없어도_안_죽는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**없는 명령을 `_run`에 넘기면 `FileNotFoundError`로 배가 가라앉는다** (D-0068).
+
+    실측으로 확인했다 — `gh`가 없는 기기에서 `make ship`이 역추적을 뿜고 죽었다.
+    """
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: None)
+
+    (line,) = SHIP.ci_verdict()
+
+    assert "gh" in line
+
+
+def test_직전_커밋의_CI가_빨가면_그렇게_말한다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**여덟 판을 빨간 CI 위에 쌓았다** (D-0254). 내보내기 전에 말한다."""
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    runs = [
+        {"conclusion": "failure", "name": "ci", "headSha": "abc"},
+        {"conclusion": "success", "name": "proposal", "headSha": "abc"},
+        {"conclusion": "failure", "name": "ci", "headSha": "older"},
+    ]
+    monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
+
+    verdict = " ".join(SHIP.ci_verdict())
+
+    assert "빨강" in verdict
+    assert "ci" in verdict
+    assert "proposal" not in verdict, "같은 커밋의 초록까지 빨갛다고 적지 않는다"
+
+
+def test_옛_커밋의_실패는_안_센다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**직전 커밋을 본다.** 지난 실패까지 세면 고친 뒤에도 계속 빨갛다고 한다."""
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    runs = [
+        {"conclusion": "success", "name": "ci", "headSha": "new"},
+        {"conclusion": "failure", "name": "ci", "headSha": "old"},
+    ]
+    monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
+
+    assert "초록" in " ".join(SHIP.ci_verdict())

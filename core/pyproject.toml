@@ -50,8 +50,9 @@ dev = [
   # 묶음에 넣어야 로컬과 CI가 같은 것을 본다.
   "shellcheck-py>=0.10",
 ]
-# 기획서 빌드 (D-0221). `make proposal`만 쓴다 — 검사와 시험은 이것 없이 돈다.
-# 시스템에 graphviz(`dot`)와 한글 글꼴이 더 필요하다.
+# 기획서 빌드 (D-0221). `make proposal`이 쓰고 **`test_bake_proposal`도 쓴다** —
+# *"검사와 시험은 이것 없이 돈다"*고 적어 뒀다가 D-0246이 그 말을 깼고, CI만
+# 빨개졌다 (D-0254). 시스템에 graphviz(`dot`)와 한글 글꼴이 더 필요하다.
 docs = [
   "matplotlib>=3.9",
   "python-docx>=1.1",

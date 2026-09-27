@@ -35,6 +35,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -125,6 +127,50 @@ def only_flags(raw: str) -> list[str]:
     return flags
 
 
+def ci_verdict() -> list[str]:
+    """`main`의 최근 워크플로 결론 (D-0254).
+
+    **빨간 CI를 아무도 안 보고 있었다.** D-0246이 `python-docx`를 시험에 끌어들인 뒤
+    CI가 계속 빨갰고, 로컬 `make check`는 초록이라 여덟 판을 그 위에 쌓았다.
+    내보내기 전에 **직전 커밋이 어떻게 됐는지** 여기서 말한다.
+
+    `gh`가 없거나 로그인 안 된 기기도 있다. **막지 않고 알리기만 한다** (D-0068).
+    없는 명령을 `_run`에 넘기면 `FileNotFoundError`로 배가 가라앉는다 — 실측으로 확인했다.
+    """
+    if shutil.which("gh") is None:
+        return [f"{DIM}못 읽었다 — `gh`가 없다{OFF}"]
+    code, text = _run(
+        "gh",
+        "run",
+        "list",
+        "--branch",
+        "main",
+        "--limit",
+        "6",
+        "--json",
+        "conclusion,name,headSha",
+    )
+    if code != 0 or not text.strip():
+        return [f"{DIM}못 읽었다 — `gh`가 없거나 로그인 안 됐다{OFF}"]
+    try:
+        runs = json.loads(text)
+    except json.JSONDecodeError:
+        return [f"{DIM}못 읽었다 — `gh` 출력이 JSON이 아니다{OFF}"]
+
+    newest = runs[0]["headSha"] if runs else ""
+    latest = [run for run in runs if run.get("headSha") == newest]
+    failed = [run for run in latest if run.get("conclusion") == "failure"]
+    if failed:
+        names = " · ".join(str(run.get("name", "?")) for run in failed)
+        return [
+            f"{RED}빨강{OFF}  {names}",
+            f"{DIM}      `gh run list` · 고치고 나서 다음 것을 쌓는다{OFF}",
+        ]
+    if any(run.get("conclusion") in (None, "") for run in latest):
+        return [f"{DIM}도는 중{OFF}"]
+    return [f"{GREEN}초록{OFF}  {len(latest)}개"]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="내보내도 되는가 (D-0147)")
     parser.add_argument("--push", action="store_true", help="통과하면 push하고 교두보로 보낸다")
@@ -155,6 +201,10 @@ def main() -> int:
     if not problems:
         ahead = _git("rev-list", "--count", "@{upstream}..HEAD")
         print(f"{GREEN}   통과{OFF}  미푸시 커밋 {ahead or '0'}개")
+
+    print(f"{DIM}── CI (직전 커밋){OFF}")
+    for line in ci_verdict():
+        print(f"   {line}")
 
     print(f"{DIM}── 위생 (세기만 한다){OFF}")
     # git 찌꺼기는 `tidy.py`가 센다. 규칙을 여기 다시 적지 않는다 (D-0225).

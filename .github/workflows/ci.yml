@@ -25,7 +25,9 @@ jobs:
           enable-cache: true
 
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: uv sync --all-extras --dev
+      # **로컬 `make sync`와 같은 것을 깐다** (D-0254). `--dev`만 깔았더니
+      # `python-docx`(docs 그룹)를 쓰는 D-0246의 시험 둘이 여기서만 죽었다.
+      - run: uv sync --all-extras --all-groups
 
       - name: Decision records
         working-directory: .

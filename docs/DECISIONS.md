@@ -19013,3 +19013,66 @@ D-0119의 판단은 옳았다 — 1.7GB · 17192개에서 O-37이 읽는 것은 
     cd core && uv run pytest tests/unit/test_ship.py -q
 
 강제자  `core/tests/unit/test_ship.py` · `core/tests/unit/test_plan_counts.py`
+
+---
+
+## D-0254. 로컬 초록이 CI 빨강이었다 — 여덟 판을 그 위에 쌓았다
+
+- **배경**: 사용자가 GitHub 화면을 보냈다. `ci` · `proposal` · `release` **셋 다 빨강**이다.
+
+      ModuleNotFoundError: No module named 'docx'
+      FAILED tests/unit/test_bake_proposal.py::test_목차_줄에_점선과_쪽을_붙인다
+      FAILED tests/unit/test_bake_proposal.py::test_목차_뒤가_끝나면_멈춘다
+
+  로컬 `make check`는 같은 시험을 **초록으로** 돌렸다. 깔린 것이 달랐다.
+
+| 자리 | 설치 |
+|---|---|
+| `make sync` | `uv sync --all-extras --all-groups` |
+| `ci.yml` | `uv sync --all-extras --dev` |
+
+### 선언이 거짓이 돼 있었다
+
+`pyproject.toml`의 `docs` 그룹에 이렇게 적혀 있다 — *"`make proposal`만 쓴다 —
+**검사와 시험은 이것 없이 돈다.**"* D-0246이 `test_bake_proposal`에 `python-docx`를
+끌어들이면서 **그 문장을 깼고, 아무도 그 줄을 안 고쳤다.**
+
+로컬은 `--all-groups`라 안 터졌다. **선언이 거짓인 것을 기계가 아니라 CI가 알렸고,
+그 CI를 아무도 안 봤다.**
+
+### 여덟 판을 빨간 CI 위에 쌓았다
+
+D-0246부터 오늘까지 여덟 개를 내보냈다. `make ship`은 `make check` · git · 위생 ·
+산출물을 보는데 **CI는 안 본다.** 내보내고 나면 결과가 어디에도 안 돌아왔다.
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) 그 시험 둘을 `importorskip`으로 건너뛴다 | **기각.** D-0246의 «붙이는 자리»가 CI에서 안 돈다. 건너뛴 시험 래칫도 둘 오른다 |
+  | (2) CI에 `--group docs`만 더한다 | **기각.** 다음 그룹에서 같은 일이 난다 |
+  | (3) **CI가 로컬과 같은 것을 깔고, 시험이 그것을 지킨다** | **채택** |
+
+- **선택**: (3). 셋을 한다.
+
+  1. `ci.yml`을 `uv sync --all-extras --all-groups`로. **로컬과 같다.**
+  2. `test_ci_parity`가 **설치 명령까지** 본다 — 지금까지 «호출하는 검사기»만 맞췄고
+     **깔리는 것은 안 봤다.** 같은 검사를 돌려도 깔린 것이 다르면 결과가 갈린다.
+  3. `make ship`이 **직전 커밋의 CI 결론**을 찍는다. 빨가면 내보내기 전에 말한다.
+
+  `gh`가 없는 기기도 있으므로 막지 않고 알리기만 한다 (D-0068). **없는 명령을
+  `_run`에 넘기면 `FileNotFoundError`로 배가 가라앉는 것을 실측으로 확인했고**
+  `shutil.which`로 먼저 본다.
+
+- **결과**: 시험 4건. 열린 질문은 그대로 36이다.
+
+### 남기는 것
+
+- **«이것 없이 돈다»는 선언은 그것을 쓰는 순간 거짓이 된다.** 그리고 거짓이 된 줄은
+  아무도 안 읽는다 — 기계가 읽게 만들어야 한다.
+- **로컬과 CI의 «같음»은 명령만으로는 부족하다.** D-0184·D-0219가 부르는 검사기를
+  맞췄고, **무엇이 깔리는지는 아무도 안 맞췄다.** 같은 명령이 다른 환경에서 다른 답을 낸다.
+- **내보낸 뒤를 안 보면 내보내기가 끝난 것이 아니다.** 여덟 판이 그렇게 쌓였다.
+
+재현
+    cd core && uv run pytest tests/unit/test_ci_parity.py tests/unit/test_ship.py -q
+
+강제자  `core/tests/unit/test_ci_parity.py` · `core/tests/unit/test_ship.py`
