@@ -105,11 +105,35 @@ def count_leftovers() -> list[str]:
     return found
 
 
+DEFAULT_ONLY = "keys,eval"
+"""교두보로 보내는 세트 (D-0253).
+
+D-0119가 `keys`만 보내게 했다 — 1.7GB · 17192개에서 O-37이 읽는 것이 `keys-*` 74MB뿐이고
+**DrvFs에서는 크기보다 개수가 아프다.** 옳은 판단이었는데 **`eval/`이 같이 빠졌다.**
+
+그 대가를 나중에 물었다. 광인사가 죽을 때(D-0122) 옛 평가 산출물이 함께 사라졌고,
+그래서 결정 기록 74건의 수치를 **다시 낼 명령을 찾을 수 없다** (D-0251 · D-0252).
+`eval/`은 열네 개 · 수십 KB다. **개수가 아픈 쪽이 아니었다.**"""
+
+
+def only_flags(raw: str) -> list[str]:
+    """`keys,eval` → `--only keys --only eval`. `sync_artifacts`는 여러 번 받는다."""
+    flags: list[str] = []
+    for part in raw.split(","):
+        if part.strip():
+            flags += ["--only", part.strip()]
+    return flags
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="내보내도 되는가 (D-0147)")
     parser.add_argument("--push", action="store_true", help="통과하면 push하고 교두보로 보낸다")
     parser.add_argument("--fix", action="store_true", help="바이트코드를 지운다")
-    parser.add_argument("--only", default="keys", help="교두보로 보낼 세트 (D-0119)")
+    parser.add_argument(
+        "--only",
+        default=DEFAULT_ONLY,
+        help=f"교두보로 보낼 세트. 쉼표로 여럿 (기본 {DEFAULT_ONLY}) (D-0119 · D-0253)",
+    )
     args = parser.parse_args()
 
     if args.fix:
@@ -160,7 +184,7 @@ def main() -> int:
     print(text.strip().splitlines()[-1] if text else "")
     if code != 0:
         return 1
-    code, text = _run("python3", "tools/sync_artifacts.py", "push", "--only", args.only)
+    code, text = _run("python3", "tools/sync_artifacts.py", "push", *only_flags(args.only))
     print(text.strip().splitlines()[-1] if text else "")
     if code != 0:
         # **교두보가 배를 가라앉히지 않는다** (D-0068 · D-0239). `git push`는 이미 끝났고,

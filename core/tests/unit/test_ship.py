@@ -145,6 +145,23 @@ def test_교두보가_배를_가라앉히지_않는다():
     밀려갔는지 모른 채 다시 친다. 실제로 `make ship`이 push 뒤에 역추적을 뿜고 죽었다.
     """
     source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
-    tail = source.split('"push", "--only"', 1)[1]
+    tail = source.split('sync_artifacts.py", "push"', 1)[1]
     assert "교두보로 못 보냈다" in tail
     assert "return code" not in tail, "교두보 실패가 종료 코드를 잡으면 배가 가라앉는다"
+
+
+def test_교두보로_평가_산출물도_보낸다() -> None:
+    """**`keys`만 보내다 74건을 잃었다** (D-0253).
+
+    D-0119가 개수를 줄이려 `keys`만 골랐고 `eval/`이 같이 빠졌다. 광인사가 죽을 때
+    (D-0122) 옛 평가 산출물이 함께 사라졌고, 그래서 그 수치를 낸 명령을 못 찾는다.
+    """
+    assert "eval" in SHIP.DEFAULT_ONLY.split(",")
+    assert "keys" in SHIP.DEFAULT_ONLY.split(",")
+
+
+def test_세트를_쉼표로_나눠_넘긴다() -> None:
+    """`sync_artifacts`는 `--only`를 여러 번 받는다. 한 덩이로 주면 아무것도 안 맞는다."""
+    assert SHIP.only_flags("keys,eval") == ["--only", "keys", "--only", "eval"]
+    assert SHIP.only_flags("keys") == ["--only", "keys"]
+    assert SHIP.only_flags("") == []
