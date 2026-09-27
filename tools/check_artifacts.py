@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""산출물 대장과 실물을 대조한다 (D-0266).
+
+### 왜 생겼나
+
+사용자가 `make ship`의 한 줄을 보고 물었다 — *"교두보에 1090개 이거 맞나? 1004개가
+아니라?"* **저장소가 그 질문에 답할 수 없었다.**
+
+- `sync_artifacts status`는 양쪽의 **차집합**을 찍는다. 양쪽이 똑같이 틀리면 초록이다.
+- `sync_artifacts verify`는 양쪽을 **서로** 비교한다. 같은 근거다.
+- `var_fsck`는 *"판정하지 않는다"*가 규약이다 (D-0203).
+
+**선언이 없으면 «맞나»는 물을 수 없는 질문이다.** 있는 것을 세는 것과 있어야 할 것과
+대조하는 것은 다르다.
+
+### 파이어레인에서 가져온다 — 이번에는 데이터 쪽을
+
+이 저장소는 파이어레인의 **문서** 규율을 열 군데 넘게 가져왔다(`doc_fsck` ·
+`deadcheck` · `encoding_check` · `check_doc_style` · `tidy` · 대장 생성). 그런데
+**데이터 규율은 한 줄도 안 가져왔다** — `regenerable` · 산출물 대장 · `feeds` ·
+`consumers`가 전부 0건이었다.
+
+D-0173이 *"「파이어레인처럼」이라고 적은 것은 전부 되받은 말이었고 본 적이 없었다"*고
+적은 그 일이 **데이터 쪽에서 되풀이됐다.**
+
+### 판정 넷 (파이어레인 `scan_data.py`)
+
+    대장에 있음 + 실물 있음  →  정상
+    대장에 있음 + 실물 없음  →  결손
+    대장에 없음 + 실물 있음  →  격리 대상
+    선언이 모자람            →  대장 결함
+
+### 두 모드로 갈라 둔다
+
+`--check`는 **대장 자신만** 본다 — 칸이 다 있는가, 만드는 코드가 실재하는가,
+재생성 불가인 계열이 교두보 의무를 지는가. 디스크를 안 읽으므로 CI에서 돈다.
+
+`--audit`은 **실물과 대조한다.** `var/`가 있는 기기에서만 뜻이 있고 `make hygiene`이
+부른다. **`var/`가 없으면 0건이 아니라 «못 쟀다»라고 말한다** — 파이어레인 `lakecheck`의
+규율이다 (*"프로브가 잴 수 없으면 0건이 아니라 빨간불이다"*).
+
+    python3 tools/check_artifacts.py --check
+    python3 tools/check_artifacts.py --audit
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+LEDGER = ROOT / "artifacts.toml"
+SUBTREE = Path("var") / "ingest"
+"""대장이 덮는 자리. `sync_artifacts.SUBTREE`와 같은 값이며 **거기가 정본이다.**"""
+
+REQUIRED = ("what", "made", "regen", "reads", "store")
+"""계열마다 있어야 하는 칸. **`reads`가 빠지면 남길 이유를 안 적은 것이다** (R4)."""
+
+CANNOT = "불가"
+"""`regen`이 이 값이면 다시 만들 수 없다 — 그때 `why`가 필수이고 `store`가 강제된다.
+
+**R2다.** `var/`는 전부 `.gitignore`에 있다. 다시 만들 수 있어서 제외하는 것이며,
+**못 만드는 것을 제외하면 그 파일은 사실상 소실된다.**"""
+
+STAMP = re.compile(r"\d{8}T\d{6}Z")
+"""실행 스탬프. 계열 이름의 `*`가 이것을 가린다 — `sync_artifacts.STAMP`와 같은 값이다."""
+
+QUARANTINE_CEILING = 0
+"""대장에 없는 계열의 천장 (D-0266). **0이다** — R3가 «없는 산출물»이라 부르는 것이다.
+
+늘리려면 결정 기록이 필요하다 (D-0118). 새 계열을 내면서 대장을 안 쓰는 길을 막는다."""
+
+
+def load() -> dict[str, dict[str, object]]:
+    """대장. **`tomllib`은 표준 라이브러리다** — 맨 `python3`으로 돈다 (D-0256)."""
+    with LEDGER.open("rb") as handle:
+        return dict(tomllib.load(handle).get("series", {}))
+
+
+def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
+    """대장 자신이 규약을 지키는가. **디스크를 안 읽는다.**"""
+    problems: list[str] = []
+    if not entries:
+        return ["대장이 비었다. `artifacts.toml`에 계열이 하나도 없다"]
+    for name, entry in sorted(entries.items()):
+        for field in REQUIRED:
+            if field not in entry:
+                problems.append(f"{name}에 `{field}` 칸이 없다")
+        made = entry.get("made")
+        if isinstance(made, str) and not (ROOT / made).exists():
+            problems.append(f"{name}의 `made`가 없는 파일을 가리킨다: {made}")
+        reads = entry.get("reads")
+        if isinstance(reads, list) and not reads:
+            problems.append(f"{name}의 `reads`가 비었다. 못 채우면 «미투입 — 언제 쓸지»를 적는다")
+        if entry.get("regen") == CANNOT:
+            if not entry.get("why"):
+                problems.append(f"{name}은 재생성 불가인데 `why`가 없다")
+            if entry.get("store") is not True:
+                problems.append(
+                    f"{name}은 재생성 불가인데 `store`가 참이 아니다. "
+                    "`var/`는 전부 ignore되므로 그대로면 소실된다 (R2)"
+                )
+    return problems
+
+
+def folded(base: Path) -> set[str]:
+    """`var/ingest` 바로 아래 이름을 계열로 접는다. **없으면 빈 집합이 아니라 호출자가 가른다.**"""
+    return {STAMP.sub("*", path.name) for path in base.iterdir()}
+
+
+def audit(entries: dict[str, dict[str, object]], base: Path) -> tuple[list[str], list[str], int]:
+    """`(결손, 격리 대상, 정상 수)`. **세기만 한다 — 아무것도 옮기거나 지우지 않는다.**"""
+    found = folded(base)
+    declared = set(entries)
+    missing = sorted(declared - found)
+    orphan = sorted(found - declared)
+    return missing, orphan, len(declared & found)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="산출물 대장 대조 (D-0266)")
+    parser.add_argument("--check", action="store_true", help="대장 자신만 본다. CI에서 돈다")
+    parser.add_argument("--audit", action="store_true", help="실물과 대조한다. `var/`가 필요하다")
+    parser.add_argument("--root", type=Path, default=ROOT / SUBTREE, help="대조할 산출물 루트")
+    args = parser.parse_args()
+
+    entries = load()
+    problems = check_ledger(entries)
+    if problems:
+        print(f"산출물 대장에 결함이 {len(problems)}건 있다.", file=sys.stderr)
+        for line in problems:
+            print(f"  - {line}", file=sys.stderr)
+        return 1
+
+    if not args.audit:
+        cannot = [name for name, entry in entries.items() if entry.get("regen") == CANNOT]
+        print(f"산출물 대장 검사 통과 · 계열 {len(entries)}개 · 재생성 불가 {len(cannot)}개")
+        return 0
+
+    if not args.root.is_dir():
+        # **못 쟀으면 못 쟀다고 말한다** — 0건으로 넘기지 않는다 (GR-0.5).
+        print(f"{args.root}가 없다. 산출물이 있는 기기에서 돌린다.", file=sys.stderr)
+        print("  교두보에서 가져오려면: make artifacts-pull", file=sys.stderr)
+        return 1
+
+    missing, orphan, normal = audit(entries, args.root)
+    print(f"{args.root} · 정상 {normal} · 결손 {len(missing)} · 격리 대상 {len(orphan)}")
+    for name in missing:
+        print(f"  결손    {name}  — 대장에 있는데 실물이 없다. {entries[name]['regen']}")
+    for name in orphan:
+        print(f"  격리    {name}  — 대장에 없는 계열이다. 쓰거나 치운다 (R3)", file=sys.stderr)
+    if len(orphan) > QUARANTINE_CEILING:
+        print(
+            f"\n대장에 없는 계열이 {len(orphan)}개로 천장 {QUARANTINE_CEILING}개를 넘는다.",
+            file=sys.stderr,
+        )
+        print("  **등록되지 않은 산출물은 없는 산출물이다** — 대장에 쓴다 (R3).", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

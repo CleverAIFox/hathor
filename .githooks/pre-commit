@@ -47,6 +47,7 @@ run "문서 레이아웃" python3 tools/check_doc_style.py --check
 run "망 접점"    python3 tools/check_egress.py --check
 run "금지"       python3 tools/check_forbidden.py --check
 run "compose"    python3 tools/check_compose.py --check
+run "산출물 대장" python3 tools/check_artifacts.py --check
 run "비밀정보"   python3 tools/check_secrets.py --check
 run "모델 라이선스" python3 tools/check_model_licenses.py --check
 run "기획서"    python3 tools/docx_check.py --check

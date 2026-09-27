@@ -53,6 +53,12 @@ jobs:
         working-directory: .
         run: python3 tools/check_compose.py --check
 
+      # D-0266. 대장 자신만 본다 — 디스크를 안 읽으므로 산출물이 없는 러너에서도 돈다.
+      # 실물 대조(`--audit`)는 `make hygiene`이 기기에서 부른다.
+      - name: Artifact ledger
+        working-directory: .
+        run: python3 tools/check_artifacts.py --check
+
       - name: Model licenses
         working-directory: .
         run: python3 tools/check_model_licenses.py --check

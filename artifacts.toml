@@ -1,0 +1,116 @@
+# ============================================================
+# artifacts.toml — 산출물 대장. **손대장은 이것 하나다** (D-0266)
+#
+# 파이어레인 `sources.yaml`의 규율을 산출물에 옮긴 것이다. 그쪽 그라운드 룰 셋이
+# 그대로 여기 적용된다.
+#
+#   R2. 재생성 가능성이 `.gitignore`의 근거다
+#       `var/`는 전부 ignore된다. 다시 만들 수 있어서 제외하는 것이며,
+#       **다시 만들 수 없는 것을 ignore하면 그 파일은 사실상 소실된다.**
+#       그래서 `regen = "불가"`인 계열은 `store = true`가 강제된다.
+#
+#   R3. 등록되지 않은 산출물은 없는 산출물이다
+#       여기 없는 계열이 `var/`에 있으면 **격리 대상**이다. 새 계열을 내기 전에
+#       대장부터 쓴다.
+#
+#   R4. `reads`를 못 채우면 남길 이유가 없다
+#       모든 계열은 «누가 읽나»를 든다. 못 채우면 `reads = ["미투입 — <언제 쓸지>"]`로
+#       명시하고 산다. **문제는 모은 데서 안 나오고 안 치운 데서 나온다.**
+#
+# 칸의 뜻
+#   what    무엇인가. 한 줄
+#   made    만드는 코드. 실재해야 한다 (검사가 대조한다)
+#   regen   다시 만드는 명령. 못 만들면 "불가"이고 그때는 why를 적는다
+#   reads   누가 읽나. 명령 이름 · 도구 · 결정 번호
+#   store   교두보(외장 SSD)에 있어야 하는가
+#
+# 수와 크기는 **여기 적지 않는다.** 적으면 낡는다 —
+# `python3 tools/check_artifacts.py --audit`이 그때그때 센다.
+# ============================================================
+
+[series."scan-*"]
+what = "라이브러리 스캔 — 곡마다 태그·스트림 속성 한 줄"
+made = "core/hathor/infrastructure/jsonl_scan_store.py"
+regen = "cd core && uv run python -m hathor.cli ingest scan"
+reads = ["ingest features", "ingest keys", "eval retrieval", "eval clap", "D-0010"]
+store = true
+
+[series."resolve-*"]
+what = "MusicBrainz 신원 확정 결과 — 아티스트·레코딩 MBID와 판정"
+made = "core/hathor/infrastructure/jsonl_resolution_store.py"
+regen = "cd core && uv run python -m hathor.cli ingest resolve"
+reads = ["probe_listenbrainz.py", "D-0019", "D-0216"]
+store = true
+
+[series."keys-*"]
+what = "코퍼스 조성 분포 — 곡마다 조성·크로마·도수 사전"
+made = "core/hathor/interfaces/cli/ingest_keys_bundles.py"
+regen = "cd core && uv run python -m hathor.cli ingest keys --from-bundles"
+reads = ["eval priors", "eval harmony-output", "eval order", "probe_latent.py", "D-0054"]
+store = true
+
+[series."keys-*.series"]
+what = "곡별 크로마 시계열 — 창 단위 (D-0105)"
+made = "core/hathor/infrastructure/chroma_series_store.py"
+regen = "cd core && uv run python -m hathor.cli ingest keys --from-bundles --series"
+reads = ["eval order", "eval time-drift", "D-0098"]
+store = true
+
+[series."keys-*.onsets"]
+what = "곡별 온셋 포락선과 대역 스펙트럼 (O-46 · D-0145)"
+made = "core/hathor/infrastructure/onset_store.py"
+regen = "cd core && uv run python -m hathor.cli ingest onsets"
+reads = ["eval priors --onsets", "D-0143", "D-0170"]
+store = true
+
+[series."mert-layers"]
+what = "MERT 층별 임베딩 — 취향 벡터의 정본 (D-0027 · D-0181)"
+made = "core/hathor/infrastructure/npz_feature_store.py"
+regen = "cd core && uv run python -m hathor.cli ingest features --layers"
+reads = ["eval retrieval", "eval fusion", "probe_latent.py", "D-0181"]
+store = true
+
+[series."baseline-mfcc"]
+what = "MFCC 베이스라인 특징 — MERT와 견주는 바닥선 (D-0181)"
+made = "core/hathor/infrastructure/npz_feature_store.py"
+regen = "cd core && uv run python -m hathor.cli eval mfcc"
+reads = ["eval retrieval", "D-0181"]
+store = true
+
+[series."clap"]
+what = "CLAP 임베딩 — 상업 가능한 취향 축 (O-68 · D-0231)"
+made = "core/hathor/interfaces/cli/eval_clap.py"
+regen = "cd core && uv run python -m hathor.cli eval clap"
+reads = ["미투입 — O-68의 배치가 아직 안 돌았다 (D-0231)"]
+store = true
+
+[series."lyrics-hashed"]
+what = "가사 구간 임베딩 — 원문은 안 남기고 해시와 벡터만 (D-0046)"
+made = "core/hathor/infrastructure/hashed_lyrics_extractor.py"
+regen = "cd core && uv run python -m hathor.cli ingest lyrics"
+reads = ["eval retrieval --view lyrics", "D-0046"]
+store = true
+
+[series."audio"]
+what = "곡 묶음 — 스템·크로마·매니페스트를 한 파일에 (D-0203)"
+made = "core/hathor/infrastructure/track_bundle_store.py"
+regen = "cd core && uv run python -m hathor.cli ingest all"
+reads = ["ingest keys --from-bundles", "D-0203"]
+store = true
+
+[series."taste"]
+what = "취향 비교 라벨 — **사람이 답한 것이다** (D-0028)"
+made = "core/hathor/infrastructure/jsonl_preference_store.py"
+regen = "불가"
+why = """사람이 곡 쌍을 보고 답한 라벨이다. 명령으로 다시 만들 수 없고 다시 물으면
+같은 답이 안 나온다. **R2가 말하는 «ignore하면 소실되는 파일»이 바로 이것이다** —
+`var/`가 전부 ignore되므로 이 계열만 백업 의무가 다르다."""
+reads = ["engines/taste (미구현)", "D-0012", "D-0028"]
+store = true
+
+[series."eval"]
+what = "평가 리포트와 실행 기록 — 결정 기록의 «재현»이 가리키는 자리 (D-0250)"
+made = "core/hathor/infrastructure/json_evaluation_store.py"
+regen = "각 `eval` 명령을 다시 돌린다. 기록 자체는 실행의 부산물이다"
+reads = ["tools/repro_from_artifacts.py", "D-0250", "D-0251"]
+store = true

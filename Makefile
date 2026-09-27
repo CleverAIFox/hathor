@@ -1,4 +1,4 @@
-.PHONY: mutate up up-ml down logs ps mlflow-sync flow sync tidy hygiene gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
+.PHONY: artifacts-audit mutate up up-ml down logs ps mlflow-sync flow sync tidy hygiene gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -47,6 +47,7 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 	python3 tools/check_egress.py --check
 	python3 tools/check_forbidden.py --check
 	python3 tools/check_compose.py --check
+	python3 tools/check_artifacts.py --check
 	python3 tools/check_model_licenses.py --check
 	python3 tools/docx_check.py --check
 	python3 tools/doc_fsck.py --check
@@ -95,12 +96,17 @@ hygiene:       ## 위생 한 벌 — 기기(doctor) · 저장소(tidy) · 산출
 	@$(MAKE) --no-print-directory tidy $(if $(YES),YES=1,) $(if $(FIX),FIX=1,)
 	@echo
 	@python3 tools/var_fsck.py --ratchet
+	@echo
+	@python3 tools/check_artifacts.py --audit
 
 var-fsck:      ## 산출물이 무엇인지 찍는다. 판정하지 않는다 (D-0203)
 	python3 tools/var_fsck.py
 
 artifacts:     ## 교두보와 저장소에 무엇이 있는지 (D-0118)
 	python3 tools/sync_artifacts.py status
+
+artifacts-audit: ## 대장과 실물을 대조한다 — 결손 · 격리 대상 (D-0266)
+	python3 tools/check_artifacts.py --audit
 
 artifacts-verify: ## 교두보와 여기가 정말 같은가. FULL=1 이면 내용까지 (D-0242)
 	python3 tools/sync_artifacts.py verify $(if $(FULL),--full,)

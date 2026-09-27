@@ -278,10 +278,17 @@ def transfer(
 
 
 def status(local: Path, store: Path | None) -> int:
-    """양쪽에 무엇이 있는지. **비었다고 실패로 치지 않는다** (D-0119)."""
+    """양쪽에 무엇이 있는지. **비었다고 실패로 치지 않는다** (D-0119).
+
+    **세는 것은 파일이다 — 곡이 아니다** (D-0266). 사용자가 *"교두보에 1090개 이거 맞나?
+    1004개가 아니라?"*라고 물었다. 곡 하나가 npz·묶음·매니페스트 여럿을 낳고 스탬프가 붙은
+    jsonl도 섞이므로 두 수는 애초에 같은 것이 아니다. 그리고 **이 함수는 «맞나»에 답하지
+    않는다** — 양쪽의 차집합일 뿐이고, 양쪽이 똑같이 틀리면 조용하다. 있어야 할 것과
+    대조하는 것은 `check_artifacts --audit`이다.
+    """
     here = walk(local)
     print(f"저장소  {local}")
-    print(f"  {len(here)}개 · {human(sum(here.values()))}")
+    print(f"  파일 {len(here)}개 · {human(sum(here.values()))}")
 
     state, note = probe(store)
     print(f"\n교두보  {note}")
@@ -295,9 +302,11 @@ def status(local: Path, store: Path | None) -> int:
 
     assert store is not None
     there = walk(store / SUBTREE)
-    print(f"  {len(there)}개 · {human(sum(there.values()))}")
+    print(f"  파일 {len(there)}개 · {human(sum(there.values()))}")
     incoming, outgoing = set(there) - set(here), set(here) - set(there)
-    print(f"\n  교두보에만 {len(incoming)}개 · 여기에만 {len(outgoing)}개")
+    print(f"\n  교두보에만 파일 {len(incoming)}개 · 여기에만 파일 {len(outgoing)}개")
+    # **«맞나»는 여기서 답할 수 없다** (D-0266). 대장과 대조하는 자리를 가리킨다.
+    print("  있어야 할 계열과 대조하려면: make artifacts-audit")
     if incoming:
         print("  가져오려면: make artifacts-pull")
     if outgoing:
