@@ -49,7 +49,9 @@ import argparse
 import re
 import sys
 import tomllib
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parent.parent
 LEDGER = ROOT / "artifacts.toml"
@@ -59,7 +61,10 @@ SUBTREE = Path("var") / "ingest"
 REQUIRED = ("what", "made", "regen", "reads", "store", "state")
 """계열마다 있어야 하는 칸. **`reads`가 빠지면 남길 이유를 안 적은 것이다** (R4)."""
 
-STATES = ("있음", "미생성", "폐기")
+UNMADE = "미생성"
+"""아직 한 번도 안 만들었다. **실물이 없는 것이 정상이다.**"""
+
+STATES = ("있음", UNMADE, "폐기")
 """계열의 상태 (D-0266). 파이어레인 `lakecheck` L1 — *"reserved인데 파일이 있나 ·
 active인데 0건인가"* — 와 같은 자리다.
 
@@ -105,6 +110,8 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
     if not entries:
         return ["대장이 비었다. `artifacts.toml`에 계열이 하나도 없다"]
     for name, entry in sorted(entries.items()):
+        if any(isinstance(value, str) and value.startswith(TODO) for value in entry.values()):
+            problems.append(f"{name}에 `{TODO}`가 남았다. **붙여 넣고 잊을 수 없다** (D-0268)")
         for field in REQUIRED:
             if field not in entry:
                 problems.append(f"{name}에 `{field}` 칸이 없다")
@@ -130,6 +137,50 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
     return problems
 
 
+TODO = "TODO"
+"""등재 자리를 찍어 줄 때 심는 표식. **`--check`가 거부한다** (D-0268).
+
+붙여 넣고 잊는 길을 막는다 — 그 길이 열려 있으면 대장은 이름만 있는 목록이 된다."""
+
+
+def measure(base: Path, name: str) -> str:
+    """정체를 가릴 재료 — **파일 수 · 크기 · 가장 최근 시각** (D-0268).
+
+    이름만으로는 «옛 이름 체계의 잔재»와 «어제 만든 것»을 못 가른다. 사람이 그것을
+    가르려고 매번 `du`·`ls -lt`를 치게 만들면 **대장을 안 쓰는 쪽이 싸진다.**
+
+    작성자가 세 판 연속으로 정체를 **추론**했고 세 번 다 틀렸다. 추론을 못 하게 하려면
+    추론할 필요가 없게 만들어야 한다.
+    """
+    target = base / name
+    paths = [item for item in target.rglob("*") if item.is_file()] if target.is_dir() else [target]
+    alive = [item for item in paths if item.exists()]
+    if not alive:
+        return "빈 것"
+    total = sum(item.stat().st_size for item in alive)
+    newest = max(item.stat().st_mtime for item in alive)
+    when = datetime.fromtimestamp(newest, tz=UTC).strftime("%Y-%m-%d")
+    unit = total / 1024**2
+    size = f"{unit:.1f}MB" if unit < 1024 else f"{unit / 1024:.1f}GB"
+    return f"파일 {len(alive)}개 · {size} · 최근 {when}"
+
+
+def skeleton(name: str, detail: str) -> str:
+    """등재할 자리를 찍어 준다 (D-0268)."""
+    return "\n".join(
+        (
+            f'[series."{name}"]',
+            f'what = "{TODO} — 무엇인가. {detail}"',
+            f'made = "{TODO} — 만드는 코드 경로. 없으면 폐기인지 본다"',
+            f'regen = "{TODO} — 다시 만드는 명령. 못 만들면 «불가» 또는 «폐기»"',
+            f'reads = ["{TODO} — 누가 읽나. 없으면 «미투입 — 언제 쓸지»"]',
+            "store = true",
+            'state = "있음"',
+            "",
+        )
+    )
+
+
 def folded(base: Path) -> set[str]:
     """`var/ingest` 바로 아래 이름을 계열로 접는다. **없으면 빈 집합이 아니라 호출자가 가른다.**"""
     return {STAMP.sub("*", path.name) for path in base.iterdir()}
@@ -150,10 +201,24 @@ def store_side() -> Path | None:
     return side if side.is_dir() else None
 
 
-def audit(
-    entries: dict[str, dict[str, object]], base: Path, store: Path | None = None
-) -> tuple[list[str], list[str], int]:
-    """`(결손, 격리 대상, 정상 수)`. **세기만 한다 — 아무것도 옮기거나 지우지 않는다.**
+class Verdict(NamedTuple):
+    """판정 넷을 **따로** 든다 (D-0268).
+
+    첫 판은 «선언이 낡았다»를 격리 목록에 섞었다. 그러면 `--suggest`가 **이미 선언된
+    계열의 등재 자리를 또 찍어** 키가 겹친다. 문구가 다르면 자리도 달라야 한다.
+    """
+
+    missing: list[str]
+    """결손 — 대장에 있는데 어디에도 없다."""
+    orphan: list[str]
+    """격리 대상 — 대장에 없는 계열. **등재할 것이다.**"""
+    stale: list[str]
+    """선언이 낡았다 — `미생성`이라 적혀 있는데 실물이 있다. **고칠 것은 선언이다.**"""
+    normal: int
+
+
+def audit(entries: dict[str, dict[str, object]], base: Path, store: Path | None = None) -> Verdict:
+    """**세기만 한다 — 아무것도 옮기거나 지우지 않는다.**
 
     **양쪽을 본다** (D-0266). 로컬은 부분 사본이어도 된다 — `make artifacts-pull`의 기본이
     `keys,eval`뿐이다 (`ship.DEFAULT_ONLY`). 한쪽만 보면 **정상을 결손으로 찍고**, 그런
@@ -163,20 +228,23 @@ def audit(
     """
     found = folded(base) | (folded(store) if store is not None else set())
     declared = set(entries)
-    missing = sorted(
-        name for name in declared - found if entries[name].get("state") not in ("미생성", RETIRED)
+    return Verdict(
+        missing=sorted(
+            name for name in declared - found if entries[name].get("state") not in (UNMADE, RETIRED)
+        ),
+        orphan=sorted(found - declared),
+        stale=sorted(name for name in declared & found if entries[name].get("state") == UNMADE),
+        normal=len(declared & found),
     )
-    stale = sorted(name for name in declared & found if entries[name].get("state") == "미생성")
-    orphan = sorted(found - declared) + [
-        f"{name} (선언은 «미생성»인데 실물이 있다)" for name in stale
-    ]
-    return missing, sorted(orphan), len(declared & found)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="산출물 대장 대조 (D-0266)")
     parser.add_argument("--check", action="store_true", help="대장 자신만 본다. CI에서 돈다")
     parser.add_argument("--audit", action="store_true", help="실물과 대조한다. `var/`가 필요하다")
+    parser.add_argument(
+        "--suggest", action="store_true", help="미등재 계열의 등재 자리를 찍는다 (붙여 넣을 것)"
+    )
     parser.add_argument("--root", type=Path, default=ROOT / SUBTREE, help="대조할 산출물 루트")
     args = parser.parse_args()
 
@@ -200,19 +268,46 @@ def main() -> int:
         print("  교두보에서 가져오려면: make artifacts-pull", file=sys.stderr)
         return 1
 
-    missing, orphan, normal = audit(entries, args.root, store)
+    seen = audit(entries, args.root, store)
     where = f"{args.root}" + (f" + 교두보 {store}" if store else " (교두보 안 붙었다)")
-    print(f"{where}\n  정상 {normal} · 결손 {len(missing)} · 격리 대상 {len(orphan)}")
-    for name in missing:
+    print(
+        f"{where}\n  정상 {seen.normal} · 결손 {len(seen.missing)} · "
+        f"격리 대상 {len(seen.orphan)} · 낡은 선언 {len(seen.stale)}"
+    )
+    for name in seen.missing:
         print(f"  결손    {name}  — 어디에도 없다. {entries[name]['regen']}")
-    for name in orphan:
-        print(f"  격리    {name}  — 대장에 없는 계열이다. 쓰거나 치운다 (R3)", file=sys.stderr)
-    if len(orphan) > QUARANTINE_CEILING:
+    sides = [side for side in (args.root, store) if side is not None and side.is_dir()]
+
+    def detail_of(name: str) -> str:
+        plain = name.split(" (", 1)[0]
+        return next((measure(side, plain) for side in sides if (side / plain).exists()), "못 쟀다")
+
+    for name in seen.orphan:
+        print(f"  격리    {name}\n            {detail_of(name)}", file=sys.stderr)
+    for name in seen.stale:
         print(
-            f"\n대장에 없는 계열이 {len(orphan)}개로 천장 {QUARANTINE_CEILING}개를 넘는다.",
+            f"  낡음    {name}  — 선언은 «{UNMADE}»인데 실물이 있다. **선언을 고친다**\n"
+            f"            {detail_of(name)}",
             file=sys.stderr,
         )
-        print("  **등록되지 않은 산출물은 없는 산출물이다** — 대장에 쓴다 (R3).", file=sys.stderr)
+    if seen.orphan and args.suggest:
+        print("\n  ── 아래를 `artifacts.toml`에 붙이고 TODO를 채운다 ──\n")
+        for name in seen.orphan:
+            print(skeleton(name, detail_of(name)))
+    if len(seen.orphan) > QUARANTINE_CEILING or seen.stale:
+        if seen.orphan:
+            print(
+                f"\n대장에 없는 계열이 {len(seen.orphan)}개로 천장 "
+                f"{QUARANTINE_CEILING}개를 넘는다.",
+                file=sys.stderr,
+            )
+            print(
+                "  **등록되지 않은 산출물은 없는 산출물이다** — 대장에 쓴다 (R3).", file=sys.stderr
+            )
+            print(
+                "  등재 자리를 찍으려면: python3 tools/check_artifacts.py --audit --suggest",
+                file=sys.stderr,
+            )
         return 1
     return 0
 

@@ -117,11 +117,11 @@ def test_대장에_없는_계열을_격리로_판정한다(tmp_path: Path) -> No
         "없는것": {"state": "있음"},
     }
 
-    missing, orphan, normal = LEDGER.audit(entries, tmp_path)
+    seen = LEDGER.audit(entries, tmp_path)
 
-    assert normal == 1
-    assert missing == ["없는것"]
-    assert orphan == ["낯선계열"]
+    assert seen.normal == 1
+    assert seen.missing == ["없는것"]
+    assert seen.orphan == ["낯선계열"]
     assert LEDGER.QUARANTINE_CEILING == 0
 
 
@@ -184,18 +184,19 @@ def test_양쪽을_본다(tmp_path: Path) -> None:
     (store / "mert-layers").mkdir()
     entries: dict[str, dict[str, object]] = {"mert-layers": {"state": "있음"}}
 
-    assert LEDGER.audit(entries, local)[0] == ["mert-layers"], "한쪽만 보면 결손이다"
-    assert LEDGER.audit(entries, local, store)[0] == [], "양쪽을 보면 정상이다"
+    assert LEDGER.audit(entries, local).missing == ["mert-layers"], "한쪽만 보면 결손이다"
+    assert LEDGER.audit(entries, local, store).missing == [], "양쪽을 보면 정상이다"
 
 
 def test_미생성은_결손이_아니다(tmp_path: Path) -> None:
     """`taste`는 취향 라벨이고 **아직 하나도 안 모았다** (D-0028)."""
     entries: dict[str, dict[str, object]] = {"taste": {"state": "미생성"}}
 
-    missing, orphan, _ = LEDGER.audit(entries, tmp_path)
+    seen = LEDGER.audit(entries, tmp_path)
 
-    assert missing == []
-    assert orphan == []
+    assert seen.missing == []
+    assert seen.orphan == []
+    assert seen.stale == []
 
 
 def test_미생성인데_실물이_있으면_선언이_낡았다(tmp_path: Path) -> None:
@@ -206,7 +207,10 @@ def test_미생성인데_실물이_있으면_선언이_낡았다(tmp_path: Path)
     (tmp_path / "taste").mkdir()
     entries: dict[str, dict[str, object]] = {"taste": {"state": "미생성"}}
 
-    assert [line for line in LEDGER.audit(entries, tmp_path)[1] if "미생성" in line]
+    seen = LEDGER.audit(entries, tmp_path)
+
+    assert seen.stale == ["taste"], "낡은 선언은 격리와 다른 자리에 든다 (D-0268)"
+    assert seen.orphan == [], "**이미 선언된 것을 또 등재하라고 하면 키가 겹친다**"
 
 
 def test_폐기는_왜_지웠는지를_든다() -> None:
@@ -233,3 +237,49 @@ def test_교두보_경로_파서가_하나다() -> None:
 
     assert "sync_artifacts.store_root()" in source
     assert "HATHOR_ARTIFACT_STORE" not in source, "환경변수를 직접 읽으면 파서가 둘이 된다"
+
+
+# ------------------------------------------- 추론을 못 하게 만든다 (D-0268)
+
+
+def test_미등재_계열의_정체를_재_준다(tmp_path: Path) -> None:
+    """**이름만으로는 옛 잔재와 어제 만든 것을 못 가른다** (D-0268).
+
+    작성자가 세 판 연속으로 정체를 추론했고 세 번 다 틀렸다. 추론을 못 하게 하려면
+    **추론할 필요가 없게** 만들어야 한다 — 파일 수 · 크기 · 최근 시각을 같이 찍는다.
+    """
+    (tmp_path / "낯선것").mkdir()
+    (tmp_path / "낯선것" / "a.npz").write_bytes(b"x" * 2048)
+
+    detail = LEDGER.measure(tmp_path, "낯선것")
+
+    assert "파일 1개" in detail
+    assert "최근 20" in detail
+
+
+def test_빈_것과_있는_것을_가른다(tmp_path: Path) -> None:
+    """`taste`가 **빈 폴더인지 라벨이 든 폴더인지**가 백업 의무를 가른다."""
+    (tmp_path / "빈폴더").mkdir()
+
+    assert LEDGER.measure(tmp_path, "빈폴더") == "빈 것"
+
+
+def test_등재_자리를_찍어_준다() -> None:
+    """붙여 넣을 수 있는 TOML이어야 한다 — 손으로 다시 치면 또 틀린다."""
+    import tomllib
+
+    block = LEDGER.skeleton("낯선것", "파일 3개 · 1.0MB · 최근 2026-09-27")
+    parsed = tomllib.loads(block)["series"]["낯선것"]
+
+    assert set(parsed) >= set(LEDGER.REQUIRED)
+    assert parsed["what"].startswith(LEDGER.TODO)
+
+
+def test_TODO가_남으면_거부한다() -> None:
+    """**붙여 넣고 잊을 수 없다** (D-0268). 그 길이 열려 있으면 대장은 이름만 남는다."""
+    import tomllib
+
+    pasted = tomllib.loads(LEDGER.skeleton("낯선것", "파일 3개"))["series"]
+    problems = LEDGER.check_ledger(pasted)
+
+    assert [line for line in problems if LEDGER.TODO in line]

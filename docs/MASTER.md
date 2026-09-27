@@ -2333,6 +2333,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0265 | 기록에 「자료」 칸을 만든다 | `tools/check_decisions.py (check_evidence)` | 실물 저장소 |
 | D-0266 | 산출물 대장을 만든다 | `tools/check_artifacts.py` | 실물 저장소 |
 | D-0267 | 대장이 첫 실행에 틀렸다 | `tools/check_artifacts.py` | 실물 교두보 |
+| D-0268 | 세 판 연속 정체를 추론했다 | `tools/check_artifacts.py` | 실물 교두보 |
 
 <!-- decision-ledger:end -->
 
