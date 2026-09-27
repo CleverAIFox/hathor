@@ -81,6 +81,25 @@ def test_배경이_없는_기록을_잡는다():
     assert problems and "D-9999" in problems[0]
 
 
+def _record(number: int, repro: str) -> str:
+    """**`재현` 칸은 줄이 그 낱말로 시작해야 한다** (D-0136). «불명»은 한 줄이다."""
+    return f"## D-{number:04d}. 제목\n\n- **배경**: 있다.\n\n{repro}\n\n강제자 없음 — 사유: 없다\n"
+
+
+def test_경계_뒤의_재현_불명을_잡는다():
+    """**D-0250의 강제자.** 평가가 찍은 것을 남기므로 «모른다»고 적을 이유가 없다."""
+    after = CHECKER.UNKNOWN_UNTIL + 1
+    problems = CHECKER.check_records("d.md", _record(after, "재현 불명 — 못 찾았다"))
+
+    assert problems and "«불명»" in problems[0]
+
+
+def test_경계_앞의_재현_불명은_통과한다():
+    """**과거 74건은 소급하지 않는다** — 산출물이 없으니 추측해야 하고, 그것은 빈칸보다 나쁘다."""
+    last = _record(CHECKER.UNKNOWN_UNTIL, "재현 불명 — 못 찾았다")
+    assert CHECKER.check_records("d.md", last) == []
+
+
 # ------------------------------------------------------------------ 안 잡는다
 
 

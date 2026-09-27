@@ -72,12 +72,14 @@ from hathor.interfaces.cli import ingest_keys_bundles
 from hathor.interfaces.cli.doctor import run_doctor
 from hathor.interfaces.cli.eval_clap import add_parser as add_clap_parser
 from hathor.interfaces.cli.eval_clap import run as run_eval_clap
+from hathor.interfaces.cli.eval_log import recorded
 from hathor.interfaces.cli.eval_order import run_eval_harmony_order
 from hathor.interfaces.cli.eval_output import report_harmonic_sweep, run_eval_harmony_output
 from hathor.interfaces.cli.eval_vocabulary import (
     run_eval_chromatic_origin,
     run_eval_degree_restriction,
 )
+from hathor.interfaces.cli.extraction import drive_extraction
 from hathor.interfaces.cli.feature_sources import (
     namespaced,
     open_feature_source,
@@ -95,9 +97,7 @@ from hathor.shared.config.paths import (
 )
 
 if TYPE_CHECKING:
-    from hathor.domain.entities.scanned_track import ScannedTrack
     from hathor.domain.entities.track_tags import TrackTags
-    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
 DEFAULT_LIBRARY_ROOT_ENV = LIBRARY_ROOT_ENV
 
@@ -764,27 +764,11 @@ def main(argv: list[str] | None = None) -> int:
             return _run_taste_status(args)
         return _run_taste_compare(args)
     if args.command == "eval":
-        if args.eval_command == "mfcc":
-            return _run_eval_mfcc(args)
-        if args.eval_command == "layers":
-            return _run_eval_layers(args)
-        if args.eval_command == "clap":
-            return run_eval_clap(args, _resolve_root(args.root))
-        if args.eval_command == "fusion":
-            return _run_eval_fusion(args)
-        if args.eval_command == "harmony-prior":
-            return _run_eval_harmony_prior(args)
-        if args.eval_command == "harmony-output":
-            return run_eval_harmony_output(args)
-        if args.eval_command == "degree-restriction":
-            return run_eval_degree_restriction(args)
-        if args.eval_command == "chromatic-origin":
-            return run_eval_chromatic_origin(args)
-        if args.eval_command == "time-drift":
-            return _run_eval_time_drift(args)
-        if args.eval_command == "harmony-order":
-            return run_eval_harmony_order(args)
-        return _run_eval_retrieval(args)
+        # **찍은 것을 남긴다** (D-0250). 감싸는 자리가 하나이므로 하위 명령을 새로
+        # 더해도 저절로 기록된다 — 여기 안 적어서 조용히 사라지는 일이 없다.
+        label = getattr(args, "eval_command", None) or "retrieval"
+        with recorded(_eval_log_root(args), label):
+            return _dispatch_eval(args)
     if args.command == "ingest":
         # **떨어지는 기본이 `scan`이다.** 새 하위 명령을 여기 안 적으면 조용히
         # 스캔이 돌고, 스캔에만 있는 인자를 찾다 `AttributeError`로 죽는다 —
@@ -1916,46 +1900,7 @@ def _extract_features_locked(args: argparse.Namespace) -> int:
         MertFeatureExtractor(),
         _resolve_root(args.root),
     )
-    return _drive_extraction(use_case, store, tracks, seconds_per_track=18.0)
-
-
-def _drive_extraction(
-    use_case: ExtractFeatures | ExtractLayerFeatures,
-    store: NpzFeatureStore,
-    tracks: list[ScannedTrack],
-    *,
-    seconds_per_track: float,
-) -> int:
-    """추출을 돌리며 곡 단위로 저장하고 요약을 남긴다.
-
-    MERT 경로와 MFCC 베이스라인 경로가 같은 루프를 쓴다. 진행 출력·실패
-    처리·요약 형식이 갈라지면 두 산출물을 나란히 놓고 비교할 수 없다.
-    """
-    print(f"대상 {len(tracks)}곡, 예상 {len(tracks) * seconds_per_track / 60:.1f}분", flush=True)
-
-    started = time.monotonic()
-    for index, features in enumerate(use_case.run(tracks), 1):
-        store.write_track(features)
-        elapsed = time.monotonic() - started
-        print(
-            f"  {index:>4}/{len(tracks)} {features.chunk_count:>3}청크 "
-            f"{elapsed / index:5.1f}초/곡 {features.source_key}",
-            flush=True,
-        )
-
-    summary_path = store.write_summary(
-        {
-            "processed": use_case.processed,
-            "failed": len(use_case.failed),
-            "failures": [{"source_key": key, "reason": reason} for key, reason in use_case.failed],
-        }
-    )
-    print()
-    print(f"성공 {use_case.processed}곡, 실패 {len(use_case.failed)}곡")
-    for key, reason in use_case.failed:
-        print(f"  실패 {key}: {reason}", file=sys.stderr)
-    print(f"요약: {summary_path}")
-    return 0
+    return drive_extraction(use_case, store, tracks, seconds_per_track=18.0)
 
 
 def _run_ingest_compact(args: argparse.Namespace) -> int:
@@ -2011,6 +1956,37 @@ def _default_label(view: ViewSpec, split: SplitSpec | None = None) -> str:
     if split is not None and split.mode is not SplitMode.ODD_EVEN:
         parts.append(f"{split.mode.value}{split.ratio:g}x{split.repeats}")
     return "-".join(parts)
+
+
+def _eval_log_root(args: argparse.Namespace) -> Path:
+    """평가 기록을 둘 곳. `--out`이 있으면 그 옆이고, 없으면 기본 산출물 루트다."""
+    out = getattr(args, "out", None)
+    return Path(out) if out is not None else resolve_path(DEFAULT_OUTPUT_ROOT)
+
+
+def _dispatch_eval(args: argparse.Namespace) -> int:
+    """`eval` 하위 명령을 고른다. **떨어지는 기본이 `retrieval`이다.**"""
+    if args.eval_command == "mfcc":
+        return _run_eval_mfcc(args)
+    if args.eval_command == "layers":
+        return _run_eval_layers(args)
+    if args.eval_command == "clap":
+        return run_eval_clap(args, _resolve_root(args.root))
+    if args.eval_command == "fusion":
+        return _run_eval_fusion(args)
+    if args.eval_command == "harmony-prior":
+        return _run_eval_harmony_prior(args)
+    if args.eval_command == "harmony-output":
+        return run_eval_harmony_output(args)
+    if args.eval_command == "degree-restriction":
+        return run_eval_degree_restriction(args)
+    if args.eval_command == "chromatic-origin":
+        return run_eval_chromatic_origin(args)
+    if args.eval_command == "time-drift":
+        return _run_eval_time_drift(args)
+    if args.eval_command == "harmony-order":
+        return run_eval_harmony_order(args)
+    return _run_eval_retrieval(args)
 
 
 def _run_eval_retrieval(args: argparse.Namespace) -> int:
@@ -2244,7 +2220,7 @@ def _run_eval_mfcc(args: argparse.Namespace) -> int:
                 MfccFeatureExtractor(),
                 _resolve_root(args.root),
             )
-            return _drive_extraction(use_case, store, tracks, seconds_per_track=2.0)
+            return drive_extraction(use_case, store, tracks, seconds_per_track=2.0)
     except BatchAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return 3
@@ -2306,7 +2282,7 @@ def _run_eval_layers(args: argparse.Namespace) -> int:
                 extractor,
                 _resolve_root(args.root),
             )
-            return _drive_extraction(use_case, store, tracks, seconds_per_track=4.0)
+            return drive_extraction(use_case, store, tracks, seconds_per_track=4.0)
     except BatchAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return 3

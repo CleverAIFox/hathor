@@ -67,7 +67,8 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
 
     # 진행 출력 · 실패 처리 · 요약을 여기서 다시 짜지 않는다. 형식이 갈리면 두 산출물을
     # 나란히 못 놓는다 — 그것이 이 명령의 목적이다.
-    from hathor.interfaces.cli.main import _drive_extraction
+    # **예전에는 `main`에서 가져왔다** — `main`이 이 모듈을 부르므로 서로를 보고 있었다 (D-0250).
+    from hathor.interfaces.cli.extraction import drive_extraction
 
     tracks = list(JsonlScanStore(Path(args.out)).read_tracks())
     if not tracks:
@@ -107,7 +108,7 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
             extractor = ClapFeatureExtractor()
             print(f"CLAP {extractor.dimension}차원 · mixture 하나로 저장", flush=True)
             use_case = ExtractLayerFeatures(FfmpegAudioDecoder(), extractor, library_root)
-            return _drive_extraction(use_case, store, tracks, seconds_per_track=SECONDS_PER_TRACK)
+            return drive_extraction(use_case, store, tracks, seconds_per_track=SECONDS_PER_TRACK)
     except BatchAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return 3

@@ -273,6 +273,12 @@ def check_records(name: str, text: str) -> list[str]:
                 f"{name}: {number}에 `재현` 기술이 없다. "
                 "명령을 들여쓴 블록으로 적거나 `재현 없음 — 사유: …`"
             )
+        if int(number[2:]) > UNKNOWN_UNTIL and "불명" in _field(body, "재현"):
+            problems.append(
+                f"{name}: {number}의 `재현`이 «불명»이다. "
+                f"D-{UNKNOWN_UNTIL + 1:04d}부터는 못 쓴다 (D-0250) — "
+                "평가는 찍은 것을 남기므로 그 산출물을 내는 명령을 적는다"
+            )
         for raw in ENFORCER_PATH.findall(_field(body, "강제자")):
             if not (ROOT / raw).exists():
                 problems.append(
@@ -280,6 +286,21 @@ def check_records(name: str, text: str) -> list[str]:
                 )
     return problems
 
+
+UNKNOWN_UNTIL = 249
+"""«재현 불명»을 마지막으로 허용하는 결정 번호 (D-0250).
+
+**74건이 쌓인 이유는 명령을 잊은 것이 아니었다** — 평가 명령 넷이 표를 화면에만 찍고
+아무것도 남기지 않아서 **수치가 창과 함께 사라졌다.** `eval_log.recorded`가 그 구멍을
+막았으므로 이제 «모른다»고 적을 이유가 없다.
+
+**과거 74건은 소급하지 않는다.** 산출물이 없으니 명령을 추측해야 하고, 지어낸 명령은
+빈칸보다 나쁘다 (GR-0.5). 그리고 **그 수치들이 딛고 있던 질문은 열둘 다 닫혔다** —
+다시 낼 일이 없는 수치다.
+
+**천장이 아니라 경계다.** D-0117 계열의 래칫은 «수»를 박고 그 수는 세는 자리가 또
+필요하다. 번호로 자르면 **새 기록이 이 값을 건드리지 않고는 «불명»을 쓸 수 없고**,
+건드리면 결정 기록이 남는다 — `ENFORCER_FROM` · `REPRODUCE_FROM`이 쓰는 그 방식이다."""
 
 REPRODUCE_FROM = 1
 """`재현` 기술을 요구하는 첫 결정 번호 (D-0135 · D-0136).
