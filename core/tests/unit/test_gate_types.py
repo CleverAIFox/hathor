@@ -31,6 +31,7 @@ D-0257이 «관문 도구»라는 층에 처음 이름을 붙이면서 **«`mypy
 
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 import sys
@@ -102,3 +103,82 @@ def test_이름_하나에_뜻_둘을_잡는다(tmp_path: Path) -> None:
 
     assert done.returncode == 1, done.stdout + done.stderr
     assert "[assignment]" in done.stdout, done.stdout
+
+
+# ----------------------------------- 가짜가 제 포트를 닮았는가 (D-0271)
+
+PORT_METHODS = frozenset(
+    {
+        "decode",
+        "separate",
+        "extract",
+        "extract_layers",
+        "layers",
+        "track",
+        "scan",
+        "resolve_artist",
+        "resolve_recording",
+    }
+)
+"""포트가 요구하는 메서드 이름 (`hathor/domain/ports/`). 가짜가 이 이름을 쓰면 포트를
+대신하는 것이다.
+
+**전수를 손으로 적는다.** 포트에서 뽑아 쓰면 이름이 바뀔 때 그물이 조용히 따라가고
+«0건»이 거짓으로 참이 된다. 아래 시험이 실물 포트와 대조해 **적어 둔 이름이 실재하는지**를
+본다 — 첫 판에 `read_tracks`를 넣었다가 그 시험에 걸렸다(그것은 저장소 메서드다)."""
+
+UNTYPED_FAKES = 0
+"""주석이 빈 포트 가짜의 수. **0이다** (D-0271).
+
+`--allow-untyped-defs`가 `-> None` 1111개를 면제하는데 **그 면제가 가짜의 서명까지
+면제했다.** 주석이 없으면 인자와 반환이 `Any`이고 `Any`는 **어떤 규약에도 구조적으로
+맞는다** — `ExtractOnsets(decoder: AudioDecoder)`에 아무 반을 넣어도 조용했다.
+
+19개 중 16개가 그 상태였다. 늘리려면 결정 기록이 필요하다 (D-0118)."""
+
+
+def port_fakes() -> list[str]:
+    """포트를 흉내내면서 **주석이 빈** 가짜. 이름·자리와 함께 낸다."""
+    found: list[str] = []
+    for path in sorted((CORE / "tests").rglob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for member in node.body:
+                if not isinstance(member, ast.FunctionDef) or member.name not in PORT_METHODS:
+                    continue
+                args = member.args.args[1:] + member.args.kwonlyargs
+                if any(arg.annotation is None for arg in args) or member.returns is None:
+                    where = path.relative_to(CORE).as_posix()
+                    found.append(f"{where}:{member.lineno} {node.name}.{member.name}")
+    return found
+
+
+def test_포트_가짜가_주석을_갖는다() -> None:
+    """**D-0271의 강제자.** 주석이 있으면 `mypy`가 호출 자리에서 규약과 대조한다.
+
+    사용자가 물었다 — *"죄다 구라에 가짜에 Mock에."* 가짜 자체는 제약의 결과다(오디오는
+    기기를 못 떠나고 GPU가 없다 · D-0015 · D-0021). 문제는 **그 가짜가 실물 포트를 닮았는지
+    아무도 안 본 것**이었다.
+    """
+    assert port_fakes() == [], "주석이 빈 포트 가짜가 있다"
+
+
+def test_가짜가_실제로_세어진다() -> None:
+    """**세는 그물이 비었으면 «0건»이 거짓으로 참이 된다** (D-0230).
+
+    포트 메서드 이름이 바뀌면 이 그물이 조용히 빈다 — 그래서 **실물 포트와 대조한다.**
+    """
+    ports = (CORE / "hathor" / "domain" / "ports").rglob("*.py")
+    declared = {
+        member.name
+        for path in ports
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ClassDef)
+        for member in node.body
+        if isinstance(member, ast.FunctionDef) and not member.name.startswith("_")
+    }
+
+    assert declared >= PORT_METHODS, f"포트에 없는 이름을 센다: {PORT_METHODS - declared}"
+    assert UNTYPED_FAKES == 0

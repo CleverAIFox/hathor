@@ -18,6 +18,12 @@ from hathor.application.keys_from_bundles import (
     keys_from_bundle,
     replay_guard,
 )
+from hathor.domain.ports.audio_analysis import (
+    Embedding,
+    PitchTrack,
+    StereoWaveform,
+    Waveform,
+)
 from hathor.domain.services.key_estimation import (
     HARMONIC_STRENGTH,
     estimate_key,
@@ -107,21 +113,23 @@ def test_ingest_all이_크로마_조건을_manifest에_적는다(tmp_path: Path)
     from tests.conftest import scanned_track
 
     class Decoder:
-        def decode(self, path):
+        def decode(self, path: Path) -> StereoWaveform:
             return np.random.default_rng(1).standard_normal((2, 44100 * 3)).astype(np.float32)
 
     class Separator:
-        def separate(self, waveform):
+        def separate(self, waveform: StereoWaveform) -> dict[str, StereoWaveform]:
             return {name: waveform * 0.5 for name in ("bass", "drums", "other", "vocals")}
 
     class Extractor:
         layers = (3,)
 
-        def extract_layers(self, waveform):
+        def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]:
             return {"layer03": np.zeros((2, 8), dtype=np.float32)}
 
     class Pitch:
-        def track(self, waveform, *, sample_rate, fmin, fmax):
+        def track(
+            self, waveform: Waveform, *, sample_rate: int, fmin: float, fmax: float
+        ) -> PitchTrack:
             return np.zeros(4, dtype=np.float32)
 
     track = scanned_track("가.mp3", title="가", artist="누구", duration_ms=3000)

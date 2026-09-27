@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from hathor.application.extract_features import ExtractFeatures
+from hathor.domain.ports.audio_analysis import Embedding, StereoWaveform
 from tests.conftest import scanned_track
 
 
@@ -24,7 +25,7 @@ class FakeDecoder:
 
 
 class FakeSeparator:
-    def separate(self, waveform):
+    def separate(self, waveform: StereoWaveform) -> dict[str, StereoWaveform]:
         return {name: waveform for name in ("drums", "bass", "other", "vocals")}
 
 
@@ -32,7 +33,7 @@ class FakeExtractor:
     def __init__(self) -> None:
         self.calls = 0
 
-    def extract(self, waveform):
+    def extract(self, waveform: StereoWaveform) -> Embedding:
         self.calls += 1
         return np.full((3, 768), float(self.calls), dtype=np.float32)
 
@@ -92,7 +93,7 @@ class FakeLayeredExtractor:
         self._dim = dim
         self.calls = 0
 
-    def extract_layers(self, waveform):
+    def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]:
         import numpy as np
 
         self.calls += 1
@@ -107,7 +108,7 @@ class FakeLayeredExtractor:
 class BrokenLayeredExtractor:
     layers = ()
 
-    def extract_layers(self, waveform):
+    def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]:
         import numpy as np
 
         return {"layer00": np.zeros((1, 4), dtype=np.float32)}

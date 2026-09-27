@@ -15,6 +15,12 @@ from hathor.application.ingest_all import (
     IngestAll,
 )
 from hathor.domain.entities.scanned_track import ScannedTrack
+from hathor.domain.ports.audio_analysis import (
+    Embedding,
+    PitchTrack,
+    StereoWaveform,
+    Waveform,
+)
 from hathor.infrastructure.track_bundle_store import TrackBundleStore, bundle_name
 from tests.conftest import scanned_track
 
@@ -31,31 +37,33 @@ def _track(name: str) -> ScannedTrack:
 
 
 class FakeDecoder:
-    def decode(self, path):  # type: ignore[no-untyped-def]
+    def decode(self, path: Path) -> StereoWaveform:
         generator = np.random.default_rng(len(str(path)))
         return generator.standard_normal((2, 44100 * 3)).astype(np.float32) * 0.1
 
 
 class FakeSeparator:
-    def separate(self, waveform):  # type: ignore[no-untyped-def]
+    def separate(self, waveform: StereoWaveform) -> dict[str, StereoWaveform]:  # type: ignore[no-untyped-def]
         return {name: waveform * 0.5 for name in STEMS}
 
 
 class FakeExtractor:
     layers = LAYERS
 
-    def extract_layers(self, waveform):  # type: ignore[no-untyped-def]
+    def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]:  # type: ignore[no-untyped-def]
         keys = (MIXTURE, *(f"layer{index:02d}" for index in LAYERS))
         return dict.fromkeys(keys, np.zeros((4, 768), dtype=np.float32))
 
 
 class FakePitch:
-    def track(self, waveform, *, sample_rate, fmin, fmax):  # type: ignore[no-untyped-def]
+    def track(
+        self, waveform: Waveform, *, sample_rate: int, fmin: float, fmax: float
+    ) -> PitchTrack:
         return np.full(10, fmin * 2, dtype=np.float32)
 
 
 class BrokenDecoder:
-    def decode(self, path):  # type: ignore[no-untyped-def]
+    def decode(self, path: Path) -> StereoWaveform:
         raise RuntimeError("디코딩 실패")
 
 
@@ -79,7 +87,7 @@ def test_디코딩과_분리를_곡당_한_번만_한다(job: IngestAll) -> None
     calls: list[str] = []
 
     class Counting(FakeSeparator):
-        def separate(self, waveform):  # type: ignore[no-untyped-def]
+        def separate(self, waveform: StereoWaveform) -> dict[str, StereoWaveform]:  # type: ignore[no-untyped-def]
             calls.append("분리")
             return super().separate(waveform)
 

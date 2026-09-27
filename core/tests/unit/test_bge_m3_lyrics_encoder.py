@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from hathor.domain.ports.audio_analysis import Embedding
 from hathor.infrastructure.bge_m3_lyrics_encoder import (
     MAX_TOKENS,
     POOL_CLS,
@@ -228,7 +229,7 @@ def test_verify_deterministic_rejects_shape_change():
         def __init__(self) -> None:
             self.calls = 0
 
-        def extract(self, segments):
+        def extract(self, segments: list[str]) -> Embedding:
             self.calls += 1
             return np.zeros((self.calls, DIM), dtype=np.float32)
 

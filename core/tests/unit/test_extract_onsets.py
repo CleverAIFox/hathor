@@ -6,11 +6,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from hathor.application.extract_onsets import HOP_SECONDS, ExtractOnsets
-from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE
+from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE, StereoWaveform
 from hathor.infrastructure.onset_store import (
     envelope_path,
     find_envelope_root,
@@ -29,7 +31,7 @@ class Decoder:
         self.bpm, self.seconds, self.broken = bpm, seconds, broken or set()
         self.seen: list[str] = []
 
-    def decode(self, path):
+    def decode(self, path: Path) -> StereoWaveform:
         name = path.name
         self.seen.append(name)
         if name in self.broken:
