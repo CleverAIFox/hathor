@@ -56,8 +56,27 @@ LEDGER = ROOT / "artifacts.toml"
 SUBTREE = Path("var") / "ingest"
 """대장이 덮는 자리. `sync_artifacts.SUBTREE`와 같은 값이며 **거기가 정본이다.**"""
 
-REQUIRED = ("what", "made", "regen", "reads", "store")
+REQUIRED = ("what", "made", "regen", "reads", "store", "state")
 """계열마다 있어야 하는 칸. **`reads`가 빠지면 남길 이유를 안 적은 것이다** (R4)."""
+
+STATES = ("있음", "미생성", "폐기")
+"""계열의 상태 (D-0266). 파이어레인 `lakecheck` L1 — *"reserved인데 파일이 있나 ·
+active인데 0건인가"* — 와 같은 자리다.
+
+| 값 | 실물이 없으면 | 실물이 있으면 |
+|---|---|---|
+| `있음` | **결손이다** | 정상 |
+| `미생성` | 정상 — 아직 안 만들었다 | **선언이 낡았다** |
+| `폐기` | 정상 — 지워도 되는 것이었다 | 정상. 판정의 근거로 남긴다 |
+
+`미생성`을 빼면 `taste`(취향 라벨 0건 · D-0028)가 영원히 결손으로 뜬다. **정상을 빨갛게
+찍는 검사는 꺼진다** (D-0126 · D-0129에서 되풀이 확인한 것이다)."""
+
+RETIRED = "폐기"
+"""`regen`이 이것이면 **만드는 도구를 일부러 없앴다.** 파일은 판정의 근거로 남는다.
+
+D-0216이 `tools/probe_listenbrainz.py`를 지우면서 그 산출물 세 줄은 남겼다. 그 세 줄이
+D-0216의 «자료» 칸이 가리키는 실물이다 (D-0265) — 지우면 판정의 근거가 사라진다."""
 
 CANNOT = "불가"
 """`regen`이 이 값이면 다시 만들 수 없다 — 그때 `why`가 필수이고 `store`가 강제된다.
@@ -95,6 +114,11 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
         reads = entry.get("reads")
         if isinstance(reads, list) and not reads:
             problems.append(f"{name}의 `reads`가 비었다. 못 채우면 «미투입 — 언제 쓸지»를 적는다")
+        state = entry.get("state")
+        if state is not None and state not in STATES:
+            problems.append(f"{name}의 `state`가 규약 밖이다: {state!r} (쓸 수 있는 것: {STATES})")
+        if entry.get("regen") == RETIRED and not entry.get("why"):
+            problems.append(f"{name}은 폐기인데 `why`가 없다. **왜 지웠는지가 그 파일의 뜻이다**")
         if entry.get("regen") == CANNOT:
             if not entry.get("why"):
                 problems.append(f"{name}은 재생성 불가인데 `why`가 없다")
@@ -111,13 +135,42 @@ def folded(base: Path) -> set[str]:
     return {STAMP.sub("*", path.name) for path in base.iterdir()}
 
 
-def audit(entries: dict[str, dict[str, object]], base: Path) -> tuple[list[str], list[str], int]:
-    """`(결손, 격리 대상, 정상 수)`. **세기만 한다 — 아무것도 옮기거나 지우지 않는다.**"""
-    found = folded(base)
+def store_side() -> Path | None:
+    """교두보의 `var/ingest`. **경로 파서를 새로 쓰지 않는다** (D-0199).
+
+    `.env`를 읽는 파서가 둘이 되면 갈린다 — 그것이 D-0199가 고친 결함이다. 정본은
+    `sync_artifacts.store_root()` 하나이고 여기서는 불러 쓴다."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import sync_artifacts
+
+    root = sync_artifacts.store_root()
+    if root is None:
+        return None
+    side = root / SUBTREE
+    return side if side.is_dir() else None
+
+
+def audit(
+    entries: dict[str, dict[str, object]], base: Path, store: Path | None = None
+) -> tuple[list[str], list[str], int]:
+    """`(결손, 격리 대상, 정상 수)`. **세기만 한다 — 아무것도 옮기거나 지우지 않는다.**
+
+    **양쪽을 본다** (D-0266). 로컬은 부분 사본이어도 된다 — `make artifacts-pull`의 기본이
+    `keys,eval`뿐이다 (`ship.DEFAULT_ONLY`). 한쪽만 보면 **정상을 결손으로 찍고**, 그런
+    검사는 꺼진다. 어디에도 없을 때만 결손이다.
+
+    `state`가 `미생성`·`폐기`인 계열은 실물이 없어도 결손이 아니다.
+    """
+    found = folded(base) | (folded(store) if store is not None else set())
     declared = set(entries)
-    missing = sorted(declared - found)
-    orphan = sorted(found - declared)
-    return missing, orphan, len(declared & found)
+    missing = sorted(
+        name for name in declared - found if entries[name].get("state") not in ("미생성", RETIRED)
+    )
+    stale = sorted(name for name in declared & found if entries[name].get("state") == "미생성")
+    orphan = sorted(found - declared) + [
+        f"{name} (선언은 «미생성»인데 실물이 있다)" for name in stale
+    ]
+    return missing, sorted(orphan), len(declared & found)
 
 
 def main() -> int:
@@ -140,16 +193,18 @@ def main() -> int:
         print(f"산출물 대장 검사 통과 · 계열 {len(entries)}개 · 재생성 불가 {len(cannot)}개")
         return 0
 
-    if not args.root.is_dir():
+    store = store_side()
+    if not args.root.is_dir() and store is None:
         # **못 쟀으면 못 쟀다고 말한다** — 0건으로 넘기지 않는다 (GR-0.5).
-        print(f"{args.root}가 없다. 산출물이 있는 기기에서 돌린다.", file=sys.stderr)
+        print(f"{args.root}도 교두보도 없다. 산출물이 있는 기기에서 돌린다.", file=sys.stderr)
         print("  교두보에서 가져오려면: make artifacts-pull", file=sys.stderr)
         return 1
 
-    missing, orphan, normal = audit(entries, args.root)
-    print(f"{args.root} · 정상 {normal} · 결손 {len(missing)} · 격리 대상 {len(orphan)}")
+    missing, orphan, normal = audit(entries, args.root, store)
+    where = f"{args.root}" + (f" + 교두보 {store}" if store else " (교두보 안 붙었다)")
+    print(f"{where}\n  정상 {normal} · 결손 {len(missing)} · 격리 대상 {len(orphan)}")
     for name in missing:
-        print(f"  결손    {name}  — 대장에 있는데 실물이 없다. {entries[name]['regen']}")
+        print(f"  결손    {name}  — 어디에도 없다. {entries[name]['regen']}")
     for name in orphan:
         print(f"  격리    {name}  — 대장에 없는 계열이다. 쓰거나 치운다 (R3)", file=sys.stderr)
     if len(orphan) > QUARANTINE_CEILING:

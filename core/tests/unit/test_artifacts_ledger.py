@@ -78,6 +78,7 @@ def test_교두보_의무를_안_지면_잡는다() -> None:
             "why": "사람이 답한 라벨이라 명령으로 다시 만들 수 없다. 다시 물으면 답이 다르다",
             "reads": ["engines/taste"],
             "store": False,
+            "state": "있음",
         }
     }
     problems = LEDGER.check_ledger(broken)
@@ -94,6 +95,7 @@ def test_만드는_코드가_실재하는지_본다() -> None:
             "regen": "명령",
             "reads": ["누군가"],
             "store": True,
+            "state": "있음",
         }
     }
     assert [line for line in LEDGER.check_ledger(fiction) if "없는 파일" in line]
@@ -108,14 +110,17 @@ def test_대장에_없는_계열을_격리로_판정한다(tmp_path: Path) -> No
 
     새 계열을 내면서 대장을 안 쓰는 길을 막는다 — 천장이 0이다.
     """
-    (tmp_path / "scan-20260101T000000Z").mkdir()
+    (tmp_path / "묶음-20260101T000000Z.jsonl").touch()
     (tmp_path / "낯선계열").mkdir()
-    entries: dict[str, dict[str, object]] = {"scan-*": {}, "taste": {}}
+    entries: dict[str, dict[str, object]] = {
+        "묶음-*.jsonl": {"state": "있음"},
+        "없는것": {"state": "있음"},
+    }
 
     missing, orphan, normal = LEDGER.audit(entries, tmp_path)
 
     assert normal == 1
-    assert missing == ["taste"]
+    assert missing == ["없는것"]
     assert orphan == ["낯선계열"]
     assert LEDGER.QUARANTINE_CEILING == 0
 
@@ -138,3 +143,93 @@ def test_못_쟀으면_0건이_아니다() -> None:
 
     assert "is_dir()" in body, "루트가 있는지 안 본다"
     assert "산출물이 있는 기기에서 돌린다" in body
+
+
+# ------------------------------------------------- 첫 실행이 잡은 것 (D-0266 정정)
+
+
+def test_계열_이름이_실물_그대로다() -> None:
+    """**첫 판의 대장이 어간만 적었다** (D-0266).
+
+    `scan-*`이라고 적었더니 실물은 `scan-*.jsonl`·`scan-*.failures.jsonl`·
+    `scan-*.summary.json` 셋이었고, **같은 것이 «결손»과 «격리 대상»으로 동시에 떴다.**
+    이름을 지어서 적으면 안 된다 — 저장 코드가 붙이는 접미사를 그대로 쓴다.
+    """
+    names = set(LEDGER.load())
+    store = ROOT / "core" / "hathor" / "infrastructure"
+
+    suffixes = {
+        "scan": ("jsonl", "failures.jsonl", "summary.json"),
+        "resolve": ("resolve.jsonl", "resolve.summary.json"),
+    }
+    for stem, tails in suffixes.items():
+        assert f"{stem}-*" not in names, f"{stem}-*는 어간이다. 접미사까지 적는다"
+        for tail in tails:
+            assert f"{stem}-*.{tail}" in names, f"{stem}-*.{tail}이 대장에 없다"
+
+    source = (store / "jsonl_scan_store.py").read_text(encoding="utf-8")
+    for tail in ('SUMMARY_SUFFIX = ".summary.json"', 'FAILURES_SUFFIX = ".failures.jsonl"'):
+        assert tail in source, "저장 코드의 접미사가 바뀌었다 — 대장을 다시 본다"
+
+
+def test_양쪽을_본다(tmp_path: Path) -> None:
+    """**로컬은 부분 사본이어도 된다** (D-0266).
+
+    `make artifacts-pull`의 기본이 `keys,eval`뿐이다. 한쪽만 보면 **정상을 결손으로
+    찍고**, 그런 검사는 사람이 끈다 (D-0126 · D-0129).
+    """
+    local, store = tmp_path / "여기", tmp_path / "교두보"
+    local.mkdir()
+    store.mkdir()
+    (store / "mert-layers").mkdir()
+    entries: dict[str, dict[str, object]] = {"mert-layers": {"state": "있음"}}
+
+    assert LEDGER.audit(entries, local)[0] == ["mert-layers"], "한쪽만 보면 결손이다"
+    assert LEDGER.audit(entries, local, store)[0] == [], "양쪽을 보면 정상이다"
+
+
+def test_미생성은_결손이_아니다(tmp_path: Path) -> None:
+    """`taste`는 취향 라벨이고 **아직 하나도 안 모았다** (D-0028)."""
+    entries: dict[str, dict[str, object]] = {"taste": {"state": "미생성"}}
+
+    missing, orphan, _ = LEDGER.audit(entries, tmp_path)
+
+    assert missing == []
+    assert orphan == []
+
+
+def test_미생성인데_실물이_있으면_선언이_낡았다(tmp_path: Path) -> None:
+    """**파이어레인 `lakecheck` L1이다** — *"reserved인데 파일이 있나."*
+
+    라벨을 모으기 시작하면 백업 의무가 살아난다. 선언이 안 따라오면 여기가 운다.
+    """
+    (tmp_path / "taste").mkdir()
+    entries: dict[str, dict[str, object]] = {"taste": {"state": "미생성"}}
+
+    assert [line for line in LEDGER.audit(entries, tmp_path)[1] if "미생성" in line]
+
+
+def test_폐기는_왜_지웠는지를_든다() -> None:
+    """**만드는 도구를 일부러 없앤 것과 잃어버린 것은 다르다** (D-0266).
+
+    D-0216이 `probe_listenbrainz.py`를 지우면서 산출물 세 줄은 남겼다. 그 세 줄이
+    D-0216의 «자료» 칸이 가리키는 실물이며 (D-0265) 지우면 판정의 근거가 사라진다.
+    """
+    retired = {
+        name: entry for name, entry in LEDGER.load().items() if entry["regen"] == LEDGER.RETIRED
+    }
+    assert retired, "폐기 계열이 하나는 있어야 이 시험이 뜻이 있다"
+    for name, entry in retired.items():
+        assert entry["state"] == LEDGER.RETIRED, name
+        assert isinstance(entry["why"], str) and "D-02" in entry["why"], f"{name}이 근거를 안 든다"
+
+    broken = {"버린것": {**next(iter(retired.values())), "why": ""}}
+    assert [line for line in LEDGER.check_ledger(broken) if "왜 지웠는지" in line]
+
+
+def test_교두보_경로_파서가_하나다() -> None:
+    """**`.env`를 읽는 파서가 둘이면 갈린다** (D-0199). 정본은 `sync_artifacts`다."""
+    source = (ROOT / "tools" / "check_artifacts.py").read_text(encoding="utf-8")
+
+    assert "sync_artifacts.store_root()" in source
+    assert "HATHOR_ARTIFACT_STORE" not in source, "환경변수를 직접 읽으면 파서가 둘이 된다"
