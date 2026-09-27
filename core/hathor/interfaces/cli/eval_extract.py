@@ -12,11 +12,16 @@ import sys
 from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
 from hathor.interfaces.cli.extraction import drive_extraction
+from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import (
+    DEFAULT_LAYERS,
     DEFAULT_LAYERS_DIRNAME,
+    DEFAULT_LIBRARY_ROOT_ENV,
     DEFAULT_MFCC_DIRNAME,
+    DEFAULT_OUTPUT_ROOT,
     resolve_root,
 )
+from hathor.shared.config.paths import resolve_path
 
 
 def run_eval_mfcc(args: argparse.Namespace) -> int:
@@ -121,3 +126,63 @@ def run_eval_layers(args: argparse.Namespace) -> int:
     except BatchAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return 3
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def _build_mfcc(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval mfcc` 인자."""
+    parser.add_argument(
+        "--root",
+        type=resolve_path,
+        default=None,
+        help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
+    )
+    parser.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+    )
+    parser.add_argument(
+        "--features",
+        type=resolve_path,
+        default=None,
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_MFCC_DIRNAME})",
+    )
+    parser.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+    parser.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
+
+
+def _build_layers(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval layers` 인자."""
+    parser.add_argument(
+        "--root",
+        type=resolve_path,
+        default=None,
+        help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
+    )
+    parser.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+    )
+    parser.add_argument(
+        "--features",
+        type=resolve_path,
+        default=None,
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+    )
+    parser.add_argument(
+        "--layers",
+        default=DEFAULT_LAYERS,
+        help=(
+            "뽑을 은닉 레이어 인덱스 (쉼표 구분). 0은 트랜스포머 블록 이전이며 "
+            "마지막 레이어는 mixture 키로 항상 저장된다"
+        ),
+    )
+    parser.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+    parser.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command("mfcc", "MFCC 베이스라인 특징 추출 (CPU)", _build_mfcc, run_eval_mfcc),
+    Command("layers", "MERT 레이어별 특징 추출 (GPU, 스템 없음)", _build_layers, run_eval_layers),
+)
+"""`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""

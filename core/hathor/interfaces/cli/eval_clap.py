@@ -25,6 +25,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from hathor.interfaces.cli.registry import Command
+from hathor.interfaces.cli.roots import resolve_root
 from hathor.shared.config.paths import resolve_path
 
 if TYPE_CHECKING:
@@ -37,9 +39,8 @@ SECONDS_PER_TRACK = 4.0
 """진행 예상에 쓰는 값. 스템을 안 만들므로 `eval layers`와 같은 자리다."""
 
 
-def add_parser(commands: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def _build_clap(parser: argparse.ArgumentParser) -> None:
     """`eval clap` 인자. **기본값은 문자열이다** (D-0069)."""
-    parser = commands.add_parser("clap", help="CLAP 임베딩 추출 (GPU · 상업 가능 · O-68 · D-0235)")
     parser.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
     parser.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 위치")
     parser.add_argument(
@@ -112,3 +113,30 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
     except BatchAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return 3
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def run_command(args: argparse.Namespace) -> int:
+    """`Command.run`이 요구하는 한 인자 꼴.
+
+    `run`은 라이브러리 루트를 따로 받는다 — **어디서 푸는지를 한 자리에 모아 둔 것**이고
+    (D-0009), 그 자리가 이제 여기다. 예전에는 `main._dispatch_eval`이 풀어서 넘겼다.
+    """
+    return run(args, resolve_root(args.root))
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command(
+        "clap",
+        "CLAP 임베딩 추출 (GPU · 상업 가능 · O-68 · D-0235)",
+        _build_clap,
+        run_command,
+    ),
+)
+"""`eval` 표에 실리는 것 (D-0273).
+
+**예전에는 `add_parser(eval_sub)`였다.** 그 꼴은 «등재는 이 모듈, 배선은 `main.py`»로
+갈려 있었고, 그래서 `main.py`의 글자를 긁는 검사가 이 명령을 **못 봤다** — 배선을
+빼먹어도 초록이었다."""

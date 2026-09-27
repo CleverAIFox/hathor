@@ -19,6 +19,8 @@ import numpy as np
 from hathor.application.extract_onsets import HOP_SECONDS, ExtractOnsets
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
 from hathor.infrastructure.onset_store import SUFFIX, envelope_path, write_envelope
+from hathor.interfaces.cli.registry import Command
+from hathor.interfaces.cli.roots import resolve_root
 from hathor.shared.config.paths import resolve_path
 
 if TYPE_CHECKING:
@@ -27,9 +29,8 @@ if TYPE_CHECKING:
     from hathor.domain.entities.scanned_track import ScannedTrack
 
 
-def add_parser(commands: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def _build_onsets(parser: argparse.ArgumentParser) -> None:
     """`ingest onsets` 인자. **홉은 받지만 창은 안 받는다** (D-0144)."""
-    parser = commands.add_parser("onsets", help="곡별 온셋 포락선을 뽑는다 (O-46)")
     # **기본값은 문자열이어야 한다** (D-0069). `Path`로 두면 `type`이 기본값에
     # 안 걸려 현재 디렉터리 기준으로 남는다.
     parser.add_argument("--out", type=resolve_path, default="var/ingest", help="산출물 루트")
@@ -119,3 +120,17 @@ def _write(
         for source_key, reason in extractor.failures[:5]:
             print(f"  - {source_key}: {reason}", file=sys.stderr)
     return 0
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def run_command(args: argparse.Namespace) -> int:
+    """`Command.run`이 요구하는 한 인자 꼴. 루트를 푸는 자리를 여기 둔다 (D-0009)."""
+    return run(args, resolve_root(args.root))
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command("onsets", "곡별 온셋 포락선을 뽑는다 (O-46)", _build_onsets, run_command),
+)
+"""`ingest` 표에 실리는 것 (D-0273). `eval clap`과 같은 이유로 꼴을 맞춘다."""

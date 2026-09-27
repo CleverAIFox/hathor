@@ -217,31 +217,77 @@ def test_거부_목록이_파서와_맞다():
         assert getattr(parsed, name) == default, f"{flag}의 기본값이 어긋난다"
 
 
-def test_하위_명령이_전부_배선돼_있다():
-    """**떨어지는 기본이 오류를 삼킨다** (D-0204 · D-0208).
+# ------------------------------------------------- 등재와 배선 (D-0204 · D-0273)
 
-    새 하위 명령을 `main`의 분기에 안 적으면 **조용히 다른 명령이 돈다.** 그리고
-    그 명령에만 있는 인자를 찾다 `AttributeError`로 죽는다 — `ingest all`이 그렇게
-    났고, 그 바람에 `scan-*.jsonl`이 하나 더 생겼다.
+REGISTERED = 27
+"""등재된 하위 명령의 수. 늘리려면 결정 기록이 필요하다 (D-0118).
 
-    **갈래가 넷이다.** D-0204는 `ingest`만 봤고 나머지 셋은 같은 모양으로 무방비였다.
-    그룹마다 분기에 안 적힌 이름이 **정확히 하나**여야 한다 — 그것이 떨어지는
-    기본이다. 둘 이상이면 하나는 영영 안 불린다.
+**세는 값이 있어야 «전부»가 뜻을 갖는다.** 등재표와 파서를 견주기만 하면 **둘 다 빈**
+경우에도 통과한다 — D-0230이 검사 도구에서 확인한 자리다."""
+
+
+def _parser_commands(parser: argparse.ArgumentParser, prefix: str = "") -> list[str]:
+    """파서가 실제로 아는 하위 명령. 묶음은 `묶음 하위` 꼴로 펼친다."""
+    found: list[str] = []
+    for action in parser._actions:
+        if not isinstance(action, argparse._SubParsersAction):
+            continue
+        for name, sub in action.choices.items():
+            label = f"{prefix}{name}".strip()
+            found.extend(_parser_commands(sub, f"{label} ") or [label])
+    return found
+
+
+def test_등재표와_파서가_같다():
+    """**등재와 배선이 한 표를 읽는다** (D-0273).
+
+    D-0204 이래 이 자리를 지킨 검사는 `main.py`의 **글자를 정규식으로 긁어** «배선에 없는
+    이름이 정확히 하나여야 한다»고 말했다. 위험을 없앤 것이 아니라 하나로 못 박은 것이고,
+    `add_parser`를 함수로 감싼 둘(`eval clap` · `ingest onsets`)은 **그 정규식에 아예 안
+    잡혔다** — 그 둘의 배선을 빼먹으면 검사는 초록이었다.
+
+    이제 글자가 아니라 표를 본다.
     """
-    import re
+    from hathor.interfaces.cli.main import entries
+    from hathor.interfaces.cli.registry import names
 
+    registered = names(entries())
+    assert len(registered) == REGISTERED, f"등재가 {len(registered)}개다"
+    assert sorted(_parser_commands(build_parser())) == sorted(registered)
+
+
+def test_모든_등재에_러너가_있다():
+    """**떨어지는 기본이 없다** (D-0273). 표에 있으면 부를 것이 있다."""
+    from hathor.interfaces.cli.main import entries
+    from hathor.interfaces.cli.registry import Group
+
+    for entry in entries():
+        commands = entry.commands if isinstance(entry, Group) else (entry,)
+        for command in commands:
+            assert callable(command.run), f"{command.name}에 러너가 없다"
+            assert command.help.strip(), f"{command.name}에 도움말이 없다"
+
+
+def test_표에_없는_이름은_죽는다():
+    """**양성 대조다** (D-0230). 조용히 다른 명령을 돌리지 않는다.
+
+    D-0204에서 `ingest all`이 배선에 없어 **스캔이 돌았고** `scan-*.jsonl`이 하나 더
+    생겼다. 지금은 표가 하나라 그 상태를 만들 수 없으므로 **일부러 만들어** 먹인다.
+    """
+    from hathor.interfaces.cli.registry import Command, Group, resolve
+
+    table = (Group("ingest", "h", "ingest_command", (Command("scan", "h", lambda _: None, int),)),)
+    args = argparse.Namespace(command="ingest", ingest_command="all")
+    with pytest.raises(SystemExit, match="ingest all"):
+        resolve(table, args)
+    with pytest.raises(SystemExit, match="없는것"):
+        resolve(table, argparse.Namespace(command="없는것"))
+
+
+def test_D0204의_그_명령이_제_러너로_간다():
+    """`ingest all`이 스캔으로 떨어지지 않는다 (D-0204)."""
     from hathor.interfaces.cli import main
+    from hathor.interfaces.cli.registry import resolve
 
-    source = Path(main.__file__).read_text(encoding="utf-8")
-    body = source[source.index("def main(") :]
-    for group, variable in (
-        ("ingest_sub", "ingest_command"),
-        ("eval_sub", "eval_command"),
-        ("taste_sub", "taste_command"),
-        ("lyrics_sub", "lyrics_command"),
-    ):
-        declared = set(re.findall(rf"(?<![\w]){group}\.add_parser\(\s*\"([\w-]+)\"", source))
-        routed = set(re.findall(rf'args\.{variable} == "([\w-]+)"', body))
-        assert declared, f"{group}에서 하위 명령을 못 찾았다"
-        unrouted = declared - routed
-        assert len(unrouted) == 1, f"{group}: 분기에 없는 이름이 {sorted(unrouted)}이다"
+    args = build_parser().parse_args(["ingest", "all"])
+    assert resolve(main.entries(), args) is main._run_ingest_all

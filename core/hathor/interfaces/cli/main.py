@@ -12,11 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hathor.application.evaluate_retrieval import (
-    DEFAULT_GATE,
-    DEFAULT_K,
     DEFAULT_SEED,
-    DEFAULT_SPLIT_SEED,
-    SplitMode,
 )
 from hathor.application.extract_features import ExtractFeatures
 from hathor.application.orchestrator.generation_pipeline import DEFAULT_SECTIONS, run_dry
@@ -26,7 +22,6 @@ from hathor.application.search_similar import SearchSimilar, SearchTrack
 from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolution_record import ResolutionRecord
 from hathor.domain.entities.resolved_identity import ResolutionState
-from hathor.domain.services.embedding_pooling import CombineMode, PoolMode
 from hathor.domain.services.key_estimation import (
     HARMONIC_STRENGTH,
     KEY_MARGIN_FLOOR,
@@ -59,32 +54,35 @@ from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzLookup,
 )
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
-from hathor.interfaces.cli import ingest_keys_bundles
+from hathor.interfaces.cli import (
+    eval_clap,
+    eval_extract,
+    eval_order,
+    eval_output,
+    eval_priors,
+    eval_retrieval,
+    eval_vocabulary,
+    ingest_keys_bundles,
+    ingest_onsets,
+)
 from hathor.interfaces.cli.doctor import run_doctor
-from hathor.interfaces.cli.eval_clap import add_parser as add_clap_parser
-from hathor.interfaces.cli.eval_clap import run as run_eval_clap
-from hathor.interfaces.cli.eval_extract import run_eval_layers, run_eval_mfcc
 from hathor.interfaces.cli.eval_log import recorded
-from hathor.interfaces.cli.eval_order import run_eval_harmony_order
-from hathor.interfaces.cli.eval_output import report_harmonic_sweep, run_eval_harmony_output
-from hathor.interfaces.cli.eval_priors import (
-    run_eval_fusion,
-    run_eval_harmony_prior,
-    run_eval_time_drift,
-)
-from hathor.interfaces.cli.eval_retrieval import load_search_tracks, run_eval_retrieval
-from hathor.interfaces.cli.eval_vocabulary import (
-    run_eval_chromatic_origin,
-    run_eval_degree_restriction,
-)
+from hathor.interfaces.cli.eval_output import report_harmonic_sweep
+from hathor.interfaces.cli.eval_retrieval import load_search_tracks
 from hathor.interfaces.cli.extraction import drive_extraction
-from hathor.interfaces.cli.ingest_onsets import add_parser as add_onset_parser
-from hathor.interfaces.cli.ingest_onsets import run as run_ingest_onsets
+from hathor.interfaces.cli.registry import (
+    Command,
+    Entry,
+    Group,
+    no_arguments,
+    register,
+    resolve,
+)
 from hathor.interfaces.cli.roots import (
     DEFAULT_LAYERS_DIRNAME,
     DEFAULT_LIBRARY_ROOT_ENV,
-    DEFAULT_MFCC_DIRNAME,
     DEFAULT_OUTPUT_ROOT,
+    DEFAULT_SEARCH_KEY,
     resolve_root,
 )
 from hathor.interfaces.cli.tables import ambiguity_report, parse_key, replay_refusal
@@ -100,8 +98,6 @@ if TYPE_CHECKING:
 
 
 DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
-DEFAULT_LAYERS = "0,1,2,6"
-DEFAULT_SEARCH_KEY = "layer00"
 DEFAULT_LYRICS_DIRNAME = "lyrics-hashed"
 _DETERMINISM_PROBE = (
     # 한국어·영어·혼재 각 하나. 코퍼스 실측이 혼재 40%였으므로 세 경우를 다 밟는다.
@@ -109,8 +105,6 @@ _DETERMINISM_PROBE = (
     "i never said the words out loud",
     "돌아서는 순간 you were already gone",
 )
-"""D-0027 정본 뷰."""
-"""D-0026 실측 후 기본값. layer00이 최선이었고 1·2는 미탐색이다 (O-9)."""
 
 
 def _parse_stages(raw: str) -> tuple[Stage, ...]:
@@ -129,604 +123,338 @@ def _parse_stages(raw: str) -> tuple[Stage, ...]:
     return tuple(stages)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="hathor", description="HATHOR CLI")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    gen = sub.add_parser("generate", help="생성 파이프라인 실행")
-    gen.add_argument("--seed", type=int, required=True, help="난수 시드 (GR-6.5)")
-    gen.add_argument("--stages", type=str, default="structure,harmony")
-    gen.add_argument("--dry-run", action="store_true", help="모델 없이 결정적 산출물만")
-    gen.add_argument("--out", type=resolve_path, default=None, help="JSON 출력 경로")
-    gen.add_argument("--midi", type=resolve_path, default=None, help="MIDI 출력 경로 (D-0052)")
-    gen.add_argument(
+def _build_generate(parser: argparse.ArgumentParser) -> None:
+    """`hathor generate` 인자."""
+    parser.add_argument("--seed", type=int, required=True, help="난수 시드 (GR-6.5)")
+    parser.add_argument("--stages", type=str, default="structure,harmony")
+    parser.add_argument("--dry-run", action="store_true", help="모델 없이 결정적 산출물만")
+    parser.add_argument("--out", type=resolve_path, default=None, help="JSON 출력 경로")
+    parser.add_argument("--midi", type=resolve_path, default=None, help="MIDI 출력 경로 (D-0052)")
+    parser.add_argument(
         "--reference",
         action="append",
         default=None,
         help="참조곡 제목 일부. 여러 번 줄 수 있다. 그 곡의 구조를 조건으로 쓴다",
     )
-    gen.add_argument("--scan-out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
-    gen.add_argument("--tempo", type=int, default=DEFAULT_TEMPO_BPM, help="템포 (BPM)")
-    gen.add_argument("--sections", type=int, default=DEFAULT_SECTIONS, help="구간 수")
-    gen.add_argument(
+    parser.add_argument(
+        "--scan-out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트"
+    )
+    parser.add_argument("--tempo", type=int, default=DEFAULT_TEMPO_BPM, help="템포 (BPM)")
+    parser.add_argument("--sections", type=int, default=DEFAULT_SECTIONS, help="구간 수")
+    parser.add_argument(
         "--root",
         type=resolve_path,
         default=None,
         help="라이브러리 루트. 조성 추정에 음원이 필요하다",
     )
-    gen.add_argument(
+    parser.add_argument(
         "--stem-set",
         default=DEFAULT_STEM_SET,
         help="화성 사전에 쓸 스템 조합. mix면 전체 믹스를 쓴다 (D-0074)",
     )
-    gen.add_argument(
+    parser.add_argument(
         "--transitions",
         action="store_true",
         help="배열도 참조곡을 따른다 (O-32 · D-0110). 시계열 산출물이 있어야 한다",
     )
-    gen.add_argument(
+    parser.add_argument(
         "--series",
         type=resolve_path,
         default=None,
         help="시계열 폴더. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
     )
-    gen.add_argument(
+    parser.add_argument(
         "--priors",
         type=resolve_path,
         default=None,
         help="스템 크로마 산출물 경로. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
     )
-    gen.add_argument(
+    parser.add_argument(
         "--key",
         help='출력 조성을 고정한다 (예: "C major"). 참조곡 화성 조건화는 그대로 걸린다. '
         "조성 차이를 뺀 채 화성만 비교해 들을 때 쓴다",
     )
-    gen.add_argument(
+    parser.add_argument(
         "--no-key-estimation",
         action="store_true",
         help="조성 추정을 끄고 C장조를 쓴다. 음원 없이 돌릴 때. 화성 조건화도 함께 꺼진다",
     )
-    gen.add_argument("--max-references", type=int, default=5, help="참조곡 상한 (D-0011)")
-    gen.add_argument(
+    parser.add_argument("--max-references", type=int, default=5, help="참조곡 상한 (D-0011)")
+    parser.add_argument(
         "--chroma", choices=("cq", "linear"), default="cq", help="조성 추정 크로마 방식"
     )
 
-    ingest = sub.add_parser("ingest", help="음원 라이브러리 인제스트")
-    ingest_sub = ingest.add_subparsers(dest="ingest_command", required=True)
 
-    add_onset_parser(ingest_sub)
-    keys = ingest_sub.add_parser("keys", help="코퍼스 조성 분포 실측 (D-0054 · O-22(닫힘 D-0201))")
-    keys.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
-    keys.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
-    keys.add_argument(
+def _build_ingest_keys(parser: argparse.ArgumentParser) -> None:
+    """`hathor ingest keys` 인자."""
+    parser.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
+    parser.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
+    parser.add_argument(
         "--chroma",
         choices=("cq", "linear"),
         default="cq",
         help="크로마 방식. linear는 D-0056 이전 베이스라인이다",
     )
-    keys.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
-    ingest_keys_bundles.add_argument(keys)
-    keys.add_argument(
+    parser.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
+    ingest_keys_bundles.add_argument(parser)
+    parser.add_argument(
         "--replay",
         type=resolve_path,
         default=None,
         help="저장된 keys.jsonl을 재분석. 디코딩하지 않는다",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--tuning",
         action="store_true",
         help="조율 편차도 잰다 (D-0057). 11배 느려지므로 표본에만 쓴다",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--profile",
         choices=("krumhansl", "temperley"),
         default=PROFILE_TEMPERLEY,
         help="조성 프로파일. temperley가 기본이다 (D-0201)",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--gamma", type=float, default=0.0, help="로그 압축. 0이 끔이며 기본이다 (D-0058)"
     )
-    keys.add_argument(
+    parser.add_argument(
         "--harmonic",
         type=float,
         default=HARMONIC_STRENGTH,
         help=f"배음 감산 강도. 기본 {HARMONIC_STRENGTH:g} (D-0201)",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--harmonic-sweep",
         action="store_true",
         help="배음 강도 0~1을 한 번에 훑어 표로 낸다 (D-0060). --replay와 함께 쓴다",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--series",
         type=float,
         default=None,
         metavar="초",
         help="크로마 시계열을 이 창 길이로 함께 뽑아 npz에 저장한다 (O-32 · D-0105)",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--halves",
         action="store_true",
         help="앞뒤 반쪽 크로마도 뽑는다 (D-0062). `eval harmony-prior`가 이것을 요구한다",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--separate",
         action="store_true",
         help="타악을 분리하고 스템 조합별 크로마도 뽑는다 (O-27 (a) · D-0073). GPU 필요",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--aggregate",
         choices=("mean", "median"),
         default="mean",
         help="전곡을 한 번에 변환할지(mean) 창별 중앙값을 낼지(median). O-27 후보 (b) · D-0065",
     )
-    keys.add_argument(
+    parser.add_argument(
         "--window-seconds",
         type=float,
         default=10.0,
         help="--aggregate median의 창 길이(초)",
     )
 
-    scan = ingest_sub.add_parser("scan", help="라이브러리 스캔")
-    scan.add_argument(
+
+def _build_ingest_scan(parser: argparse.ArgumentParser) -> None:
+    """`hathor ingest scan` 인자."""
+    parser.add_argument(
         "--root",
         type=resolve_path,
         default=None,
         help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
     )
-    scan.add_argument(
+    parser.add_argument(
         "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
     )
-    scan.add_argument("--force", action="store_true", help="델타 감지를 건너뛰고 전수 재스캔")
-    scan.add_argument(
+    parser.add_argument("--force", action="store_true", help="델타 감지를 건너뛰고 전수 재스캔")
+    parser.add_argument(
         "--fail-threshold",
         type=float,
         default=0.05,
         help="실패율이 이 값을 넘으면 비정상 종료",
     )
 
-    resolve = ingest_sub.add_parser("resolve", help="정규 신원 확정 (MusicBrainz)")
-    resolve.add_argument(
+
+def _build_ingest_resolve(parser: argparse.ArgumentParser) -> None:
+    """`hathor ingest resolve` 인자."""
+    parser.add_argument(
         "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
     )
-    resolve.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
-    resolve.add_argument(
+    parser.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
+    parser.add_argument(
         "--contact",
         default=DEFAULT_CONTACT,
         help="User-Agent에 넣을 연락처. MB가 식별 가능한 값을 요구한다",
     )
-    every = ingest_sub.add_parser("all", help="한 패스로 전부 뽑는다 (GPU · D-0203)")
-    every.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
-    every.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 루트")
-    every.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
-    every.add_argument("--force", action="store_true", help="끝난 곡도 다시 뽑는다")
 
-    features = ingest_sub.add_parser("features", help="오디오 특징 추출 (GPU)")
-    features.add_argument(
+
+def _build_ingest_all(parser: argparse.ArgumentParser) -> None:
+    """`hathor ingest all` 인자."""
+    parser.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
+    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 루트")
+    parser.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+    parser.add_argument("--force", action="store_true", help="끝난 곡도 다시 뽑는다")
+
+
+def _build_ingest_features(parser: argparse.ArgumentParser) -> None:
+    """`hathor ingest features` 인자."""
+    parser.add_argument(
         "--root",
         type=resolve_path,
         default=None,
         help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
     )
-    features.add_argument(
+    parser.add_argument(
         "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
     )
-    features.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
-    features.add_argument(
+    parser.add_argument("--limit", type=int, default=None, help="처리할 곡 수 상한 (시험용)")
+    parser.add_argument(
         "--force",
         action="store_true",
         help="이미 추출된 곡도 다시 처리",
     )
 
-    compact = ingest_sub.add_parser("compact", help="특징 인덱스 중복·고아 정리 (O-7 · D-0022)")
-    compact.add_argument(
+
+def _build_ingest_compact(parser: argparse.ArgumentParser) -> None:
+    """`hathor ingest compact` 인자."""
+    parser.add_argument(
         "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 디렉터리"
     )
-    compact.add_argument(
+    parser.add_argument(
         "--keep-missing",
         action="store_true",
         help="npz가 없는 기록도 남긴다 (기본은 버린다)",
     )
-    compact.add_argument("--dry-run", action="store_true", help="쓰지 않고 결과만 보고한다")
+    parser.add_argument("--dry-run", action="store_true", help="쓰지 않고 결과만 보고한다")
 
-    evaluate = sub.add_parser("eval", help="검색 평가 하네스")
-    eval_sub = evaluate.add_subparsers(dest="eval_command", required=True)
 
-    retrieval = eval_sub.add_parser("retrieval", help="M0/M1/M2 + 무작위 베이스라인")
-    retrieval.add_argument(
-        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
-    )
-    retrieval.add_argument(
-        "--features",
-        action="append",
-        default=None,
-        metavar="[이름=]경로",
-        help=(
-            "특징 산출물 루트 (미지정 시 --out). 여러 번 줄 수 있으며, 둘 이상이면 "
-            "각각에 이름이 필요하고 키를 `이름:mixture`로 지정한다"
-        ),
-    )
-    retrieval.add_argument(
-        "--keys",
-        default="mixture",
-        help="쓸 임베딩 키 (쉼표 구분). 예: mixture / drums,bass,other,vocals",
-    )
-    retrieval.add_argument("--combine", choices=[m.value for m in CombineMode], default="concat")
-    retrieval.add_argument("--pool", choices=[m.value for m in PoolMode], default="mean")
-    retrieval.add_argument(
-        "--chunk-l2",
-        action="store_true",
-        help="풀링 전에 청크별 L2 정규화 (곡 벡터 L2는 코사인에서 무의미하다)",
-    )
-    retrieval.add_argument(
-        "--raw",
-        action="store_true",
-        help="중심화를 끈다. 허브 곡이 상위를 차지한다 (비교용, D-0031)",
-    )
-    retrieval.add_argument(
-        "--block-l2",
-        action="store_true",
-        help="블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다",
-    )
-    retrieval.add_argument(
-        "--split",
-        choices=[m.value for m in SplitMode],
-        default=SplitMode.ODD_EVEN.value,
-        help="M0 분할 규칙. odd-even은 결정적이며 오디오축 정본이다 (D-0040)",
-    )
-    retrieval.add_argument(
-        "--split-ratio",
-        type=float,
-        default=0.5,
-        help="random 분할에서 쿼리 조각의 비율. 0.5가 홀짝과 직접 비교된다",
-    )
-    retrieval.add_argument(
-        "--split-repeats",
-        type=int,
-        default=1,
-        help="random 분할 반복 횟수. 1회 값은 표본 하나라 그대로 인용하면 안 된다",
-    )
-    retrieval.add_argument("--split-seed", type=int, default=DEFAULT_SPLIT_SEED, help="분할 시드")
-    retrieval.add_argument("--k", type=int, default=DEFAULT_K, help="상위 k개")
-    retrieval.add_argument("--seed", type=int, default=DEFAULT_SEED, help="무작위 베이스라인 시드")
-    retrieval.add_argument("--gate", type=float, default=DEFAULT_GATE, help="M0 통과 기준")
-    retrieval.add_argument(
-        "--force",
-        action="store_true",
-        help="붕괴 판정에도 M1/M2를 계산한다. 조사용이며 그 수치를 인용하면 안 된다",
-    )
-    retrieval.add_argument("--label", default=None, help="실험 이름 (미지정 시 뷰에서 생성)")
-    retrieval.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
-
-    fusion = eval_sub.add_parser("fusion", help="시드 결합 규칙 비교 (M4)")
-    fusion.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
-    fusion.add_argument(
+def _build_taste_compare(parser: argparse.ArgumentParser) -> None:
+    """`hathor taste compare` 인자."""
+    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    parser.add_argument(
         "--features",
         type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
     )
-    fusion.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
-    fusion.add_argument("-k", type=int, default=10, help="상위 k개")
-    fusion.add_argument("--pairs", type=int, default=200, help="시드 쌍 표본 수")
-    fusion.add_argument("--seed", type=int, default=20260817, help="쌍 추출 시드")
-    fusion.add_argument("--penalty", type=float, default=1.0, help="penalized 모드의 편차 계수")
-    fusion.add_argument("--raw", action="store_true", help="중심화를 끈다")
+    parser.add_argument("--count", type=int, default=20, help="이번 세션 문항 수")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추출 시드")
 
-    harmony = eval_sub.add_parser(
-        "harmony-prior", help="화성 도수 사전의 정보량 판정 (O-21 · D-0062)"
-    )
-    harmony.add_argument(
-        "--replay",
-        type=resolve_path,
-        required=True,
-        help="`ingest keys --halves`가 만든 keys.jsonl. 음원도 GPU도 필요 없다",
-    )
-    harmony.add_argument(
-        "--stem-set",
-        default=None,
-        help="스템 조합 이름 (예: other, other+bass). --separate로 뽑은 것만 쓸 수 있다",
-    )
-    harmony.add_argument(
-        "--harmonic", type=float, default=0.0, help="배음 감산 강도. 네 선 전부에 적용된다"
-    )
-    harmony.add_argument("--smoothing", type=float, default=0.01, help="예측 분포 평활 비율")
-    harmony.add_argument(
-        "--margin-floor", type=float, default=KEY_MARGIN_FLOOR, help="조성 추정 애매 기준"
-    )
-    harmony.add_argument(
-        "--confident-only", action="store_true", help="격차가 하한 미만인 곡을 뺀다"
-    )
-    harmony.add_argument("--seed", type=int, default=20260819, help="귀무선 짝짓기 시드")
-    harmony.add_argument("--blend-steps", type=int, default=11, help="λ 격자 수")
 
-    output = eval_sub.add_parser(
-        "harmony-output", help="참조곡을 바꿨을 때 출력이 얼마나 갈리는지 (O-29 · D-0078)"
-    )
-    output.add_argument(
-        "--priors",
-        type=resolve_path,
-        default=None,
-        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
-    )
-    output.add_argument(
-        "--stem-set",
-        default=DEFAULT_STEM_SET,
-        help="잴 사전 출처. mix면 전체 믹스 크로마다 (D-0074)",
-    )
-    output.add_argument(
-        "--against",
-        default="mix",
-        help="짝지어 견줄 기준 출처. none이면 견주지 않는다. 기본 mix",
-    )
-    output.add_argument("--seeds", type=int, default=DEFAULT_OUTPUT_SEEDS, help="시드 수")
-    output.add_argument("--bars", type=int, default=DEFAULT_OUTPUT_BARS, help="마디 수")
-    output.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
-    output.add_argument("--key", default="C major", help="출력 조성. 고정한다")
-    output.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
-    output.add_argument(
-        "--vocabulary",
-        choices=("base", "mixture", "control"),
-        default="base",
-        help="코드 풀. mixture는 ♭III·♭VI·♭VII를 더한다 (O-36 · D-0094)",
-    )
-    output.add_argument(
-        "--compare-vocabulary",
-        action="store_true",
-        help="base·mixture·control 셋을 같은 쌍·같은 시드로 짝지어 잰다. **개입이다**",
-    )
-    output.add_argument(
-        "--bar-sweep",
-        default=None,
-        metavar="8,16,32,64",
-        help="마디 수를 훑어 극한으로 내려가는지 본다. 8마디가 표본인지 여기서 갈린다",
-    )
+def _build_taste_status(parser: argparse.ArgumentParser) -> None:
+    """`hathor taste status` 인자."""
+    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
 
-    restriction = eval_sub.add_parser(
-        "degree-restriction", help="다이어토닉 6도수 제한이 버리는 몫 (O-31 · D-0083)"
-    )
-    restriction.add_argument(
-        "--priors",
-        type=resolve_path,
-        default=None,
-        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
-    )
-    restriction.add_argument(
-        "--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스 크로마다"
-    )
-    restriction.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
-    restriction.add_argument("--key", default="C major", help="선법을 정한다. 버리는 칸이 달라진다")
-    restriction.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
 
-    origin = eval_sub.add_parser(
-        "chromatic-origin", help="반음계 질량이 차용인지 조성 오차인지 (O-33 · D-0089)"
-    )
-    origin.add_argument(
-        "--priors",
-        type=resolve_path,
-        default=None,
-        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
-    )
-    origin.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스")
-    origin.add_argument("--key", default="C major", help="선법을 정한다. 치환 짝이 달라진다")
-    origin.add_argument("--seed", type=int, default=20260822, help="귀무선·회전·부트스트랩 시드")
-    origin.add_argument(
-        "--rotated-share", type=float, default=0.30, help="눈금선에서 일부러 회전시킬 곡 비율"
-    )
-    origin.add_argument(
-        "--margin-split",
-        action="store_true",
-        help="조성 추정 신뢰도 상·하위 절반을 따로 낸다. **역인과가 있어 보조 시야다**",
-    )
-
-    drift = eval_sub.add_parser(
-        "time-drift", help="곡마다 다른 시간 변화가 실재하는가 (O-32 게이트 · D-0098)"
-    )
-    drift.add_argument(
-        "--priors",
-        type=resolve_path,
-        default=None,
-        help="`ingest keys --halves --separate`가 만든 keys.jsonl",
-    )
-    drift.add_argument(
-        "--left", default="other", help="첫째 관측. **둘째와 겹치면 안 된다** (D-0099)"
-    )
-    drift.add_argument("--right", default="bass", help="둘째 관측. mix면 전체 믹스 크로마")
-    drift.add_argument("--seed", type=int, default=20260822, help="귀무선·부트스트랩 시드")
-
-    order = eval_sub.add_parser(
-        "harmony-order", help="출력의 배열이 그 참조곡을 닮았는가 (O-32 · D-0112)"
-    )
-    order.add_argument("--priors", type=resolve_path, default=None, help="keys.jsonl")
-    order.add_argument("--series", type=resolve_path, default=None, help="시계열 폴더")
-    order.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="사전 출처")
-    order.add_argument("--songs", type=int, default=200, help="참조곡 수")
-    order.add_argument("--seeds", type=int, default=200, help="시드 수")
-    order.add_argument("--bars", type=int, default=64, help="마디 수")
-    order.add_argument("--key", default="C major", help="출력 조성. 고정한다")
-    order.add_argument("--seed", type=int, default=20260822, help="추첨 시드")
-    order.add_argument(
-        "--use-hold",
-        action="store_true",
-        help="곡별 화음 유지 확률을 시계열에서 뽑아 건다 (O-37 · D-0124). **선이 하나 는다**",
-    )
-    order.add_argument(
-        "--self-transition-sweep",
-        default=None,
-        metavar="0,0.1,0.2,0.4",
-        help="자기 전이 확률을 훑는다 (O-38 닫힘 · D-0114). **진단 전용이며 제품은 0.0만 쓴다**",
-    )
-    order.add_argument(
-        "--sweep-bars",
-        default="8,16,64",
-        metavar="8,16,64",
-        help="자기 전이 훑기에서 함께 볼 마디 수. 짧은 구간과 64마디를 나란히 본다",
-    )
-
-    mfcc = eval_sub.add_parser("mfcc", help="MFCC 베이스라인 특징 추출 (CPU)")
-    mfcc.add_argument(
-        "--root",
-        type=resolve_path,
-        default=None,
-        help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
-    )
-    mfcc.add_argument(
-        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
-    )
-    mfcc.add_argument(
-        "--features",
-        type=resolve_path,
-        default=None,
-        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_MFCC_DIRNAME})",
-    )
-    mfcc.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
-    mfcc.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
-
-    layers = eval_sub.add_parser("layers", help="MERT 레이어별 특징 추출 (GPU, 스템 없음)")
-    layers.add_argument(
-        "--root",
-        type=resolve_path,
-        default=None,
-        help=f"라이브러리 루트 (미지정 시 ${DEFAULT_LIBRARY_ROOT_ENV})",
-    )
-    layers.add_argument(
-        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
-    )
-    layers.add_argument(
-        "--features",
-        type=resolve_path,
-        default=None,
-        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
-    )
-    layers.add_argument(
-        "--layers",
-        default=DEFAULT_LAYERS,
-        help=(
-            "뽑을 은닉 레이어 인덱스 (쉼표 구분). 0은 트랜스포머 블록 이전이며 "
-            "마지막 레이어는 mixture 키로 항상 저장된다"
-        ),
-    )
-    layers.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
-    layers.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
-
-    add_clap_parser(eval_sub)
-
-    taste = sub.add_parser("taste", help="취향 라벨 수집")
-    taste_sub = taste.add_subparsers(dest="taste_command", required=True)
-
-    compare = taste_sub.add_parser("compare", help="쌍대비교 문항을 내고 응답을 기록한다")
-    compare.add_argument(
-        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치"
-    )
-    compare.add_argument(
-        "--features",
-        type=resolve_path,
-        default=None,
-        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
-    )
-    compare.add_argument("--count", type=int, default=20, help="이번 세션 문항 수")
-    compare.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추출 시드")
-
-    status = taste_sub.add_parser("status", help="수집 현황")
-    status.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
-
-    lyrics = sub.add_parser("lyrics", help="가사축")
-    lyrics_sub = lyrics.add_subparsers(dest="lyrics_command", required=True)
-    lyrics_structure = lyrics_sub.add_parser(
-        "structure", help="가사 반복 패턴에서 곡 구조 분포 실측 (D-0049)"
-    )
-    lyrics_structure.add_argument(
-        "--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트"
-    )
-    lyrics_structure.add_argument(
+def _build_lyrics_structure(parser: argparse.ArgumentParser) -> None:
+    """`hathor lyrics structure` 인자."""
+    parser.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
+    parser.add_argument(
         "--threshold",
         type=float,
         default=0.5,
         help="반복 판정 자카드 하한. 근거로 정한 값이 아니다 (실측 필요)",
     )
-    lyrics_structure.add_argument(
+    parser.add_argument(
         "--sweep",
         action="store_true",
         help="임계값을 0.3~0.7로 훑어 민감도를 본다. 하나의 값으로 결론내지 않기 위해서다",
     )
-    lyrics_structure.add_argument("--samples", type=int, default=5, help="예시로 보일 곡 수")
-    lyrics_extract = lyrics_sub.add_parser("extract", help="가사 특징 추출 (CPU, 수 초)")
-    lyrics_extract.add_argument(
+    parser.add_argument("--samples", type=int, default=5, help="예시로 보일 곡 수")
+
+
+def _build_lyrics_extract(parser: argparse.ArgumentParser) -> None:
+    """`hathor lyrics extract` 인자."""
+    parser.add_argument(
         "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
     )
-    lyrics_extract.add_argument(
+    parser.add_argument(
         "--features",
         type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LYRICS_DIRNAME})",
     )
-    lyrics_extract.add_argument(
+    parser.add_argument(
         "--encoder",
         choices=("hashed", "bge-m3"),
         default="hashed",
         help="가사 인코더. hashed는 베이스라인이자 기본값이다 (D-0036 · D-0045)",
     )
-    lyrics_extract.add_argument(
-        "--device", default="cuda", help="bge-m3 추론 장치. GPU가 없으면 cpu"
-    )
-    lyrics_extract.add_argument("--batch-size", type=int, default=16, help="bge-m3 배치 크기")
-    lyrics_extract.add_argument(
+    parser.add_argument("--device", default="cuda", help="bge-m3 추론 장치. GPU가 없으면 cpu")
+    parser.add_argument("--batch-size", type=int, default=16, help="bge-m3 배치 크기")
+    parser.add_argument(
         "--pooling",
         choices=("cls", "mean"),
         default="cls",
         help="bge-m3 풀링. cls는 모델의 dense 정의와 일치한다 (D-0046)",
     )
-    lyrics_extract.add_argument("--dim", type=int, default=1024, help="해싱 차원")
-    lyrics_extract.add_argument("--ngrams", default="2,3,4", help="문자 n-gram 크기 (쉼표 구분)")
-    lyrics_extract.add_argument(
+    parser.add_argument("--dim", type=int, default=1024, help="해싱 차원")
+    parser.add_argument("--ngrams", default="2,3,4", help="문자 n-gram 크기 (쉼표 구분)")
+    parser.add_argument(
         "--collapse-space",
         action="store_true",
         help="공백을 제거한다. `보고싶어`와 `보고 싶어`를 같게 본다",
     )
-    lyrics_extract.add_argument(
+    parser.add_argument(
         "--repeat-damping",
         type=float,
         default=0.0,
         help="곡 안에서 반복되는 n-gram 감쇠 (0=없음, 1=곡내 문서빈도 역수)",
     )
-    lyrics_extract.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
-    lyrics_extract.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
+    parser.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+    parser.add_argument("--force", action="store_true", help="이미 추출된 곡도 다시 처리")
 
-    search = sub.add_parser("search", help="시드곡 조합으로 유사곡을 찾는다")
-    search.add_argument(
+
+def _build_search(parser: argparse.ArgumentParser) -> None:
+    """`hathor search` 인자."""
+    parser.add_argument(
         "--like",
         action="append",
         default=None,
         metavar="검색어",
         help="시드곡. 아티스트·제목·경로 일부로 찾는다. 여러 번 주면 퓨전한다",
     )
-    search.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
-    search.add_argument(
+    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    parser.add_argument(
         "--features",
         type=resolve_path,
         default=None,
         help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
     )
-    search.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
-    search.add_argument("-k", type=int, default=10, help="결과 개수")
-    search.add_argument(
+    parser.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
+    parser.add_argument("-k", type=int, default=10, help="결과 개수")
+    parser.add_argument(
         "--fusion",
         choices=[m.value for m in FusionMode],
         default=FusionMode.MEAN.value,
         help="시드 결합 규칙. min은 모든 시드와 가까울 것을 요구한다 (D-0033)",
     )
-    search.add_argument("--penalty", type=float, default=1.0, help="penalized 모드의 편차 계수")
-    search.add_argument(
+    parser.add_argument("--penalty", type=float, default=1.0, help="penalized 모드의 편차 계수")
+    parser.add_argument(
         "--raw",
         action="store_true",
         help="중심화를 끈다. 허브 곡이 어떤 질의에도 상위에 온다 (비교용)",
     )
-    sub.add_parser("env", help="해석된 경로와 설정을 찍는다. 기기를 옮겼을 때 먼저 본다")
-    sub.add_parser("doctor", help="기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)")
-    setup = sub.add_parser("setup", help="기기를 탐지해 .env를 쓴다. 기기당 한 번 (D-0068)")
-    setup.add_argument("--force", action="store_true", help="이미 있는 값도 덮어쓴다")
-    setup.add_argument("--dry-run", action="store_true", help="찾은 것만 보여주고 쓰지 않는다")
 
+
+def _build_setup(parser: argparse.ArgumentParser) -> None:
+    """`hathor setup` 인자."""
+    parser.add_argument("--force", action="store_true", help="이미 있는 값도 덮어쓴다")
+    parser.add_argument("--dry-run", action="store_true", help="찾은 것만 보여주고 쓰지 않는다")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """등재표를 파서로 만든다. **이름은 표 한 곳에만 적힌다** (D-0273).
+
+    예전에는 이 함수가 599줄이었고, 여기 적은 이름을 `main`과 `_dispatch_eval`이 손으로
+    한 번 더 적었다. 어긋나면 argparse는 조용하고 **떨어지는 기본이 대신 돌았다** (D-0204).
+    """
+    parser = argparse.ArgumentParser(prog="hathor", description="HATHOR CLI")
+    register(parser.add_subparsers(dest="command", required=True), entries())
     return parser
 
 
@@ -736,46 +464,13 @@ def main(argv: list[str] | None = None) -> int:
     # 값은 덮지 않으므로 한 번만 다르게 돌려 보는 것도 그대로 된다.
     load_dotenv()
     args = build_parser().parse_args(argv)
-    if args.command == "env":
-        return _run_env(args)
-    if args.command == "doctor":
-        return run_doctor(args)
-    if args.command == "setup":
-        return _run_setup(args)
-    if args.command == "lyrics":
-        if args.lyrics_command == "structure":
-            return _run_lyrics_structure(args)
-        return _run_lyrics_extract(args)
-    if args.command == "search":
-        return _run_search(args)
-    if args.command == "taste":
-        if args.taste_command == "status":
-            return _run_taste_status(args)
-        return _run_taste_compare(args)
+    runner = resolve(entries(), args)
     if args.command == "eval":
         # **찍은 것을 남긴다** (D-0250). 감싸는 자리가 하나이므로 하위 명령을 새로
         # 더해도 저절로 기록된다 — 여기 안 적어서 조용히 사라지는 일이 없다.
-        label = getattr(args, "eval_command", None) or "retrieval"
-        with recorded(_eval_log_root(args), label):
-            return _dispatch_eval(args)
-    if args.command == "ingest":
-        # **떨어지는 기본이 `scan`이다.** 새 하위 명령을 여기 안 적으면 조용히
-        # 스캔이 돌고, 스캔에만 있는 인자를 찾다 `AttributeError`로 죽는다 —
-        # `ingest all`이 그렇게 났다 (D-0204).
-        if args.ingest_command == "all":
-            return _run_ingest_all(args)
-        if args.ingest_command == "keys":
-            return _run_ingest_keys(args)
-        if args.ingest_command == "resolve":
-            return _run_ingest_resolve(args)
-        if args.ingest_command == "features":
-            return _run_ingest_features(args)
-        if args.ingest_command == "onsets":
-            return run_ingest_onsets(args, resolve_root(args.root))
-        if args.ingest_command == "compact":
-            return _run_ingest_compact(args)
-        return _run_ingest_scan(args)
-    return _run_generate(args)
+        with recorded(_eval_log_root(args), args.eval_command):
+            return runner(args)
+    return runner(args)
 
 
 def _run_generate(args: argparse.Namespace) -> int:
@@ -1126,16 +821,6 @@ def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, s
         )
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     return out_root / f"keys-{stamp}.keys.jsonl", set(), 0
-
-
-DEFAULT_OUTPUT_SEEDS = 1000
-DEFAULT_OUTPUT_BARS = 8
-DEFAULT_OUTPUT_PAIRS = 100
-"""O-29 표본. **8마디 하나는 표본이 아니다** (D-0078).
-
-100쌍 곱하기 1000시드가 CPU로 약 16초다. D-0078에 "수 초"라고 적었으나 실측은 그보다
-느리다 — 음원도 GPU도 안 쓰는 것은 맞다.
-"""
 
 
 def _resolve_harmony_prior(
@@ -1919,31 +1604,6 @@ def _eval_log_root(args: argparse.Namespace) -> Path:
     return Path(out) if out is not None else resolve_path(DEFAULT_OUTPUT_ROOT)
 
 
-def _dispatch_eval(args: argparse.Namespace) -> int:
-    """`eval` 하위 명령을 고른다. **떨어지는 기본이 `retrieval`이다.**"""
-    if args.eval_command == "mfcc":
-        return run_eval_mfcc(args)
-    if args.eval_command == "layers":
-        return run_eval_layers(args)
-    if args.eval_command == "clap":
-        return run_eval_clap(args, resolve_root(args.root))
-    if args.eval_command == "fusion":
-        return run_eval_fusion(args)
-    if args.eval_command == "harmony-prior":
-        return run_eval_harmony_prior(args)
-    if args.eval_command == "harmony-output":
-        return run_eval_harmony_output(args)
-    if args.eval_command == "degree-restriction":
-        return run_eval_degree_restriction(args)
-    if args.eval_command == "chromatic-origin":
-        return run_eval_chromatic_origin(args)
-    if args.eval_command == "time-drift":
-        return run_eval_time_drift(args)
-    if args.eval_command == "harmony-order":
-        return run_eval_harmony_order(args)
-    return run_eval_retrieval(args)
-
-
 def _format_track(source_key: str, tags: Mapping[str, TrackTags]) -> str:
     """`아티스트 — 제목` 형태. 태그가 없으면 경로를 그대로 쓴다."""
     tag = tags.get(source_key)
@@ -2295,3 +1955,126 @@ def _run_lyrics_extract(args: argparse.Namespace) -> int:
     except BatchAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return 3
+
+
+# ------------------------------------------------- 등재표 (D-0273)
+
+
+def entries() -> tuple[Entry, ...]:
+    """하위 명령 전부. **`build_parser`와 `main`이 이것 하나를 읽는다** (D-0273).
+
+    이름 · 도움말 · 인자 · 러너가 한 줄에 같이 선다. 예전에는 이름이 `build_parser`와
+    `main`(그리고 `eval`은 `_dispatch_eval`까지) 두세 곳에 적혀 있었고, 어긋나도 아무
+    소리가 안 났다 — 그것이 `ingest all`을 스캔으로 떨어뜨렸다 (D-0204).
+
+    **함수다.** 러너들이 이 아래가 아니라 위에 있어야 하는데 모듈 수준 상수로 두면
+    정의 순서에 걸린다. 파서를 만들 때마다 한 번 짜는 값이라 비용이 없다.
+    """
+    return (
+        Command("generate", "생성 파이프라인 실행", _build_generate, _run_generate),
+        Group(
+            "ingest",
+            "음원 라이브러리 인제스트",
+            "ingest_command",
+            (
+                *ingest_onsets.COMMANDS,
+                Command(
+                    "keys",
+                    "코퍼스 조성 분포 실측 (D-0054 · O-22(닫힘 D-0201))",
+                    _build_ingest_keys,
+                    _run_ingest_keys,
+                ),
+                Command("scan", "라이브러리 스캔", _build_ingest_scan, _run_ingest_scan),
+                Command(
+                    "resolve",
+                    "정규 신원 확정 (MusicBrainz)",
+                    _build_ingest_resolve,
+                    _run_ingest_resolve,
+                ),
+                Command(
+                    "all",
+                    "한 패스로 전부 뽑는다 (GPU · D-0203)",
+                    _build_ingest_all,
+                    _run_ingest_all,
+                ),
+                Command(
+                    "features",
+                    "오디오 특징 추출 (GPU)",
+                    _build_ingest_features,
+                    _run_ingest_features,
+                ),
+                Command(
+                    "compact",
+                    "특징 인덱스 중복·고아 정리 (O-7 · D-0022)",
+                    _build_ingest_compact,
+                    _run_ingest_compact,
+                ),
+            ),
+        ),
+        Group(
+            "eval",
+            "검색 평가 하네스",
+            "eval_command",
+            (
+                *eval_retrieval.COMMANDS,
+                *eval_priors.COMMANDS,
+                *eval_output.COMMANDS,
+                *eval_vocabulary.COMMANDS,
+                *eval_order.COMMANDS,
+                *eval_extract.COMMANDS,
+                *eval_clap.COMMANDS,
+            ),
+        ),
+        Group(
+            "taste",
+            "취향 라벨 수집",
+            "taste_command",
+            (
+                Command(
+                    "compare",
+                    "쌍대비교 문항을 내고 응답을 기록한다",
+                    _build_taste_compare,
+                    _run_taste_compare,
+                ),
+                Command("status", "수집 현황", _build_taste_status, _run_taste_status),
+            ),
+        ),
+        Group(
+            "lyrics",
+            "가사축",
+            "lyrics_command",
+            (
+                Command(
+                    "structure",
+                    "가사 반복 패턴에서 곡 구조 분포 실측 (D-0049)",
+                    _build_lyrics_structure,
+                    _run_lyrics_structure,
+                ),
+                Command(
+                    "extract",
+                    "가사 특징 추출 (CPU, 수 초)",
+                    _build_lyrics_extract,
+                    _run_lyrics_extract,
+                ),
+            ),
+        ),
+        Command("search", "시드곡 조합으로 유사곡을 찾는다", _build_search, _run_search),
+        Command(
+            "env",
+            "해석된 경로와 설정을 찍는다. 기기를 옮겼을 때 먼저 본다",
+            no_arguments,
+            _run_env,
+        ),
+        Command(
+            "doctor",
+            "기록된 규약과 기기 상태가 맞는지 검사한다 (D-0067)",
+            no_arguments,
+            run_doctor,
+        ),
+        Command(
+            "setup",
+            "기기를 탐지해 .env를 쓴다. 기기당 한 번 (D-0068)",
+            _build_setup,
+            _run_setup,
+        ),
+    )

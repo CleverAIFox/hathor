@@ -11,12 +11,20 @@ import json
 import sys
 
 from hathor.application.evaluate_fusion import EvaluateFusion
+from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import STEM_SETS, stems_overlap
 from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
 from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_drift_observations
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
+from hathor.interfaces.cli.registry import Command
+from hathor.interfaces.cli.roots import (
+    DEFAULT_LAYERS_DIRNAME,
+    DEFAULT_OUTPUT_ROOT,
+    DEFAULT_SEARCH_KEY,
+)
 from hathor.interfaces.cli.tables import render_table
+from hathor.shared.config.paths import resolve_path
 
 
 def run_eval_fusion(args: argparse.Namespace) -> int:
@@ -267,3 +275,83 @@ def run_eval_time_drift(args: argparse.Namespace) -> int:
     print("**그래도 못 가르는 것**: 뒷반쪽이 그냥 더 시끄러운 식의 곡별 인공물은 두 스템에")
     print("함께 나타날 수 있고 그것은 화성이 아니다.")
     return 0
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def _build_fusion(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval fusion` 인자."""
+    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    parser.add_argument(
+        "--features",
+        type=resolve_path,
+        default=None,
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+    )
+    parser.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
+    parser.add_argument("-k", type=int, default=10, help="상위 k개")
+    parser.add_argument("--pairs", type=int, default=200, help="시드 쌍 표본 수")
+    parser.add_argument("--seed", type=int, default=20260817, help="쌍 추출 시드")
+    parser.add_argument("--penalty", type=float, default=1.0, help="penalized 모드의 편차 계수")
+    parser.add_argument("--raw", action="store_true", help="중심화를 끈다")
+
+
+def _build_harmony_prior(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval harmony-prior` 인자."""
+    parser.add_argument(
+        "--replay",
+        type=resolve_path,
+        required=True,
+        help="`ingest keys --halves`가 만든 keys.jsonl. 음원도 GPU도 필요 없다",
+    )
+    parser.add_argument(
+        "--stem-set",
+        default=None,
+        help="스템 조합 이름 (예: other, other+bass). --separate로 뽑은 것만 쓸 수 있다",
+    )
+    parser.add_argument(
+        "--harmonic", type=float, default=0.0, help="배음 감산 강도. 네 선 전부에 적용된다"
+    )
+    parser.add_argument("--smoothing", type=float, default=0.01, help="예측 분포 평활 비율")
+    parser.add_argument(
+        "--margin-floor", type=float, default=KEY_MARGIN_FLOOR, help="조성 추정 애매 기준"
+    )
+    parser.add_argument(
+        "--confident-only", action="store_true", help="격차가 하한 미만인 곡을 뺀다"
+    )
+    parser.add_argument("--seed", type=int, default=20260819, help="귀무선 짝짓기 시드")
+    parser.add_argument("--blend-steps", type=int, default=11, help="λ 격자 수")
+
+
+def _build_time_drift(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval time-drift` 인자."""
+    parser.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys --halves --separate`가 만든 keys.jsonl",
+    )
+    parser.add_argument(
+        "--left", default="other", help="첫째 관측. **둘째와 겹치면 안 된다** (D-0099)"
+    )
+    parser.add_argument("--right", default="bass", help="둘째 관측. mix면 전체 믹스 크로마")
+    parser.add_argument("--seed", type=int, default=20260822, help="귀무선·부트스트랩 시드")
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command("fusion", "시드 결합 규칙 비교 (M4)", _build_fusion, run_eval_fusion),
+    Command(
+        "harmony-prior",
+        "화성 도수 사전의 정보량 판정 (O-21 · D-0062)",
+        _build_harmony_prior,
+        run_eval_harmony_prior,
+    ),
+    Command(
+        "time-drift",
+        "곡마다 다른 시간 변화가 실재하는가 (O-32 게이트 · D-0098)",
+        _build_time_drift,
+        run_eval_time_drift,
+    ),
+)
+"""`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""

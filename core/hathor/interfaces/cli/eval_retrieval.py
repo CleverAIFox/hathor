@@ -11,6 +11,10 @@ import argparse
 import sys
 
 from hathor.application.evaluate_retrieval import (
+    DEFAULT_GATE,
+    DEFAULT_K,
+    DEFAULT_SEED,
+    DEFAULT_SPLIT_SEED,
     EvaluateRetrieval,
     EvaluationConfig,
     EvaluationReport,
@@ -28,7 +32,9 @@ from hathor.interfaces.cli.feature_sources import (
     parse_feature_stores,
     store_keys,
 )
-from hathor.interfaces.cli.roots import DEFAULT_LAYERS_DIRNAME
+from hathor.interfaces.cli.registry import Command
+from hathor.interfaces.cli.roots import DEFAULT_LAYERS_DIRNAME, DEFAULT_OUTPUT_ROOT
+from hathor.shared.config.paths import resolve_path
 
 
 def _default_label(view: ViewSpec, split: SplitSpec | None = None) -> str:
@@ -270,3 +276,80 @@ def load_search_tracks(args: argparse.Namespace, keys: tuple[str, ...]) -> list[
             )
         )
     return tracks
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def _build_retrieval(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval retrieval` 인자."""
+    parser.add_argument(
+        "--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="스캔 산출물 위치"
+    )
+    parser.add_argument(
+        "--features",
+        action="append",
+        default=None,
+        metavar="[이름=]경로",
+        help=(
+            "특징 산출물 루트 (미지정 시 --out). 여러 번 줄 수 있으며, 둘 이상이면 "
+            "각각에 이름이 필요하고 키를 `이름:mixture`로 지정한다"
+        ),
+    )
+    parser.add_argument(
+        "--keys",
+        default="mixture",
+        help="쓸 임베딩 키 (쉼표 구분). 예: mixture / drums,bass,other,vocals",
+    )
+    parser.add_argument("--combine", choices=[m.value for m in CombineMode], default="concat")
+    parser.add_argument("--pool", choices=[m.value for m in PoolMode], default="mean")
+    parser.add_argument(
+        "--chunk-l2",
+        action="store_true",
+        help="풀링 전에 청크별 L2 정규화 (곡 벡터 L2는 코사인에서 무의미하다)",
+    )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="중심화를 끈다. 허브 곡이 상위를 차지한다 (비교용, D-0031)",
+    )
+    parser.add_argument(
+        "--block-l2",
+        action="store_true",
+        help="블록별 단위 정규화 후 결합. 서로 다른 추출기를 섞을 때 필수다",
+    )
+    parser.add_argument(
+        "--split",
+        choices=[m.value for m in SplitMode],
+        default=SplitMode.ODD_EVEN.value,
+        help="M0 분할 규칙. odd-even은 결정적이며 오디오축 정본이다 (D-0040)",
+    )
+    parser.add_argument(
+        "--split-ratio",
+        type=float,
+        default=0.5,
+        help="random 분할에서 쿼리 조각의 비율. 0.5가 홀짝과 직접 비교된다",
+    )
+    parser.add_argument(
+        "--split-repeats",
+        type=int,
+        default=1,
+        help="random 분할 반복 횟수. 1회 값은 표본 하나라 그대로 인용하면 안 된다",
+    )
+    parser.add_argument("--split-seed", type=int, default=DEFAULT_SPLIT_SEED, help="분할 시드")
+    parser.add_argument("--k", type=int, default=DEFAULT_K, help="상위 k개")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="무작위 베이스라인 시드")
+    parser.add_argument("--gate", type=float, default=DEFAULT_GATE, help="M0 통과 기준")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="붕괴 판정에도 M1/M2를 계산한다. 조사용이며 그 수치를 인용하면 안 된다",
+    )
+    parser.add_argument("--label", default=None, help="실험 이름 (미지정 시 뷰에서 생성)")
+    parser.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command("retrieval", "M0/M1/M2 + 무작위 베이스라인", _build_retrieval, run_eval_retrieval),
+)
+"""`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""

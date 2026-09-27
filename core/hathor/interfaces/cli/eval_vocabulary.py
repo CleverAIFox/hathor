@@ -12,13 +12,16 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from hathor.domain.services.stem_sets import MIX_SOURCE
+from hathor.domain.services.stem_sets import DEFAULT_STEM_SET, MIX_SOURCE
 from hathor.infrastructure.keys_jsonl_store import (
     find_keys_store,
     load_degree_priors,
     load_key_margins,
 )
+from hathor.interfaces.cli.registry import Command
+from hathor.interfaces.cli.roots import DEFAULT_OUTPUT_PAIRS
 from hathor.interfaces.cli.tables import parse_key, render_table
+from hathor.shared.config.paths import resolve_path
 
 if TYPE_CHECKING:
     import argparse
@@ -250,3 +253,60 @@ def run_eval_degree_restriction(args: argparse.Namespace) -> int:
     print("**쌍 단위 승률이 60%를 못 넘으면 동전 던지기와 구분되지 않는다** — 쌍 100개에서")
     print("57%의 단측 확률이 0.10이다 (D-0087).")
     return 0
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def _build_degree_restriction(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval degree-restriction` 인자."""
+    parser.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    parser.add_argument(
+        "--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스 크로마다"
+    )
+    parser.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
+    parser.add_argument("--key", default="C major", help="선법을 정한다. 버리는 칸이 달라진다")
+    parser.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
+
+
+def _build_chromatic_origin(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval chromatic-origin` 인자."""
+    parser.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    parser.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스")
+    parser.add_argument("--key", default="C major", help="선법을 정한다. 치환 짝이 달라진다")
+    parser.add_argument("--seed", type=int, default=20260822, help="귀무선·회전·부트스트랩 시드")
+    parser.add_argument(
+        "--rotated-share", type=float, default=0.30, help="눈금선에서 일부러 회전시킬 곡 비율"
+    )
+    parser.add_argument(
+        "--margin-split",
+        action="store_true",
+        help="조성 추정 신뢰도 상·하위 절반을 따로 낸다. **역인과가 있어 보조 시야다**",
+    )
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command(
+        "degree-restriction",
+        "다이어토닉 6도수 제한이 버리는 몫 (O-31 · D-0083)",
+        _build_degree_restriction,
+        run_eval_degree_restriction,
+    ),
+    Command(
+        "chromatic-origin",
+        "반음계 질량이 차용인지 조성 오차인지 (O-33 · D-0089)",
+        _build_chromatic_origin,
+        run_eval_chromatic_origin,
+    ),
+)
+"""`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""

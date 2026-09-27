@@ -10,12 +10,19 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, cast
 
-from hathor.domain.services.stem_sets import MIX_SOURCE
+from hathor.domain.services.stem_sets import DEFAULT_STEM_SET, MIX_SOURCE
 from hathor.infrastructure.keys_jsonl_store import (
     find_keys_store,
     load_degree_priors,
 )
+from hathor.interfaces.cli.registry import Command
+from hathor.interfaces.cli.roots import (
+    DEFAULT_OUTPUT_BARS,
+    DEFAULT_OUTPUT_PAIRS,
+    DEFAULT_OUTPUT_SEEDS,
+)
 from hathor.interfaces.cli.tables import parse_key, render_table
+from hathor.shared.config.paths import resolve_path
 
 if TYPE_CHECKING:
     import argparse
@@ -364,3 +371,59 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
     print("숫자를 읽지 않는다. `random`은 아무 사전 둘이라 느슨하고, `shuffled`가 뾰족함을")
     print("맞춘 귀무선이다 — 실측이 그보다 작으면 곡들이 화성 어휘를 공유한다는 뜻이다.")
     return 0
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def _build_harmony_output(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval harmony-output` 인자."""
+    parser.add_argument(
+        "--priors",
+        type=resolve_path,
+        default=None,
+        help="`ingest keys`가 만든 keys.jsonl. 생략하면 var/ingest에서 가장 최근 것을 찾는다",
+    )
+    parser.add_argument(
+        "--stem-set",
+        default=DEFAULT_STEM_SET,
+        help="잴 사전 출처. mix면 전체 믹스 크로마다 (D-0074)",
+    )
+    parser.add_argument(
+        "--against",
+        default="mix",
+        help="짝지어 견줄 기준 출처. none이면 견주지 않는다. 기본 mix",
+    )
+    parser.add_argument("--seeds", type=int, default=DEFAULT_OUTPUT_SEEDS, help="시드 수")
+    parser.add_argument("--bars", type=int, default=DEFAULT_OUTPUT_BARS, help="마디 수")
+    parser.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
+    parser.add_argument("--key", default="C major", help="출력 조성. 고정한다")
+    parser.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
+    parser.add_argument(
+        "--vocabulary",
+        choices=("base", "mixture", "control"),
+        default="base",
+        help="코드 풀. mixture는 ♭III·♭VI·♭VII를 더한다 (O-36 · D-0094)",
+    )
+    parser.add_argument(
+        "--compare-vocabulary",
+        action="store_true",
+        help="base·mixture·control 셋을 같은 쌍·같은 시드로 짝지어 잰다. **개입이다**",
+    )
+    parser.add_argument(
+        "--bar-sweep",
+        default=None,
+        metavar="8,16,32,64",
+        help="마디 수를 훑어 극한으로 내려가는지 본다. 8마디가 표본인지 여기서 갈린다",
+    )
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command(
+        "harmony-output",
+        "참조곡을 바꿨을 때 출력이 얼마나 갈리는지 (O-29 · D-0078)",
+        _build_harmony_output,
+        run_eval_harmony_output,
+    ),
+)
+"""`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""

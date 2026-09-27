@@ -13,13 +13,16 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
+from hathor.domain.services.stem_sets import DEFAULT_STEM_SET
 from hathor.infrastructure.chroma_series_store import (
     find_series_root,
     load_hold_probabilities,
     load_transition_priors,
 )
 from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_degree_priors, load_tonics
+from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.tables import parse_key, render_table
+from hathor.shared.config.paths import resolve_path
 
 if TYPE_CHECKING:
     import argparse
@@ -221,3 +224,46 @@ def _report_self_transition_sweep(
     print("참이면 짧은 마디에서 `자기전이`가 오를수록 `other-self`가 **오른다.**")
     print("**D-0114가 이 표로 짐작을 기각했다.** 표본 부족이며 재현용으로 남긴다.")
     print(f"귀무 대조: 같은 훑기를 `--stem-set {args.stem_set}`에서 전이 없이 돌린다.")
+
+
+# ------------------------------------------ 명령 등재 (D-0273)
+
+
+def _build_harmony_order(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval harmony-order` 인자."""
+    parser.add_argument("--priors", type=resolve_path, default=None, help="keys.jsonl")
+    parser.add_argument("--series", type=resolve_path, default=None, help="시계열 폴더")
+    parser.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="사전 출처")
+    parser.add_argument("--songs", type=int, default=200, help="참조곡 수")
+    parser.add_argument("--seeds", type=int, default=200, help="시드 수")
+    parser.add_argument("--bars", type=int, default=64, help="마디 수")
+    parser.add_argument("--key", default="C major", help="출력 조성. 고정한다")
+    parser.add_argument("--seed", type=int, default=20260822, help="추첨 시드")
+    parser.add_argument(
+        "--use-hold",
+        action="store_true",
+        help="곡별 화음 유지 확률을 시계열에서 뽑아 건다 (O-37 · D-0124). **선이 하나 는다**",
+    )
+    parser.add_argument(
+        "--self-transition-sweep",
+        default=None,
+        metavar="0,0.1,0.2,0.4",
+        help="자기 전이 확률을 훑는다 (O-38 닫힘 · D-0114). **진단 전용이며 제품은 0.0만 쓴다**",
+    )
+    parser.add_argument(
+        "--sweep-bars",
+        default="8,16,64",
+        metavar="8,16,64",
+        help="자기 전이 훑기에서 함께 볼 마디 수. 짧은 구간과 64마디를 나란히 본다",
+    )
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command(
+        "harmony-order",
+        "출력의 배열이 그 참조곡을 닮았는가 (O-32 · D-0112)",
+        _build_harmony_order,
+        run_eval_harmony_order,
+    ),
+)
+"""`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""

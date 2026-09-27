@@ -94,10 +94,32 @@ def test_eval_분기가_기록을_거친다(tmp_path: Path, monkeypatch: pytest.
     """**`recorded`가 초록인 것과 `main`이 그것을 거치는 것은 다르다** (D-0244).
 
     감싸는 자리가 하나이므로 여기가 빠지면 하위 명령 열 개가 다 안 남는다.
-    """
-    from hathor.interfaces.cli import main as cli
 
-    monkeypatch.setattr(cli, "_dispatch_eval", lambda args: _shout())
+    **`_dispatch_eval`을 갈아끼우던 시험이다** (D-0273). 등재표가 러너를 **함수 객체로
+    들고** 있으므로 모듈 속성을 바꿔도 표는 옛 함수를 계속 가리킨다 — 그렇게 쓰면 시험이
+    조용히 실물을 돌린다. 그래서 **표째로** 갈아끼운다. 등재와 배선을 같이 지나므로
+    예전보다 지나는 자리가 오히려 넓다.
+    """
+    from hathor.interfaces.cli import eval_retrieval
+    from hathor.interfaces.cli import main as cli
+    from hathor.interfaces.cli.registry import Command, Group
+
+    table = (
+        Group(
+            "eval",
+            "h",
+            "eval_command",
+            (
+                Command(
+                    "retrieval",
+                    "h",
+                    eval_retrieval._build_retrieval,
+                    lambda _args: _shout(),
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(cli, "entries", lambda: table)
 
     assert cli.main(["eval", "retrieval", "--out", str(tmp_path)]) == 0
     (log,) = _logs(tmp_path)
