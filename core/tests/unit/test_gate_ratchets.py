@@ -98,3 +98,35 @@ def test_늘어도_줄어도_말한다() -> None:
 def test_빠진_부류는_0으로_센다() -> None:
     """프로브가 죽어 결과가 아예 없으면 **0으로 세어 천장과 어긋나야 한다.**"""
     assert DEAD.verdict({}, {"삼킨 예외": 2})
+
+
+# ------------------------------------------------------------------ mutate_gate
+
+MUTATE = _tool("mutate_gate")
+
+
+def test_비교를_뒤집는다() -> None:
+    """**«시험이 있다»와 «시험이 민다»는 다르다** (D-0259). 뒤집기가 안 되면 전부 통과한다."""
+    import ast
+
+    tree = ast.parse("def f(a, b):\n    return a < b\n")
+    flipper = MUTATE.Flipper()
+
+    changed = ast.unparse(ast.fix_missing_locations(flipper.visit(tree)))
+
+    assert flipper.count == 1
+    assert "a >= b" in changed
+
+
+def test_뒤집을_것이_없으면_센_수가_0이다() -> None:
+    """비교가 없는 도구를 «울지 않았다»로 세면 **거짓 고발이 된다.**"""
+    import ast
+
+    flipper = MUTATE.Flipper()
+    flipper.visit(ast.parse("x = 1\n"))
+
+    assert flipper.count == 0
+
+
+def test_관문_도구를_실제로_찾는다() -> None:
+    assert len(MUTATE.gate_tools()) >= 20

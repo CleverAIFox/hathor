@@ -37,6 +37,19 @@ CALLERS = (
 
 TOOL_CALL = re.compile(r"tools/([a-z_0-9]+)\.(?:py|sh)")
 
+TEXT_ONLY = {
+    "register_runner": (
+        "GitHub API와 실제 등록 토큰이 필요하다 (D-0224 · D-0226). 토큰은 `gh`가 받고 "
+        "저장소에 안 남으므로 **돌려 보는 시험을 만들 수 없다.** 텍스트로 본다."
+    ),
+}
+"""**시험이 열어 보기만 하고 안 미는 관문 도구** (D-0259).
+
+`exit 7`을 넣어도 아무 시험이 안 우는 것을 실측으로 확인했다. **«시험이 있다»와 «시험이
+민다»는 다르고**, 그 차이를 안 적으면 «전부 시험이 있다»가 거짓으로 참이 된다.
+
+선언 없는 면제는 없다 (D-0219). 여기 없는 도구는 **`make mutate`에서 울어야 한다.**"""
+
 UNTESTED = 0
 """**자기 시험이 없는 관문 도구의 수** (D-0257 · D-0258).
 
@@ -126,6 +139,16 @@ def test_갈래_안의_같은_이름은_안_잡는다(tmp_path: Path) -> None:
     )
 
     assert _redefined(fake) == []
+
+
+def test_텍스트만_보는_예외에_사유가_적혀_있다() -> None:
+    """**선언 없는 면제는 없다** (D-0219). 사유가 비면 그냥 빠져나간 것이다."""
+    assert all(len(reason) > 30 for reason in TEXT_ONLY.values())
+
+
+def test_텍스트만_보는_예외가_관문에_실제로_있다() -> None:
+    """지워진 도구가 예외표에 남으면 **그 줄이 낡은 채 아무도 안 본다** (D-0132)."""
+    assert set(TEXT_ONLY) <= set(gate_tools())
 
 
 def test_시험_없는_관문_도구가_래칫과_같다() -> None:

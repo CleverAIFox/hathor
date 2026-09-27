@@ -1,4 +1,4 @@
-.PHONY: up up-ml down logs ps mlflow-sync flow sync tidy hygiene gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
+.PHONY: mutate up up-ml down logs ps mlflow-sync flow sync tidy hygiene gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -113,6 +113,9 @@ ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
 
 proposal:      ## 기획서를 MASTER Part I ~ III에서 빌드한다. graphviz · 한글 글꼴 필요 (D-0221)
 	cd core && uv run --group docs python ../tools/build_proposal.py
+
+mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 25분 (D-0259)
+	python3 tools/mutate_gate.py
 
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [WHICH=1] [NOCOMMIT=1] (D-0070 · D-0249)
 	@bash tools/apply_patch.sh $(if $(WHICH),--which,) $(PATCH)

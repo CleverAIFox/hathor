@@ -2285,6 +2285,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0256 | 워크플로가 묶음 없이 도구를 불렀다 | `core/tests/unit/test_tool_deps.py` |
 | D-0257 | 검사가 자기를 안 봤다 | `core/tests/unit/test_gate_tools.py` |
 | D-0258 | 빚으로 적지 않고 같은 판에 갚는다 | `core/tests/unit/test_gate_tools.py` |
+| D-0259 | «시험이 있다»와 «시험이 민다»는 다르다 | `core/tests/unit/test_gate_tools.py` |
 
 <!-- decision-ledger:end -->
 
