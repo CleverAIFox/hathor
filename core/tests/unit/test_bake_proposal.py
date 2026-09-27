@@ -8,19 +8,11 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
-from hathor.shared.config.paths import repo_root
+from tests.conftest import tool_module
 
-_spec = importlib.util.spec_from_file_location(
-    "bake_proposal", repo_root() / "tools" / "bake_proposal.py"
-)
-assert _spec is not None and _spec.loader is not None
-BAKER = importlib.util.module_from_spec(_spec)
-sys.modules["bake_proposal"] = BAKER
-_spec.loader.exec_module(BAKER)
+BAKER = tool_module("bake_proposal")
 
 TITLES = ["Part I. 프로젝트 제안서", "1. 프로젝트 개요", "12. 산출물 목록"]
 

@@ -2336,6 +2336,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0268 | 세 판 연속 정체를 추론했다 | `tools/check_artifacts.py` | 실물 교두보 |
 | D-0269 | 네 판 연속 추론했다 | `tools/check_artifacts.py` | 실물 교두보 |
 | D-0271 | 가짜의 서명까지 면제되고 있었다 | `core/tests/unit/test_gate_types.py::test_포트_가짜가_주석을_갖는다` | 실물 저장소 |
+| D-0272 | 도구를 싣는 자리를 하나로 | `core/tests/unit/test_gate_types.py::test_도구를_싣는_자리가_하나다` | 실물 저장소 |
 
 <!-- decision-ledger:end -->
 

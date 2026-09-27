@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
+
+from tests.conftest import tool_module
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -22,14 +24,9 @@ if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
 
-def _module():
-    path = ROOT / "tools" / "ship.py"
-    spec = importlib.util.spec_from_file_location("ship", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["ship"] = module
-    spec.loader.exec_module(module)
-    return module
+def _module() -> ModuleType:
+    """`tools/ship.py`. 싣는 자리는 `tests.conftest` 하나다 (D-0272)."""
+    return tool_module("ship")
 
 
 SHIP = _module()

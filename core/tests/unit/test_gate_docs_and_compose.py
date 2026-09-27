@@ -13,21 +13,8 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from types import ModuleType
-
 from hathor.shared.config.paths import repo_root
-
-
-def _tool(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, repo_root() / "tools" / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
+from tests.conftest import tool_module as _tool
 
 STYLE = _tool("check_doc_style")
 COMPOSE = _tool("check_compose")

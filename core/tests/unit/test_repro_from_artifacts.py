@@ -8,21 +8,14 @@
 from __future__ import annotations
 
 import copy
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 from hathor.shared.config.paths import repo_root
+from tests.conftest import tool_module
 
-_spec = importlib.util.spec_from_file_location(
-    "repro_from_artifacts", repo_root() / "tools" / "repro_from_artifacts.py"
-)
-assert _spec is not None and _spec.loader is not None
-TOOL = importlib.util.module_from_spec(_spec)
-sys.modules["repro_from_artifacts"] = TOOL
-_spec.loader.exec_module(TOOL)
+TOOL = tool_module("repro_from_artifacts")
 
 BASE: dict[str, Any] = {
     "label": "unnamed",

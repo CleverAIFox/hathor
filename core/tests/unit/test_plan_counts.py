@@ -6,10 +6,10 @@
 
 from __future__ import annotations
 
-import importlib.util
 import re
-import sys
 from pathlib import Path
+
+from tests.conftest import tool_module
 
 ROOT = Path(__file__).resolve().parents[3]
 PLAN = ROOT / "docs" / "PLAN.md"
@@ -38,13 +38,7 @@ def test_시험_코드_타입_오류가_래칫과_같다() -> None:
     수는 «1421 → 75 → 66 → **0**»의 끝으로 옮겼다 — **줄의 모양이 바뀌어도 이 시험이
     같은 것을 물어야 한다.** 묻는 것은 «그 줄이 말하는 수가 못과 같은가»다.
     """
-    path = ROOT / "tools" / "check_test_types.py"
-    spec = importlib.util.spec_from_file_location("check_test_types", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["check_test_types"] = module
-    spec.loader.exec_module(module)
-    pinned: dict[str, int] = module.PINNED
+    pinned: dict[str, int] = tool_module("check_test_types").PINNED
     assert _claim(r"검사 코드 타입 오류.*?\*\*(\d+)\*\*") == sum(pinned.values())
 
 

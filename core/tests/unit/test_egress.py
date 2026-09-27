@@ -6,24 +6,20 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
+from types import ModuleType
 from typing import cast
 
 import pytest
 
+from tests.conftest import tool_module
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def _module():
-    path = ROOT / "tools" / "check_egress.py"
-    spec = importlib.util.spec_from_file_location("check_egress", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["check_egress"] = module
-    spec.loader.exec_module(module)
-    return module
+def _module() -> ModuleType:
+    """`tools/check_egress.py`. 싣는 자리는 `tests.conftest` 하나다 (D-0272)."""
+    return tool_module("check_egress")
 
 
 CHECKER = _module()

@@ -2,17 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
-from hathor.shared.config.paths import repo_root
+from tests.conftest import tool_module
 
-_spec = importlib.util.spec_from_file_location("var_fsck", repo_root() / "tools" / "var_fsck.py")
-assert _spec is not None and _spec.loader is not None
-CHECKER = importlib.util.module_from_spec(_spec)
-sys.modules["var_fsck"] = CHECKER
-_spec.loader.exec_module(CHECKER)
+CHECKER = tool_module("var_fsck")
 
 
 def _touch(root: Path, *names: str) -> list[Path]:

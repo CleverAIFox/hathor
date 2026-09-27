@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
+from tests.conftest import tool_module
+
 ROOT = Path(__file__).resolve().parents[3]
-_spec = importlib.util.spec_from_file_location("doc_fsck", ROOT / "tools" / "doc_fsck.py")
-assert _spec and _spec.loader
-CHECKER = importlib.util.module_from_spec(_spec)
-sys.modules["doc_fsck"] = CHECKER
-_spec.loader.exec_module(CHECKER)
+CHECKER = tool_module("doc_fsck")
 
 
 def test_저장소가_통과한다():

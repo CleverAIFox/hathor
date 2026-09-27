@@ -9,28 +9,11 @@ GPU도 `torch`도 없이 민다 — 셋 다 판정을 순수 함수로 떼어 �
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
-from hathor.shared.config.paths import repo_root
-
-
-def _tool(name: str) -> ModuleType:
-    """**`tools/`를 경로에 넣는다** — `build_proposal`이 `proposal_source`를 형제로 들인다."""
-    tools = str(repo_root() / "tools")
-    if tools not in sys.path:
-        sys.path.insert(0, tools)
-    spec = importlib.util.spec_from_file_location(name, repo_root() / "tools" / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
+from tests.conftest import tool_module as _tool
 
 SMOKE = _tool("gpu_smoke")
 STEP0 = _tool("step0_check")

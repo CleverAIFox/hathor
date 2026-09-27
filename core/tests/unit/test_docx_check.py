@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import shutil
 import sys
 import zipfile
@@ -14,18 +13,14 @@ from types import ModuleType
 
 import pytest
 
+from tests.conftest import tool_module
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
 def _module() -> ModuleType:
-    sys.path.insert(0, str(ROOT / "tools"))
-    path = ROOT / "tools" / "docx_check.py"
-    spec = importlib.util.spec_from_file_location("docx_check", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["docx_check"] = module
-    spec.loader.exec_module(module)
-    return module
+    """`tools/docx_check.py`. 싣는 자리는 `tests.conftest` 하나다 (D-0272)."""
+    return tool_module("docx_check")
 
 
 CHECKER = _module()

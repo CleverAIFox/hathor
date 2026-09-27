@@ -182,3 +182,52 @@ def test_가짜가_실제로_세어진다() -> None:
 
     assert declared >= PORT_METHODS, f"포트에 없는 이름을 센다: {PORT_METHODS - declared}"
     assert UNTYPED_FAKES == 0
+
+
+# --------------------------------- 도구를 싣는 자리는 하나다 (D-0272)
+
+LOADERS = 1
+"""`spec_from_file_location`을 쓰는 시험 파일의 수. **1이다 — `conftest.py`** (D-0272).
+
+`tools/`는 패키지가 아니라 스크립트 묶음이라(D-0256) 시험이 경로로 실어야 하고, 그 여덟
+줄이 **21벌에 흩어져 꼴이 열셋으로 갈려 있었다.** 셋은 `sys.path`를 손으로 얹고 나머지는
+안 얹었다 — 같은 일을 다르게 하는 것이 스물한 벌이었다.
+
+`ScannedTrack` 조립이 다섯 벌이던 것과 같은 부류다 (D-0264). 늘리려면 결정 기록이 필요하다."""
+
+
+SELF = Path(__file__).name
+"""**자기 자신은 안 본다** (D-0261과 같은 자리).
+
+세려는 낱말을 적어 두는 자리가 바로 이 파일이다. `check_forbidden`이 커밋되자마자 자기
+패턴 여덟 줄에 걸린 것과 같고, 이 시험도 첫 실행에 자기를 잡았다."""
+
+
+def loader_files() -> list[str]:
+    """도구를 손으로 싣는 시험 파일. **이 파일은 뺀다** — 세는 낱말이 여기 적혀 있다."""
+    return sorted(
+        path.relative_to(CORE).as_posix()
+        for path in (CORE / "tests").rglob("*.py")
+        if path.name != SELF and "spec_from_file_location" in path.read_text(encoding="utf-8")
+    )
+
+
+def test_도구를_싣는_자리가_하나다() -> None:
+    """**D-0272의 강제자.** 스물한 벌이 한 벌이 됐다."""
+    found = loader_files()
+
+    assert len(found) == LOADERS, f"싣는 자리가 {len(found)}곳이다: {found}"
+    assert found == ["tests/conftest.py"]
+
+
+def test_같은_도구를_두_번_싣지_않는다() -> None:
+    """**다시 실으면 그 모듈의 상수가 두 벌이 된다** (D-0272).
+
+    `monkeypatch.setattr(CHECKER, "ROOT", tmp_path)`가 한쪽만 고치고, 검사는 안 고쳐진
+    쪽을 본다. 옛 로더들은 부를 때마다 다시 실었고 **모듈 수준에서 한 번만 불러서**
+    우연히 안 터졌다.
+    """
+    from tests.conftest import tool_module
+
+    first = tool_module("check_egress")
+    assert tool_module("check_egress") is first

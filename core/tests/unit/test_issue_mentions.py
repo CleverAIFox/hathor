@@ -6,25 +6,20 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
+from types import ModuleType
 from typing import cast
 
 import pytest
 
+from tests.conftest import tool_module
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def _module():
-    """`tools/`는 패키지가 아니다. 파일에서 직접 읽는다."""
-    path = ROOT / "tools" / "check_issue_mentions.py"
-    spec = importlib.util.spec_from_file_location("check_issue_mentions", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["check_issue_mentions"] = module
-    spec.loader.exec_module(module)
-    return module
+def _module() -> ModuleType:
+    """`tools/check_issue_mentions.py`. 싣는 자리는 `tests.conftest` 하나다 (D-0272)."""
+    return tool_module("check_issue_mentions")
 
 
 CHECKER = _module()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ import sys
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -98,6 +100,38 @@ def scanned_track(
         ),
         raw_frame_names=(),
     )
+
+
+TOOLS = Path(__file__).resolve().parents[2] / "tools"
+"""`tools/`. 시험이 도구를 경로로 싣는 자리다."""
+
+
+def tool_module(name: str) -> ModuleType:
+    """`tools/<name>.py`를 싣는다. **정본은 여기 하나다** (D-0272).
+
+    `tools/`는 패키지가 아니라 `python3 tools/x.py`로 도는 스크립트 묶음이다 (D-0256).
+    그래서 시험이 경로로 실어야 하고, 그 여덟 줄이 **시험 파일 21벌에 흩어져 있었다** —
+    꼴이 열셋으로 갈려 있었다. `ScannedTrack` 조립이 다섯 벌이던 것과 같은 부류다 (D-0264).
+
+    `sys.path`에 `tools/`를 얹는다. **도구가 형제 도구를 임포트한다** —
+    `build_proposal`이 `proposal_source`를 부르고, 그것을 세 파일이 각자 해 주고 있었다.
+
+    **이미 실은 것은 다시 싣지 않는다.** 모듈 수준에서 부르는 파일이 여럿이고, 다시
+    실으면 그 모듈의 상수가 두 벌이 되어 `monkeypatch`가 한쪽만 고친다.
+    """
+    root = str(TOOLS)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    path = TOOLS / f"{name}.py"
+    loaded = sys.modules.get(name)
+    if loaded is not None and getattr(loaded, "__file__", None) == str(path):
+        return loaded
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None, f"{path}를 못 싣는다"
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 FFMPEG = shutil.which("ffmpeg")
