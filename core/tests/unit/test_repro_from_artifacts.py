@@ -188,3 +188,52 @@ def test_두_자리로_줄어드는_꼴은_안_넣는다() -> None:
     """`0.9`가 열쇠가 되면 아무 데나 걸린다. **하나도 안 내놓는 것이 맞다.**"""
     assert TOOL.variants("0.9") == set()
     assert TOOL.variants("0.4312") == {"0.4312", "0.431"}
+
+
+# ------------------------------------------------------------------ 비율과 라벨
+
+
+def test_기록이_수치를_많이_적었으면_셋_겹치는_것으로는_안_된다(tmp_path: Path) -> None:
+    """**오짝 여섯 건이 이렇게 붙었다.** 산출물 하나에 수치가 수백 개다."""
+    _artifact(tmp_path, "a", [0.1111, 0.2222, 0.3333])
+    body = "0.1111 · 0.2222 · 0.3333 " + " ".join(f"0.{n:04d}" for n in range(5000, 5012))
+
+    assert len(TOOL.numbers(body)) == 14, "겹치는 셋에 열한 개를 더한 기록이다"
+    assert TOOL.match(body, TOOL.read_artifacts(tmp_path)) == [], "셋은 3/14이고 8이 필요하다"
+
+
+def test_기록_수치의_대부분이_있으면_근거다(tmp_path: Path) -> None:
+    """**그 산출물이 근거라면 기록이 적은 수치가 거기 있어야 한다.**"""
+    _artifact(tmp_path, "a", [0.1111, 0.2222, 0.3333, 0.4444])
+    body = "0.1111 · 0.2222 · 0.3333 · 0.4444 · 0.9999"
+
+    assert TOOL.match(body, TOOL.read_artifacts(tmp_path))[0][0] == 4
+
+
+def test_라벨이_본문에_있으면_그것이_증거다(tmp_path: Path) -> None:
+    """`mert-mean-std`는 사람이 지은 이름이다 — **우연히 안 겹친다.**"""
+    _artifact(tmp_path, "a", [0.1111, 0.2222, 0.3333], label="o12-random-8192")
+    body = "라벨 o12-random-8192로 돌렸다. " + " ".join(f"0.{n:04d}" for n in range(5000, 5020))
+
+    hits = TOOL.match(body, TOOL.read_artifacts(tmp_path))
+
+    assert hits and hits[0][1].label == "o12-random-8192"
+
+
+def test_기록에_수치가_없으면_짝이_없다(tmp_path: Path) -> None:
+    """짝지을 열쇠가 없다. **그 건은 진짜 유물이다.**"""
+    _artifact(tmp_path, "a", [0.1111, 0.2222, 0.3333])
+
+    assert TOOL.match("수치를 안 적은 기록이다", TOOL.read_artifacts(tmp_path)) == []
+
+
+def test_라벨이_unnamed면_열쇠가_아니다(tmp_path: Path) -> None:
+    """기본 라벨은 **모든 산출물이 같이 든다.**"""
+    _artifact(tmp_path, "a", [0.1111, 0.2222, 0.3333])
+
+    assert TOOL.read_artifacts(tmp_path)[0].label == ""
+
+
+def test_도구_바이트코드를_안_남긴다() -> None:
+    """**낡은 `.pyc`가 시험을 거짓말하게 만든다** (D-0252). `conftest`가 막는다."""
+    assert not (repo_root() / "tools" / "__pycache__").exists()

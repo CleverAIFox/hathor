@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -13,6 +14,22 @@ import pytest
 pytest.importorskip("mutagen")
 
 MACHINE_ENV_PREFIX = "HATHOR_"
+TOOLS_CACHE = Path(__file__).resolve().parents[2] / "tools" / "__pycache__"
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """**도구의 낡은 바이트코드를 지운다** (D-0252).
+
+    시험 열다섯 개가 `tools/*.py`를 경로로 로드한다. 그 로드가 `tools/__pycache__`를
+    만들고, 파이썬은 `.pyc`의 유효성을 **mtime(초)과 크기**로만 본다 — 같은 초에 같은
+    크기로 고치면 낡은 것이 그대로 쓰인다.
+
+    **실측했다.** `SHARE = 0.6`을 `0.0`으로 고치고 되돌렸더니 파일에는 `0.6`이 적혀
+    있는데 시험은 `0.0`을 보고 판정했다. «고쳤다»를 시험으로 확인하는 이 저장소의
+    방식이 **그 순간 거짓말을 한다.**
+    """
+    shutil.rmtree(TOOLS_CACHE, ignore_errors=True)
+    sys.dont_write_bytecode = True
 
 
 @pytest.fixture(autouse=True)

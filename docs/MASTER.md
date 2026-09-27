@@ -2278,6 +2278,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0249 | 패치 폴더는 우리 것만 있는 곳이 아니었다 | `core/tests/unit/test_apply_patch.py` |
 | D-0250 | 평가가 화면에만 찍고 있었다 | `core/tests/unit/test_eval_log.py` |
 | D-0251 | 소급할 수 있었다 | `core/tests/unit/test_repro_from_artifacts.py` |
+| D-0252 | 짝짓기가 우연을 근거로 셌다 | `core/tests/unit/test_repro_from_artifacts.py` |
 
 <!-- decision-ledger:end -->
 

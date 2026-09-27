@@ -49,7 +49,13 @@ NUMBER = re.compile(r"(?<![\w.])\d+\.\d{3,}")
 """소수 셋 이상. **정수와 두 자리는 안 본다** — 마디 수·개수·백분율이 우연히 겹친다."""
 
 STRONG = 3
-"""이 개수 이상 겹치면 근거로 인정한다. 둘은 보고만 한다."""
+"""아무리 기록이 짧아도 이 개수는 겹쳐야 한다."""
+
+SHARE = 0.6
+"""기록이 적은 수치 가운데 이 비율 이상이 산출물에 있어야 근거다 (D-0252).
+
+**개수만 보면 오짝이 난다.** 산출물 하나에 수치가 수백 개이고, 그중 셋이 우연히 겹치는
+것은 거의 필연이다. 실제로 여섯 건이 그렇게 붙었고 **둘은 시기가 아예 안 맞았다.**"""
 
 
 def trim(raw: str) -> str | None:
@@ -135,11 +141,14 @@ def command_of(config: dict[str, Any]) -> str:
 
 
 class Artifact:
-    """산출물 하나. **명령과 수치를 같이 든다.**"""
+    """산출물 하나. **명령 · 라벨 · 수치를 든다.**"""
 
     def __init__(self, path: Path, record: dict[str, Any]) -> None:
+        config = record.get("config") or {}
         self.path = path
-        self.command = command_of(record.get("config") or {})
+        self.command = command_of(config)
+        label = config.get("label")
+        self.label = str(label) if label and label != "unnamed" else ""
         self.numbers = {
             value for raw in NUMBER.findall(" ".join(flatten(record))) for value in variants(raw)
         }
@@ -169,10 +178,34 @@ def unknown_records(text: str) -> list[tuple[str, str]]:
 
 
 def match(body: str, artifacts: Iterable[Artifact]) -> list[tuple[int, Artifact]]:
-    """본문 수치와 겹치는 산출물을 **겹친 개수가 큰 것부터** 돌려준다."""
+    """근거일 만한 산출물을 **겹친 개수가 큰 것부터** 돌려준다.
+
+    ### 개수가 아니라 **비율**을 본다
+
+    첫 판은 «수치 셋 이상 겹침»을 썼고 **오짝 여섯 건을 냈다.** 산출물 하나에 수치가
+    수백 개이고 반올림 꼴까지 넓히면 열쇠가 천 개를 넘는다 — 셋 겹치는 것은 거의 필연이다.
+    D-0044(가사축 판정)에 MERT 명령이, D-0024에 그보다 한참 뒤인 CLAP 명령이 붙었다.
+
+    **그 산출물이 이 기록의 근거라면 기록이 적은 수치의 대부분이 거기 있어야 한다.**
+    그래서 «기록 수치의 몇 할이 산출물에 있나»를 문턱으로 쓴다.
+
+    ### 라벨은 수치보다 센 증거다
+
+    `--label mert-mean-std`는 **사람이 지은 이름이고 우연히 안 겹친다.** 본문에 라벨이
+    인용돼 있으면 비율을 안 봐도 근거다. 없으면 비율만으로 판정한다.
+    """
     wanted = numbers(body)
-    hits = [(len(wanted & art.numbers), art) for art in artifacts]
-    return sorted((row for row in hits if row[0] >= 2), key=lambda row: -row[0])
+    if not wanted:
+        return []
+    floor = max(STRONG, round(len(wanted) * SHARE))
+    hits: list[tuple[int, Artifact]] = []
+    for art in artifacts:
+        overlap = len(wanted & art.numbers)
+        if art.label and art.label in body:
+            hits.append((max(overlap, floor), art))
+        elif overlap >= floor:
+            hits.append((overlap, art))
+    return sorted(hits, key=lambda row: -row[0])
 
 
 def repro_block(commands: list[str]) -> str:
@@ -221,21 +254,22 @@ def report(eval_root: Path, write: bool) -> int:
         if not hits:
             continue
         best = hits[0][0]
-        if best < STRONG:
+        need = max(STRONG, round(len(numbers(body)) * SHARE))
+        if best < need:
             weak += 1
-            print(f"{number}  약함 (수치 {best}개 일치) — 안 쓴다")
+            print(f"{number}  약함 (수치 {best}/{len(numbers(body))} 일치 · {need} 필요) — 안 쓴다")
             continue
         commands: list[str] = []
         for count, art in hits:
             if count == best and art.command not in commands:
                 commands.append(art.command)
         strong[number] = commands[:3]
-        print(f"{number}  수치 {best}개 일치 · 명령 {len(commands)}개")
+        print(f"{number}  수치 {best}/{len(numbers(body))} 일치 · 명령 {len(commands)}개")
         for command in strong[number]:
             print(f"      {command}")
 
     print(f"\n확실한 짝 {len(strong)}건 · 약한 짝 {weak}건")
-    if not strong and not weak:
+    if not strong:
         explain(artifacts, rows)
     if not write:
         print("채우려면 --write")
