@@ -127,6 +127,13 @@ def only_flags(raw: str) -> list[str]:
     return flags
 
 
+GREEN = ("success", "skipped", "neutral")
+"""**초록으로 칠 결론.** 나머지는 전부 빨강이다 (D-0255).
+
+`failure`만 거르는 차단 목록을 썼다가 `timed_out` · `cancelled` · `action_required`가
+새는 것을 확인했다. **모르는 값을 통과시키는 그물은 모르는 사고를 통과시킨다.**"""
+
+
 def ci_verdict() -> list[str]:
     """`main`의 최근 워크플로 결론 (D-0254).
 
@@ -159,7 +166,9 @@ def ci_verdict() -> list[str]:
 
     newest = runs[0]["headSha"] if runs else ""
     latest = [run for run in runs if run.get("headSha") == newest]
-    failed = [run for run in latest if run.get("conclusion") == "failure"]
+    # **모르는 결론은 빨강이다** (D-0255). `failure`만 걸렀더니 `timed_out` ·
+    # `cancelled` · `action_required`가 초록으로 샜다 — 차단 목록은 모르는 것을 통과시킨다.
+    failed = [run for run in latest if run.get("conclusion") not in (*GREEN, None, "")]
     if failed:
         names = " · ".join(str(run.get("name", "?")) for run in failed)
         return [

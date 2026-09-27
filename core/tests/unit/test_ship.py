@@ -209,3 +209,24 @@ def test_옛_커밋의_실패는_안_센다(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
 
     assert "초록" in " ".join(SHIP.ci_verdict())
+
+
+def test_모르는_결론은_빨강이다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**`failure`만 걸렀더니 `timed_out`이 초록으로 샜다** (D-0255).
+
+    차단 목록은 모르는 값을 통과시킨다. GitHub가 결론 종류를 더하면 그때마다 사각이 는다.
+    """
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    runs = [{"conclusion": "timed_out", "name": "ci", "headSha": "abc"}]
+    monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
+
+    assert "빨강" in " ".join(SHIP.ci_verdict())
+
+
+def test_건너뛴_것은_빨강이_아니다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """조건이 안 맞아 안 돈 잡까지 빨갛다고 하면 **사람이 그 줄을 안 믿게 된다.**"""
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    runs = [{"conclusion": "skipped", "name": "gpu-smoke", "headSha": "abc"}]
+    monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
+
+    assert "초록" in " ".join(SHIP.ci_verdict())

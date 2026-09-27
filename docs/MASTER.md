@@ -2281,6 +2281,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0252 | 짝짓기가 우연을 근거로 셌다 | `core/tests/unit/test_repro_from_artifacts.py` |
 | D-0253 | «불명»을 결론으로 바꾼다 | `core/tests/unit/test_ship.py` |
 | D-0254 | 로컬 초록이 CI 빨강이었다 | `core/tests/unit/test_ci_parity.py` |
+| D-0255 | 봉인은 «같다»가 아니라 «그때 읽어서 같았다»이다 | `core/tests/unit/test_ship.py` |
 
 <!-- decision-ledger:end -->
 

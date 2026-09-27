@@ -383,3 +383,16 @@ def test_위생은_한_이름으로_모인다() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     block = makefile.split("hygiene:", 1)[1].split("\n\n", 1)[0]
     assert all(name in block for name in ("doctor", "tidy", "var-fsck"))
+
+
+def test_봉인이_자기_근거를_든다() -> None:
+    """**«same»이라는 글자는 근거 없이 셌다** (D-0255).
+
+    봉인은 «같다»가 아니라 «그때 읽어서 같았다»이다. 네 번째 칸에 그때 읽은 해시를
+    적어야 봉인 자체를 나중에 검증할 수 있다 — 파이썬 `.pyc`가 같은 가정을 쓰다가
+    이 저장소를 속였다 (D-0252).
+    """
+    source = (ROOT / "tools" / "sync_artifacts.py").read_text(encoding="utf-8")
+
+    assert 'sealed[name] = [*mark, "same"]' not in source
+    assert "sealed[name] = [*mark, mine_digest]" in source

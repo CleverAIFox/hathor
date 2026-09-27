@@ -315,6 +315,15 @@ SEAL = ROOT / "var" / "seal" / "artifacts.verify.jsonl"
 
 `(크기, mtime)`이 양쪽 다 그대로면 다시 안 읽는다 — 그것이 CDC다. **읽기에만 붙인다**:
 `push`·`pull`은 이 파일을 보지 않는다 (D-0240).
+
+### 봉인은 «같다»가 아니라 «그때 읽어서 같았다»이다 (D-0255)
+
+한 번은 내용을 통째로 읽고 대조한다. **그 뒤로는 mtime을 믿는다.** mtime은 내용을
+보증하지 않는다 — 복원·`rsync -t`·아카이브 풀기는 시각을 보존한다. 파이썬의 `.pyc`가
+같은 가정을 쓰다가 오늘 이 저장소를 속였다 (D-0252).
+
+그래서 **봉인이 자기 근거를 든다.** 네 번째 칸이 그때 읽은 내용의 해시다. 예전에는
+`"same"`이라는 글자가 들어 있었고, **그 말은 근거 없이 셌다.**
 """
 
 HASH_CHUNK = 1 << 20
@@ -390,13 +399,15 @@ def verify(local: Path, store: Path | None, full: bool) -> int:
         if sealed.get(name, [None])[:3] == mark:
             continue
         checked += 1
-        if digest(local / name) != digest(store / SUBTREE / name):
+        mine_digest = digest(local / name)
+        if mine_digest != digest(store / SUBTREE / name):
             row[1] += 1
             row[0] -= 1
             broken.append(f"{name}  크기는 같은데 **내용이 다르다**")
             sealed.pop(name, None)
             continue
-        sealed[name] = [*mark, "same"]
+        # **«same»이 아니라 그때 읽은 해시를 적는다** (D-0255). 봉인이 자기 근거를 든다.
+        sealed[name] = [*mark, mine_digest]
 
     print(f"{'계열':<30}{'같음':>8}{'다름':>8}{'여기만':>8}{'교두보만':>10}")
     print("-" * 66)
