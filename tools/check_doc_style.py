@@ -404,8 +404,57 @@ def check_sixth_document() -> list[str]:
     return problems
 
 
+SHINGLE = 3
+"""문서 사이에서 잡을 **연속 줄 수** (D-0262).
+
+D-0043이 *"문서 4종에서 3줄 이상 연속 일치를 기계로 검사해 0건"*이라고 적었고 **그 기계가
+저장소에 없었다.** 손으로 한 번 세고 끝난 것이며, 그 뒤 열여덟 달 동안 아무도 다시 안 셌다.
+
+재 보니 **1건이 있었다.** `PLAN.md`와 `MASTER.md`가 같은 3축 표를 두 벌 들었는데 문구가
+갈렸고(«남은 일» ↔ «다음 작업»), 흡수된 `CONTRIBUTING.md`의 줄이 이름만 바뀐 채 남아
+있었다 — *"한 항목은 한 문서에만 산다"*고 적은 그 표가 자기 규약을 어기고 있었다."""
+
+
+def shingles(text: str) -> dict[str, int]:
+    """`연속 {SHINGLE}줄 → 첫 줄 번호`. **빈 줄이 낀 자리는 안 센다.**
+
+    빈 줄을 세면 인용 부호나 표 구분선만으로 우연히 겹친다.
+    """
+    lines = text.splitlines()
+    found: dict[str, int] = {}
+    for index in range(len(lines) - SHINGLE + 1):
+        block = [line.strip() for line in lines[index : index + SHINGLE]]
+        if not all(block):
+            continue
+        found.setdefault("\n".join(block), index + 1)
+    return found
+
+
+def check_duplicates() -> list[str]:
+    """문서 둘이 **같은 세 줄**을 들고 있는가 (D-0043 · D-0262).
+
+    두 곳에 있으면 한쪽만 고치는 날이 온다. 실제로 그 날이 왔었다.
+    """
+    seen = {
+        path.relative_to(ROOT).as_posix(): shingles(path.read_text(encoding="utf-8"))
+        for path in targets()
+    }
+    problems: list[str] = []
+    names = sorted(seen)
+    for first in range(len(names)):
+        for second in range(first + 1, len(names)):
+            here, there = seen[names[first]], seen[names[second]]
+            for block in sorted(set(here) & set(there)):
+                head = block.splitlines()[0][:60]
+                problems.append(
+                    f"{names[first]}:{here[block]}와 {names[second]}:{there[block]}이 "
+                    f"{SHINGLE}줄 겹친다 — «{head}»"
+                )
+    return problems
+
+
 def check() -> list[str]:
-    problems: list[str] = list(check_sixth_document())
+    problems: list[str] = list(check_sixth_document()) + check_duplicates()
     for path in targets():
         name = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")

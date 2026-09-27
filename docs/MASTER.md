@@ -2100,6 +2100,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 
 | 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |
 |---|---|---|
+| D-0001 | MongoDB를 core 프로파일에 유지한다 | `tools/check_compose.py` |
 | D-0002 | 본인 보컬 시드 녹음을 P7까지 연기한다 | `tools/check_forbidden.py` |
 | D-0003 | 실존 가수의 음색 복제·보간은 구현하지 않는다 | `tools/check_forbidden.py` |
 | D-0004 | 저장소를 WSL ext4에 두고 F 드라이브는 데이터 전용으로 쓴다 | `core/tests/unit/test_paths.py` |
@@ -2127,6 +2128,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` |
 | D-0041 | M0에 순위 진단과 해석적 베이스라인을 넣는다 | `core/tests/unit/test_retrieval_metrics.py` |
 | D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/check_decisions.py` |
+| D-0043 | `PLAN.md`를 `DESIGN.md`로, GROUND RULES를 `CONTRIBUTING.md`로 | `tools/check_doc_style.py` |
 | D-0045 | 가사축 인코더를 BGE-M3로 한다 | `core/tests/unit/test_bge_m3_lyrics_encoder.py` |
 | D-0047 | CLI 배선을 테스트로 고정한다 | `core/tests/unit/test_eval_cli.py` |
 | D-0049 | 구조 생성을 가사 반복 패턴에서 규칙으로 뽑는다 | `core/tests/unit/test_song_structure.py` |
@@ -2170,6 +2172,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0100 | 이어받기가 조건을 다 보지 않았다 | `core/tests/unit/test_ingest_resume.py` |
 | D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` |
 | D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` |
+| D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` |
 | D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` |
 | D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` |
 | D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` |
@@ -2295,6 +2298,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0259 | «시험이 있다»와 «시험이 민다»는 다르다 | `core/tests/unit/test_gate_tools.py` |
 | D-0260 | `eval` 보고를 `main.py`에서 뗀다 | `core/tests/unit/test_file_size.py` |
 | D-0261 | 결정이 금지한 것을 검사가 막는다 | `tools/check_forbidden.py` |
+| D-0262 | 셋을 더 박고 다섯을 더 채운다 | `core/tests/unit/test_gate_docs_and_compose.py` |
 
 <!-- decision-ledger:end -->
 

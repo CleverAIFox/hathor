@@ -46,6 +46,7 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 	python3 tools/check_doc_style.py --check
 	python3 tools/check_egress.py --check
 	python3 tools/check_forbidden.py --check
+	python3 tools/check_compose.py --check
 	python3 tools/check_model_licenses.py --check
 	python3 tools/docx_check.py --check
 	python3 tools/doc_fsck.py --check

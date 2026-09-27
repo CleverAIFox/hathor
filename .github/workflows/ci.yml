@@ -49,6 +49,10 @@ jobs:
         working-directory: .
         run: python3 tools/check_forbidden.py --check
 
+      - name: Compose memory
+        working-directory: .
+        run: python3 tools/check_compose.py --check
+
       - name: Model licenses
         working-directory: .
         run: python3 tools/check_model_licenses.py --check
