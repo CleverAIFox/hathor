@@ -48,6 +48,25 @@ VRAM_REQUIREMENTS = [
 ]
 
 
+PYTHON_FLOOR = (3, 12)
+"""권장 파이썬 바닥 (D-0258).
+
+**`info["python"] < "3.10"`이라고 글자로 비교하고 있었다.** `"3.9" < "3.10"`은 거짓이므로
+3.9에서 경고가 안 떴다. 그리고 메시지는 «3.12 이상»인데 비교값은 3.10이라 **둘 다 틀린 채
+조용히 통과했다.** 수로 비교하고 임계값은 여기 하나만 둔다."""
+
+
+def old_python(version: str) -> bool:
+    """이 판이 바닥보다 낮은가. **글자가 아니라 수로 센다.**"""
+    parts: list[int] = []
+    for chunk in version.split(".")[: len(PYTHON_FLOOR)]:
+        digits = "".join(c for c in chunk if c.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts) < PYTHON_FLOOR
+
+
 def hr(title: str = "") -> None:
     print("\n" + "=" * 62)
     if title:
@@ -90,8 +109,8 @@ def check_system() -> dict:
     print(f"  RAM         : {info['ram_gb'] or '미확인 (pip install psutil)'} GB")
     print(f"  디스크 여유 : {info['disk_free_gb']} GB / {info['disk_total_gb']} GB")
 
-    if info["python"] < "3.10":
-        print("  [경고] Python 3.12 이상을 권장한다.")
+    if old_python(info["python"]):
+        print(f"  [경고] Python {'.'.join(str(n) for n in PYTHON_FLOOR)} 이상을 권장한다.")
     if info["disk_free_gb"] < 100:
         print("  [경고] 여유 공간 100GB 미만. 스템 분리 산출물이 원본의 4배를 차지한다.")
     return info

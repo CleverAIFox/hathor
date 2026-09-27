@@ -36,7 +36,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "core" / "pyproject.toml"
 SLACK = 3.0
-FLOOR = re.compile(r"^(fail_under\s*=\s*)(\d+(?:\.\d+)?)\s*$", re.M)
+FLOOR = re.compile(r"^(fail_under\s*=\s*)(\d+(?:\.\d+)?)[^\S\n]*$", re.M)
+"""바닥이 적힌 줄. **`\\s*$`였다가 개행까지 먹었다** (D-0258).
+
+`re.M`에서 `$`는 개행 **앞**에 서지만 `\\s*`가 그 개행을 이미 삼킨다. 치환이 개행을
+안 돌려주므로 `make cov-bump`가 빈 줄을 지웠고, 다음 줄이 `[section]`이었다면
+**TOML이 깨졌다.** 같은 줄의 후행 공백만 먹는다."""
 
 
 def floor(text: str) -> float:

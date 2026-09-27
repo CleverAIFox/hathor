@@ -37,13 +37,14 @@ CALLERS = (
 
 TOOL_CALL = re.compile(r"tools/([a-z_0-9]+)\.(?:py|sh)")
 
-UNTESTED = 8
-"""**자기 시험이 없는 관문 도구의 수** (D-0257).
+UNTESTED = 0
+"""**자기 시험이 없는 관문 도구의 수** (D-0257 · D-0258).
 
-한 번에 여덟을 채우면 큰 차이가 되고, 안 걸면 다음 세션이 아홉 번째를 더한다.
-D-0117이 파일 길이에, D-0149가 타입 오류에 쓴 래칫을 여기에 그대로 쓴다.
+D-0257이 여덟을 세고 «다음에 갚는다»고 빚으로 적었다. **사용자가 그 자리에서 막았다** —
+*"빚을 만들 게 아니라 바로바로 갚으라니까."* 맞는 말이라 같은 판에 여덟을 다 채웠고,
+**빚 줄은 생기기 전에 사라졌다.**
 
-늘리려면 `--allow-growth`가 아니라 **결정 기록**이 필요하다. 줄이면 이 수를 내려 박는다."""
+이제 0이다. **새 관문 도구는 시험 없이 못 들어온다** — 하나라도 늘면 여기가 빨개진다."""
 
 
 def gate_tools() -> list[str]:
@@ -57,12 +58,20 @@ def _tested() -> str:
 
 
 def untested_gate_tools() -> list[str]:
-    """관문에 서는데 **어느 시험도 열어 보지 않는** 도구."""
+    """관문에 서는데 **어느 시험도 열어 보지 않는** 도구.
+
+    시험이 도구를 부르는 꼴이 셋이다 — 경로를 통째로 적거나(`tools/ship.py`), 파일 이름만
+    적거나(`"ship.py"`), **이름만 주고 경로는 로더가 조립하거나**(`_tool("ship")`).
+    셋을 다 봐야 한다. 처음에는 마지막 꼴을 못 봐서 **여덟을 채운 판에도 여덟이라고 셌다.**
+    """
     blob = _tested()
     return [
         name
         for name in gate_tools()
-        if not any(token in blob for token in (f'"{name}.py"', f'"{name}.sh"', f"tools/{name}."))
+        if not any(
+            token in blob
+            for token in (f'"{name}"', f'"{name}.py"', f'"{name}.sh"', f"tools/{name}.")
+        )
     ]
 
 
