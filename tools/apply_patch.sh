@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # 패치 적용 + 커밋. **손으로 파일 목록을 적지 않는다** (GR-0.7 · D-0070).
 #
-#   make apply                  # 패치 폴더의 가장 최근 .patch
+#   make apply                  # 패치 폴더의 가장 최근 **hathor** .patch
 #   make apply PATCH=D0071.patch
+#   make apply WHICH=1          # 무엇을 집을지만 찍고 끝낸다 (D-0249)
 #   make apply PATCH=... NOCOMMIT=1   # 붙이기만 하고 커밋하지 않는다
 #
 # 커밋 메시지는 패치 안의 `# hathor-commit:` 줄에서 읽는다. 없으면 파일 이름을 쓴다.
+# **그 줄은 표식도 겸한다** — 패치 폴더를 여러 저장소가 나눠 쓰므로 (D-0249).
 #
 # **되돌리기·멱등성은 git이 진다.** 별도 백업 디렉터리를 만들지 않는다.
 
@@ -25,6 +27,35 @@ declared_paths() {
        }' "$1" | sort -u
 }
 ok()  { printf '\033[32m%s\033[0m\n' "$1"; }
+
+# **패치 폴더는 저장소 하나의 것이 아니다** (D-0249). 윈도 다운로드 폴더 하나에 여러
+# 저장소의 패치가 같이 떨어지므로 «가장 최근»이 남의 것일 수 있다. 실제로 그랬고
+# `git apply`가 *"No such file or directory"* 다섯 줄을 뱉은 뒤에야 알았다.
+# **표식은 이미 있었다** — 커밋 메시지를 담은 `# <저장소>-commit:` 머리다.
+MARKER='# hathor-commit:'
+
+# 이 패치가 선언한 저장소. 없으면 빈 문자열(옛 패치일 수 있으므로 막지 않는다).
+patch_origin() {
+  grep -m1 -oE '^# [a-z][a-z0-9-]*-commit:' "$1" 2>/dev/null || true
+}
+
+# 폴더에서 **우리 것 중 가장 최근**을 고른다. 하나도 없으면 1을 낸다.
+newest_ours() {
+  local file
+  while IFS= read -r file; do
+    if grep -qF -m1 "$MARKER" "$file" 2>/dev/null; then
+      printf '%s' "$file"
+      return 0
+    fi
+  done < <(ls -t "$1"/*.patch 2>/dev/null)
+  return 1
+}
+
+WHICH=""
+if [[ "${1:-}" == "--which" ]]; then
+  WHICH=1
+  shift
+fi
 
 # **`.env`를 읽는 자리는 하나다** (D-0199). 예전에는 여기서 `grep`으로 직접
 # 갈랐고 `paths.load_dotenv`와 규약이 달랐다 — CRLF · 따옴표 · `=` 주변 공백
@@ -49,12 +80,27 @@ PATCH="${1:-}"
 if [[ -z "$PATCH" ]]; then
   [[ -n "${HATHOR_PATCH_DIR:-}" ]] || die "PATCH를 주거나 .env에 HATHOR_PATCH_DIR을 적는다 (make setup)"
   [[ -d "$HATHOR_PATCH_DIR" ]] || die "패치 폴더가 없다: ${HATHOR_PATCH_DIR}"
-  PATCH="$(ls -t "${HATHOR_PATCH_DIR}"/*.patch 2>/dev/null | head -1 || true)"
-  [[ -n "$PATCH" ]] || die "${HATHOR_PATCH_DIR}에 .patch가 없다"
-elif [[ ! -f "$PATCH" && -n "${HATHOR_PATCH_DIR:-}" && -f "${HATHOR_PATCH_DIR}/${PATCH}" ]]; then
-  PATCH="${HATHOR_PATCH_DIR}/${PATCH}"
+  PATCH="$(newest_ours "$HATHOR_PATCH_DIR" || true)"
+  [[ -n "$PATCH" ]] || die "${HATHOR_PATCH_DIR}에 hathor 패치가 없다 — \`${MARKER}\` 머리로 가른다. 이름을 주면 그대로 붙인다"
+else
+  if [[ ! -f "$PATCH" && -n "${HATHOR_PATCH_DIR:-}" && -f "${HATHOR_PATCH_DIR}/${PATCH}" ]]; then
+    PATCH="${HATHOR_PATCH_DIR}/${PATCH}"
+  fi
+  # 이름을 줬어도 남의 것이면 막는다. **`git apply`가 실패하기 전에 말해야 한다** —
+  # 그 실패는 «브랜치를 확인하라»고 하고, 브랜치에는 아무 문제가 없다.
+  if [[ -f "$PATCH" ]]; then
+    origin="$(patch_origin "$PATCH")"
+    if [[ -n "$origin" && "$origin" != "$MARKER" ]]; then
+      die "$(basename "$PATCH")은 다른 저장소의 패치다 (\`${origin}\`)"
+    fi
+  fi
 fi
 [[ -f "$PATCH" ]] || die "패치가 없다: ${PATCH}"
+
+if [[ -n "$WHICH" ]]; then
+  printf '%s\n' "$PATCH"
+  exit 0
+fi
 printf '패치: %s\n' "$(basename "$PATCH")"
 
 if git apply --reverse --check "$PATCH" >/dev/null 2>&1; then

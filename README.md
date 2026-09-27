@@ -117,8 +117,9 @@ make proposal                                            # MASTER Part I ~ III �
 ## 패치 파이프 · 내보내기
 
 ```bash
-make apply                    # HATHOR_PATCH_DIR(윈도 다운로드)의 가장 최근 .patch
+make apply                    # 패치 폴더의 가장 최근 **hathor** .patch (D-0249)
 make apply PATCH=D0221.patch
+make apply WHICH=1            # 무엇을 집을지만 찍는다
 make check && git push
 make ship                     # 규약 · git 상태 · 위생 · 산출물을 한 번에 (D-0147)
 make tidy                     # 로컬 찌꺼기를 센다 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치

@@ -2275,6 +2275,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0246 | 목차에 쪽 번호가 없었다 | `core/tests/unit/test_bake_proposal.py::test_목차_쪽이_아니라_본문_쪽을_센다` |
 | D-0247 | 재현 불명을 깎는 규칙 | `core/tests/unit/test_plan_counts.py` |
 | D-0248 | O-68 판정에 빠진 후보가 있었다 | `core/tests/unit/test_model_licenses.py` |
+| D-0249 | 패치 폴더는 우리 것만 있는 곳이 아니었다 | `core/tests/unit/test_apply_patch.py` |
 
 <!-- decision-ledger:end -->
 

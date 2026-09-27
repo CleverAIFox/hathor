@@ -114,8 +114,8 @@ ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
 proposal:      ## 기획서를 MASTER Part I ~ III에서 빌드한다. graphviz · 한글 글꼴 필요 (D-0221)
 	cd core && uv run --group docs python ../tools/build_proposal.py
 
-apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [NOCOMMIT=1] (D-0070)
-	@bash tools/apply_patch.sh $(PATCH)
+apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [WHICH=1] [NOCOMMIT=1] (D-0070 · D-0249)
+	@bash tools/apply_patch.sh $(if $(WHICH),--which,) $(PATCH)
 
 clean:         ## 저장소의 파이썬 바이트코드만 지운다. **.venv/와 var/는 건드리지 않는다** (D-0148)
 	find . -type d \( -name .venv -o -name var -o -name node_modules \) -prune -o \
