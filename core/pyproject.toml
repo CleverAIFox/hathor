@@ -168,6 +168,28 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+# D-0003. **실존 가수의 음색을 복제하지 않는다.** 그 결정이 표에서 «어기면 가장 나쁜 것»
+# 둘 중 하나이고, 짝인 D-0015는 D-0134가 이미 못 박았다 (위 계약). 여기가 나머지다.
+#
+# 지금 `hathor.engines.vocal`은 빈 모듈이다. **구멍이 0일 때 박는다** — 가창 엔진이
+# 라이브러리 오디오와 그 표현을 임포트조차 못 하면, 그 오디오에서 성문을 뽑는 길이
+# 타입 수준에서 막힌다. 화자 공간은 밖에서 주입받는다 (D-0002).
+#
+# 낱말로 막는 쪽은 tools/check_forbidden.py가 든다 — 이름(`rvc` · `so-vits` 등)을 센다.
+name = "가창 엔진은 라이브러리 오디오를 모른다"
+type = "forbidden"
+source_modules = ["hathor.engines.vocal"]
+forbidden_modules = [
+  "hathor.domain.entities.audio_stream",
+  "hathor.domain.ports.audio_analysis",
+  "hathor.infrastructure.demucs_separator",
+  "hathor.infrastructure.ffmpeg_audio_decoder",
+  "hathor.infrastructure.mert_feature_extractor",
+  "hathor.infrastructure.npz_feature_store",
+  "hathor.infrastructure.track_bundle_store",
+]
+
+[[tool.importlinter.contracts]]
 name = "애플리케이션은 구현체를 모른다"
 type = "forbidden"
 source_modules = ["hathor.application"]

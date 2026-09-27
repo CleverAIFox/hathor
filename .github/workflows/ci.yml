@@ -45,6 +45,10 @@ jobs:
         working-directory: .
         run: python3 tools/check_egress.py --check
 
+      - name: Forbidden by decision
+        working-directory: .
+        run: python3 tools/check_forbidden.py --check
+
       - name: Model licenses
         working-directory: .
         run: python3 tools/check_model_licenses.py --check

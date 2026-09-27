@@ -2100,10 +2100,13 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 
 | 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |
 |---|---|---|
+| D-0002 | 본인 보컬 시드 녹음을 P7까지 연기한다 | `tools/check_forbidden.py` |
+| D-0003 | 실존 가수의 음색 복제·보간은 구현하지 않는다 | `tools/check_forbidden.py` |
 | D-0004 | 저장소를 WSL ext4에 두고 F 드라이브는 데이터 전용으로 쓴다 | `core/tests/unit/test_paths.py` |
 | D-0005 | 가사는 태그 우선, STT 폴백 경로를 유지한다 | `core/tests/unit/test_lyrics_axis.py` |
 | D-0006 | ISRC 부재로 Chromaprint 지문 정규화가 주 경로가 된다 | `core/tests/unit/test_musicbrainz_lookup.py` |
 | D-0009 | 노트북 2대 역할을 재정의하고 파이썬 3.12로 고정한다 | `core/tests/unit/test_paths.py` |
+| D-0012 | 취향 웜스타트는 적응적 쌍대비교로 수행한다 | `tools/check_forbidden.py — «랜덤 포레스트» 호칭 금지분만` |
 | D-0013 | 라이브러리 변경 추적은 명시적 재스캔 + 델타 감지로 한다 | `core/tests/unit/test_cli.py` |
 | D-0014 | 아티스트 파서는 정규화하지 않고 후보를 제시한다 | `core/tests/unit/test_artist_name_parser.py` |
 | D-0015 | 로컬 에이전트 아키텍처를 채택하고 오디오 비이동을 불변 원칙으로 둔다 | `tools/check_egress.py` |
@@ -2116,9 +2119,11 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0023 | 검색 평가 하네스를 태그 동치류로 구성한다 (M0/M1/M2) | `core/tests/unit/test_evaluate_retrieval.py` |
 | D-0025 | MERT와 MFCC는 상보적이다 | `core/tests/unit/test_npz_feature_store.py` |
 | D-0028 | 취향 라벨 수집은 무작위 평가 집합을 먼저 확보한다 | `core/tests/unit/test_taste_collection.py` |
+| D-0029 | 주기능은 시드곡 퓨전이다 | `core/tests/unit/test_search_similar.py` |
 | D-0030 | 임베딩 공간이 뭉쳐 허브 곡이 생긴다 | `core/tests/unit/test_isotropy.py` |
 | D-0033 | 시드 결합 규칙을 실측으로 고른다 | `core/tests/unit/test_evaluate_fusion.py` |
 | D-0036 | 가사축은 문자 n-gram 해싱 베이스라인으로 착수한다 | `core/tests/unit/test_lyrics_axis.py` |
+| D-0039 | 문서 체계를 3축으로 명시한다 | `tools/check_doc_style.py` |
 | D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` |
 | D-0041 | M0에 순위 진단과 해석적 베이스라인을 넣는다 | `core/tests/unit/test_retrieval_metrics.py` |
 | D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/check_decisions.py` |
@@ -2143,6 +2148,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0072 | 커밋 대상을 패치와 대조한다 | `tools/apply_patch.sh` |
 | D-0073 | O-27 (a) 타악 분리를 구현한다 | `core/tests/unit/test_harmony_prior_cli.py` |
 | D-0075 | 조성 추출을 이어받게 한다 | `core/tests/unit/test_ingest_resume.py` |
+| D-0076 | (결번) 기록이 유실됐다 | `tools/check_decisions.py` |
 | D-0077 | 추출을 동시에 못 돌게 한다 | `core/tests/unit/test_ingest_resume.py` |
 | D-0079 | O-29 도구를 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` |
 | D-0080 | 결정 기록 자신의 규약을 기계가 검사하게 한다 | `tools/check_decisions.py` |
@@ -2179,6 +2185,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0119 | 교두보가 실제 기기에서 세 자리에 걸렸다 | `core/tests/unit/test_sync_artifacts.py` |
 | D-0120 | 쓰지 않는 것을 옮기다 죽었다 | `core/tests/unit/test_sync_artifacts.py` |
 | D-0121 | 검사를 만들어 놓고 안 불렀다 | `core/tests/unit/test_check_decisions.py` |
+| D-0122 | 광인사가 사라졌다 | `tools/check_forbidden.py — copy2 금지분만` |
 | D-0123 | 화성 리듬은 손잡이가 아니다 | `core/tests/unit/test_chord_rhythm.py` |
 | D-0124 | 유지 확률을 곡에서 뽑아 판정에 건다 | `core/tests/unit/test_evaluate_order_conditioning.py ·` |
 | D-0126 | 닫힌 질문을 코드가 열린 것처럼 적는다 | `tools/check_issue_mentions.py` |
@@ -2287,6 +2294,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0258 | 빚으로 적지 않고 같은 판에 갚는다 | `core/tests/unit/test_gate_tools.py` |
 | D-0259 | «시험이 있다»와 «시험이 민다»는 다르다 | `core/tests/unit/test_gate_tools.py` |
 | D-0260 | `eval` 보고를 `main.py`에서 뗀다 | `core/tests/unit/test_file_size.py` |
+| D-0261 | 결정이 금지한 것을 검사가 막는다 | `tools/check_forbidden.py` |
 
 <!-- decision-ledger:end -->
 

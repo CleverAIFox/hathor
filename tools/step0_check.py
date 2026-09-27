@@ -33,13 +33,12 @@ AUDIO_EXTS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".wma", 
 REPORT_PATH = Path("hathor_step0_report.json")
 
 # VRAM(GB) 기준 작업별 요구량
-VRAM_REQUIREMENTS = [
+VRAM_REQUIREMENTS = [  # 음색 변환은 D-0003이 금지했다 — D-0261이 그 줄을 뺐다
     ("Demucs 스템 분리 (segment 조절)", 4, "곡당 2~4분. 필수 기능"),
     ("MERT 임베딩 추출 (fp16)", 4, "취향 벡터의 핵심"),
     ("CLAP 임베딩 추출", 3, "자연어 음악 검색"),
     ("faster-whisper large-v3 (int8)", 4, "가사 태그 없는 곡 전사"),
     ("SDXL 앨범 커버 (fp16 + slicing)", 6, "앨범 커버 생성"),
-    ("RVC v2 학습 (batch 1~2)", 6, "가창 음색 변환"),
     ("MIDI Transformer 학습 (small)", 6, "멜로디 생성"),
     ("한국어 LLM 8B 추론 (4bit)", 6, "챗봇 · 군집 서술"),
     ("한국어 LLM 8B QLoRA 학습", 10, "작사 특화 (선택)"),
