@@ -95,3 +95,48 @@ def test_문서_문자열_속_예시는_안_잡는다(tmp_path, monkeypatch):
     (tmp_path / "Makefile").write_text("x:\n\ttrue\n", encoding="utf-8")
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
     assert CHECKER.check_wiring() == []
+
+
+# --------------------------------------------------------- 세어서 적은 수 (D-0263)
+
+
+def test_저장소의_수가_실물과_같다():
+    """**D-0263의 강제자.** `make docs`가 매번 보는 것이다."""
+    assert CHECKER.check_counts() == []
+
+
+def test_계약_수가_어긋나면_잡는다(tmp_path, monkeypatch):
+    """**D-0261이 여섯째 계약을 넣고 «계약 5종» 네 곳을 안 고쳤다** (D-0263).
+
+    경로도 도구도 실재하므로 이 검사의 다른 눈에는 안 걸렸다 — **숫자만 틀렸다.**
+    경로가 틀리면 명령이 죽어서 알게 되지만 수가 틀리면 아무 일도 안 일어난다.
+    """
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "MASTER.md").write_text("**계약 5종**\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        CHECKER, "COUNTED", ((CHECKER.COUNTED[0][0], CHECKER.COUNTED[0][1], lambda: 6),)
+    )
+
+    problems = CHECKER.check_counts()
+    assert len(problems) == 1
+    assert "5종이라 적혔는데 실물은 6종이다" in problems[0]
+
+
+def test_맞는_수는_안_잡는다(tmp_path, monkeypatch):
+    """**맞을 때 조용해야 검사다.** 비교를 뒤집으면 여기가 운다."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "MASTER.md").write_text(
+        "import-linter 계약 6종 전부 KEPT\n| 계층 계약 | import-linter 6종 |\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        CHECKER, "COUNTED", ((CHECKER.COUNTED[0][0], CHECKER.COUNTED[0][1], lambda: 6),)
+    )
+
+    assert CHECKER.check_counts() == []
+
+
+def test_계약_수를_pyproject에서_센다():
+    """**정본은 `core/pyproject.toml` 하나다** (D-0223). 문서가 아니라 선언을 센다."""
+    assert CHECKER.contract_count() == 6

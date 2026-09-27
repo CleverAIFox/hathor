@@ -6,6 +6,7 @@ __pycache__/
 .mypy_cache/
 .mypy_cache_src/
 .mypy_cache_tests/
+.mypy_cache_tools/
 .ruff_cache/
 .coverage
 .import_linter_cache/

@@ -34,7 +34,9 @@ def main() -> int:
         if unicodedata.normalize("NFC", name) != name:
             nfd_names += 1
         try:
-            tags = ID3(path)
+            # mutagen의 `ID3`는 상류에서 주석이 없다. 우리가 고칠 수 없으므로
+            # **여기 한 줄에만 선언하고 넘긴다** (D-0219 · D-0263).
+            tags = ID3(path)  # type: ignore[no-untyped-call]
         except ID3NoHeaderError:
             frame_counter["<NO_ID3_HEADER>"] += 1
             continue
@@ -42,7 +44,7 @@ def main() -> int:
             failures.append((name, f"{type(exc).__name__}: {exc}"))
             continue
 
-        keys = set(tags.keys())
+        keys = set(tags.keys())  # type: ignore[no-untyped-call]
         prefixes = {k.split(":")[0] for k in keys}
         for prefix in prefixes:
             frame_counter[prefix] += 1

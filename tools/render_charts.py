@@ -24,6 +24,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
+from matplotlib.patches import Rectangle
 from proposal_source import (
     ROOT,
     SourceError,
@@ -182,7 +183,7 @@ def requirement_status(out: Path) -> Path:
                 left += value
     ax.set_yticks(range(len(groups)), [f"REQ-{g}" for g, _ in reversed(groups)])
     ax.set_xlabel("요구사항 수")
-    handles = [plt.Rectangle((0, 0), 1, 1, color=STATUS_COLORS[s]) for s in order]
+    handles = [Rectangle((0, 0), 1, 1, color=STATUS_COLORS[s]) for s in order]
     ax.legend(
         handles,
         order,
@@ -436,15 +437,13 @@ def harmony_layers(out: Path) -> Path:
     front = [number(v) for v in found.column("앞절반")]
     back = [number(v) for v in found.column("뒤절반")]
     whole = [number(v) for v in found.column("전체")]
-    mfcc = (
-        number(
-            re.search(
-                r"MFCC\((\d\.\d+)\)", section(source(), "### □ 층별 화성 — 화성축 (D-0181)")
-            ).group(1)
-        )
-        if re.search(r"MFCC\(", source())
-        else 0.0
+    # **찾은 것과 물어본 것이 달랐다** (D-0263). 조건은 `source()` 전체에서 `MFCC(`를
+    # 찾고 값은 그 절에서 `MFCC(숫자.숫자)`를 찾았다 — 절 밖에 `MFCC(`가 있고 절 안의
+    # 표기가 다르면 `.group(1)`이 `None`에 걸려 죽는다. **한 번 찾고 그것만 본다.**
+    baseline = re.search(
+        r"MFCC\((\d\.\d+)\)", section(source(), "### □ 층별 화성 — 화성축 (D-0181)")
     )
+    mfcc = number(baseline.group(1)) if baseline else 0.0
     fig, ax = plt.subplots(figsize=(WIDTH, 2.6))
     x = range(len(layers))
     ax.bar([i - 0.27 for i in x], front, width=0.27, color=SKY, label="앞절반")

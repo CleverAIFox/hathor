@@ -28,6 +28,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple, Protocol
 
 AUDIO_EXTS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".wma", ".aiff", ".alac"}
 REPORT_PATH = Path("hathor_step0_report.json")
@@ -82,43 +83,63 @@ def run(cmd: list[str]) -> str | None:
 
 
 # ---------------------------------------------------------------- 1. 시스템
-def check_system() -> dict:
-    hr("1. 시스템")
-    info = {
-        "os": f"{platform.system()} {platform.release()}",
-        "machine": platform.machine(),
-        "python": sys.version.split()[0],
-        "cpu_count": os.cpu_count(),
-    }
+def check_system() -> dict[str, object]:
+    """**판단은 지역 변수로 하고 사전은 보고서로만 쓴다** (D-0263).
 
-    try:
+    옛 판은 `info: dict`에 값을 담고 그 사전에서 다시 꺼내 `info["disk_free_gb"] < 100`으로
+    비교했다. 사전 값의 타입은 `str | int | None`이라 **`str < int`이 될 수 있는 비교였고**
+    검사기가 없어 아무도 안 봤다. 값을 지역 변수로 두면 그 비교가 애초에 불가능하다.
+    """
+    hr("1. 시스템")
+    python = sys.version.split()[0]
+    ram_gb: float | None = None
+    # `psutil`은 선택 의존이다. **`except: pass`가 아니라 적어 둔 것으로 쓴다** (D-0230).
+    with contextlib.suppress(ImportError):
         import psutil
 
-        info["ram_gb"] = round(psutil.virtual_memory().total / 1024**3, 1)
-    except ImportError:
-        info["ram_gb"] = None
+        ram_gb = round(psutil.virtual_memory().total / 1024**3, 1)
 
     total, _used, free = shutil.disk_usage(Path.home())
-    info["disk_free_gb"] = round(free / 1024**3, 1)
-    info["disk_total_gb"] = round(total / 1024**3, 1)
+    free_gb = round(free / 1024**3, 1)
+    total_gb = round(total / 1024**3, 1)
 
-    print(f"  OS          : {info['os']} ({info['machine']})")
-    print(f"  Python      : {info['python']}")
-    print(f"  CPU 코어    : {info['cpu_count']}")
-    print(f"  RAM         : {info['ram_gb'] or '미확인 (pip install psutil)'} GB")
-    print(f"  디스크 여유 : {info['disk_free_gb']} GB / {info['disk_total_gb']} GB")
+    print(f"  OS          : {platform.system()} {platform.release()} ({platform.machine()})")
+    print(f"  Python      : {python}")
+    print(f"  CPU 코어    : {os.cpu_count()}")
+    print(f"  RAM         : {ram_gb or '미확인 (pip install psutil)'} GB")
+    print(f"  디스크 여유 : {free_gb} GB / {total_gb} GB")
 
-    if old_python(info["python"]):
+    if old_python(python):
         print(f"  [경고] Python {'.'.join(str(n) for n in PYTHON_FLOOR)} 이상을 권장한다.")
-    if info["disk_free_gb"] < 100:
+    if free_gb < 100:
         print("  [경고] 여유 공간 100GB 미만. 스템 분리 산출물이 원본의 4배를 차지한다.")
-    return info
+
+    return {
+        "os": f"{platform.system()} {platform.release()}",
+        "machine": platform.machine(),
+        "python": python,
+        "cpu_count": os.cpu_count(),
+        "ram_gb": ram_gb,
+        "disk_free_gb": free_gb,
+        "disk_total_gb": total_gb,
+    }
+
+
+class Device(NamedTuple):
+    """`nvidia-smi` 한 줄. **이름이 붙은 자리가 사전보다 안전하다** (D-0263).
+
+    옛 판은 `info["devices"]`에 사전을 넣고 `max(d["vram_gb"] for d in …)`로 꺼냈다.
+    그 값은 `object`이고 `max`는 비교를 하므로 **타입 검사기가 있으면 통과하지 못한다.**"""
+
+    name: str
+    vram_gb: float
+    driver: str
 
 
 # ---------------------------------------------------------------- 2. GPU
-def check_gpu() -> dict:
+def check_gpu() -> dict[str, object]:
     hr("2. GPU / VRAM")
-    info: dict = {"available": False, "devices": []}
+    devices: list[Device] = []
 
     out = run(
         [
@@ -131,26 +152,28 @@ def check_gpu() -> dict:
         print("  NVIDIA GPU를 찾지 못했다.")
         print("  → GPU 없이도 인제스트·정규화·EDA·DB 작업은 전부 가능하다.")
         print("  → 모델 관련 작업은 RunPod 등 클라우드 GPU로 처리한다.")
-        return info
+        return {"available": False, "devices": []}
 
-    info["available"] = True
     for line in out.splitlines():
         parts = [p.strip() for p in line.split(",")]
         if len(parts) < 3:
             continue
-        name, mem_mb, driver = parts[0], parts[1], parts[2]
-        vram = round(int(mem_mb) / 1024, 1)
-        info["devices"].append({"name": name, "vram_gb": vram, "driver": driver})
-        print(f"  {name}")
-        print(f"    VRAM   : {vram} GB")
-        print(f"    드라이버: {driver}")
+        device = Device(parts[0], round(int(parts[1]) / 1024, 1), parts[2])
+        devices.append(device)
+        print(f"  {device.name}")
+        print(f"    VRAM   : {device.vram_gb} GB")
+        print(f"    드라이버: {device.driver}")
 
-    if not info["devices"]:
+    info: dict[str, object] = {
+        "available": True,
+        "devices": [device._asdict() for device in devices],
+    }
+    if not devices:
         return info
 
-    vram = max(d["vram_gb"] for d in info["devices"])
+    vram = max(device.vram_gb for device in devices)
     print(f"\n  [VRAM {vram} GB 기준 실행 가능 여부]")
-    verdict = {}
+    verdict: dict[str, dict[str, object]] = {}
     for task, need, note in VRAM_REQUIREMENTS:
         ok = vram >= need
         verdict[task] = {"required_gb": need, "possible": ok}
@@ -162,9 +185,9 @@ def check_gpu() -> dict:
 
 
 # ---------------------------------------------------------------- 3. 파이썬 환경
-def check_python_env() -> dict:
+def check_python_env() -> dict[str, object]:
     hr("3. Python 라이브러리")
-    info: dict = {}
+    info: dict[str, object] = {}
 
     try:
         import torch
@@ -207,8 +230,18 @@ def check_python_env() -> dict:
     return info
 
 
+class _Tags(Protocol):
+    """태그 묶음에서 **필요한 것은 `get` 하나다** (D-0263).
+
+    mutagen의 태그 형은 컨테이너마다 다르고(`ID3` · `MP4Tags` · `VCFlacDict`) 공통 조상이
+    쓸모없다. `object`라고 적으면 `.get`이 없다고 빨개지고, `Any`라고 적으면 무엇이든
+    받는다 — **필요한 모양만 적는 것이 그 사이다.**"""
+
+    def get(self, key: str) -> object: ...
+
+
 # ---------------------------------------------------------------- 4. 음원 스캔
-def scan_library(root: Path) -> dict:
+def scan_library(root: Path) -> dict[str, object]:
     hr("4. 음원 라이브러리 스캔")
 
     try:
@@ -231,9 +264,8 @@ def scan_library(root: Path) -> dict:
         print("  오디오 파일을 찾지 못했다. 경로를 확인한다.")
         return {"error": "no_audio_files", "path": str(root)}
 
-    fmt = Counter()
-    sample_rates = Counter()
-    bit_depths = Counter()
+    fmt: Counter[str] = Counter()
+    sample_rates: Counter[int] = Counter()
     duration_s = 0.0
     size_bytes = 0
 
@@ -267,16 +299,13 @@ def scan_library(root: Path) -> dict:
             duration_s += float(getattr(inf, "length", 0) or 0)
             sr = getattr(inf, "sample_rate", None)
             if sr:
-                sample_rates[sr] += 1
-            bd = getattr(inf, "bits_per_sample", None)
-            if bd:
-                bit_depths[bd] += 1
+                sample_rates[int(sr)] += 1
 
         tags = getattr(audio, "tags", None)
         if tags is None:
             continue
 
-        keys = set()
+        keys: set[str] = set()
         with contextlib.suppress(Exception):
             keys = {str(k).upper() for k in tags}
 
@@ -295,7 +324,7 @@ def scan_library(root: Path) -> dict:
         if any("ISRC" in k for k in keys):
             has_isrc += 1
 
-        def present(*names: str, keys: set[str] = keys, tags: object = tags) -> bool:
+        def present(*names: str, keys: set[str] = keys, tags: _Tags = tags) -> bool:
             for n in names:
                 if n in keys:
                     return True
@@ -385,7 +414,7 @@ def main() -> None:
     print("\nHATHOR — STEP 0 환경 점검")
     print(f"실행 시각: {datetime.now():%Y-%m-%d %H:%M:%S}")
 
-    report = {
+    report: dict[str, object] = {
         "generated_at": datetime.now().isoformat(),
         "system": check_system(),
         "gpu": check_gpu(),

@@ -284,7 +284,8 @@ def plan_render(out: Path, font: str) -> Path:
     steps = re.findall(r"^(\d)\. (\S+(?: · \S+)*)\s{2,}(.+?)\s{2,}(D-\d{4}.*)$", block, re.M)
     if len(steps) < 6:
         raise SourceError("기획 · 렌더 블록에서 단계를 못 읽었다")
-    plan, rend = [], []
+    plan: list[str] = []
+    rend: list[str] = []
     for number, name, what, ref in steps:
         label = f"{number}. {name}\\n{what.strip()}\\n{ref.strip()}"
         target = plan if int(number) <= 6 else rend

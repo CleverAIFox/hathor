@@ -101,6 +101,11 @@ jobs:
       - name: Type check
         run: uv run mypy hathor --strict --cache-dir .mypy_cache_src
 
+      # D-0263. 관문 도구가 타입 검사 밖이었다. `ship.py`의 `GREEN`이 문자열에서 튜플로
+      # 덮여 여덟 판이 머리글에 튜플을 찍었고, **이 한 줄이 있었으면 첫 판에서 잡혔다.**
+      - name: Gate tool type check
+        run: uv run mypy ../tools --strict --cache-dir .mypy_cache_tools
+
       - name: Architecture boundary
         run: uv run lint-imports
 

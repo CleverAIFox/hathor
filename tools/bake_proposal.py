@@ -28,6 +28,13 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - 검사기만 읽는다
+    # **`python-docx`는 `docs` 묶음에만 있다** (D-0263). 실행 시 임포트는 함수 안에서
+    # 하고 형만 여기서 빌린다 — `object`라고 적었더니 `.text`·`.add_run`이 전부 빨개졌다.
+    from docx.document import Document as DocxDocument
+    from docx.text.paragraph import Paragraph
 
 ROOT = Path(__file__).resolve().parent.parent
 TOC_HEADING = "목차"
@@ -87,11 +94,11 @@ def locate(pages: list[str], titles: list[str]) -> dict[str, int]:
     return found
 
 
-def toc_paragraphs(document: object, titles: set[str]) -> list[object]:
+def toc_paragraphs(document: DocxDocument, titles: set[str]) -> list[Paragraph]:
     """목차 제목 아래에 이어지는 항목 문단들."""
-    rows: list[object] = []
+    rows: list[Paragraph] = []
     seen_heading = False
-    for paragraph in document.paragraphs:  # type: ignore[attr-defined]
+    for paragraph in document.paragraphs:
         text = paragraph.text.strip()
         if not seen_heading:
             seen_heading = text == TOC_HEADING

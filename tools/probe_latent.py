@@ -135,19 +135,20 @@ def vectors_of(out: Path, wanted: str) -> tuple[dict[str, np.ndarray], Path | No
     이름만 주면 사전 순으로 먼저 오는 폴더를 집는다 — 가사 임베딩이 걸릴 수 있다.
     **우연히 맞는 것은 맞은 것이 아니다.**
     """
-    home, _, name = wanted.rpartition(":")
-    wanted = name
+    home, _, wanted = wanted.rpartition(":")
     for folder in stores_under(out):
         if home and folder.name != home:
             continue
         store = NpzFeatureStore(folder)
         found: dict[str, np.ndarray] = {}
         for record in store.read_records():
-            key, name = record.get("source_key"), record.get("vector_file")
-            if not isinstance(key, str) or not isinstance(name, str):
+            # **`name`을 다시 쓰지 않는다** (D-0263). 위에서 `name`은 찾는 임베딩 이름이고
+            # 여기서는 벡터 파일 이름이다 — 한 함수에서 이름 하나가 뜻 둘이면 사고가 된다.
+            key, vector_file = record.get("source_key"), record.get("vector_file")
+            if not isinstance(key, str) or not isinstance(vector_file, str):
                 continue
             try:
-                views = store.read_vectors(name)
+                views = store.read_vectors(vector_file)
             except (OSError, ValueError, KeyError):
                 continue
             if wanted in views:
@@ -318,11 +319,12 @@ def eda(keys: list[str], labels: dict[str, str], matrix: np.ndarray, k: int) -> 
     for name, _, score in rows:
         modes.setdefault(name.rsplit(" ", 1)[-1], []).append(score)
     print("\n으뜸음 말고 **장단**으로 묶으면")
-    for mode, found in sorted(modes.items()):
+    # **`found`를 다시 쓰지 않는다** (D-0263). 위에서 `found`는 `RetrievalScore`였고
+    # 여기서는 점수 목록이다 — `len()`과 `median()`이 그 위에서 돌고 있었다.
+    for mode, scored in sorted(modes.items()):
         songs = sum(count for name, count, _ in rows if name.endswith(mode))
-        print(
-            f"  {mode:<8} {len(found):>2}종 {songs:>4}곡  P@{k} 중앙 {float(np.median(found)):.4f}"
-        )
+        middle = float(np.median(scored))
+        print(f"  {mode:<8} {len(scored):>2}종 {songs:>4}곡  P@{k} 중앙 {middle:.4f}")
     print("  **D-0054의 나란한조 혼동이 여기 있을 수 있다** — 오염된 쪽은 못 맞힌다")
 
 

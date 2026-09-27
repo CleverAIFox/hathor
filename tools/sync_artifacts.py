@@ -395,7 +395,7 @@ def verify(local: Path, store: Path | None, full: bool) -> int:
         row[0] += 1
         if not full:
             continue
-        mark = [mine[0], mine[1], yours[1]]
+        mark: list[int | str] = [mine[0], mine[1], yours[1]]
         if sealed.get(name, [None])[:3] == mark:
             continue
         checked += 1
@@ -412,8 +412,10 @@ def verify(local: Path, store: Path | None, full: bool) -> int:
     print(f"{'계열':<30}{'같음':>8}{'다름':>8}{'여기만':>8}{'교두보만':>10}")
     print("-" * 66)
     for name, (same, differ, only_here, only_there) in sorted(rows.items()):
-        mark = "  ← **다르다**" if differ else ""
-        print(f"{name:<30}{same:>8}{differ:>8}{only_here:>8}{only_there:>10}{mark}")
+        # **`mark`가 아니다** (D-0263). 위쪽 `mark`는 봉인의 근거(크기 · 시각 · 해시)이고
+        # 이것은 화면에 찍는 글자다. 한 함수에서 이름 하나가 뜻 둘이면 `ship.py`의 `GREEN`이 된다.
+        flag = "  ← **다르다**" if differ else ""
+        print(f"{name:<30}{same:>8}{differ:>8}{only_here:>8}{only_there:>10}{flag}")
     for line in broken[:10]:
         print(f"  {line}", file=sys.stderr)
     if len(broken) > 10:

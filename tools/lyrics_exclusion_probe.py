@@ -43,8 +43,11 @@ ROOT = Path(__file__).resolve().parents[1]
 """저장소 루트. 경로 인자를 여기 기준으로 푼다 (D-0069 · D-0153)."""
 
 
-def diagnose(text: str) -> dict[str, object]:
-    """분할이 실패한 지점을 단계별로 짚는다. `split_segments`의 순서를 따른다."""
+def diagnose(text: str) -> dict[str, int]:
+    """분할이 실패한 지점을 단계별로 짚는다. `split_segments`의 순서를 따른다.
+
+    **전부 수다** (D-0263). `dict[str, object]`라고 적었더니 읽는 쪽이 `int()`로 다시
+    감쌌고 — 그 `int()`는 `object`에서 통하지 않아 검사기가 잡았다."""
     normalized = normalize_lyrics(text)
     lines = [line for line in normalized.split("\n") if line.strip()]
     blocks = [block for block in BLANK_LINE.split(normalized) if block.strip()]
@@ -59,12 +62,12 @@ def diagnose(text: str) -> dict[str, object]:
     }
 
 
-def verdict(facts: dict[str, object]) -> str:
-    lines = int(facts["lines"])
-    chars = int(facts["chars"])
+def verdict(facts: dict[str, int]) -> str:
+    lines = facts["lines"]
+    chars = facts["chars"]
     if lines <= 1 and chars > 200:
         return "한 줄짜리 태그 — 줄바꿈이 없어 4줄 폴백이 블록 하나만 낸다"
-    if int(facts["bracketed_lines"]) >= lines:
+    if facts["bracketed_lines"] >= lines:
         return "모든 줄이 구조 표기 — 정리 단계에서 전부 버려진다"
     if lines <= 4:
         return f"줄이 {lines}개뿐 — 폴백 단위(4줄)로 블록 하나다"
@@ -86,7 +89,7 @@ def main() -> int:
     parser.add_argument("--show", type=int, default=300, help="원문 앞부분을 몇 자 보일지")
     args = parser.parse_args()
 
-    excluded: list[tuple[str, str, dict[str, object]]] = []
+    excluded: list[tuple[str, str, dict[str, int]]] = []
     total = 0
     no_lyrics = 0
 

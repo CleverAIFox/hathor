@@ -29,12 +29,29 @@ def query(entity: str, params: dict[str, str]) -> dict[str, object]:
     for attempt in range(4):
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                return json.loads(response.read().decode("utf-8"))
+                loaded = json.loads(response.read().decode("utf-8"))
+                # **남의 서버가 준 것은 모양을 모른다** (D-0263). `Any`를 그대로
+                # 돌려주면 이 아래 전부가 검사 밖으로 나간다.
+                return loaded if isinstance(loaded, dict) else {}
         except Exception as exc:
             wait = INTERVAL * (attempt + 1) * 2
             print(f"  재시도 {attempt + 1}/3 ({exc}) {wait:.1f}s", file=sys.stderr)
             time.sleep(wait)
     return {}
+
+
+def hits_of(result: dict[str, object], field: str) -> list[dict[str, object]]:
+    """검색 결과의 후보 목록. **모양이 아니면 빈 목록이다** (D-0263)."""
+    found = result.get(field)
+    if not isinstance(found, list):
+        return []
+    return [one for one in found if isinstance(one, dict)]
+
+
+def score_of(hit: dict[str, object]) -> int:
+    """후보의 `score`. **없거나 수가 아니면 0이다** (D-0263)."""
+    value = hit.get("score", 0)
+    return int(value) if isinstance(value, int | float | str) else 0
 
 
 def load_rows() -> list[dict[str, object]]:
@@ -79,8 +96,8 @@ def judge(hits: list[dict[str, object]]) -> tuple[str, int, int]:
     """1·2순위 점수 격차로 판정한다. score 단독으로는 오답을 못 거른다."""
     if not hits:
         return "UNRESOLVED", 0, 0
-    top = int(hits[0].get("score", 0))
-    second = int(hits[1].get("score", 0)) if len(hits) > 1 else 0
+    top = score_of(hits[0])
+    second = score_of(hits[1]) if len(hits) > 1 else 0
     if top < 90:
         return "UNRESOLVED", top, second
     if top - second < 10:
@@ -103,8 +120,8 @@ def probe_artists(rows: list[dict[str, object]]) -> dict[str, tuple[str, str]]:
     out: dict[str, tuple[str, str]] = {}
     for index, (key, name) in enumerate(sorted(names.items()), 1):
         result = query("artist", {"query": name, "fmt": "json", "limit": "2"})
-        hits = result.get("artists") or []
-        verdict, top, second = judge(hits)  # type: ignore[arg-type]
+        hits = hits_of(result, "artists")
+        verdict, top, second = judge(hits)
         matched = str(hits[0].get("name", "")) if hits else ""
         out[key] = (verdict, matched)
         print(f"  {index:>3}/{len(names)} {verdict:<10} {top:>3}/{second:<3} {name} -> {matched}")
@@ -140,9 +157,8 @@ def probe_recordings(
             "recording",
             {"query": f'recording:"{title}" AND artist:"{artist}"', "fmt": "json", "limit": "3"},
         )
-        hits = result.get("recordings") or []
-        top = hits[0] if hits else None
-        score = int(top.get("score", 0)) if isinstance(top, dict) else 0
+        hits = hits_of(result, "recordings")
+        score = score_of(hits[0]) if hits else 0
         ok = score >= 90
         tally["resolved" if ok else "unresolved"] += 1
         print(f"  {index:>4}/{len(rows)} {'O' if ok else 'X'} score={score:>3} {artist} - {title}")

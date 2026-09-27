@@ -95,8 +95,11 @@ def parsed(path: Path) -> ast.Module | None:
         return None
 
 
-def _named(node: ast.AST) -> str:
-    """호출 · 속성의 점 이름. `pytest.raises` 같은 것을 문자열로 본다."""
+def _named(node: ast.AST | None) -> str:
+    """호출 · 속성의 점 이름. `pytest.raises` 같은 것을 문자열로 본다.
+
+    **`None`을 받는다** (D-0263). `except:`(맨몸)의 `node.type`은 `None`이고 이 함수는
+    이미 그것을 빈 문자열로 처리하고 있었다 — 서명만 `AST`라고 거짓말했다."""
     return ast.unparse(node) if isinstance(node, ast.expr) else ""
 
 

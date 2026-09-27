@@ -125,12 +125,15 @@ def self_test() -> int:
     print("\n\n귀무 대조 — 실측 대 창 순서 뒤섞음\n")
     print(f"{'참 길이(창)':>10} {'실측':>7} {'뒤섞음':>7} {'차이':>8} {'t':>8} {'승률':>7}")
     for truth in (1, 2, 4, 8, 16):
-        left, right = [], []
+        left: list[float] = []
+        right: list[float] = []
         for seed in range(40):
             series = synth(truth, 960, noise=0.25, seed=seed)
-            got, shaken = measure(series), measure(shuffled(series, seed=100 + seed))
-            if got is not None and shaken is not None:
-                left.append(got)
+            # **위쪽 고리의 `got`은 `list[float]`이다** (D-0263). 한 함수에서 이름 하나가
+            # 뜻 둘이면 `ship.py`의 `GREEN`이 된다 — 그쪽은 실제로 여덟 판을 망쳤다.
+            real, shaken = measure(series), measure(shuffled(series, seed=100 + seed))
+            if real is not None and shaken is not None:
+                left.append(real)
                 right.append(shaken)
         arr_l, arr_r = np.asarray(left), np.asarray(right)
         gap = arr_l - arr_r

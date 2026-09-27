@@ -704,7 +704,7 @@ HATHOR
 
 | ID | 요구사항 | 우선 | 단계 | 상태 | 비고 |
 |---|---|---|---|---|---|
-| REQ-INF-001 | 계층 구조를 정적 계약으로 강제한다 | M | P0 | 완료 | import-linter 5종 (D-0134) |
+| REQ-INF-001 | 계층 구조를 정적 계약으로 강제한다 | M | P0 | 완료 | import-linter 6종 (D-0134 · D-0261) |
 | REQ-INF-002 | CI에서 린트·타입·계약·테스트를 검사한다 | M | P0 | 완료 | |
 | REQ-INF-003 | 시크릿 스캔을 CI에 포함한다 | M | P0 | 완료 | 저장소 검사 · gitleaks · 커밋 훅 |
 | REQ-INF-004 | 결정적 생성 경로를 CI에서 검증한다 | M | P0 | 완료 | |
@@ -777,7 +777,7 @@ HATHOR
 
 | ID | 요구사항 | 기준 |
 |---|---|---|
-| NFR-MNT-001 | 계층 경계 | import-linter 계약 5종 전부 KEPT |
+| NFR-MNT-001 | 계층 경계 | import-linter 계약 6종 전부 KEPT |
 | NFR-MNT-002 | 타입 검사 | mypy --strict 통과 |
 | NFR-MNT-003 | 테스트 커버리지 | 바닥은 `core/pyproject.toml` 한 곳이며 래칫이다 — 실측이 3%p 넘게 앞서면 올린다 (D-0223) |
 | NFR-MNT-004 | 결정 기록 | 설계 판단은 DECISIONS.md에 배경·후보·선택·결과와 **강제자 · 재현** 줄로 기록. 형식은 검사가 본다 |
@@ -898,7 +898,7 @@ HATHOR
 | `interfaces` | CLI·REST·워커 진입점. 비즈니스 로직 없음 | → application |
 | `shared` | 설정·텔레메트리 | 없음 |
 
-**계약 5종**
+**계약 6종**
 1. 도메인은 외부를 모른다 — `domain`이 다른 계층을 import하지 않는다
 2. 애플리케이션은 구현체를 모른다 — `application`이 `infrastructure`를 import하지 않는다
 3. 엔진 간 직접 호출 금지 — 엔진끼리 서로 import하지 않는다. 조합은 `application`이 한다
@@ -906,6 +906,9 @@ HATHOR
 5. **송신부는 오디오를 모른다** — 망을 타는 모듈이 디코더·분리기·특징 추출기·파형
    타입을 import하지 않는다. D-0015의 *"타입 수준의 불가능"*을 서버 없이 구현한
    형태다 (D-0134)
+6. **가창 엔진은 라이브러리 오디오를 모른다** — `engines.vocal`이 디코더·분리기·특징
+   추출기·특징 저장소를 import하지 않는다. 낱말을 안 쓰고도 성문을 뽑는 길을 막는
+   것이며, D-0003의 판단을 계층으로 옮긴 형태다 (D-0261)
 
 **엔진 vs 배관의 구분 기준**: 엔진은 무거운 AI 연산이다. 인제스트는 파일을 읽고 표를 만드는 배관이므로 엔진이 아니며 `application` +
 `infrastructure`에 배치한다.
@@ -1678,7 +1681,7 @@ CI에서 동일 시드 2회 실행 후 산출물을 비교한다. UUID 등 본�
 | **죽은 검사** | 무검증 시험 · 건너뛴 시험 · 삼킨 예외 · 빈 그물을 세는 래칫. 생사는 합성 트리에서 묻는다 | D-0230 |
 | **글자 · 개행** | BOM · CRLF · 비 UTF-8 · 끝 개행 없음 | D-0230 |
 | 린트 · 타입 | ruff · mypy strict · 시험 코드 타입 래칫 · 워크플로(actionlint) · 셸(shellcheck) | D-0149 · D-0150 · D-0225 |
-| 계층 계약 | import-linter 5종 | D-0134 |
+| 계층 계약 | import-linter 6종 | D-0134 · D-0261 |
 | 시험 · 커버리지 | pytest · 커버리지 바닥 래칫 — 숫자는 `core/pyproject.toml` 하나, 실측이 3%p 넘게 앞서면 바닥을 올린다 | D-0223 |
 
 **`make check` · CI · 커밋 훅이 같은 검사를 도는지 차집합으로 대조한다** (D-0219). 차이는
@@ -2299,6 +2302,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0260 | `eval` 보고를 `main.py`에서 뗀다 | `core/tests/unit/test_file_size.py` |
 | D-0261 | 결정이 금지한 것을 검사가 막는다 | `tools/check_forbidden.py` |
 | D-0262 | 셋을 더 박고 다섯을 더 채운다 | `core/tests/unit/test_gate_docs_and_compose.py` |
+| D-0263 | 관문 도구를 타입 검사에 넣는다 | `make type` |
 
 <!-- decision-ledger:end -->
 

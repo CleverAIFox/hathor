@@ -44,6 +44,7 @@ import argparse
 import ast
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -211,13 +212,47 @@ def check_reserved_packages() -> list[str]:
     return problems
 
 
+def contract_count() -> int:
+    """`import-linter` 계약의 실제 수."""
+    body = (ROOT / "core" / "pyproject.toml").read_text(encoding="utf-8")
+    return body.count("[[tool.importlinter.contracts]]")
+
+
+COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
+    ("import-linter 계약", re.compile(r"(?:계약|import-linter)\s*\*{0,2}(\d+)종"), contract_count),
+)
+"""문서가 **세어서 적은 수**와 실물 (D-0263).
+
+D-0261이 여섯째 계약을 넣고 **`MASTER`의 «계약 5종» 세 곳을 안 고쳤다.** 경로도
+도구도 실재하므로 이 검사의 다른 눈에는 안 걸렸다 — **숫자만 틀렸다.**
+
+경로가 틀리면 명령이 죽어서 알게 되지만, **수가 틀리면 아무 일도 안 일어난다.**
+읽는 사람만 틀린 것을 배운다. 그래서 세는 자리를 여기 둔다."""
+
+
+def check_counts() -> list[str]:
+    """문서가 적은 수가 실물과 같은가 (D-0263)."""
+    problems: list[str] = []
+    for name, pattern, count in COUNTED:
+        real = count()
+        for path in living_documents():
+            where = path.relative_to(ROOT).as_posix()
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                problems += [
+                    f"{where}:{number} {name}이 {said}종이라 적혔는데 실물은 {real}종이다"
+                    for said in pattern.findall(line)
+                    if int(said) != real
+                ]
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="문서 ↔ 실물 대조 (D-0189)")
     parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
     parser.parse_args()
 
     problems = check_paths() + check_commands() + check_orphan_tools()
-    problems += check_wiring() + check_reserved_packages()
+    problems += check_wiring() + check_reserved_packages() + check_counts()
     if problems:
         print(f"문서가 없는 것을 가리키는 자리가 {len(problems)}곳 있다.", file=sys.stderr)
         for problem in problems:
