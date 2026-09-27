@@ -25,6 +25,30 @@ from hathor.domain.services.embedding_pooling import (
 from hathor.domain.services.isotropy import center, mean_direction
 from hathor.domain.services.retrieval_metrics import cosine_similarity, top1_accuracy
 
+
+def part(record: dict[str, object], *path: str) -> dict[str, object]:
+    """보고서 사전의 하위 절 (D-0264).
+
+    `as_record()`는 `dict[str, object]`를 낸다. **그것이 정직한 형이다** — JSON 나무이고
+    칸마다 형이 다르다. 그래서 `record["a"]["b"]`가 «`object`는 색인할 수 없다»로
+    빨개진다. 이 파일은 이미 두 자리에서 `assert isinstance(…, dict)`로 풀고 있었고,
+    나머지 일곱 자리는 그냥 빨간 채로 래칫에 세어져 있었다. **같은 것을 한 자리에 둔다.**
+    """
+    found: object = record
+    for step in path:
+        assert isinstance(found, dict), f"{step} 앞이 사전이 아니다: {found!r}"
+        found = found[step]
+    assert isinstance(found, dict), f"{path}가 사전이 아니다: {found!r}"
+    return found
+
+
+def number(record: dict[str, object], key: str) -> float:
+    """보고서 사전의 수 한 칸. **없거나 수가 아니면 시험이 그 자리에서 터진다.**"""
+    value = record[key]
+    assert isinstance(value, int | float), f"{key}가 수가 아니다: {value!r}"
+    return float(value)
+
+
 DIM = 16
 CHUNKS = 6
 
@@ -266,7 +290,8 @@ def test_report_includes_anisotropy():
         EvaluationConfig(view=ViewSpec(keys=("mixture",), centered=False))
     ).run(build_corpus(albums=4, per_album=4))
     assert 0.0 <= report.anisotropy <= 1.0
-    assert report.as_record()["corpus"]["anisotropy"] == pytest.approx(report.anisotropy, abs=1e-5)
+    corpus_part = part(report.as_record(), "corpus")
+    assert number(corpus_part, "anisotropy") == pytest.approx(report.anisotropy, abs=1e-5)
 
 
 def test_centering_lowers_anisotropy():
@@ -276,7 +301,7 @@ def test_centering_lowers_anisotropy():
     ).run(corpus)
     centered = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(corpus)
     assert centered.anisotropy < plain.anisotropy
-    assert centered.as_record()["config"]["view"]["centered"] is True
+    assert part(centered.as_record(), "config", "view")["centered"] is True
 
 
 def test_centering_keeps_self_consistency_measurable():
@@ -290,7 +315,7 @@ def test_centering_keeps_self_consistency_measurable():
 def test_centering_is_on_by_default():
     """전 지표가 개선됐으므로 켠 쪽이 기본이다 (D-0031)."""
     assert ViewSpec().centered is True
-    assert EvaluationConfig().as_record()["view"]["centered"] is True  # type: ignore[index]
+    assert part(EvaluationConfig().as_record(), "view")["centered"] is True
 
 
 # --- O-12: 분할 규칙 (D-0040) ---
@@ -362,21 +387,21 @@ def test_repeats_expose_spread():
     report = EvaluateRetrieval(config).run(tracks)
     assert len(report.consistency.scores) == 4
     assert report.consistency.top1_std >= 0.0
-    assert "repeats" in report.as_record()["m0_self_consistency"]
+    assert "repeats" in part(report.as_record(), "m0_self_consistency")
 
 
 def test_single_repeat_omits_repeat_list():
     """반복이 하나면 분포가 없다. 빈 목록을 남기면 있는 것처럼 보인다."""
     report = EvaluateRetrieval(EvaluationConfig()).run(build_corpus())
-    assert "repeats" not in report.as_record()["m0_self_consistency"]
+    assert "repeats" not in part(report.as_record(), "m0_self_consistency")
 
 
 def test_report_includes_rank_diagnostics():
     report = EvaluateRetrieval(EvaluationConfig()).run(build_corpus())
-    record = report.as_record()["m0_self_consistency"]
-    assert record["mrr"] >= record["top1_accuracy"]
-    assert record["recall_at_10"] >= record["top1_accuracy"]
-    assert record["split"]["mode"] == "odd-even"
+    record = part(report.as_record(), "m0_self_consistency")
+    assert number(record, "mrr") >= number(record, "top1_accuracy")
+    assert number(record, "recall_at_10") >= number(record, "top1_accuracy")
+    assert part(record, "split")["mode"] == "odd-even"
 
 
 def test_gate_reads_mean_of_repeats():
@@ -390,9 +415,9 @@ def test_gate_reads_mean_of_repeats():
 def test_m0_reports_analytic_baseline():
     """M0에도 베이스라인이 있어야 한다. top-1 0.90은 후보 수 없이 의미가 없다."""
     report = EvaluateRetrieval(EvaluationConfig()).run(build_corpus())
-    record = report.as_record()["m0_self_consistency"]
-    assert record["random_top1"] == pytest.approx(1.0 / report.tracks)
-    assert record["random_median_rank"] == pytest.approx((report.tracks + 1) / 2.0)
+    record = part(report.as_record(), "m0_self_consistency")
+    assert number(record, "random_top1") == pytest.approx(1.0 / report.tracks)
+    assert number(record, "random_median_rank") == pytest.approx((report.tracks + 1) / 2.0)
 
 
 def _twinned_corpus(pairs: int = 8, singles: int = 40) -> list[TrackRecord]:
@@ -431,8 +456,7 @@ def test_근접_실패는_계산하고_표식을_단다():
     assert not report.collapsed, "정답이 상위권에 있으면 무너진 것이 아니다"
     assert len(report.metrics) == 2, "근접 실패에서도 지표를 낸다"
     assert not report.citable, "그러나 정본으로 인용하지 않는다"
-    consistency = report.as_record()["m0_self_consistency"]
-    assert isinstance(consistency, dict)
+    consistency = part(report.as_record(), "m0_self_consistency")
     assert consistency["citable"] is False, "자격은 산출물이 들고 다닌다"
 
 
@@ -460,8 +484,7 @@ def test_통과한_실행은_인용할_수_있다():
     corpus = build_corpus(albums=4, per_album=4)
     report = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(corpus)
     assert report.citable
-    consistency = report.as_record()["m0_self_consistency"]
-    assert isinstance(consistency, dict)
+    consistency = part(report.as_record(), "m0_self_consistency")
     assert consistency["collapsed"] is False
 
 

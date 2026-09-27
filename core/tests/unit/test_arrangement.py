@@ -219,13 +219,18 @@ def test_짧은_진행이면_예전처럼_한_칸씩_민다():
 
 
 def test_섹션당_마디는_한_곳에서_온다():
-    """**한 이름이 두 값이면 둘 중 하나는 반드시 틀린다** (D-0111)."""
-    from hathor.application.orchestrator import generation_pipeline
+    """**한 이름이 두 값이면 둘 중 하나는 반드시 틀린다** (D-0111).
 
-    assert generation_pipeline.BARS_PER_SECTION is BARS_PER_SECTION
-    assert generation_pipeline.DEFAULT_BARS == (
-        generation_pipeline.DEFAULT_SECTIONS * BARS_PER_SECTION
+    옛 판은 `generation_pipeline.BARS_PER_SECTION`을 읽어 같은 객체인지 봤다. 그것은
+    **재수출에 기댄 것이고** 재수출을 쓰는 곳은 이 시험뿐이었다 (D-0264). 지키려는 것은
+    그 이름이 아니라 «파생값이 정본에서 나왔는가»이므로 파생값으로 확인한다.
+    """
+    from hathor.application.orchestrator.generation_pipeline import (
+        DEFAULT_BARS,
+        DEFAULT_SECTIONS,
     )
+
+    assert DEFAULT_BARS == DEFAULT_SECTIONS * BARS_PER_SECTION
 
 
 # ------------------------------------------------------------------ 층별 세기 (D-0174)

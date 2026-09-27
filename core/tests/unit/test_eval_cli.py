@@ -5,6 +5,7 @@
 """
 
 import json
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -12,6 +13,9 @@ import pytest
 from hathor.domain.entities.track_features import TrackFeatures
 from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 from hathor.interfaces.cli.main import main
+
+if TYPE_CHECKING:  # pragma: no cover - 검사기만 읽는다
+    from hathor.application.evaluate_retrieval import EvaluationReport
 
 DIM = 32
 CHUNKS = 6
@@ -403,7 +407,9 @@ def test_gate_failure_still_flags_real_collapse_with_low_recall():
     assert "상위권에도 없다" in message
 
 
-def _report_with(*, top1: float, recall10: float, miss: float, queries: int = 1004):
+def _report_with(
+    *, top1: float, recall10: float, miss: float, queries: int = 1004
+) -> "EvaluationReport":
     """지정한 순위 진단을 갖는 리포트. **실물 자료형으로 짓는다** (D-0233의 교훈).
 
     옛 판은 필드 셋짜리 가짜였고, D-0234가 `collapsed`를 읽자 **CLI가 아니라 가짜가

@@ -18,10 +18,8 @@ from hathor.infrastructure.onset_store import (
     write_envelope,
 )
 
-
-class Track:
-    def __init__(self, source_key: str) -> None:
-        self.source_key = source_key
+# 이 파일에는 곡이 자주 나온다. 옛 판이 `Track`이라는 가짜 반을 쓴 자리다 (D-0264).
+from tests.conftest import scanned_track as track
 
 
 class Decoder:
@@ -47,7 +45,7 @@ class Decoder:
 
 
 def test_곡마다_포락선_하나(tmp_path):
-    found = list(ExtractOnsets(Decoder(), tmp_path).run([Track("a.flac"), Track("b.flac")]))
+    found = list(ExtractOnsets(Decoder(), tmp_path).run([track("a.flac"), track("b.flac")]))
     assert [item.source_key for item in found] == ["a.flac", "b.flac"]
     assert all(item.envelope.size > 0 for item in found)
 
@@ -56,7 +54,7 @@ def test_한_곡이_깨져도_배치가_안_멈춘다(tmp_path):
     """**1004곡 배치가 거기서 멈추면 안 된다** (D-0075와 같은 근거)."""
     decoder = Decoder(broken={"b.flac"})
     extractor = ExtractOnsets(decoder, tmp_path)
-    found = list(extractor.run([Track("a.flac"), Track("b.flac"), Track("c.flac")]))
+    found = list(extractor.run([track("a.flac"), track("b.flac"), track("c.flac")]))
     assert [item.source_key for item in found] == ["a.flac", "c.flac"]
     assert len(extractor.failures) == 1
 
@@ -64,14 +62,14 @@ def test_한_곡이_깨져도_배치가_안_멈춘다(tmp_path):
 def test_실패가_조용히_사라지지_않는다(tmp_path):
     """**없는 것을 없다고 말한다** (GR-0.5)."""
     extractor = ExtractOnsets(Decoder(broken={"a.flac"}), tmp_path)
-    list(extractor.run([Track("a.flac")]))
+    list(extractor.run([track("a.flac")]))
     assert extractor.failures[0][0] == "a.flac"
     assert "못 읽는다" in extractor.failures[0][1]
 
 
 def test_모노로_섞는다(tmp_path):
     """**좌우 차이는 발음 자리를 안 바꾼다.** 채널마다 따로 뽑으면 값이 생긴다."""
-    found = next(iter(ExtractOnsets(Decoder(), tmp_path).run([Track("a.flac")])))
+    found = next(iter(ExtractOnsets(Decoder(), tmp_path).run([track("a.flac")])))
     assert found.envelope.ndim == 1
 
 
@@ -89,7 +87,7 @@ def test_추출한_포락선에서_박이_나온다(tmp_path):
     """**배선이 통하는지 여기서 본다.** 파형부터 박까지 한 줄로 이어진다."""
     from hathor.domain.services.onset import beat_period
 
-    found = next(iter(ExtractOnsets(Decoder(bpm=120, seconds=20), tmp_path).run([Track("a.flac")])))
+    found = next(iter(ExtractOnsets(Decoder(bpm=120, seconds=20), tmp_path).run([track("a.flac")])))
     beat = beat_period(found.envelope, found.hop_seconds)
     assert beat is not None
     assert abs(beat.tempo_bpm - 120.0) < 2.0

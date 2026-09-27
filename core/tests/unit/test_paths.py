@@ -253,7 +253,11 @@ def test_Public_같은_시스템_계정은_거른다(fake_mount, monkeypatch):
     from hathor.shared.config import paths
 
     monkeypatch.setattr(paths, "WINDOWS_USERS_ROOT", fake_mount / "c" / "Users")
-    assert paths.windows_user_dir().name != "Public"
+    # **못 찾으면 `None`이다** (GR-0.5). 그 경우 «Public이 아니다»는 공짜로 참이 되므로
+    # 있다는 것부터 본다 — 시험이 아무것도 안 보는 자리를 만들지 않는다 (D-0264).
+    found = paths.windows_user_dir()
+    assert found is not None, "가짜 마운트에 사용자 폴더를 깔았으므로 찾아야 한다"
+    assert found.name != "Public"
 
 
 def test_사용자_폴더가_없으면_None이다(tmp_path, monkeypatch):

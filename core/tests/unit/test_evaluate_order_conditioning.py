@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -20,6 +23,16 @@ from hathor.engines.compose.harmony_generator import vocabulary_roots
 DEGREES = 12
 ROOTS = vocabulary_roots(Mode.MAJOR)
 FAST = OutputCondition(seed_count=40, bar_count=64)
+
+
+def grid(matrix: object) -> tuple[tuple[float, ...], ...]:
+    """전이 사전을 **제품이 넘기는 꼴로** 만든다 (D-0264).
+
+    `restrict_transition`은 `Sequence[Sequence[float]]`를 받는다고 적혀 있고 **제품의
+    유일한 호출자가 정말 `OrderReference.transition`(중첩 튜플)을 넘긴다.** 시험만
+    `ndarray`를 먹이고 있었다 — 서명이 참이면 서명에 맞춘다."""
+    rows = np.asarray(matrix, dtype=np.float64)
+    return tuple(tuple(float(value) for value in row) for row in rows)
 
 
 def _references(count: int, seed: int = 7) -> list[OrderReference]:
@@ -73,7 +86,7 @@ def test_문턱이_승인_문턱이다():
 def test_전이_사전을_코드_풀로_좁힌다():
     """사전은 12x12이고 출력 전이는 코드 풀 크기다. **같은 자리에 놓아야 한다.**"""
     matrix = np.ones((DEGREES, DEGREES))
-    restricted = restrict_transition(matrix, ROOTS)
+    restricted = restrict_transition(grid(matrix), ROOTS)
     assert restricted.shape == (len(ROOTS), len(ROOTS))
     assert restricted.sum() == pytest.approx(1.0)
 
@@ -81,13 +94,13 @@ def test_전이_사전을_코드_풀로_좁힌다():
 def test_좁힐_때도_대각선을_버린다():
     """**자기 전이는 창 길이가 정한다** (D-0103). 비교에 쓸 수 없다."""
     matrix = np.eye(DEGREES) * 5.0 + 1.0
-    restricted = restrict_transition(matrix, ROOTS)
+    restricted = restrict_transition(grid(matrix), ROOTS)
     assert restricted.diagonal() == pytest.approx(np.zeros(len(ROOTS)))
 
 
 def test_비어_있는_사전을_좁히면_0이다():
     """**0으로 나누지 않는다.**"""
-    assert restrict_transition(np.zeros((DEGREES, DEGREES)), ROOTS).sum() == 0.0
+    assert restrict_transition(grid(np.zeros((DEGREES, DEGREES))), ROOTS).sum() == 0.0
 
 
 # ------------------------------------------------------------------ 곁가지
@@ -116,14 +129,22 @@ def test_같은_시드는_같은_수를_낸다():
 
 
 @pytest.mark.parametrize(
-    "field,value", [("prior", (0.1,) * 11), ("transition", ((0.0,) * 12,) * 11)]
+    "broken",
+    [
+        lambda base: replace(base, prior=(0.1,) * 11),
+        lambda base: replace(base, transition=((0.0,) * 12,) * 11),
+    ],
+    ids=["prior", "transition"],
 )
-def test_모양이_틀리면_거부한다(field, value):
+def test_모양이_틀리면_거부한다(broken: Callable[[OrderReference], OrderReference]) -> None:
+    """**한 칸만 바꾼다** (D-0264).
+
+    옛 판은 칸 이름과 값을 따로 받아 사전으로 조립하고 `**kwargs`로 풀었다. 칸마다 형이
+    달라 그 사전이 `dict[str, object]`가 되고 **네 칸 전부가 형이 안 맞는다고 나왔다.**
+    망가뜨리는 방법 자체를 인자로 받으면 **각 방법이 제 자리에서 형 검사를 받는다.**"""
     base = _references(1)[0]
-    kwargs = {"source_key": base.source_key, "prior": base.prior, "transition": base.transition}
-    kwargs[field] = value
     with pytest.raises(ValueError):
-        OrderReference(**kwargs)
+        broken(base)
 
 
 def test_참조곡이_둘_미만이면_거부한다():

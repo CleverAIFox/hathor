@@ -60,8 +60,10 @@ def test_섹션_수와_마디_수는_다른_것이다():
     이름이 `DEFAULT_SECTIONS`인데 `bar_count` 자리에 들어갔고 아무도 안 봤다.
     섹션당 화음 하나인 곡은 없다.
     """
+    # **정본은 `arrangement`다** (D-0264). `generation_pipeline`이 그것을 다시
+    # 내보내는 것은 우연이며, 시험이 그 우연에 기대면 정본이 어디인지가 흐려진다.
+    from hathor.application.arrangement import BARS_PER_SECTION
     from hathor.application.orchestrator.generation_pipeline import (
-        BARS_PER_SECTION,
         DEFAULT_BARS,
         DEFAULT_SECTIONS,
     )

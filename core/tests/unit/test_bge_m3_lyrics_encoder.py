@@ -7,6 +7,8 @@
 **결정론 검사가 편차를 잡는가.** 둘 다 어긋나면 1003곡 산출물이 통째로 버려진다.
 """
 
+import builtins
+from collections.abc import Callable
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -22,6 +24,9 @@ from hathor.infrastructure.bge_m3_lyrics_encoder import (
 )
 
 DIM = 8
+
+_Index = int | slice | tuple[int | slice, ...]
+"""텐서를 무엇으로 색인하는가. 제품은 `hidden[:, 0]` 하나를 쓴다 (D-0264)."""
 
 
 class _Tensor:
@@ -57,7 +62,13 @@ class _Tensor:
     def sum(self, dim: int | None = None) -> "_Tensor":
         return _Tensor(self.array.sum(axis=dim) if dim is not None else self.array.sum())
 
-    def clamp(self, *, min: float) -> "_Tensor":
+    def clamp(self, *, min: builtins.float) -> "_Tensor":
+        """**`float`이라고 적을 수 없다** (D-0264).
+
+        이 반에는 `float()` 메서드가 있다 — `torch.Tensor.float()`를 흉내내야 하기
+        때문이다. 반 본문 안에서 `float`은 그 메서드를 가리키고, 검사기가
+        «함수는 형이 아니다»라고 잡았다. `min`도 내장 `min`을 가린다.
+        """
         return _Tensor(np.clip(self.array, min, None))
 
     def __mul__(self, other: "_Tensor") -> "_Tensor":
@@ -66,7 +77,9 @@ class _Tensor:
     def __truediv__(self, other: "_Tensor") -> "_Tensor":
         return _Tensor(self.array / other.array)
 
-    def __getitem__(self, key: object) -> "_Tensor":
+    def __getitem__(
+        self, key: builtins.int | slice | tuple[builtins.int | slice, ...]
+    ) -> "_Tensor":
         return _Tensor(self.array[key])
 
     def __iter__(self):
@@ -86,7 +99,18 @@ def _fake_tokenizer(batch, *, padding, truncation, max_length, return_tensors):
     return {"input_ids": _Tensor(ids), "attention_mask": _Tensor(mask)}
 
 
-def _make_model(*, jitter: float = 0.0):
+class _Callable:
+    """`transformers` 모델 자리의 가짜. **부를 수 있는 것이어야 한다** (D-0264)."""
+
+    def __init__(self, forward: Callable[..., object], config: object) -> None:
+        self._forward = forward
+        self.config = config
+
+    def __call__(self, **kwargs: object) -> object:
+        return self._forward(**kwargs)
+
+
+def _make_model(*, jitter: builtins.float = 0.0) -> _Callable:
     """토큰마다 다른 은닉값을 낸다. **패딩 칸에 큰 값을 넣는다.**
 
     패딩에 0을 넣으면 마스크를 빼먹어도 평균이 대충 맞아 버그가 숨는다.
@@ -111,9 +135,10 @@ def _make_model(*, jitter: float = 0.0):
         hidden[:, 0] += jitter * state["calls"]
         return SimpleNamespace(last_hidden_state=_Tensor(hidden))
 
-    return SimpleNamespace(
-        __call__=forward, config=SimpleNamespace(hidden_size=DIM), _forward=forward
-    )
+    # **`SimpleNamespace(__call__=…)`은 불릴 수 없다** (D-0264). 파이썬은 `__call__`을
+    # 인스턴스가 아니라 형에서 찾으므로 그 칸은 죽은 칸이었다 — 부르는 쪽이 `_forward`를
+    # 꺼내 `_Callable`로 다시 감싸고 있었고, 그래서 아무도 안 봤다.
+    return _Callable(forward, SimpleNamespace(hidden_size=DIM))
 
 
 def _encoder(
@@ -123,7 +148,7 @@ def _encoder(
     encoder = object.__new__(BgeM3LyricsEncoder)
     model = _make_model(jitter=jitter)
     encoder._tokenizer = _fake_tokenizer
-    encoder._model = _Callable(model._forward, model.config)
+    encoder._model = model
     encoder._device = "cpu"
     encoder._batch_size = batch_size
     encoder._pooling = pooling
@@ -132,15 +157,6 @@ def _encoder(
     encoder._torch = SimpleNamespace(no_grad=_no_grad)  # type: ignore[assignment]
     encoder.truncated = 0
     return encoder
-
-
-class _Callable:
-    def __init__(self, forward, config) -> None:
-        self._forward = forward
-        self.config = config
-
-    def __call__(self, **kwargs):
-        return self._forward(**kwargs)
 
 
 @contextmanager

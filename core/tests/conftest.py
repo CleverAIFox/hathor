@@ -7,9 +7,14 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
+from hathor.domain.entities.audio_stream import AudioStreamProperties
+from hathor.domain.entities.scanned_track import ScannedTrack
+from hathor.domain.entities.track_tags import TrackTags
 
 pytest.importorskip("mutagen")
 
@@ -52,6 +57,47 @@ def isolate_machine_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "hathor.interfaces.cli.main.load_dotenv", lambda *_args, **_kwargs: {}, raising=False
     )
     yield
+
+
+def scanned_track(
+    source_key: str = "a.mp3",
+    *,
+    title: str | None = "t",
+    artist: str | None = "a",
+    duration_ms: int = 1000,
+) -> ScannedTrack:
+    """인제스트의 최소 단위 하나. **정본은 여기 하나다** (D-0264).
+
+    응용 계층의 유스케이스 여섯이 `Iterable[ScannedTrack]`을 받고, 시험은 그것을
+    **다섯 군데서 손으로 조립하고 있었다** — 같은 17줄이 다섯 벌이고 다른 것은
+    `source_key` · `title` · `artist` · 길이뿐이다.
+
+    그래서 일곱째 시험(`test_extract_onsets`)이 **`source_key`만 가진 가짜 반**을
+    새로 만들었다. `ExtractOnsets`가 실제로 읽는 것이 그 칸 하나이므로 돌기는 돈다 —
+    그러나 **`ScannedTrack`이라고 적힌 자리에 그것이 아닌 것이 들어갔다.** 형 검사를
+    걸자 여덟 건으로 나왔다. 조립이 한 자리면 애초에 생기지 않는 부류다.
+    """
+    return ScannedTrack(
+        source_key=source_key,
+        file_size_bytes=1,
+        modified_at=datetime.now(UTC),
+        stream=AudioStreamProperties(
+            sample_rate_hz=44100,
+            channels=2,
+            duration_ms=duration_ms,
+            bitrate_bps=320000,
+            codec="mp3",
+        ),
+        tags=TrackTags(
+            title=title,
+            artist=artist,
+            album=None,
+            lyrics_text=None,
+            has_album_art=False,
+            has_synced_lyrics=False,
+        ),
+        raw_frame_names=(),
+    )
 
 
 FFMPEG = shutil.which("ffmpeg")

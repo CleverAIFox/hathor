@@ -28,7 +28,7 @@ dense 1024차원은 기본·345·nospace·damp 조건과 차원이 같아 **인�
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -141,7 +141,18 @@ class BgeM3LyricsEncoder:
         return np.asarray(matrix, dtype=np.float32)
 
 
-def verify_deterministic(encoder: BgeM3LyricsEncoder, segments: list[str]) -> float:
+class SegmentEncoder(Protocol):
+    """구간 목록을 임베딩으로 만드는 것. **이 함수가 필요한 것은 이 하나다** (D-0264).
+
+    옛 서명은 `BgeM3LyricsEncoder`를 받는다고 적었고 본문은 `extract` 하나만 부른다.
+    그래서 시험이 «형상이 달라지는 인코더»를 흉내내려고 `extract`만 가진 가짜를 넣었고
+    **형 검사에서 어긋났다.** 필요한 것을 적으면 그 가짜가 정당한 입력이 된다.
+    """
+
+    def extract(self, segments: list[str]) -> Embedding: ...
+
+
+def verify_deterministic(encoder: SegmentEncoder, segments: list[str]) -> float:
     """같은 입력을 두 번 인코딩해 최대 절대 편차를 낸다 (D-0009 재현성 계층 1).
 
     GPU fp16 추론은 커널 선택에 따라 비결정적일 수 있다. **0이 아니면 산출물이

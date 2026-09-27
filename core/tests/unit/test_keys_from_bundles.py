@@ -103,12 +103,8 @@ def test_믹스_크로마가_없으면_올린다() -> None:
 
 def test_ingest_all이_크로마_조건을_manifest에_적는다(tmp_path: Path) -> None:
     """**D-0203은 기본값에 기대고 안 적었다.** 뒤로 뽑는 묶음은 스스로 말한다."""
-    from datetime import UTC, datetime
-
     from hathor.application.ingest_all import IngestAll
-    from hathor.domain.entities.audio_stream import AudioStreamProperties
-    from hathor.domain.entities.scanned_track import ScannedTrack
-    from hathor.domain.entities.track_tags import TrackTags
+    from tests.conftest import scanned_track
 
     class Decoder:
         def decode(self, path):
@@ -128,23 +124,7 @@ def test_ingest_all이_크로마_조건을_manifest에_적는다(tmp_path: Path)
         def track(self, waveform, *, sample_rate, fmin, fmax):
             return np.zeros(4, dtype=np.float32)
 
-    track = ScannedTrack(
-        source_key="가.mp3",
-        file_size_bytes=1,
-        modified_at=datetime.now(UTC),
-        stream=AudioStreamProperties(
-            sample_rate_hz=44100, channels=2, duration_ms=3000, bitrate_bps=320000, codec="mp3"
-        ),
-        tags=TrackTags(
-            title="가",
-            artist="누구",
-            album=None,
-            lyrics_text=None,
-            has_album_art=False,
-            has_synced_lyrics=False,
-        ),
-        raw_frame_names=(),
-    )
+    track = scanned_track("가.mp3", title="가", artist="누구", duration_ms=3000)
     job = IngestAll(Decoder(), Separator(), Extractor(), Pitch(), library_root=tmp_path)
     bundle = next(iter(job.run([track])))
 

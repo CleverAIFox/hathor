@@ -22,6 +22,14 @@
 `--allow-untyped-defs` · `--allow-untyped-calls`로 돈다. **`-> None` 1111개는 잡음이고
 잡음이 많으면 검사를 끈다** (D-0126 · D-0129에서 되풀이해 확인한 것이다).
 
+### 래칫이 끝났다 (D-0264)
+
+75 → 66 → **0이다.** 남은 66을 다 갚았고 그중 절반은 «형이 안 맞는다»가 실질이었다 —
+시험이 float64를 먹이고 제품이 float32를 받는 자리, `ScannedTrack`이라고 적힌 자리에
+칸 하나짜리 가짜가 들어간 자리, 반 안에서 `float`이 메서드에 가려진 자리.
+
+**이제 래칫이 아니라 못이다.** 하나라도 생기면 빨개진다.
+
     python3 tools/check_test_types.py            # 검사한다
     python3 tools/check_test_types.py --update   # 못을 다시 박는다
 """
@@ -37,22 +45,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CORE = ROOT / "core"
 
-PINNED = {
-    "arg-type": 19,
-    "no-untyped-def": 15,
-    "list-item": 8,
-    "index": 7,
-    "no-any-return": 6,
-    "attr-defined": 4,
-    "union-attr": 3,
-    "operator": 2,
-    "call-overload": 1,
-    "valid-type": 1,
-}
-"""**부류별로** 못을 박는다 (D-0151).
+PINNED: dict[str, int] = {}
+"""부류별로 박은 못. **지금은 비어 있다 — 0이다** (D-0264).
 
 D-0150이 합계를 박았고 다음 기기에서 `assignment`가 하나 나왔는데 **총 67이라는
 것만 알 수 있었다.** 부류별로 박으면 어긋난 순간 **어느 줄을 봐야 하는지가 나온다.**
+
+**래칫이 제 일을 끝냈다.** 75 → 66 → 0이며, 이제 이것은 래칫이 아니라 못이다 —
+「구멍이 0일 때 못 박는다」(D-0134 · D-0261과 같은 자리). 하나라도 생기면 빨개진다.
 
 늘리려면 `--update --allow-growth`와 결정 기록이 필요하다 (D-0118).
 **손이 한 번 멈추는 것이 요점이다.**"""
@@ -165,13 +165,16 @@ def _rewrite(counts: dict[str, int]) -> None:
     """못을 다시 박는다. **정렬해 쓴다** — 차례가 기기마다 달라지면 못 읽는다."""
     path = Path(__file__)
     text = path.read_text(encoding="utf-8")
-    head = text.index("PINNED = {")
+    head = text.index("PINNED")
     tail = text.index("}", head) + 1
     body = "\n".join(
         f'    "{code}": {count},'
         for code, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     )
-    path.write_text(text[:head] + "PINNED = {\n" + body + "\n}" + text[tail:], encoding="utf-8")
+    # **0건이면 `{}`라고 쓴다** (D-0264). 빈 줄만 든 사전은 `ruff format`이 다시 고치고,
+    # 그러면 «못을 박았다»가 곧 «린트가 빨개졌다»가 된다.
+    written = "PINNED: dict[str, int] = {}" if not body else "PINNED = {\n" + body + "\n}"
+    path.write_text(text[:head] + written + text[tail:], encoding="utf-8")
 
 
 def main() -> int:
@@ -205,7 +208,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"검사 코드 타입 래칫 통과 · {found}건")
+    print(f"검사 코드 타입 검사 통과 · {found}건" + (" (0이 못이다)" if not PINNED else ""))
     return 0
 
 

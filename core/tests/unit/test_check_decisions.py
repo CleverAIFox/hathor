@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import sys
+from typing import cast
 
 import pytest
 
@@ -108,7 +109,9 @@ FULL = "- **배경**: 무엇.\n- **결과**:\n  - 무엇을 했다.\n"
 
 def _new(body: str) -> list[tool.Record]:
     text = decisions(*range(1, tool.FORMAT_ENFORCED_FROM)) + record(tool.FORMAT_ENFORCED_FROM, body)
-    return tool.scan_records(text)
+    # **경로로 실은 모듈의 속성은 `mypy`가 못 본다** — 그 반환은 `Any`다 (D-0264).
+    # 여기 적는 형이 곧 «이 도구가 무엇을 내는가»에 대한 시험의 주장이다.
+    return cast("list[tool.Record]", tool.scan_records(text))
 
 
 def test_필수_절이_다_있으면_통과한다():
@@ -153,7 +156,9 @@ def test_결번_표시는_내용_검사에서_뺀다():
 
 
 def _layout(body: str) -> list[str]:
-    return tool.check_layout([("DECISIONS", HEAD + record(1) + body)])
+    # **경로로 실은 모듈의 속성은 `mypy`가 못 본다** — 그 반환은 `Any`다 (D-0264).
+    # 여기 적는 형이 곧 «이 도구가 무엇을 내는가»에 대한 시험의 주장이다.
+    return cast("list[str]", tool.check_layout([("DECISIONS", HEAD + record(1) + body)]))
 
 
 def test_표제_앞뒤가_규약대로면_통과한다():

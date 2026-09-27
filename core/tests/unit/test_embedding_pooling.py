@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from hathor.domain.ports.audio_analysis import Embedding
 from hathor.domain.services.embedding_pooling import (
     CombineMode,
     PoolMode,
@@ -14,9 +15,14 @@ from hathor.domain.services.embedding_pooling import (
 )
 
 
-def embedding(rows: int, dim: int = 4, start: float = 1.0) -> np.ndarray:
+def embedding(rows: int, dim: int = 4, start: float = 1.0, gain: float = 1.0) -> Embedding:
+    """`(행, 차원)` float32 임베딩. **세기는 여기서 곱한다** (D-0264).
+
+    호출한 자리에서 `embedding(...) * 100.0`이라고 쓰면 실행 시점 dtype은 float32
+    그대로인데 (NEP 50) **`mypy`의 넘파이 스텁은 그 곱을 float64로 읽는다.**
+    `Embedding` 계약은 float32이므로 곱을 dtype을 보장하는 자리 안에 둔다."""
     values = np.arange(rows * dim, dtype=np.float32).reshape(rows, dim)
-    return np.asarray(values + start, dtype=np.float32)
+    return np.asarray((values + start) * gain, dtype=np.float32)
 
 
 def test_l2_normalize_makes_unit_rows():
@@ -110,7 +116,10 @@ def test_build_view_key_order_matters():
 
 def test_block_l2_makes_each_part_unit_length():
     """서로 다른 추출기를 붙일 때 노름이 큰 블록이 코사인을 지배하는 것을 막는다."""
-    embeddings = {"big": embedding(2, dim=4) * 100.0, "small": embedding(2, dim=4) * 0.01}
+    embeddings = {
+        "big": embedding(2, dim=4, gain=100.0),
+        "small": embedding(2, dim=4, gain=0.01),
+    }
     plain = build_view(embeddings, ("big", "small"))
     normalized = build_view(embeddings, ("big", "small"), block_l2=True)
     assert np.linalg.norm(plain[:4]) / np.linalg.norm(plain[4:]) > 1000

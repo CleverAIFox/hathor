@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -39,14 +40,16 @@ DESIGN = """
 """
 
 
-def _scan(tmp_path, monkeypatch, text: str) -> list[str]:
+def _scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str) -> list[str]:
     """임시 나무 하나만 훑게 한다."""
     tree = tmp_path / "core" / "hathor"
     tree.mkdir(parents=True)
     (tree / "target.py").write_text(text, encoding="utf-8")
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
     monkeypatch.setattr(CHECKER, "DOCUMENTS", ())
-    return CHECKER.check(DESIGN)
+    # **경로로 실은 모듈의 속성은 `mypy`가 못 본다** — 그 반환은 `Any`다 (D-0264).
+    # 여기 적는 형이 곧 «이 도구가 무엇을 내는가»에 대한 시험의 주장이다.
+    return cast("list[str]", CHECKER.check(DESIGN))
 
 
 # ------------------------------------------------------------------ 잡는다

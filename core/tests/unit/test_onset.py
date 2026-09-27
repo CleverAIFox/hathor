@@ -186,8 +186,15 @@ def test_잡음이_섞여도_관통한다():
 def test_음원의_위상이_패턴을_가른다():
     plain = envelope(audio(96), SR, HOP)
     mixed = envelope(audio(96, {0.0: 1.0, 0.5: 0.7}), SR, HOP)
-    straight = phase_profile(plain, beat_period(plain, HOP).period_seconds, HOP)
-    offbeat = phase_profile(mixed, beat_period(mixed, HOP).period_seconds, HOP)
+    # **박이 안 나오면 여기서 터진다** (D-0264). 옛 판은 `None.period_seconds`로
+    # `AttributeError`가 났을 것이고, 그러면 «위상이 패턴을 가른다»가 아니라
+    # «박을 못 찾았다»가 실패 사유인데 화면에는 그 말이 안 나온다.
+    straight_beat = beat_period(plain, HOP)
+    offbeat_beat = beat_period(mixed, HOP)
+    assert straight_beat is not None and offbeat_beat is not None, "합성 음원에서 박이 나와야 한다"
+
+    straight = phase_profile(plain, straight_beat.period_seconds, HOP)
+    offbeat = phase_profile(mixed, offbeat_beat.period_seconds, HOP)
     assert max(straight) > max(offbeat)
 
 

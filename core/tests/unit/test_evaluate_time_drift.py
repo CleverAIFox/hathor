@@ -13,12 +13,25 @@ import pytest
 from hathor.application.evaluate_time_drift import GATE_T, EvaluateTimeDrift
 from hathor.domain.services.chroma_drift import DriftObservation, drift_vector
 
+
+def degrees(values: object) -> tuple[float, ...]:
+    """도수 벡터를 **제품이 넘기는 꼴로** 만든다 (D-0264).
+
+    `drift_vector`는 `Sequence[float]`를 받는다고 적혀 있고 **제품의 유일한 호출자가
+    정말 `tuple[float, ...]`을 넘긴다** (`keys_jsonl_store._rotate`). 시험만 `ndarray`를
+    먹이고 있었다 — D-0149가 고친 반대 경우(서명이 거짓말)와 **방향이 반대다.**
+    서명이 참이면 서명에 맞춘다."""
+    return tuple(float(value) for value in np.asarray(values, dtype=np.float64).ravel())
+
+
 DEGREES = 12
 KRUMHANSL = np.asarray([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
 FAST = {"bootstrap": 20, "null_repeats": 8}
 
 
-def _corpus(count: int, *, drift: float, noise: float, common: float = 0.0, seed: int = 7):
+def _corpus(
+    count: int, *, drift: float, noise: float, common: float = 0.0, seed: int = 7
+) -> list[DriftObservation]:
     """`drift`=곡마다 다른 변화 · `noise`=반쪽 추정 잡음 · `common`=코퍼스 공통 변화."""
     rng = np.random.default_rng(seed)
     shape = KRUMHANSL / KRUMHANSL.sum()
@@ -32,7 +45,7 @@ def _corpus(count: int, *, drift: float, noise: float, common: float = 0.0, seed
         for _ in range(2):
             head = base * np.exp(rng.normal(0.0, noise, DEGREES))
             tail = base * step * shared * np.exp(rng.normal(0.0, noise, DEGREES))
-            sides.append(drift_vector(head / head.sum(), tail / tail.sum()))
+            sides.append(drift_vector(degrees(head / head.sum()), degrees(tail / tail.sum())))
         made.append(DriftObservation(f"곡{index:04d}.flac", sides[0], sides[1]))
     return made
 
@@ -44,14 +57,14 @@ def test_전체_세기가_바뀌어도_변화_벡터는_같다():
     """**로그를 쓰는 이유다.** 반쪽마다 세기가 달라도 화성이 아니다."""
     head = np.asarray([0.1, 0.2, 0.3, 0.4] + [0.0] * 8) + 1e-6
     tail = head * 3.0
-    assert drift_vector(head, tail) == pytest.approx((0.0,) * DEGREES, abs=1e-9)
+    assert drift_vector(degrees(head), degrees(tail)) == pytest.approx((0.0,) * DEGREES, abs=1e-9)
 
 
 def test_한_칸만_오르면_그_칸이_양수다():
     head = np.full(DEGREES, 1.0 / DEGREES)
     tail = head.copy()
     tail[5] *= 2.0
-    changed = drift_vector(head, tail)
+    changed = drift_vector(degrees(head), degrees(tail))
     assert changed[5] == max(changed)
     assert changed[5] > 0
 

@@ -3,10 +3,7 @@
 네트워크를 타지 않는다. 조회기는 가짜를 주입한다.
 """
 
-from datetime import UTC, datetime
-
 from hathor.application.resolve_identities import ResolveIdentities
-from hathor.domain.entities.audio_stream import AudioStreamProperties
 from hathor.domain.entities.parsed_artist import ArtistCandidate
 from hathor.domain.entities.resolved_identity import (
     ResolutionState,
@@ -14,27 +11,12 @@ from hathor.domain.entities.resolved_identity import (
     ResolvedRecording,
 )
 from hathor.domain.entities.scanned_track import ScannedTrack
-from hathor.domain.entities.track_tags import TrackTags
+from tests.conftest import scanned_track
 
 
 def make_track(artist: str | None, title: str | None) -> ScannedTrack:
-    return ScannedTrack(
-        source_key="a.mp3",
-        file_size_bytes=1,
-        modified_at=datetime.now(UTC),
-        stream=AudioStreamProperties(
-            duration_ms=1000, bitrate_bps=320000, sample_rate_hz=44100, channels=2, codec="mp3"
-        ),
-        tags=TrackTags(
-            title=title,
-            artist=artist,
-            album=None,
-            lyrics_text=None,
-            has_album_art=False,
-            has_synced_lyrics=False,
-        ),
-        raw_frame_names=(),
-    )
+    """조립은 `tests.conftest.scanned_track` 하나다 (D-0264). 여기는 인자 순서만 맞춘다."""
+    return scanned_track(artist=artist, title=title)
 
 
 class FakeArtists:

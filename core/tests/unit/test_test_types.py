@@ -35,9 +35,27 @@ def test_주석을_요구하지_않는다():
 
 
 def test_부류별로_못이_박혀_있다():
-    """**합계만 박으면 어느 부류가 달라졌는지 모른다** (D-0151)."""
+    """**합계만 박으면 어느 부류가 달라졌는지 모른다** (D-0151).
+
+    옛 판은 `total(PINNED) > 0`이라고 적었다 — **래칫이 살아 있다는 뜻으로 쓴 것이고,
+    다 갚으면 그 주장이 거짓이 된다** (D-0264). 지켜야 할 것은 «0이 아니다»가 아니라
+    «부류별로 적혀 있다»이므로 그것을 적는다.
+    """
     assert isinstance(RATCHET.PINNED, dict)
-    assert RATCHET.total(RATCHET.PINNED) > 0
+    assert all(
+        isinstance(code, str) and isinstance(count, int) for code, count in RATCHET.PINNED.items()
+    )
+    assert RATCHET.total(RATCHET.PINNED) == sum(RATCHET.PINNED.values())
+
+
+def test_지금은_0이_못이다():
+    """**래칫이 끝났다** (D-0264). 75 → 66 → 0이며 이제 하나라도 생기면 빨개진다.
+
+    「구멍이 0일 때 못 박는다」(D-0134 · D-0261과 같은 자리). 이 시험이 빨개지는 길은
+    둘이다 — 오류가 다시 생겨 누가 `--update`로 못을 올렸거나, 아니면 그 결정을
+    기록하고 이 줄을 고쳤거나. **둘 다 손이 한 번 멈춘다.**
+    """
+    assert RATCHET.PINNED == {}, f"못이 다시 박혔다: {RATCHET.PINNED}"
 
 
 def test_못_재면_0으로_안_넘긴다(monkeypatch):

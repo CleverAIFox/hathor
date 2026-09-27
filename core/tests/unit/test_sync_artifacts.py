@@ -15,6 +15,7 @@ import errno
 import pathlib
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -28,10 +29,12 @@ ROOT = repo_root()
 
 
 @pytest.fixture
-def store(tmp_path) -> Path:
+def store(tmp_path: Path) -> Path:
     """붙어 있고 산출물도 있는 교두보."""
     root = tmp_path / "ssd"
-    (root / tool.SUBTREE).mkdir(parents=True)
+    # **경로로 실은 모듈의 속성은 `mypy`가 못 본다** — 그 반환은 `Any`다 (D-0264).
+    # 여기 적는 형이 곧 «이 도구가 무엇을 내는가»에 대한 시험의 주장이다.
+    (root / cast("str", tool.SUBTREE)).mkdir(parents=True)
     return root
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -29,12 +30,14 @@ def _module():
 CHECKER = _module()
 
 
-def _scan(tmp_path, monkeypatch, name: str, text: str) -> list[str]:
+def _scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, text: str) -> list[str]:
     target = tmp_path / name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-    return CHECKER.check([name])
+    # **경로로 실은 모듈의 속성은 `mypy`가 못 본다** — 그 반환은 `Any`다 (D-0264).
+    # 여기 적는 형이 곧 «이 도구가 무엇을 내는가»에 대한 시험의 주장이다.
+    return cast("list[str]", CHECKER.check([name]))
 
 
 # ------------------------------------------------------------------ 잡는다

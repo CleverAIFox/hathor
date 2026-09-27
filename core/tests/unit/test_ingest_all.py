@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,10 +14,9 @@ from hathor.application.ingest_all import (
     PITCH_SOURCES,
     IngestAll,
 )
-from hathor.domain.entities.audio_stream import AudioStreamProperties
 from hathor.domain.entities.scanned_track import ScannedTrack
-from hathor.domain.entities.track_tags import TrackTags
 from hathor.infrastructure.track_bundle_store import TrackBundleStore, bundle_name
+from tests.conftest import scanned_track
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -28,23 +26,8 @@ LAYERS = (0, 3, 6)
 
 
 def _track(name: str) -> ScannedTrack:
-    return ScannedTrack(
-        source_key=name,
-        file_size_bytes=1,
-        modified_at=datetime.now(UTC),
-        stream=AudioStreamProperties(
-            sample_rate_hz=44100, channels=2, duration_ms=3000, bitrate_bps=320000, codec="mp3"
-        ),
-        tags=TrackTags(
-            title=name,
-            artist="누구",
-            album=None,
-            lyrics_text=None,
-            has_album_art=False,
-            has_synced_lyrics=False,
-        ),
-        raw_frame_names=(),
-    )
+    """조립은 `tests.conftest.scanned_track` 하나다 (D-0264)."""
+    return scanned_track(name, title=name, artist="누구", duration_ms=3000)
 
 
 class FakeDecoder:

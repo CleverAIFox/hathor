@@ -9,16 +9,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hathor.domain.services.key_estimation import (
-    SOURCE_SAMPLE_RATE,
-    chroma_series,
-    group_series,
-)
+from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE, Waveform
+from hathor.domain.services.key_estimation import chroma_series, group_series
 
 SR = SOURCE_SAMPLE_RATE
 
 
-def _chord(seconds: float, roots: tuple[float, ...], seed: int = 3):
+def _chord(seconds: float, roots: tuple[float, ...], seed: int = 3) -> Waveform:
     """화음이 `seconds`마다 바뀌는 합성 파형."""
     rng = np.random.default_rng(seed)
     parts = []
@@ -28,7 +25,8 @@ def _chord(seconds: float, roots: tuple[float, ...], seed: int = 3):
         wave = sum(np.sin(2 * np.pi * root * 2 ** (k / 12) * time) for k in (0, 4, 7))
         parts.append((wave / np.abs(wave).max()).astype(np.float32))
     made = np.concatenate(parts)
-    return (made + rng.standard_normal(made.size).astype(np.float32) * 0.01).astype(np.float32)
+    noise = rng.standard_normal(made.size).astype(np.float32) * 0.01
+    return np.asarray(made + noise, dtype=np.float32)
 
 
 # ------------------------------------------------------------------ 묶기

@@ -2,7 +2,9 @@ import json
 
 import pytest
 
+from hathor.domain.entities.scanned_track import ScannedTrack
 from hathor.interfaces.cli.main import main
+from tests.conftest import scanned_track
 
 
 def test_cli_writes_identical_output_for_same_seed(tmp_path):
@@ -53,11 +55,13 @@ def test_ingest_features_without_scan_output(tmp_path, capsys):
 
 def test_ingest_features_skips_completed(tmp_path, capsys, monkeypatch):
     """전부 추출된 상태면 GPU 구현체를 만들지 않고 끝난다."""
+    from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
     from hathor.infrastructure.npz_feature_store import NpzFeatureStore
-    from hathor.interfaces.cli import main as cli
 
     track = _fake_track("a.mp3")
-    monkeypatch.setattr(cli.JsonlScanStore, "read_tracks", lambda self: iter([track]))
+    # **반은 객체 하나다** (D-0264). 정본에서 가져와 붙여도 `main`이 보는 것과 같은
+    # 것이며, `main`을 통해 읽으면 «`main`이 그것을 내보낸다»에 기대게 된다.
+    monkeypatch.setattr(JsonlScanStore, "read_tracks", lambda self: iter([track]))
     index = NpzFeatureStore(tmp_path).index_path
     index.parent.mkdir(parents=True, exist_ok=True)
     index.write_text(json.dumps({"source_key": "a.mp3"}) + "\n", encoding="utf-8")
@@ -68,34 +72,9 @@ def test_ingest_features_skips_completed(tmp_path, capsys, monkeypatch):
     assert "처리할 곡이 없다" in out
 
 
-def _fake_track(source_key):
-    from datetime import UTC, datetime
-
-    from hathor.domain.entities.audio_stream import AudioStreamProperties
-    from hathor.domain.entities.scanned_track import ScannedTrack
-    from hathor.domain.entities.track_tags import TrackTags
-
-    return ScannedTrack(
-        source_key=source_key,
-        file_size_bytes=1,
-        modified_at=datetime.now(UTC),
-        stream=AudioStreamProperties(
-            sample_rate_hz=44100,
-            channels=2,
-            duration_ms=1000,
-            bitrate_bps=320000,
-            codec="mp3",
-        ),
-        tags=TrackTags(
-            title="t",
-            artist="a",
-            album=None,
-            lyrics_text=None,
-            has_album_art=False,
-            has_synced_lyrics=False,
-        ),
-        raw_frame_names=(),
-    )
+def _fake_track(source_key: str) -> ScannedTrack:
+    """조립은 `tests.conftest.scanned_track` 하나다 (D-0264)."""
+    return scanned_track(source_key)
 
 
 # ---------------------------------------------------------------- ingest compact (O-7(D-0022))

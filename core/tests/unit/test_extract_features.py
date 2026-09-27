@@ -3,35 +3,12 @@
 GPU를 쓰지 않는다. 디코더·분리기·추출기는 가짜를 주입한다.
 """
 
-from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
 
 from hathor.application.extract_features import ExtractFeatures
-from hathor.domain.entities.audio_stream import AudioStreamProperties
-from hathor.domain.entities.scanned_track import ScannedTrack
-from hathor.domain.entities.track_tags import TrackTags
-
-
-def make_track(source_key: str = "a.mp3") -> ScannedTrack:
-    return ScannedTrack(
-        source_key=source_key,
-        file_size_bytes=1,
-        modified_at=datetime.now(UTC),
-        stream=AudioStreamProperties(
-            sample_rate_hz=44100, channels=2, duration_ms=1000, bitrate_bps=320000, codec="mp3"
-        ),
-        tags=TrackTags(
-            title="t",
-            artist="a",
-            album=None,
-            lyrics_text=None,
-            has_album_art=False,
-            has_synced_lyrics=False,
-        ),
-        raw_frame_names=(),
-    )
+from tests.conftest import scanned_track
 
 
 class FakeDecoder:
@@ -39,7 +16,7 @@ class FakeDecoder:
         self.fail = fail
         self.seen: list[Path] = []
 
-    def decode(self, path: Path):
+    def decode(self, path: Path) -> np.ndarray:
         self.seen.append(path)
         if self.fail:
             raise OSError("디코딩 실패")
@@ -64,7 +41,7 @@ def test_혼합과_스템_4종의_특징을_뽑는다():
     extractor = FakeExtractor()
     use_case = ExtractFeatures(FakeDecoder(), FakeSeparator(), extractor, Path("/음원"))
 
-    results = list(use_case.run([make_track()]))
+    results = list(use_case.run([scanned_track()]))
 
     assert len(results) == 1
     assert set(results[0].stems) == {"drums", "bass", "other", "vocals"}
@@ -77,7 +54,7 @@ def test_라이브러리_루트를_source_key에_붙인다():
     decoder = FakeDecoder()
     use_case = ExtractFeatures(decoder, FakeSeparator(), FakeExtractor(), Path("/음원"))
 
-    list(use_case.run([make_track("가수/곡.mp3")]))
+    list(use_case.run([scanned_track("가수/곡.mp3")]))
 
     assert decoder.seen == [Path("/음원/가수/곡.mp3")]
 
@@ -88,7 +65,7 @@ def test_한_곡의_실패가_배치를_멈추지_않는다():
         FakeDecoder(fail=True), FakeSeparator(), FakeExtractor(), Path("/음원")
     )
 
-    results = list(use_case.run([make_track("x.mp3"), make_track("y.mp3")]))
+    results = list(use_case.run([scanned_track("x.mp3"), scanned_track("y.mp3")]))
 
     assert results == []
     assert use_case.processed == 0
@@ -99,7 +76,7 @@ def test_한_곡의_실패가_배치를_멈추지_않는다():
 def test_성공_건수를_센다():
     use_case = ExtractFeatures(FakeDecoder(), FakeSeparator(), FakeExtractor(), Path("/음원"))
 
-    list(use_case.run([make_track("a.mp3"), make_track("b.mp3")]))
+    list(use_case.run([scanned_track("a.mp3"), scanned_track("b.mp3")]))
 
     assert use_case.processed == 2
     assert use_case.failed == []
@@ -142,7 +119,7 @@ def test_layer_features_put_layers_in_stem_slot(tmp_path):
 
     extractor = FakeLayeredExtractor()
     use_case = ExtractLayerFeatures(FakeDecoder(), extractor, tmp_path)
-    features = list(use_case.run([make_track("가/노래.mp3")]))
+    features = list(use_case.run([scanned_track("가/노래.mp3")]))
 
     assert len(features) == 1
     assert set(features[0].stems) == {"layer00", "layer03"}
@@ -156,7 +133,7 @@ def test_layer_features_decode_once_per_track(tmp_path):
 
     extractor = FakeLayeredExtractor(layers=(0, 3, 6, 9))
     use_case = ExtractLayerFeatures(FakeDecoder(), extractor, tmp_path)
-    list(use_case.run([make_track("가/노래.mp3")]))
+    list(use_case.run([scanned_track("가/노래.mp3")]))
     assert extractor.calls == 1
 
 
@@ -164,6 +141,6 @@ def test_layer_features_require_mixture_key(tmp_path):
     from hathor.application.extract_features import ExtractLayerFeatures
 
     use_case = ExtractLayerFeatures(FakeDecoder(), BrokenLayeredExtractor(), tmp_path)
-    assert list(use_case.run([make_track("가/노래.mp3")])) == []
+    assert list(use_case.run([scanned_track("가/노래.mp3")])) == []
     assert len(use_case.failed) == 1
     assert "KeyError" in use_case.failed[0][1]

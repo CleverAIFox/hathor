@@ -264,7 +264,9 @@ def test_이끔음만_다르면_온음계_몫이_1이다():
 KRUMHANSL = np.asarray([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
 
 
-def _tonal_references(count: int, *, off_jitter: float, on_jitter: float = 0.25, seed=4):
+def _tonal_references(
+    count: int, *, off_jitter: float, on_jitter: float = 0.25, seed: int = 4
+) -> list[ReferencePrior]:
     """**코퍼스가 공유하는 조성 모양을 넣는다** (D-0086).
 
     이 구조가 없으면 통계가 실제 자료와 다르게 움직이고, **그것이 D-0083부터 D-0085까지

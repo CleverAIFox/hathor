@@ -2303,6 +2303,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0261 | 결정이 금지한 것을 검사가 막는다 | `tools/check_forbidden.py` |
 | D-0262 | 셋을 더 박고 다섯을 더 채운다 | `core/tests/unit/test_gate_docs_and_compose.py` |
 | D-0263 | 관문 도구를 타입 검사에 넣는다 | `make type` |
+| D-0264 | 검사 코드 타입 오류 66건을 0으로 | `tools/check_test_types.py (PINNED = {})` |
 
 <!-- decision-ledger:end -->
 

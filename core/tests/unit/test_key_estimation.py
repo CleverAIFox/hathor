@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE
+from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE, Waveform
 from hathor.domain.services.key_estimation import (
     CHROMA_CQ,
     CHROMA_LINEAR,
@@ -21,19 +21,19 @@ from hathor.domain.services.key_estimation import (
 from hathor.domain.value_objects.key import Key, Mode
 
 
-def tone(frequency: float, seconds: float = 1.0) -> np.ndarray:
-    """배음 3개까지 넣는다. 순음은 실제 악기와 너무 달라 검증이 무의미해진다."""
+def tone(frequency: float, seconds: float = 1.0, gain: float = 1.0) -> Waveform:
+    """배음 3개. `gain`도 여기서 곱한다 — 밖에서 곱하면 스텁이 float64로 읽는다 (D-0264)."""
     time = np.arange(int(SOURCE_SAMPLE_RATE * seconds)) / SOURCE_SAMPLE_RATE
     stacked = sum(np.sin(2 * np.pi * frequency * partial * time) / partial for partial in (1, 2, 3))
-    return np.asarray(stacked, dtype=np.float32)
+    return np.asarray(np.asarray(stacked) * gain, dtype=np.float32)
 
 
 def midi_hz(note: int) -> float:
     return 440.0 * 2 ** ((note - 69) / 12)
 
 
-def chord(notes: list[int], seconds: float = 1.0) -> np.ndarray:
-    return np.asarray(sum(tone(midi_hz(note), seconds) for note in notes), dtype=np.float32)
+def chord(notes: list[int], seconds: float = 1.0, gain: float = 1.0) -> Waveform:
+    return np.asarray(sum(tone(midi_hz(n), seconds, gain) for n in notes), dtype=np.float32)
 
 
 # --- 빈 매핑 ---
@@ -438,8 +438,8 @@ def test_compression_normalizes_before_and_after():
     """압축 전에 정규화한다. 곡의 절대 음량이 압축 강도를 바꾸면 안 된다."""
     from hathor.domain.services.key_estimation import cq_chroma
 
-    quiet = chord([60, 64, 67], 1.5) * 0.01
-    loud = chord([60, 64, 67], 1.5) * 4.0
+    quiet = chord([60, 64, 67], 1.5, gain=0.01)
+    loud = chord([60, 64, 67], 1.5, gain=4.0)
     assert np.allclose(cq_chroma(quiet, gamma=100.0), cq_chroma(loud, gamma=100.0), atol=1e-5)
 
 
@@ -638,9 +638,9 @@ def test_black_keys_are_disjoint_from_naturals():
 # ---------------------------------------------- 창별 집계 (O-27 · D-0064)
 
 
-def _tone(frequency: float, seconds: float, sample_rate: int = 44100) -> np.ndarray:
-    time = np.arange(int(sample_rate * seconds), dtype=np.float32) / sample_rate
-    return np.sin(2 * np.pi * frequency * time).astype(np.float32)
+def _tone(frequency: float, seconds: float, rate: int = 44100, gain: float = 1.0) -> Waveform:
+    time = np.arange(int(rate * seconds), dtype=np.float32) / rate
+    return np.asarray(np.sin(2 * np.pi * frequency * time) * gain, dtype=np.float32)
 
 
 def test_창을_나눠도_순음이면_같은_피치클래스를_찍는다():
@@ -701,7 +701,7 @@ def test_배음_감산이_실제로_걸린다():
     """
     from hathor.domain.services.key_estimation import chroma
 
-    signal = _tone(130.81, 12.0) + 0.5 * _tone(261.63, 12.0)  # C3 + C4 배음
+    signal = _tone(130.81, 12.0) + _tone(261.63, 12.0, gain=0.5)  # C3 + C4 배음
     plain = chroma(signal, harmonic=0.0)
     reduced = chroma(signal, harmonic=0.8)
     assert not np.allclose(plain, reduced)

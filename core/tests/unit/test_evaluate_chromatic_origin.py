@@ -29,7 +29,7 @@ FAST = OriginCondition(bootstrap=15, null_repeats=5)
 MAJOR_SCALE = (0, 2, 4, 5, 7, 9, 11)
 
 
-def _corpus(count: int, *, borrow: float, error: float, seed: int = 7):
+def _corpus(count: int, *, borrow: float, error: float, seed: int = 7) -> list[ReferencePrior]:
     """**조성 공유 모양 위에서** 차용(첨가)과 오차(치환)를 따로 돌린다."""
     rng = np.random.default_rng(seed)
     shape = KRUMHANSL / KRUMHANSL.sum()
@@ -154,7 +154,9 @@ def test_온음계_질량을_함께_낸다():
 # ------------------------------------------------------------------ 뭉침 대비 (D-0091)
 
 
-def _mixed_corpus(count: int, *, mixture: float, leak: float, seed: int = 11):
+def _mixed_corpus(
+    count: int, *, mixture: float, leak: float, seed: int = 11
+) -> list[ReferencePrior]:
     """`mixture`=단조 차용(♭3♭6♭7 동시), `leak`=이웃 반음 번짐. **따로 돌린다.**"""
     rng = np.random.default_rng(seed)
     shape = KRUMHANSL / KRUMHANSL.sum()
