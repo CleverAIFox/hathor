@@ -166,3 +166,25 @@ def test_재현_절을_들여쓴_블록으로_만든다() -> None:
     assert block.startswith("재현\n    hathor")
     assert block.endswith("--raw")
     assert "\n    hathor eval retrieval --raw" in block
+
+
+# ------------------------------------------------------------------ 반올림
+
+
+def test_기록이_반올림해_적어도_맞는다(tmp_path: Path) -> None:
+    """**첫 판이 짝을 0건 찾았다.** 산출물은 `round(x, 6)`이고 사람은 «0.9174»라고 쓴다."""
+    _artifact(tmp_path, "a", [0.917416, 0.864952, 0.431087])
+
+    hits = TOOL.match("MAP 0.9174 · M1 0.8650 · M2 0.4311", TOOL.read_artifacts(tmp_path))
+
+    assert hits and hits[0][0] == 3
+
+
+def test_반올림_꼴을_세_자리까지_넓힌다() -> None:
+    assert TOOL.variants("0.917416") == {"0.917416", "0.91742", "0.9174", "0.917"}
+
+
+def test_두_자리로_줄어드는_꼴은_안_넣는다() -> None:
+    """`0.9`가 열쇠가 되면 아무 데나 걸린다. **하나도 안 내놓는 것이 맞다.**"""
+    assert TOOL.variants("0.9") == set()
+    assert TOOL.variants("0.4312") == {"0.4312", "0.431"}

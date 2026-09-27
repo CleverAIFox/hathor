@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_EVAL_ROOT = ROOT / "var" / "ingest" / "eval"
+DEFAULT_EVAL_ROOT = ROOT / "var"
 RECORD = re.compile(r"^## (D-\d{4})\.", re.M)
 UNKNOWN = "재현 불명"
 
@@ -52,13 +52,31 @@ STRONG = 3
 """이 개수 이상 겹치면 근거로 인정한다. 둘은 보고만 한다."""
 
 
+def trim(raw: str) -> str | None:
+    """끝의 0을 떼고, 소수 셋을 못 채우면 버린다."""
+    trimmed = raw.rstrip("0").rstrip(".")
+    return trimmed if len(trimmed.partition(".")[2]) >= 3 else None
+
+
 def numbers(text: str) -> set[str]:
-    """소수를 **끝의 0을 떼고** 모은다. 기록은 0.9174, 산출물은 0.917400일 수 있다."""
-    found = set()
-    for raw in NUMBER.findall(text):
-        trimmed = raw.rstrip("0").rstrip(".")
-        if len(trimmed.partition(".")[2]) >= 3:
-            found.add(trimmed)
+    """글자에 적힌 소수. **기록 쪽은 적힌 그대로 본다.**"""
+    return {value for raw in NUMBER.findall(text) if (value := trim(raw))}
+
+
+def variants(raw: str) -> set[str]:
+    """이 수가 **기록에 적힐 수 있는 꼴들** — 3~6자리로 반올림한 값 전부.
+
+    첫 판이 짝을 0건 찾았다. 산출물은 `round(x, 6)`이고 **기록은 반올림해 적는다** —
+    `0.917416`을 사람이 «0.9174»라고 쓴다. 문자열이 같아야 짝이라고 하면 하나도 안 맞는다.
+    """
+    found = {value for value in (trim(raw),) if value}
+    try:
+        number = float(raw)
+    except ValueError:
+        return found
+    for digits in range(3, 7):
+        if (value := trim(f"{number:.{digits}f}")) is not None:
+            found.add(value)
     return found
 
 
@@ -122,7 +140,9 @@ class Artifact:
     def __init__(self, path: Path, record: dict[str, Any]) -> None:
         self.path = path
         self.command = command_of(record.get("config") or {})
-        self.numbers = numbers(" ".join(flatten(record)))
+        self.numbers = {
+            value for raw in NUMBER.findall(" ".join(flatten(record))) for value in variants(raw)
+        }
 
 
 def read_artifacts(root: Path) -> list[Artifact]:
@@ -161,6 +181,27 @@ def repro_block(commands: list[str]) -> str:
     return f"재현\n{lines}"
 
 
+def explain(artifacts: list[Artifact], rows: list[tuple[str, str]]) -> None:
+    """짝이 하나도 없을 때 **왜 없는지 보여 준다.** 한 번 더 돌리게 하지 않는다."""
+    print("\n── 왜 안 맞았나\n")
+    print(f"산출물 {len(artifacts)}개:")
+    for art in artifacts[:12]:
+        sample = sorted(art.numbers)[:4]
+        print(f"  {art.path.name}  수치 {len(art.numbers)}개 {sample}")
+        print(f"      {art.command}")
+
+    scored = sorted(((len(numbers(body)), number, body) for number, body in rows), reverse=True)
+    print("\n수치가 많은 기록:")
+    for count, number, body in scored[:6]:
+        best = max((len(numbers(body) & art.numbers) for art in artifacts), default=0)
+        print(f"  {number}  수치 {count}개 · 최고 교집합 {best} · {sorted(numbers(body))[:4]}")
+
+    print("\n짝이 없는 흔한 이유 셋:")
+    print("  1. 산출물이 여기 없다 — 교두보에 있으면 `make artifacts-pull` 또는 --eval-root")
+    print("  2. 그 실측이 이 하네스 이전이다 — 옛 조건은 산출물 규격이 달랐다")
+    print("  3. 기록이 수치를 표로만 적고 소수 셋을 안 썼다 — 그러면 짝지을 열쇠가 없다")
+
+
 def report(eval_root: Path, write: bool) -> int:
     decisions = ROOT / "docs" / "DECISIONS.md"
     text = decisions.read_text(encoding="utf-8")
@@ -194,6 +235,8 @@ def report(eval_root: Path, write: bool) -> int:
             print(f"      {command}")
 
     print(f"\n확실한 짝 {len(strong)}건 · 약한 짝 {weak}건")
+    if not strong and not weak:
+        explain(artifacts, rows)
     if not write:
         print("채우려면 --write")
         return 0
