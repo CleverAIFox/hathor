@@ -19180,3 +19180,79 @@ D-0254가 붙인 CI 줄이 **초록 3개**를 찍었다. 직전 커밋은 빨갰
     cd core && uv run pytest tests/unit/test_ship.py tests/unit/test_sync_artifacts.py -q
 
 강제자  `core/tests/unit/test_ship.py` · `core/tests/unit/test_sync_artifacts.py`
+
+---
+
+## D-0256. 워크플로가 묶음 없이 도구를 불렀다 — 그물을 치니 둘이 나왔다
+
+- **배경**: D-0255를 올린 뒤 `ci`와 `release`는 초록인데 **`proposal`만 빨갰다.** 사용자가
+  물었다 — *"255에서도 같은 문제 반복되는데 그냥 넘겨도 되냐?"*
+
+  **안 된다.** D-0255가 *"빨간 CI를 아무도 안 봤다"*를 기록으로 남겼다. 그 잉크가 마르기
+  전에 넘기면 **그 기록이 거짓이 된다.**
+
+### `deploy` 잡에 묶음이 없었다
+
+    - uses: actions/checkout@v4
+    - name: Bake PDF
+      run: python3 tools/bake_proposal.py ...      # ← 시스템 파이썬
+
+`bake_proposal`은 `from docx import Document`를 쓴다. 그 잡은 `libreoffice-writer` ·
+`fonts-noto-cjk` · `poppler-utils`만 깔고 **파이썬 묶음은 안 깐다.**
+
+**D-0246이 이 워크플로를 만든 뒤로 한 번도 초록인 적이 없다.** 로컬에서는 `uv run`으로
+돌려 보이지 않았고, 나는 내가 만든 것이 CI에서 도는지 **확인하지 않았다.**
+
+### 그물을 치니 둘이 나왔다
+
+한 건을 고치는 대신 규칙을 세웠다.
+
+| 부르는 법 | 지켜야 할 것 |
+|---|---|
+| `python3 tools/X.py` | `X`는 **표준 라이브러리만** 쓴다 |
+| 서드파티가 필요하다 | 워크플로가 **`uv run`**으로 부른다 |
+
+시험이 워크플로에서 맨 `python3`으로 불리는 도구를 모으고 **함수 안 import까지 AST로**
+훑는다 — `bake_proposal`의 `docx`가 함수 안에 숨어 있었다.
+
+그물이 **둘**을 잡았다.
+
+| 도구 | 쓰는 것 | 어디서 |
+|---|---|---|
+| `bake_proposal.py` | `docx` | `proposal.yml` — 오늘의 빨강 |
+| `step0_check.py` | `torch` · `mutagen` · `psutil` | `gpu-smoke.yml` — **몰랐다** |
+
+`step0_check`는 `uv sync`보다 **앞서** 돌고 있었다. 찾으러 간 것은 하나였고 둘이 나왔다.
+
+### 구워 봤다
+
+고친 뒤 **실제로 구웠다.** CI가 거는 어서션 셋을 그대로 돌렸다.
+
+    구웠다 · 목차 24줄에 쪽 번호 · _site/proposal.pdf
+    쪽 66 · 쪽수 OK · 본문 OK · 목차 쪽번호 OK
+
+시험이 초록인 것과 그 워크플로가 도는 것은 다르다 (D-0244). **이번에는 봤다.**
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) `deploy`에 `pip install python-docx` | **기각.** 잠금 파일 밖이라 판이 갈린다 |
+  | (2) 그 스텝만 `uv run`으로 | **기각.** 같은 부류가 또 있었고 실제로 있었다 |
+  | (3) **규칙을 세우고 시험이 든다** | **채택** |
+
+- **선택**: (3). 둘 다 고쳤다. `gpu-smoke`는 `Environment`를 설치 뒤로 옮기고 `uv run`으로
+  부른다. `proposal`은 `deploy`에 `uv sync --all-extras --all-groups`를 넣는다.
+  `docx_check`는 `zipfile`만 쓰므로 맨 `python3` 그대로 둔다.
+
+- **결과**: 시험 3건. 열린 질문은 그대로 36이다.
+
+### 남기는 것
+
+- **D-0255의 경계 표에 한 줄이 더 붙는다** — «묶음 안 파이썬 ↔ 시스템 파이썬». 어느 쪽
+  검사도 그 사이를 안 봤다.
+- **하나를 고치지 말고 그물을 친다.** 한 건만 고쳤으면 `step0_check`는 계속 숨어 있었다.
+- **«같은 문제가 또 나왔다»는 넘길 이유가 아니라 그물이 없다는 신호다.**
+
+재현
+    cd core && uv run pytest tests/unit/test_tool_deps.py -q
+
+강제자  `core/tests/unit/test_tool_deps.py`

@@ -33,12 +33,15 @@ jobs:
       - name: Driver
         run: nvidia-smi
 
-      - name: Environment
-        run: python3 tools/step0_check.py
-
       - name: Install (GPU extras)
         working-directory: core
-        run: uv sync --all-extras --dev
+        run: uv sync --all-extras --all-groups
+
+      # **`torch` · `mutagen` · `psutil`을 쓴다** (D-0256). 설치 전에 맨 `python3`으로
+      # 부르고 있었다 — 시스템 파이썬에는 묶음이 없다.
+      - name: Environment
+        working-directory: core
+        run: uv run --no-sync python ../tools/step0_check.py
 
       - name: Engine resume condition
         working-directory: core

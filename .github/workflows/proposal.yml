@@ -45,6 +45,17 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}proposal.html
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      # **`bake_proposal`이 `python-docx`를 쓴다** (D-0256). 이 잡에는 묶음이 없어서
+      # D-0246이 이 워크플로를 만든 뒤로 **한 번도 초록인 적이 없었다.**
+      - name: Install
+        working-directory: core
+        run: uv sync --all-extras --all-groups
+
+      # `docx_check`는 `zipfile`만 쓴다 — 맨 `python3`으로 둔다.
       - name: Proposal vs sources
         run: python3 tools/docx_check.py --check
       # D-0229. 브라우저가 docx를 직접 그리던 판은 웹에서 표와 글꼴이 무너졌다.
@@ -56,7 +67,10 @@ jobs:
             libreoffice-writer fonts-noto-cjk poppler-utils
       - name: Bake PDF
         # **목차에 쪽 번호를 박는다** (D-0246). 두 판을 굽고 쪽이 밀리지 않았는지 확인한다.
-        run: python3 tools/bake_proposal.py --docx docs/proposal.docx --out _site/proposal.pdf
+        working-directory: core
+        run: >
+          uv run --no-sync python ../tools/bake_proposal.py
+          --docx ../docs/proposal.docx --out ../_site/proposal.pdf
       - name: PDF is not broken
         run: |
           pages=$(pdfinfo _site/proposal.pdf | awk '/^Pages/ {print $2}')
