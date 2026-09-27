@@ -373,7 +373,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_cli.py -q
 
 ---
 
@@ -427,7 +428,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_artist_name_parser.py -q
 
 ---
 
@@ -540,7 +542,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_artist_name_parser.py -q
 
 ---
 
@@ -611,7 +614,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_domain.py -q
 
 ---
 
@@ -834,7 +838,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_lookup_verdict.py -q
 
 ---
 
@@ -907,7 +912,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_ffmpeg_audio_decoder.py -q
 
 ---
 
@@ -945,7 +951,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_ingest_resume.py -q
 
 ---
 
@@ -1063,7 +1070,8 @@ grep -rn "D-0086" docs/decisions/
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_evaluate_retrieval.py -q
 
 ---
 
@@ -1454,7 +1462,8 @@ D-0012의 쌍대비교가 그 라벨을 합성하는 장치이며, 다음 작업
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_taste_collection.py -q
 
 ---
 
@@ -2284,7 +2293,8 @@ M0가 절반 이하로 떨어졌다.
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_evaluate_retrieval.py -q
 
 ---
 
@@ -2335,7 +2345,8 @@ top-1과 함께 읽어야 한다. 별도 표식을 두지 않은 것은 JSON 소
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_retrieval_metrics.py -q
 
 ---
 
@@ -2889,7 +2900,8 @@ CLS를 먼저 고른 이유는 BGE-M3의 dense 정의와 일치하기 때문이�
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_eval_cli.py -q
 
 ---
 
@@ -3032,7 +3044,8 @@ D-0046은 "평균 풀링은 모든 토큰을 섞으므로 공통 방향이 강�
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_song_structure.py -q
 
 ---
 
@@ -3075,7 +3088,8 @@ D-0046은 "평균 풀링은 모든 토큰을 섞으므로 공통 방향이 강�
 
 강제자  `core/tests/unit/test_song_structure.py`
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_song_structure.py -q
 
 ---
 
@@ -3555,7 +3569,8 @@ D-0055가 "판별력 없음"으로 판정한 지표가 되살아날 여지가 �
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_key_estimation.py -q
 
 ---
 
@@ -6995,7 +7010,8 @@ D-0091에서 열을 늘리며 **행 문자열은 고치고 머리글 문자열�
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_harmony_output_cli.py -q
 
 ---
 
@@ -8053,7 +8069,8 @@ D-0100이 스템 조합을 조건에 넣은 것과 같은 이유다. **다른 �
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_chroma_series.py -q
 
 ---
 
@@ -8196,7 +8213,8 @@ D-0104가 "짧게 뽑아 두고 묶는다"를 정한 근거도 그것이다. **�
 
 ---
 
-재현 불명 — 이 수치를 내는 명령을 못 찾았다 (O-41)
+재현
+    cd core && uv run pytest tests/unit/test_transition_prior.py -q
 
 ---
 
@@ -10554,6 +10572,9 @@ D-0081의 선이 여기서도 갈린다. **현재를 조사해 채울 수 있으
 ---
 
 ## D-0136. `재현`을 전수 소급한다 — 정의를 고르는 것으로 일을 없앴다
+
+> **갱신됨 — D-0247.** 깎는 **규칙**을 적었다 — 규약형은 강제자를 돌리는 명령이
+> 재현이고, 실측형은 그 수치를 낸 명령뿐이다. 93 → 75건.
 
 - **갱신**: D-0135 — `REPRODUCE_FROM`을 135에서 **1로 내렸다.**
 
@@ -18524,3 +18545,52 @@ Part I. 프로젝트 제안서
     python3 tools/bake_proposal.py --docx docs/proposal.docx --out _site/proposal.pdf
 
 강제자  `core/tests/unit/test_bake_proposal.py::test_목차_쪽이_아니라_본문_쪽을_센다`
+
+---
+
+## D-0247. 재현 불명을 깎는 규칙 — 강제자가 재현인 경우와 아닌 경우
+
+- **갱신**: D-0136 · D-0222 — «재현 불명»을 세기 시작한 결정과 그 수를 시험에 맡긴 결정.
+
+- **배경**: 93건이 남아 있었다. PLAN은 *"하나씩 명령을 찾아 줄인다. 추측해 적지 않는다"*고만
+  적어 뒀다. **규칙이 없으면 결국 그럴듯한 명령을 적게 된다** — 그것이 O-41이 막으려던 것이다.
+
+### 두 부류를 가른다
+
+| 결정이 주장하는 것 | 재현은 무엇인가 |
+|---|---|
+| **규약·동작** — *"이렇게 돈다"* · *"이 형식으로 쓴다"* | **강제자를 돌리는 명령.** 그 시험이 주장을 실행해 보인다 |
+| **실측** — *"MFCC가 MERT를 이긴다"* · *"78.5%가 상한이다"* | **그 수치를 낸 명령.** 없으면 «불명»을 그대로 둔다 |
+
+**실측형에 시험 명령을 적으면 거짓 재현이다.** `test_npz_feature_store.py`는 D-0025의
+«MERT와 MFCC는 상보적이다»를 다시 재 주지 않는다 — 저장소가 도는지만 본다. 강제자가 있다고
+재현이 있는 것이 아니다.
+
+### 이번 판에 깎은 것
+
+규약형 **열여덟** 건이다 — D-0013 · D-0014 · D-0016 · D-0017 · D-0020 · D-0021 · D-0022 ·
+D-0023 · D-0028 · D-0040 · D-0041 · D-0047 · D-0049 · D-0050 · D-0056 · D-0092 · D-0105 · D-0107.
+
+**적기 전에 전부 돌렸다.** 열다섯 파일을 한 번에 돌려 초록인 것을 보고 적었다 — 안 돌려 보고
+적으면 그것도 추측이다.
+
+- **후보**: | 안 | 판정 |
+  |---|---|
+  | (1) 강제자가 있으면 전부 그 명령을 적는다 | **기각.** 54건 중 36건이 실측형이다. 거짓 재현이 36개 생긴다 |
+  | (2) 실측형은 `make check`을 적는다 | **기각.** 더 넓은 거짓말이다 |
+  | (3) **부류를 갈라 규약형만 깎는다** | **채택** |
+
+- **선택**: (3). 실측형은 그 수치를 낸 명령을 찾을 때까지 «불명»으로 둔다 — **모르는 것을
+  모른다고 적는 것이 이 줄의 값이다.**
+
+- **결과**: 93 → **75건**. 남은 75 중 36건은 강제자가 있으나 실측형이라 그대로 뒀다.
+
+### 남기는 것
+
+- **«재현»은 문서가 아니라 명령이다.** 돌려 보지 않고 적으면 그것도 추측이다.
+- **부류를 안 가르면 깎기가 거짓말로 바뀐다.** 숫자만 줄이는 것은 목표가 아니다.
+
+재현
+    cd core && uv run pytest tests/unit/test_plan_counts.py -q
+
+강제자  `core/tests/unit/test_plan_counts.py`
