@@ -2099,211 +2099,216 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 것이며, `tools/check_decisions.py`가 이 표를 다시 쓴다. **손으로 고치지 않는다** —
 고치면 다음 갱신에 지워지고, 그것이 D-0043이 말한 *"두 곳이 어긋난다"*이다.
 
+**`자료` 칸이 그 판단의 무게를 말한다** (D-0265). `합성`은 지은 자료에서 선 것이고
+`실물 …`은 실제 자료나 실제 기기에서 선 것이다. **둘은 같은 무게가 아니다** — 합성에서
+선 판단은 실물에서 뒤집힐 수 있고, 그 목록이 PLAN §3의 빚 한 줄이다.
+
 <!-- decision-ledger:begin -->
 
-| 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |
-|---|---|---|
-| D-0001 | MongoDB를 core 프로파일에 유지한다 | `tools/check_compose.py` |
-| D-0002 | 본인 보컬 시드 녹음을 P7까지 연기한다 | `tools/check_forbidden.py` |
-| D-0003 | 실존 가수의 음색 복제·보간은 구현하지 않는다 | `tools/check_forbidden.py` |
-| D-0004 | 저장소를 WSL ext4에 두고 F 드라이브는 데이터 전용으로 쓴다 | `core/tests/unit/test_paths.py` |
-| D-0005 | 가사는 태그 우선, STT 폴백 경로를 유지한다 | `core/tests/unit/test_lyrics_axis.py` |
-| D-0006 | ISRC 부재로 Chromaprint 지문 정규화가 주 경로가 된다 | `core/tests/unit/test_musicbrainz_lookup.py` |
-| D-0009 | 노트북 2대 역할을 재정의하고 파이썬 3.12로 고정한다 | `core/tests/unit/test_paths.py` |
-| D-0012 | 취향 웜스타트는 적응적 쌍대비교로 수행한다 | `tools/check_forbidden.py — «랜덤 포레스트» 호칭 금지분만` |
-| D-0013 | 라이브러리 변경 추적은 명시적 재스캔 + 델타 감지로 한다 | `core/tests/unit/test_cli.py` |
-| D-0014 | 아티스트 파서는 정규화하지 않고 후보를 제시한다 | `core/tests/unit/test_artist_name_parser.py` |
-| D-0015 | 로컬 에이전트 아키텍처를 채택하고 오디오 비이동을 불변 원칙으로 둔다 | `tools/check_egress.py` |
-| D-0016 | 아티스트 파서 출력 스키마와 표기 체계 휴리스틱 | `core/tests/unit/test_artist_name_parser.py` |
-| D-0017 | 정규화 기준을 ISRC에서 MusicBrainz MBID로 옮기고 Track을 폐기한다 | `core/tests/unit/test_domain.py` |
-| D-0019 | MusicBrainz 조회는 2단계 구조로 하고 78.5%를 상한으로 받아들인다 | `core/tests/unit/test_musicbrainz_lookup.py` |
-| D-0020 | 재생시간으로 레코딩 버전을 확정한다 | `core/tests/unit/test_lookup_verdict.py` |
-| D-0021 | 오디오 디코딩은 ffmpeg 서브프로세스, 정규화는 MERT 특징 추출기에 맡긴다 | `core/tests/unit/test_ffmpeg_audio_decoder.py` |
-| D-0022 | 배치 중복 실행은 flock으로 막고 인덱스는 키 정렬로 유지한다 | `core/tests/unit/test_ingest_resume.py` |
-| D-0023 | 검색 평가 하네스를 태그 동치류로 구성한다 (M0/M1/M2) | `core/tests/unit/test_evaluate_retrieval.py` |
-| D-0025 | MERT와 MFCC는 상보적이다 | `core/tests/unit/test_npz_feature_store.py` |
-| D-0028 | 취향 라벨 수집은 무작위 평가 집합을 먼저 확보한다 | `core/tests/unit/test_taste_collection.py` |
-| D-0029 | 주기능은 시드곡 퓨전이다 | `core/tests/unit/test_search_similar.py` |
-| D-0030 | 임베딩 공간이 뭉쳐 허브 곡이 생긴다 | `core/tests/unit/test_isotropy.py` |
-| D-0033 | 시드 결합 규칙을 실측으로 고른다 | `core/tests/unit/test_evaluate_fusion.py` |
-| D-0036 | 가사축은 문자 n-gram 해싱 베이스라인으로 착수한다 | `core/tests/unit/test_lyrics_axis.py` |
-| D-0039 | 문서 체계를 3축으로 명시한다 | `tools/check_doc_style.py` |
-| D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` |
-| D-0041 | M0에 순위 진단과 해석적 베이스라인을 넣는다 | `core/tests/unit/test_retrieval_metrics.py` |
-| D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/check_decisions.py` |
-| D-0043 | `PLAN.md`를 `DESIGN.md`로, GROUND RULES를 `CONTRIBUTING.md`로 | `tools/check_doc_style.py` |
-| D-0045 | 가사축 인코더를 BGE-M3로 한다 | `core/tests/unit/test_bge_m3_lyrics_encoder.py` |
-| D-0047 | CLI 배선을 테스트로 고정한다 | `core/tests/unit/test_eval_cli.py` |
-| D-0049 | 구조 생성을 가사 반복 패턴에서 규칙으로 뽑는다 | `core/tests/unit/test_song_structure.py` |
-| D-0050 | 가사 구간 폴백 판정을 정리 뒤로 옮긴다 | `core/tests/unit/test_song_structure.py` |
-| D-0052 | 생성 경로가 종단간 관통했다 | `core/tests/unit/test_midi_writer.py` |
-| D-0054 | 참조곡에서 조성을 추정한다 | `core/tests/unit/test_key_estimation.py` |
-| D-0056 | 크로마를 반음 격자로 바꾼다 | `core/tests/unit/test_key_estimation.py` |
-| D-0059 | 베이스라인이 조건을 따라가지 않았다 | `core/tests/unit/test_key_estimation.py` |
-| D-0060 | 베이스라인이 또 조건을 안 따라갔다 | `core/tests/unit/test_key_estimation.py` |
-| D-0062 | O-21의 판정 장치를 생성기보다 먼저 만든다 | `core/tests/unit/test_harmony_prior.py` |
-| D-0063 | O-21을 닫는다 | `core/tests/unit/test_harmony_generator.py` |
-| D-0064 | 창별 중앙값 크로마를 넣는다 (O-27 (b)) | `core/tests/unit/test_key_estimation.py` |
-| D-0066 | 두 기기 개발 환경을 규약으로 고정한다 | `core/tests/unit/test_paths.py` |
-| D-0067 | 규약을 기계가 확인하게 한다 | `core/tests/unit/test_paths.py` |
-| D-0068 | 기기 설정을 탐지해서 쓴다 | `core/tests/unit/test_paths.py` |
-| D-0069 | 부류를 검사로 바꾼다 | `core/tests/unit/test_cli_contracts.py` |
-| D-0070 | 패치 적용과 커밋을 한 명령으로 묶는다 | `tools/apply_patch.sh` |
-| D-0071 | 검사가 기기 상태에 의존했다 | `core/tests/conftest.py` |
-| D-0072 | 커밋 대상을 패치와 대조한다 | `tools/apply_patch.sh` |
-| D-0073 | O-27 (a) 타악 분리를 구현한다 | `core/tests/unit/test_harmony_prior_cli.py` |
-| D-0075 | 조성 추출을 이어받게 한다 | `core/tests/unit/test_ingest_resume.py` |
-| D-0076 | (결번) 기록이 유실됐다 | `tools/check_decisions.py` |
-| D-0077 | 추출을 동시에 못 돌게 한다 | `core/tests/unit/test_ingest_resume.py` |
-| D-0079 | O-29 도구를 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0080 | 결정 기록 자신의 규약을 기계가 검사하게 한다 | `tools/check_decisions.py` |
-| D-0081 | 표기는 전수 강제하고 내용만 신규에 건다 | `tools/check_decisions.py` |
-| D-0083 | O-31 도구 | `core/tests/unit/test_evaluate_degree_restriction.py` |
-| D-0084 | 귀무선이 질량까지 바꿨다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
-| D-0085 | O-31을 닫는다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
-| D-0086 | 귀무선의 0점이 0이 아니었다 | `core/tests/unit/test_evaluate_degree_restriction.py` |
-| D-0087 | 선을 하나 더했더니 다른 선의 수가 바뀌었다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0089 | O-33 도구 | `core/tests/unit/test_evaluate_chromatic_origin.py` |
-| D-0091 | 차용은 뭉치고 누설은 고르게 번진다 | `core/tests/unit/test_evaluate_chromatic_origin.py` |
-| D-0092 | 머리글과 값을 따로 쓰다가 이름표가 밀렸다 | `core/tests/unit/test_harmony_output_cli.py` |
-| D-0094 | 어휘를 넓힌다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0095 | 어휘를 넓혔는데 번 몫이 없다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0096 | 8마디에서 안 보인다고 없는 것이 아니다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0097 | O-36을 닫는다 | `core/tests/unit/test_arrangement.py` |
-| D-0098 | 비싼 작업 전에 게이트를 세운다 | `core/tests/unit/test_evaluate_time_drift.py` |
-| D-0099 | 게이트가 통과했는데 못 읽는다 | `core/tests/unit/test_evaluate_time_drift.py` |
-| D-0100 | 이어받기가 조건을 다 보지 않았다 | `core/tests/unit/test_ingest_resume.py` |
-| D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` |
-| D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` |
-| D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` |
-| D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` |
-| D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` |
-| D-0108 | 한쪽 기기에서만 초록이었다 | `core/tests/unit/test_evaluate_time_drift.py` |
-| D-0109 | 생성기가 배열을 조건화한다 | `core/tests/unit/test_harmony_generator.py` |
-| D-0110 | 배열 사전이 생성 경로에 붙었다 | `core/tests/unit/test_harmony_output_cli.py` |
-| D-0111 | 배열 조건화가 소리에 거의 안 닿고 있었다 | `core/tests/unit/test_arrangement.py` |
-| D-0112 | 쌍 거리로는 배열 조건화를 판정할 수 없다 | `core/tests/unit/test_evaluate_order_conditioning.py` |
-| D-0115 | 결정 기록 하나가 조각 밖에 있었고 검사가 못 봤다 | `tools/check_decisions.py` |
-| D-0116 | 저장소 로더를 CLI에서 인프라로 내린다 | `core/tests/unit/test_chroma_series.py` |
-| D-0117 | 파일 길이에 래칫을 건다 | `tools/check_file_size.py` |
-| D-0118 | 산출물 교두보를 세운다 | `tools/sync_artifacts.py` |
-| D-0119 | 교두보가 실제 기기에서 세 자리에 걸렸다 | `core/tests/unit/test_sync_artifacts.py` |
-| D-0120 | 쓰지 않는 것을 옮기다 죽었다 | `core/tests/unit/test_sync_artifacts.py` |
-| D-0121 | 검사를 만들어 놓고 안 불렀다 | `core/tests/unit/test_check_decisions.py` |
-| D-0122 | 광인사가 사라졌다 | `tools/check_forbidden.py — copy2 금지분만` |
-| D-0123 | 화성 리듬은 손잡이가 아니다 | `core/tests/unit/test_chord_rhythm.py` |
-| D-0124 | 유지 확률을 곡에서 뽑아 판정에 건다 | `core/tests/unit/test_evaluate_order_conditioning.py ·` |
-| D-0126 | 닫힌 질문을 코드가 열린 것처럼 적는다 | `tools/check_issue_mentions.py` |
-| D-0127 | `main.py`를 쪼개 래칫을 되돌린다 | `tools/check_file_size.py` |
-| D-0128 | 규약이 "검사가 돈다"고 적었는데 그 검사가 없었다 | `tools/check_secrets.py` |
-| D-0129 | 문서 강제자 | `tools/check_doc_style.py` |
-| D-0130 | 문서 축을 시제로 다시 나눈다 | `tools/check_doc_style.py` |
-| D-0131 | 결정에 `강제자` 칸을 세운다 | `tools/check_doc_style.py` |
-| D-0132 | `강제자`를 전수 소급한다 | `tools/check_doc_style.py` |
-| D-0133 | 빚 넷 중 셋을 한 번에 청산한다 | `tools/check_doc_style.py` |
-| D-0134 | 오디오 비이동을 강제한다 | `tools/check_egress.py` |
-| D-0135 | 실측에 명령을 붙인다 | `tools/check_doc_style.py` |
-| D-0136 | `재현`을 전수 소급한다 | `tools/check_doc_style.py` |
-| D-0137 | 성부 진행을 넣는다 | `core/tests/unit/test_voice_leading.py` |
-| D-0138 | 이어지는 같은 도수를 다시 치지 않는다 | `core/tests/unit/test_arrangement.py` |
-| D-0139 | 베이스를 붙인다 | `core/tests/unit/test_voice_leading.py` |
-| D-0141 | 가락을 붙인다 | `core/tests/unit/test_melody.py` |
-| D-0142 | 두 번째로 들었다 | `core/tests/unit/test_melody.py` |
-| D-0143 | 박과 온셋 | `core/tests/unit/test_onset.py` |
-| D-0144 | 온셋 포락선 | `core/tests/unit/test_onset.py` |
-| D-0145 | 온셋 배선을 끝낸다 | `core/tests/unit/test_extract_onsets.py` |
-| D-0146 | 검사마다 빼 둔 나무를 전수로 훑는다 | `tools/check_egress.py` |
-| D-0147 | 파이프라인이 없었다 | `core/tests/unit/test_ship.py` |
-| D-0148 | 세는 수가 틀렸다 | `core/tests/unit/test_ship.py` |
-| D-0149 | 린트와 타입 검사의 사각지대를 닫는다 | `core/tests/unit/test_test_types.py` |
-| D-0150 | 래칫이 기기마다 다른 수를 냈다 | `core/tests/unit/test_test_types.py` |
-| D-0151 | 합계만 박은 못은 어디가 달라졌는지 못 알려준다 | `core/tests/unit/test_test_types.py` |
-| D-0153 | 탐침이 빈손으로 돌아왔다 | `core/tests/unit/test_cli_contracts.py` |
-| D-0155 | 위상이 평평했던 것은 드리프트가 아니라 바닥이었다 | `core/tests/unit/test_onset.py` |
-| D-0156 | 두 번 짐작하고 두 번 틀렸다 | `core/tests/unit/test_onset.py` |
-| D-0161 | 스무 곡이 전부 한 아티스트였다 | `core/tests/unit/test_extract_onsets.py` |
-| D-0164 | 예측은 맞았으나 짝지은 비교가 아니었다 | `core/tests/unit/test_extract_onsets.py` |
-| D-0168 | 세션을 닫는다 | `tools/check_doc_style.py` |
-| D-0169 | 창을 홉에서 떼어낸다 | `core/tests/unit/test_onset.py` |
-| D-0170 | 반감점이 옮겨왔다 | `core/tests/unit/test_onset.py` |
-| D-0171 | 예측 둘이 통과했다 | `core/tests/unit/test_onset.py` |
-| D-0174 | 귀가 처음으로 무언가를 지적했다 | `core/tests/unit/test_arrangement.py` |
-| D-0176 | 귀 아픈 것은 음역이 아니라 밀도였다 | `core/tests/unit/test_arrangement.py` |
-| D-0177 | 한 층 안에서 세기가 전부 같았다 | `core/tests/unit/test_arrangement.py` |
-| D-0183 | 위생 점검 | `core/tests/unit/test_issue_mentions.py` |
-| D-0184 | CI를 만들어 놓고 안 쓰고 있었다 | `core/tests/unit/test_ci_parity.py` |
-| D-0186 | `MASTER.md`로 합친다 | `core/tests/unit/test_doc_style.py::test_폐기_보관소가_없다` |
-| D-0187 | 조각을 되돌린다 | `core/tests/unit/test_doc_style.py::test_축_셋만_통과한다` |
-| D-0188 | 길이 상한을 파일에서 기록으로 옮긴다 | `core/tests/unit/test_check_decisions.py::test_실제_저장소가_전_검사를_통과한다` |
-| D-0189 | 색인을 없애고 문서 ↔ 실물 강제자를 세운다 | `core/tests/unit/test_doc_fsck.py::test_저장소가_통과한다` |
-| D-0190 | 빈 자리가 말을 하게 한다 | `core/tests/unit/test_doc_fsck.py::test_저장소가_통과한다` |
-| D-0191 | 배음 감산이 단조를 살린다 | `core/tests/unit/test_cli_contracts.py` |
-| D-0192 | 강제자를 적고 안 지켰다 | `core/tests/unit/test_tables.py` |
-| D-0193 | 결정 대장이 낡아 있었다 | `core/tests/unit/test_check_decisions.py::test_색인을_만들지_않는다` |
-| D-0196 | `make apply`가 넉 달째 죽어 있었다 | `core/tests/unit/test_doc_fsck.py::test_배선이_없는_스크립트를_부르면_잡는다` |
-| D-0197 | 선법별 지표에는 선법별 바닥을 댄다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_선법별_바닥이_전체_바닥과_다르다` |
-| D-0198 | `--check`가 검사를 안 하고 썼다 | `core/tests/unit/test_check_decisions.py::test_check가_대장을_쓰지_않는다` |
-| D-0199 | `.env`를 읽는 파서가 둘이었다 | `core/tests/unit/test_paths.py::test_셸이_env를_따로_가르지_않는다` |
-| D-0200 | 죽은 손잡이 하나와, 모든 표가 어긋나 있었다 | `core/tests/unit/test_tables.py::test_한글_머리글이_값과_어긋나지_않는다` |
-| D-0201 | 배음 감산을 켠다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_고정_집합_바닥이_전체_바닥보다_낮다` |
-| D-0203 | 산출물을 전부 버리고 한 패스로 다시 뽑는다 | `core/tests/unit/test_ingest_all.py::test_디코딩과_분리를_곡당_한_번만_한다` |
-| D-0204 | 새 하위 명령이 조용히 스캔으로 갔다 | `core/tests/unit/test_cli_contracts.py::test_ingest_하위_명령이_전부_배선돼_있다` |
-| D-0205 | 마지막 층을 소스마다 두 번 담았다 | `core/tests/unit/test_ingest_all.py::test_마지막_층을_두_번_담지_않는다` |
-| D-0206 | O-46의 비교선이 섰다 | `core/tests/unit/test_determinism.py` |
-| D-0207 | 화음이 마디 머리에만 울렸다 | `core/tests/unit/test_arrangement.py::test_소리가_끊기지_않는다` |
-| D-0208 | 떨어지는 기본이 네 갈래인데 검사는 하나만 봤다 | `core/tests/unit/test_cli_contracts.py::test_하위_명령이_전부_배선돼_있다` |
-| D-0209 | 정상을 잔해로 찍고 있었다 | `core/tests/unit/test_var_fsck.py::test_한_실행이_낸_파일_셋을_한_묶음으로_센다` |
-| D-0211 | 묶음에서 옛 규격을 다시 쓴다 | `core/tests/unit/test_keys_from_bundles.py::test_생성_경로의_옛_로더가_새_산출물을_읽는다` |
-| D-0213 | 배열 사전이 절대음이었다 | `core/tests/unit/test_keys_from_bundles.py::test_조성이_달라도_같은_진행이면_같은_사전이다` |
-| D-0216 | 대중성 라벨을 접는다 | `core/tests/unit/test_resolve_identities.py::test_끊긴_조회는_정본_이름을_못_받는다` |
-| D-0217 | 엔진 후보를 서류로 거른다 | `core/tests/unit/test_model_licenses.py::test_상업_불가는_MERT_하나다` |
-| D-0219 | 관문 대조를 클래스 가드로 바꾼다 | `core/tests/unit/test_ci_parity.py::test_세_관문이_선언과_맞는다` |
-| D-0220 | 기획서를 docx로 다시 낸다 | `core/tests/unit/test_docx_check.py::test_저장소_기획서가_정본과_맞는다` |
-| D-0221 | 기획서를 `MASTER.md`에서 빌드한다 | `core/tests/unit/test_docx_check.py::test_지문이_다르면_낡았다고_말한다` |
-| D-0222 | 기획서를 Pages로 배포한다 | `core/tests/unit/test_ci_parity.py::test_배포는_검사를_지난다` |
-| D-0223 | 커버리지 래칫 · 결정 번호 릴리스 · 의존성 갱신 · 데브 컨테이너 | `core/tests/unit/test_release_and_ratchet.py::test_커버리지_바닥은_한_곳에만_산다` |
-| D-0224 | MLflow · Prefect를 연결하고 러너를 손으로만 건다 | `core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다` |
-| D-0225 | 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다 | `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다` |
-| D-0226 | 웹 화면의 버튼을 `gh` 명령으로 | `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다` |
-| D-0227 | 봇 갱신이 죽은 원인은 안 도는 칸이었다 | `core/tests/unit/test_hygiene.py::test_잠금은_도는_곳만_푼다` |
-| D-0228 | 러너 폴더를 저장소마다 나눈다 | `core/tests/unit/test_hygiene.py::test_다른_저장소의_러너는_안_건드린다` |
-| D-0229 | 웹에서 보여 주는 것은 구운 PDF다 | `core/tests/unit/test_ci_parity.py::test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다` |
-| D-0230 | 검사를 검사한다 | `core/tests/unit/test_hygiene.py::test_프로브는_심은_결함에_운다` |
-| D-0231 | 상업 가능한 취향 축을 잴 길을 놓는다 | `core/tests/unit/test_clap_feature_extractor.py::test_청크마다_임베딩_하나를_쌓는다` |
-| D-0232 | 가짜는 실물의 서명을 따른다 | `core/tests/unit/test_clap_feature_extractor.py::test_처리기_인자_이름을_실물에서_확인한다` |
-| D-0233 | 임베딩인 줄 알았던 6GB는 은닉 상태였다 | `core/tests/unit/test_clap_feature_extractor.py::test_은닉_상태가_아니라_임베딩을_쌓는다` |
-| D-0234 | 붕괴와 식별을 가른다 | `core/tests/unit/test_evaluate_retrieval.py::test_근접_실패는_계산하고_표식을_단다` |
-| D-0235 | O-68 판정 | `core/tests/unit/test_model_licenses.py` |
-| D-0236 | O-56 | `core/tests/unit/test_layering.py::test_계층_계약에_예외가_없다` |
-| D-0237 | 패치 검사가 이름 바꾸기를 못 읽었다 | `core/tests/unit/test_hygiene.py::test_패치_검사가_이름_바꾸기를_읽는다` |
-| D-0238 | 검사가 9분이다 | `core/tests/unit/test_hygiene.py::test_시험_이름에_메모리_주소가_없다` |
-| D-0239 | 교두보를 훑다 메모리가 터졌다 | `core/tests/unit/test_sync_artifacts.py::test_못_읽는_폴더에서_멈추지_않는다` |
-| D-0240 | 복사가 커널에 맡겨져 있었다 | `core/tests/unit/test_sync_artifacts.py::test_메모리가_모자라면_더_잘게_다시_쓴다` |
-| D-0241 | 캐시 하나를 둘이 나눠 쓰고 있었다 | `core/tests/unit/test_test_types.py::test_제_캐시를_따로_쓴다` |
-| D-0242 | 교두보가 «같다»를 이름으로만 말하고 있었다 | `core/tests/unit/test_sync_artifacts.py::test_봉인한_것은_다시_안_읽는다` |
-| D-0243 | 잠금 하나가 «다르다»를 만들었다 | `core/tests/unit/test_sync_artifacts.py::test_잠금과_반쪽은_산출물이_아니다` |
-| D-0244 | «고쳤다»가 안 고쳐져 있었다 | `core/tests/unit/test_var_fsck.py::test_한_단계_아래_manifest도_읽는다` |
-| D-0245 | O-62 판정 | `core/tests/unit/test_var_fsck.py::test_옛_실행이_남으면_관문이_막는다` |
-| D-0246 | 목차에 쪽 번호가 없었다 | `core/tests/unit/test_bake_proposal.py::test_목차_쪽이_아니라_본문_쪽을_센다` |
-| D-0247 | 재현 불명을 깎는 규칙 | `core/tests/unit/test_plan_counts.py` |
-| D-0248 | O-68 판정에 빠진 후보가 있었다 | `core/tests/unit/test_model_licenses.py` |
-| D-0249 | 패치 폴더는 우리 것만 있는 곳이 아니었다 | `core/tests/unit/test_apply_patch.py` |
-| D-0250 | 평가가 화면에만 찍고 있었다 | `core/tests/unit/test_eval_log.py` |
-| D-0251 | 소급할 수 있었다 | `core/tests/unit/test_repro_from_artifacts.py` |
-| D-0252 | 짝짓기가 우연을 근거로 셌다 | `core/tests/unit/test_repro_from_artifacts.py` |
-| D-0253 | «불명»을 결론으로 바꾼다 | `core/tests/unit/test_ship.py` |
-| D-0254 | 로컬 초록이 CI 빨강이었다 | `core/tests/unit/test_ci_parity.py` |
-| D-0255 | 봉인은 «같다»가 아니라 «그때 읽어서 같았다»이다 | `core/tests/unit/test_ship.py` |
-| D-0256 | 워크플로가 묶음 없이 도구를 불렀다 | `core/tests/unit/test_tool_deps.py` |
-| D-0257 | 검사가 자기를 안 봤다 | `core/tests/unit/test_gate_tools.py` |
-| D-0258 | 빚으로 적지 않고 같은 판에 갚는다 | `core/tests/unit/test_gate_tools.py` |
-| D-0259 | «시험이 있다»와 «시험이 민다»는 다르다 | `core/tests/unit/test_gate_tools.py` |
-| D-0260 | `eval` 보고를 `main.py`에서 뗀다 | `core/tests/unit/test_file_size.py` |
-| D-0261 | 결정이 금지한 것을 검사가 막는다 | `tools/check_forbidden.py` |
-| D-0262 | 셋을 더 박고 다섯을 더 채운다 | `core/tests/unit/test_gate_docs_and_compose.py` |
-| D-0263 | 관문 도구를 타입 검사에 넣는다 | `make type` |
-| D-0264 | 검사 코드 타입 오류 66건을 0으로 | `tools/check_test_types.py (PINNED = {})` |
+| 결정 | 무엇이 효력을 갖는가 | 누가 지키나 | 자료 |
+|---|---|---|---|
+| D-0001 | MongoDB를 core 프로파일에 유지한다 | `tools/check_compose.py` | 실물 저장소 |
+| D-0002 | 본인 보컬 시드 녹음을 P7까지 연기한다 | `tools/check_forbidden.py` | 해당 없음 |
+| D-0003 | 실존 가수의 음색 복제·보간은 구현하지 않는다 | `tools/check_forbidden.py` | 해당 없음 |
+| D-0004 | 저장소를 WSL ext4에 두고 F 드라이브는 데이터 전용으로 쓴다 | `core/tests/unit/test_paths.py` | 실물 기기 |
+| D-0005 | 가사는 태그 우선, STT 폴백 경로를 유지한다 | `core/tests/unit/test_lyrics_axis.py` | 실물 1004곡 |
+| D-0006 | ISRC 부재로 Chromaprint 지문 정규화가 주 경로가 된다 | `core/tests/unit/test_musicbrainz_lookup.py` | 실물 태그 |
+| D-0009 | 노트북 2대 역할을 재정의하고 파이썬 3.12로 고정한다 | `core/tests/unit/test_paths.py` | 실물 기기 |
+| D-0012 | 취향 웜스타트는 적응적 쌍대비교로 수행한다 | `tools/check_forbidden.py — «랜덤 포레스트» 호칭 금지분만` | 해당 없음 |
+| D-0013 | 라이브러리 변경 추적은 명시적 재스캔 + 델타 감지로 한다 | `core/tests/unit/test_cli.py` | 실물 1004곡 |
+| D-0014 | 아티스트 파서는 정규화하지 않고 후보를 제시한다 | `core/tests/unit/test_artist_name_parser.py` | 실물 1004곡 |
+| D-0015 | 로컬 에이전트 아키텍처를 채택하고 오디오 비이동을 불변 원칙으로 둔다 | `tools/check_egress.py` | 해당 없음 |
+| D-0016 | 아티스트 파서 출력 스키마와 표기 체계 휴리스틱 | `core/tests/unit/test_artist_name_parser.py` | 실물 태그 |
+| D-0017 | 정규화 기준을 ISRC에서 MusicBrainz MBID로 옮기고 Track을 폐기한다 | `core/tests/unit/test_domain.py` | 해당 없음 |
+| D-0019 | MusicBrainz 조회는 2단계 구조로 하고 78.5%를 상한으로 받아들인다 | `core/tests/unit/test_musicbrainz_lookup.py` | 실물 1004곡 |
+| D-0020 | 재생시간으로 레코딩 버전을 확정한다 | `core/tests/unit/test_lookup_verdict.py` | 실물 1004곡 |
+| D-0021 | 오디오 디코딩은 ffmpeg 서브프로세스, 정규화는 MERT 특징 추출기에 맡긴다 | `core/tests/unit/test_ffmpeg_audio_decoder.py` | 실물 오디오 파일 |
+| D-0022 | 배치 중복 실행은 flock으로 막고 인덱스는 키 정렬로 유지한다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
+| D-0023 | 검색 평가 하네스를 태그 동치류로 구성한다 (M0/M1/M2) | `core/tests/unit/test_evaluate_retrieval.py` | 합성 |
+| D-0025 | MERT와 MFCC는 상보적이다 | `core/tests/unit/test_npz_feature_store.py` | 실물 1004곡 |
+| D-0028 | 취향 라벨 수집은 무작위 평가 집합을 먼저 확보한다 | `core/tests/unit/test_taste_collection.py` | 해당 없음 |
+| D-0029 | 주기능은 시드곡 퓨전이다 | `core/tests/unit/test_search_similar.py` | 실물 응답 30건 |
+| D-0030 | 임베딩 공간이 뭉쳐 허브 곡이 생긴다 | `core/tests/unit/test_isotropy.py` | 실물 1004곡 |
+| D-0033 | 시드 결합 규칙을 실측으로 고른다 | `core/tests/unit/test_evaluate_fusion.py` | 해당 없음 |
+| D-0036 | 가사축은 문자 n-gram 해싱 베이스라인으로 착수한다 | `core/tests/unit/test_lyrics_axis.py` | 해당 없음 |
+| D-0039 | 문서 체계를 3축으로 명시한다 | `tools/check_doc_style.py` | 해당 없음 |
+| D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` | 합성 |
+| D-0041 | M0에 순위 진단과 해석적 베이스라인을 넣는다 | `core/tests/unit/test_retrieval_metrics.py` | 해당 없음 |
+| D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/check_decisions.py` | 실물 저장소 |
+| D-0043 | `PLAN.md`를 `DESIGN.md`로, GROUND RULES를 `CONTRIBUTING.md`로 | `tools/check_doc_style.py` | 실물 문서 4종 |
+| D-0045 | 가사축 인코더를 BGE-M3로 한다 | `core/tests/unit/test_bge_m3_lyrics_encoder.py` | 실물 1003곡 |
+| D-0047 | CLI 배선을 테스트로 고정한다 | `core/tests/unit/test_eval_cli.py` | 해당 없음 |
+| D-0049 | 구조 생성을 가사 반복 패턴에서 규칙으로 뽑는다 | `core/tests/unit/test_song_structure.py` | 실물 1003곡 |
+| D-0050 | 가사 구간 폴백 판정을 정리 뒤로 옮긴다 | `core/tests/unit/test_song_structure.py` | 실물 1곡 |
+| D-0052 | 생성 경로가 종단간 관통했다 | `core/tests/unit/test_midi_writer.py` | 해당 없음 |
+| D-0054 | 참조곡에서 조성을 추정한다 | `core/tests/unit/test_key_estimation.py` | 합성 · 실물 참조곡 |
+| D-0056 | 크로마를 반음 격자로 바꾼다 | `core/tests/unit/test_key_estimation.py` | 합성 · 실물 200곡 |
+| D-0059 | 베이스라인이 조건을 따라가지 않았다 | `core/tests/unit/test_key_estimation.py` | 합성 · 실물 200곡 |
+| D-0060 | 베이스라인이 또 조건을 안 따라갔다 | `core/tests/unit/test_key_estimation.py` | 합성 · 실물 200곡 |
+| D-0062 | O-21의 판정 장치를 생성기보다 먼저 만든다 | `core/tests/unit/test_harmony_prior.py` | 합성 |
+| D-0063 | O-21을 닫는다 | `core/tests/unit/test_harmony_generator.py` | 실물 200곡 |
+| D-0064 | 창별 중앙값 크로마를 넣는다 (O-27 (b)) | `core/tests/unit/test_key_estimation.py` | 합성 |
+| D-0066 | 두 기기 개발 환경을 규약으로 고정한다 | `core/tests/unit/test_paths.py` | 실물 기기 |
+| D-0067 | 규약을 기계가 확인하게 한다 | `core/tests/unit/test_paths.py` | 실물 기기 |
+| D-0068 | 기기 설정을 탐지해서 쓴다 | `core/tests/unit/test_paths.py` | 실물 기기 |
+| D-0069 | 부류를 검사로 바꾼다 | `core/tests/unit/test_cli_contracts.py` | 해당 없음 |
+| D-0070 | 패치 적용과 커밋을 한 명령으로 묶는다 | `tools/apply_patch.sh` | 해당 없음 |
+| D-0071 | 검사가 기기 상태에 의존했다 | `core/tests/conftest.py` | 해당 없음 |
+| D-0072 | 커밋 대상을 패치와 대조한다 | `tools/apply_patch.sh` | 해당 없음 |
+| D-0073 | O-27 (a) 타악 분리를 구현한다 | `core/tests/unit/test_harmony_prior_cli.py` | 실물 표본 200곡 |
+| D-0075 | 조성 추출을 이어받게 한다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
+| D-0076 | (결번) 기록이 유실됐다 | `tools/check_decisions.py` | 해당 없음 |
+| D-0077 | 추출을 동시에 못 돌게 한다 | `core/tests/unit/test_ingest_resume.py` | 실물 기기 |
+| D-0079 | O-29 도구를 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0080 | 결정 기록 자신의 규약을 기계가 검사하게 한다 | `tools/check_decisions.py` | 실물 기록 78건 |
+| D-0081 | 표기는 전수 강제하고 내용만 신규에 건다 | `tools/check_decisions.py` | 실물 문서 4종 |
+| D-0083 | O-31 도구 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 |
+| D-0084 | 귀무선이 질량까지 바꿨다 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 · 실물 1004곡 |
+| D-0085 | O-31을 닫는다 | `core/tests/unit/test_evaluate_degree_restriction.py` | 실물 1004곡 |
+| D-0086 | 귀무선의 0점이 0이 아니었다 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 · 실물 1004곡 |
+| D-0087 | 선을 하나 더했더니 다른 선의 수가 바뀌었다 | `core/tests/unit/test_evaluate_harmony_output.py` | 실물 코퍼스 |
+| D-0089 | O-33 도구 | `core/tests/unit/test_evaluate_chromatic_origin.py` | 합성 · 실물 코퍼스 |
+| D-0091 | 차용은 뭉치고 누설은 고르게 번진다 | `core/tests/unit/test_evaluate_chromatic_origin.py` | 합성 |
+| D-0092 | 머리글과 값을 따로 쓰다가 이름표가 밀렸다 | `core/tests/unit/test_harmony_output_cli.py` | 실물 산출물 |
+| D-0094 | 어휘를 넓힌다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0095 | 어휘를 넓혔는데 번 몫이 없다 | `core/tests/unit/test_evaluate_harmony_output.py` | 실물 1004곡 |
+| D-0096 | 8마디에서 안 보인다고 없는 것이 아니다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 1004곡 |
+| D-0097 | O-36을 닫는다 | `core/tests/unit/test_arrangement.py` | 실물 1004곡 |
+| D-0098 | 비싼 작업 전에 게이트를 세운다 | `core/tests/unit/test_evaluate_time_drift.py` | 합성 |
+| D-0099 | 게이트가 통과했는데 못 읽는다 | `core/tests/unit/test_evaluate_time_drift.py` | 실물 표본 200곡 |
+| D-0100 | 이어받기가 조건을 다 보지 않았다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
+| D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` | 합성 |
+| D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` | 합성 |
+| D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` | 실물 기기 |
+| D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` | 합성 |
+| D-0108 | 한쪽 기기에서만 초록이었다 | `core/tests/unit/test_evaluate_time_drift.py` | 해당 없음 |
+| D-0109 | 생성기가 배열을 조건화한다 | `core/tests/unit/test_harmony_generator.py` | 합성 |
+| D-0110 | 배열 사전이 생성 경로에 붙었다 | `core/tests/unit/test_harmony_output_cli.py` | 합성 |
+| D-0111 | 배열 조건화가 소리에 거의 안 닿고 있었다 | `core/tests/unit/test_arrangement.py` | 실물 기기 |
+| D-0112 | 쌍 거리로는 배열 조건화를 판정할 수 없다 | `core/tests/unit/test_evaluate_order_conditioning.py` | 합성 |
+| D-0115 | 결정 기록 하나가 조각 밖에 있었고 검사가 못 봤다 | `tools/check_decisions.py` | 해당 없음 |
+| D-0116 | 저장소 로더를 CLI에서 인프라로 내린다 | `core/tests/unit/test_chroma_series.py` | 실물 저장소 코드 |
+| D-0117 | 파일 길이에 래칫을 건다 | `tools/check_file_size.py` | 실물 저장소 코드 |
+| D-0118 | 산출물 교두보를 세운다 | `tools/sync_artifacts.py` | 실물 산출물 |
+| D-0119 | 교두보가 실제 기기에서 세 자리에 걸렸다 | `core/tests/unit/test_sync_artifacts.py` | 실물 기기 |
+| D-0120 | 쓰지 않는 것을 옮기다 죽었다 | `core/tests/unit/test_sync_artifacts.py` | 실물 기기 |
+| D-0121 | 검사를 만들어 놓고 안 불렀다 | `core/tests/unit/test_check_decisions.py` | 실물 저장소 |
+| D-0122 | 광인사가 사라졌다 | `tools/check_forbidden.py — copy2 금지분만` | 실물 기기 |
+| D-0123 | 화성 리듬은 손잡이가 아니다 | `core/tests/unit/test_chord_rhythm.py` | 합성 · 실물 1002곡 |
+| D-0124 | 유지 확률을 곡에서 뽑아 판정에 건다 | `core/tests/unit/test_evaluate_order_conditioning.py ·` | 합성 |
+| D-0126 | 닫힌 질문을 코드가 열린 것처럼 적는다 | `tools/check_issue_mentions.py` | 실물 저장소 문서 |
+| D-0127 | `main.py`를 쪼개 래칫을 되돌린다 | `tools/check_file_size.py` | 실물 저장소 코드 |
+| D-0128 | 규약이 "검사가 돈다"고 적었는데 그 검사가 없었다 | `tools/check_secrets.py` | 실물 저장소 코드 |
+| D-0129 | 문서 강제자 | `tools/check_doc_style.py` | 실물 결정 기록 123건 |
+| D-0130 | 문서 축을 시제로 다시 나눈다 | `tools/check_doc_style.py` | 실물 문서 |
+| D-0131 | 결정에 `강제자` 칸을 세운다 | `tools/check_doc_style.py` | 실물 문서 |
+| D-0132 | `강제자`를 전수 소급한다 | `tools/check_doc_style.py` | 실물 결정 기록 131건 |
+| D-0133 | 빚 넷 중 셋을 한 번에 청산한다 | `tools/check_doc_style.py` | 실물 저장소 파일 |
+| D-0134 | 오디오 비이동을 강제한다 | `tools/check_egress.py` | 실물 저장소 코드 |
+| D-0135 | 실측에 명령을 붙인다 | `tools/check_doc_style.py` | 실물 1004곡 |
+| D-0136 | `재현`을 전수 소급한다 | `tools/check_doc_style.py` | 실물 결정 기록 135건 |
+| D-0137 | 성부 진행을 넣는다 | `core/tests/unit/test_voice_leading.py` | 실물 생성 출력 |
+| D-0138 | 이어지는 같은 도수를 다시 치지 않는다 | `core/tests/unit/test_arrangement.py` | 실물 생성 출력 |
+| D-0139 | 베이스를 붙인다 | `core/tests/unit/test_voice_leading.py` | 실물 생성 출력 |
+| D-0141 | 가락을 붙인다 | `core/tests/unit/test_melody.py` | 실물 생성 출력 |
+| D-0142 | 두 번째로 들었다 | `core/tests/unit/test_melody.py` | 실물 생성 출력 |
+| D-0143 | 박과 온셋 | `core/tests/unit/test_onset.py` | 합성 |
+| D-0144 | 온셋 포락선 | `core/tests/unit/test_onset.py` | 합성 |
+| D-0145 | 온셋 배선을 끝낸다 | `core/tests/unit/test_extract_onsets.py` | 실물 저장소 문서 |
+| D-0146 | 검사마다 빼 둔 나무를 전수로 훑는다 | `tools/check_egress.py` | 실물 저장소 코드 |
+| D-0147 | 파이프라인이 없었다 | `core/tests/unit/test_ship.py` | 해당 없음 |
+| D-0148 | 세는 수가 틀렸다 | `core/tests/unit/test_ship.py` | 실물 저장소 파일 |
+| D-0149 | 린트와 타입 검사의 사각지대를 닫는다 | `core/tests/unit/test_test_types.py` | 실물 저장소 코드 |
+| D-0150 | 래칫이 기기마다 다른 수를 냈다 | `core/tests/unit/test_test_types.py` | 실물 기기 |
+| D-0151 | 합계만 박은 못은 어디가 달라졌는지 못 알려준다 | `core/tests/unit/test_test_types.py` | 실물 기기 |
+| D-0153 | 탐침이 빈손으로 돌아왔다 | `core/tests/unit/test_cli_contracts.py` | 실물 저장소 코드 |
+| D-0155 | 위상이 평평했던 것은 드리프트가 아니라 바닥이었다 | `core/tests/unit/test_onset.py` | 합성 · 실물 1곡 |
+| D-0156 | 두 번 짐작하고 두 번 틀렸다 | `core/tests/unit/test_onset.py` | 합성 · 실물 20곡 |
+| D-0161 | 스무 곡이 전부 한 아티스트였다 | `core/tests/unit/test_extract_onsets.py` | 실물 20곡 |
+| D-0164 | 예측은 맞았으나 짝지은 비교가 아니었다 | `core/tests/unit/test_extract_onsets.py` | 실물 39곡 |
+| D-0168 | 세션을 닫는다 | `tools/check_doc_style.py` | 실물 문서 4종 |
+| D-0169 | 창을 홉에서 떼어낸다 | `core/tests/unit/test_onset.py` | 합성 |
+| D-0170 | 반감점이 옮겨왔다 | `core/tests/unit/test_onset.py` | 합성 |
+| D-0171 | 예측 둘이 통과했다 | `core/tests/unit/test_onset.py` | 합성 · 실물 39곡 |
+| D-0174 | 귀가 처음으로 무언가를 지적했다 | `core/tests/unit/test_arrangement.py` | 실물 청취 |
+| D-0176 | 귀 아픈 것은 음역이 아니라 밀도였다 | `core/tests/unit/test_arrangement.py` | 실물 생성 출력 |
+| D-0177 | 한 층 안에서 세기가 전부 같았다 | `core/tests/unit/test_arrangement.py` | 실물 생성 출력 |
+| D-0183 | 위생 점검 | `core/tests/unit/test_issue_mentions.py` | 실물 저장소 |
+| D-0184 | CI를 만들어 놓고 안 쓰고 있었다 | `core/tests/unit/test_ci_parity.py` | 실물 기기 |
+| D-0186 | `MASTER.md`로 합친다 | `core/tests/unit/test_doc_style.py::test_폐기_보관소가_없다` | 실물 문서 3저장소 |
+| D-0187 | 조각을 되돌린다 | `core/tests/unit/test_doc_style.py::test_축_셋만_통과한다` | 실물 문서 3저장소 |
+| D-0188 | 길이 상한을 파일에서 기록으로 옮긴다 | `core/tests/unit/test_check_decisions.py::test_실제_저장소가_전_검사를_통과한다` | 해당 없음 |
+| D-0189 | 색인을 없애고 문서 ↔ 실물 강제자를 세운다 | `core/tests/unit/test_doc_fsck.py::test_저장소가_통과한다` | 해당 없음 |
+| D-0190 | 빈 자리가 말을 하게 한다 | `core/tests/unit/test_doc_fsck.py::test_저장소가_통과한다` | 실물 저장소 |
+| D-0191 | 배음 감산이 단조를 살린다 | `core/tests/unit/test_cli_contracts.py` | 합성 · 실물 코퍼스 |
+| D-0192 | 강제자를 적고 안 지켰다 | `core/tests/unit/test_tables.py` | 실물 저장소 |
+| D-0193 | 결정 대장이 낡아 있었다 | `core/tests/unit/test_check_decisions.py::test_색인을_만들지_않는다` | 실물 저장소 |
+| D-0196 | `make apply`가 넉 달째 죽어 있었다 | `core/tests/unit/test_doc_fsck.py::test_배선이_없는_스크립트를_부르면_잡는다` | 실물 저장소 |
+| D-0197 | 선법별 지표에는 선법별 바닥을 댄다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_선법별_바닥이_전체_바닥과_다르다` | 합성 |
+| D-0198 | `--check`가 검사를 안 하고 썼다 | `core/tests/unit/test_check_decisions.py::test_check가_대장을_쓰지_않는다` | 실물 저장소 |
+| D-0199 | `.env`를 읽는 파서가 둘이었다 | `core/tests/unit/test_paths.py::test_셸이_env를_따로_가르지_않는다` | 합성 |
+| D-0200 | 죽은 손잡이 하나와, 모든 표가 어긋나 있었다 | `core/tests/unit/test_tables.py::test_한글_머리글이_값과_어긋나지_않는다` | 실물 저장소 |
+| D-0201 | 배음 감산을 켠다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_고정_집합_바닥이_전체_바닥보다_낮다` | 합성 · 실물 1004곡 |
+| D-0203 | 산출물을 전부 버리고 한 패스로 다시 뽑는다 | `core/tests/unit/test_ingest_all.py::test_디코딩과_분리를_곡당_한_번만_한다` | 실물 기기 · 산출물 |
+| D-0204 | 새 하위 명령이 조용히 스캔으로 갔다 | `core/tests/unit/test_cli_contracts.py::test_ingest_하위_명령이_전부_배선돼_있다` | 해당 없음 |
+| D-0205 | 마지막 층을 소스마다 두 번 담았다 | `core/tests/unit/test_ingest_all.py::test_마지막_층을_두_번_담지_않는다` | 실물 3곡 |
+| D-0206 | O-46의 비교선이 섰다 | `core/tests/unit/test_determinism.py` | 실물 1004곡 |
+| D-0207 | 화음이 마디 머리에만 울렸다 | `core/tests/unit/test_arrangement.py::test_소리가_끊기지_않는다` | 실물 1003곡 |
+| D-0208 | 떨어지는 기본이 네 갈래인데 검사는 하나만 봤다 | `core/tests/unit/test_cli_contracts.py::test_하위_명령이_전부_배선돼_있다` | 실물 저장소 |
+| D-0209 | 정상을 잔해로 찍고 있었다 | `core/tests/unit/test_var_fsck.py::test_한_실행이_낸_파일_셋을_한_묶음으로_센다` | 실물 산출물 |
+| D-0211 | 묶음에서 옛 규격을 다시 쓴다 | `core/tests/unit/test_keys_from_bundles.py::test_생성_경로의_옛_로더가_새_산출물을_읽는다` | 해당 없음 |
+| D-0213 | 배열 사전이 절대음이었다 | `core/tests/unit/test_keys_from_bundles.py::test_조성이_달라도_같은_진행이면_같은_사전이다` | 실물 참조곡 10시드 |
+| D-0216 | 대중성 라벨을 접는다 | `core/tests/unit/test_resolve_identities.py::test_끊긴_조회는_정본_이름을_못_받는다` | 실물 ListenBrainz 3곡 |
+| D-0217 | 엔진 후보를 서류로 거른다 | `core/tests/unit/test_model_licenses.py::test_상업_불가는_MERT_하나다` | 실물 문서 7종 |
+| D-0219 | 관문 대조를 클래스 가드로 바꾼다 | `core/tests/unit/test_ci_parity.py::test_세_관문이_선언과_맞는다` | 실물 저장소 |
+| D-0220 | 기획서를 docx로 다시 낸다 | `core/tests/unit/test_docx_check.py::test_저장소_기획서가_정본과_맞는다` | 실물 문서 |
+| D-0221 | 기획서를 `MASTER.md`에서 빌드한다 | `core/tests/unit/test_docx_check.py::test_지문이_다르면_낡았다고_말한다` | 실물 저장소 문서 |
+| D-0222 | 기획서를 Pages로 배포한다 | `core/tests/unit/test_ci_parity.py::test_배포는_검사를_지난다` | 실물 저장소 문서 |
+| D-0223 | 커버리지 래칫 · 결정 번호 릴리스 · 의존성 갱신 · 데브 컨테이너 | `core/tests/unit/test_release_and_ratchet.py::test_커버리지_바닥은_한_곳에만_산다` | 실물 저장소 |
+| D-0224 | MLflow · Prefect를 연결하고 러너를 손으로만 건다 | `core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다` | 실물 기기 |
+| D-0225 | 환경은 `make sync` 하나 · 봇은 월 1회 · 찌꺼기는 `tidy` · 워크플로도 린트한다 | `core/tests/unit/test_hygiene.py::test_환경을_맞추는_명령은_make_sync_하나다` | 합성 · 실물 저장소 |
+| D-0226 | 웹 화면의 버튼을 `gh` 명령으로 | `core/tests/unit/test_hygiene.py::test_웹_화면_안내는_명령으로_바꾼다` | 실물 저장소 |
+| D-0227 | 봇 갱신이 죽은 원인은 안 도는 칸이었다 | `core/tests/unit/test_hygiene.py::test_잠금은_도는_곳만_푼다` | 실물 저장소 |
+| D-0228 | 러너 폴더를 저장소마다 나눈다 | `core/tests/unit/test_hygiene.py::test_다른_저장소의_러너는_안_건드린다` | 실물 기기 |
+| D-0229 | 웹에서 보여 주는 것은 구운 PDF다 | `core/tests/unit/test_ci_parity.py::test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다` | 실물 문서 |
+| D-0230 | 검사를 검사한다 | `core/tests/unit/test_hygiene.py::test_프로브는_심은_결함에_운다` | 합성 · 실물 저장소 |
+| D-0231 | 상업 가능한 취향 축을 잴 길을 놓는다 | `core/tests/unit/test_clap_feature_extractor.py::test_청크마다_임베딩_하나를_쌓는다` | 해당 없음 |
+| D-0232 | 가짜는 실물의 서명을 따른다 | `core/tests/unit/test_clap_feature_extractor.py::test_처리기_인자_이름을_실물에서_확인한다` | 실물 1004곡 |
+| D-0233 | 임베딩인 줄 알았던 6GB는 은닉 상태였다 | `core/tests/unit/test_clap_feature_extractor.py::test_은닉_상태가_아니라_임베딩을_쌓는다` | 실물 984곡 |
+| D-0234 | 붕괴와 식별을 가른다 | `core/tests/unit/test_evaluate_retrieval.py::test_근접_실패는_계산하고_표식을_단다` | 합성 · 실물 라이브러리 |
+| D-0235 | O-68 판정 | `core/tests/unit/test_model_licenses.py` | 실물 1004곡 |
+| D-0236 | O-56 | `core/tests/unit/test_layering.py::test_계층_계약에_예외가_없다` | 해당 없음 |
+| D-0237 | 패치 검사가 이름 바꾸기를 못 읽었다 | `core/tests/unit/test_hygiene.py::test_패치_검사가_이름_바꾸기를_읽는다` | 해당 없음 |
+| D-0238 | 검사가 9분이다 | `core/tests/unit/test_hygiene.py::test_시험_이름에_메모리_주소가_없다` | 실물 기기 |
+| D-0239 | 교두보를 훑다 메모리가 터졌다 | `core/tests/unit/test_sync_artifacts.py::test_못_읽는_폴더에서_멈추지_않는다` | 실물 교두보 |
+| D-0240 | 복사가 커널에 맡겨져 있었다 | `core/tests/unit/test_sync_artifacts.py::test_메모리가_모자라면_더_잘게_다시_쓴다` | 실물 교두보 |
+| D-0241 | 캐시 하나를 둘이 나눠 쓰고 있었다 | `core/tests/unit/test_test_types.py::test_제_캐시를_따로_쓴다` | 실물 기기 |
+| D-0242 | 교두보가 «같다»를 이름으로만 말하고 있었다 | `core/tests/unit/test_sync_artifacts.py::test_봉인한_것은_다시_안_읽는다` | 실물 교두보 |
+| D-0243 | 잠금 하나가 «다르다»를 만들었다 | `core/tests/unit/test_sync_artifacts.py::test_잠금과_반쪽은_산출물이_아니다` | 실물 교두보 |
+| D-0244 | «고쳤다»가 안 고쳐져 있었다 | `core/tests/unit/test_var_fsck.py::test_한_단계_아래_manifest도_읽는다` | 실물 산출물 |
+| D-0245 | O-62 판정 | `core/tests/unit/test_var_fsck.py::test_옛_실행이_남으면_관문이_막는다` | 실물 교두보 |
+| D-0246 | 목차에 쪽 번호가 없었다 | `core/tests/unit/test_bake_proposal.py::test_목차_쪽이_아니라_본문_쪽을_센다` | 실물 문서 |
+| D-0247 | 재현 불명을 깎는 규칙 | `core/tests/unit/test_plan_counts.py` | 실물 저장소 |
+| D-0248 | O-68 판정에 빠진 후보가 있었다 | `core/tests/unit/test_model_licenses.py` | 실물 모델 카드 |
+| D-0249 | 패치 폴더는 우리 것만 있는 곳이 아니었다 | `core/tests/unit/test_apply_patch.py` | 실물 저장소 |
+| D-0250 | 평가가 화면에만 찍고 있었다 | `core/tests/unit/test_eval_log.py` | 실물 저장소 |
+| D-0251 | 소급할 수 있었다 | `core/tests/unit/test_repro_from_artifacts.py` | 실물 저장소 |
+| D-0252 | 짝짓기가 우연을 근거로 셌다 | `core/tests/unit/test_repro_from_artifacts.py` | 실물 산출물 |
+| D-0253 | «불명»을 결론으로 바꾼다 | `core/tests/unit/test_ship.py` | 실물 저장소 |
+| D-0254 | 로컬 초록이 CI 빨강이었다 | `core/tests/unit/test_ci_parity.py` | 실물 CI 실행 |
+| D-0255 | 봉인은 «같다»가 아니라 «그때 읽어서 같았다»이다 | `core/tests/unit/test_ship.py` | 실물 CI 실행 |
+| D-0256 | 워크플로가 묶음 없이 도구를 불렀다 | `core/tests/unit/test_tool_deps.py` | 실물 CI 실행 |
+| D-0257 | 검사가 자기를 안 봤다 | `core/tests/unit/test_gate_tools.py` | 실물 저장소 |
+| D-0258 | 빚으로 적지 않고 같은 판에 갚는다 | `core/tests/unit/test_gate_tools.py` | 실물 저장소 |
+| D-0259 | «시험이 있다»와 «시험이 민다»는 다르다 | `core/tests/unit/test_gate_tools.py` | 실물 저장소 |
+| D-0260 | `eval` 보고를 `main.py`에서 뗀다 | `core/tests/unit/test_file_size.py` | 실물 저장소 |
+| D-0261 | 결정이 금지한 것을 검사가 막는다 | `tools/check_forbidden.py` | 실물 저장소 |
+| D-0262 | 셋을 더 박고 다섯을 더 채운다 | `core/tests/unit/test_gate_docs_and_compose.py` | 실물 저장소 |
+| D-0263 | 관문 도구를 타입 검사에 넣는다 | `make type` | 실물 저장소 |
+| D-0264 | 검사 코드 타입 오류 66건을 0으로 | `tools/check_test_types.py (PINNED = {})` | 실물 저장소 |
+| D-0265 | 기록에 「자료」 칸을 만든다 | `tools/check_decisions.py (check_evidence)` | 실물 저장소 |
 
 <!-- decision-ledger:end -->
 

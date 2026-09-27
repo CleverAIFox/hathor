@@ -120,15 +120,22 @@ LEDGER_END = "<!-- decision-ledger:end -->"
 
 
 def build_ledger(text: str) -> str:
-    """강제자를 적은 기록에서 대장을 뽑는다. **고르지 않는다.**"""
+    """강제자를 적은 기록에서 대장을 뽑는다. **고르지 않는다.**
+
+    **`자료` 칸을 같이 든다** (D-0265). 대장은 *"지금 무엇이 효력이 있는가"*를 묻는
+    자리이고, 그 답에는 «그 판단이 무엇으로 뒷받침되나»가 들어가야 한다 — 합성에서 낸
+    수로 선 판단과 1004곡에서 낸 수로 선 판단은 **같은 무게가 아니다.**
+    """
     rows = []
     for identifier, title, body in records_with_body(text):
         found = re.search(r"^강제자  (\S.*)$", body, re.MULTILINE)
         if not found:
             continue
         keeper = found.group(1).strip().replace("`", "").split(" · ")[0]
-        rows.append(f"| {identifier} | {title.split(' — ')[0].strip()} | `{keeper}` |")
-    head = ["| 결정 | 무엇이 효력을 갖는가 | 누가 지키나 |", "|---|---|---|"]
+        source = EVIDENCE.search(body)
+        evidence = source.group(1).strip() if source else "—"
+        rows.append(f"| {identifier} | {title.split(' — ')[0].strip()} | `{keeper}` | {evidence} |")
+    head = ["| 결정 | 무엇이 효력을 갖는가 | 누가 지키나 | 자료 |", "|---|---|---|---|"]
     # **표식과 표 사이를 빈 줄로 띄운다.** HTML 주석은 표 머리로 안 읽히고,
     # `check_doc_style`이 *"산문이 표를 끊는다"*로 문다.
     return "\n".join([LEDGER_BEGIN, "", *head, *rows, "", LEDGER_END])
@@ -278,6 +285,65 @@ def check_sections(records: list[Record]) -> list[str]:
         if has_candidates != has_choice:
             missing = "선택" if has_candidates else "후보"
             problems.append(f"{record.identifier}에 `- **{missing}**`이 없다. 둘은 짝이다")
+    return problems
+
+
+EVIDENCE = re.compile(r"^자료  (\S.*)$", re.MULTILINE)
+"""기록이 **스스로 낸 수**의 출처 (D-0265).
+
+`강제자`는 «누가 지키나», `재현`은 «어떻게 다시 내나»를 적는다. **«무엇으로 쟀나»를
+적는 칸이 없었다** — 264건 중 0건이었다. 그래서 `P@10 0.47`이 1004곡 실물에서 나온
+것인지 `default_rng(7)` 합성에서 나온 것인지 **산문을 읽어야 알았고 기계는 몰랐다.**
+
+D-0132가 `강제자`·`재현`을 전수로 채운 것과 같은 자리다."""
+
+EVIDENCE_VALUES = re.compile(r"^(합성|해당 없음|불명|실물 \S.*|합성 · 실물 \S.*)$")
+"""쓸 수 있는 값. **넷뿐이다** (D-0265).
+
+| 값 | 뜻 |
+|---|---|
+| `합성` | 지은 자료에서 냈다 — `default_rng` · 합성 파형 · 임시 나무 |
+| `실물 <무엇>` | 실제 자료나 실제 기기에서 냈다. 무엇이었는지 적는다 |
+| `합성 · 실물 <무엇>` | 둘 다 썼다 — 합성 귀무 대조 + 실물 측정 |
+| `해당 없음` | **아무것도 안 쟀다.** 설계 판단 · 규약 · 도구 배선 |
+| `불명` | 쟀는데 무엇으로 쟀는지 기록에 없고 알아낼 수 없다 |
+
+**인용은 안 센다.** 남의 기록에서 가져온 수는 그 기록의 칸이 든다. 아직 안 잰
+것(«실측 필요»)은 `해당 없음`이다 — 그 기준이 없으면 같은 기록이 세션마다 달리 분류된다."""
+
+UNKNOWN_EVIDENCE = 0
+"""`자료 불명`의 천장 (D-0265). **지금 0이다.**
+
+264건을 전수로 채우면서 하나도 `불명`이 안 나왔다 — **«재현 불명»과 «자료 불명»은
+다르다.** 명령이 사라진 11건도 무엇으로 쟀는지는 적고 있었다. 산출물은 없어졌지만
+자료의 정체는 남아 있다.
+
+늘리려면 결정 기록이 필요하다 (D-0118). **모르는 것을 «해당 없음»으로 숨기는 쪽이
+훨씬 쉬우므로** 이 천장이 그 길을 막는다."""
+
+
+def check_evidence(records: list[Record]) -> list[str]:
+    """기록마다 `자료` 칸이 있고 값이 규약 안인가 (D-0265).
+
+    **전 기록에 건다.** `FORMAT_ENFORCED_FROM` 뒤로 미루지 않는다 — 264건을 읽어 전수로
+    채웠으므로 구멍이 0이고, **구멍이 0일 때 못 박는다** (D-0134 · D-0261).
+    """
+    problems: list[str] = []
+    unknown = 0
+    for record in records:
+        found = EVIDENCE.search(record.body)
+        if found is None:
+            problems.append(
+                f"{record.identifier}에 `자료` 칸이 없다. 값은 {EVIDENCE_VALUES.pattern}"
+            )
+            continue
+        value = found.group(1).strip()
+        if not EVIDENCE_VALUES.match(value):
+            problems.append(f"{record.identifier}의 `자료` 값이 규약 밖이다: {value!r}")
+        if value == "불명":
+            unknown += 1
+    if unknown > UNKNOWN_EVIDENCE:
+        problems.append(f"`자료 불명`이 {unknown}건으로 천장 {UNKNOWN_EVIDENCE}건을 넘는다")
     return problems
 
 
@@ -472,6 +538,7 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_numbering(records),
         *check_references(records),
         *check_sections(records),
+        *check_evidence(records),
         *check_supersession(records),
         *check_open_issues(issues),
         *check_issue_references(issues, records),

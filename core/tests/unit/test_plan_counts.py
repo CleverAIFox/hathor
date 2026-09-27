@@ -46,3 +46,20 @@ def test_시험_코드_타입_오류가_래칫과_같다() -> None:
     spec.loader.exec_module(module)
     pinned: dict[str, int] = module.PINNED
     assert _claim(r"검사 코드 타입 오류.*?\*\*(\d+)\*\*") == sum(pinned.values())
+
+
+def test_합성만으로_선_강제자_수가_대장과_같다() -> None:
+    """**«뭘 믿냐»에 답하는 수다** (D-0265).
+
+    대장 201건 중 자료 칸이 `합성`인 것이 몇인가. 이 수가 PLAN의 주장과 어긋나면
+    **둘 중 하나가 낡았고, 낡은 쪽은 사람이 읽는 쪽이다.**
+    """
+    master = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    block = master.split("<!-- decision-ledger:begin -->")[1].split("<!-- decision-ledger:end -->")[
+        0
+    ]
+    rows = [line for line in block.splitlines() if line.startswith("| D-")]
+    synthetic = [row for row in rows if row.rsplit("|", 2)[1].strip() == "합성"]
+
+    assert rows, "대장이 비었다"
+    assert _claim(r"강제자 \*\*(\d+)건\*\*이 합성 자료만으로") == len(synthetic)

@@ -30,6 +30,7 @@ sys.path.insert(0, str(repo_root() / "tools"))
 import check_decisions as tool
 
 HEAD = "# 결정 기록\n\n"
+DECISIONS = repo_root() / "docs" / "DECISIONS.md"
 
 
 def record(number: int, body: str = "- **배경**: 무엇이 있었다.\n") -> str:
@@ -414,3 +415,71 @@ _LEDGER_SOURCE = """
 
 강제자  `core/tests/unit/test_check_decisions.py`
 """
+
+
+# --------------------------------------------------------------- 자료 칸 (D-0265)
+
+
+def test_전_기록에_자료_칸이_있다() -> None:
+    """**D-0265의 강제자.** 264건을 읽어 전수로 채웠으므로 구멍이 0이다."""
+    assert tool.check_evidence(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
+
+
+def _evidence(body: str) -> list[str]:
+    """D-0002 하나에 대한 문제만. **`decisions(1)`이 만드는 D-0001에도 칸이 없다** —
+    그것까지 세면 무엇을 잡았는지가 흐려진다."""
+    text = decisions(1) + record(2, body)
+    return [
+        line
+        for line in tool.check_evidence(tool.scan_records(text))
+        if "D-0002" in line or "천장" in line
+    ]
+
+
+BODY = "- **배경**: 무엇.\n- **결과**:\n  - 했다.\n"
+
+
+def test_자료_칸이_없으면_잡는다() -> None:
+    """`강제자`·`재현` 옆에 한 칸. **없으면 그 기록의 수는 출처가 없다.**"""
+    problems = _evidence(BODY)
+
+    assert problems, "자료 칸이 없는 기록을 안 잡았다"
+    assert "`자료` 칸이 없다" in problems[0]
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["합성", "해당 없음", "실물 1004곡", "실물 기기", "합성 · 실물 200곡"],
+)
+def test_규약_안의_값은_통과한다(value: str) -> None:
+    assert _evidence(f"{BODY}\n자료  {value}\n") == []
+
+
+@pytest.mark.parametrize("value", ["실물", "합성 · 실물", "진짜", "합성/실물", "실측"])
+def test_규약_밖의_값을_잡는다(value: str) -> None:
+    """**`실물`만 적으면 무엇이었는지 모른다.** 뒤에 무엇을 쟀는지 붙여야 한다."""
+    assert [line for line in _evidence(f"{BODY}\n자료  {value}\n") if "규약 밖" in line]
+
+
+def test_불명은_값으로는_맞고_천장에_걸린다() -> None:
+    """**모르는 것을 «해당 없음»으로 숨기는 쪽이 훨씬 쉽다** (D-0265).
+
+    그래서 `불명`이 값으로는 허용되고 천장이 0이다 — 쓰려면 손이 한 번 멈춘다.
+    """
+    assert tool.UNKNOWN_EVIDENCE == 0
+
+    problems = _evidence(f"{BODY}\n자료  불명\n")
+    assert not [line for line in problems if "규약 밖" in line]
+    assert [line for line in problems if "천장" in line]
+
+
+def test_대장이_자료_칸을_든다() -> None:
+    """**합성에서 낸 수로 선 판단과 1004곡에서 낸 수로 선 판단은 같은 무게가 아니다.**"""
+    built = tool.build_ledger(DECISIONS.read_text(encoding="utf-8"))
+    rows = [line for line in built.splitlines() if line.startswith("| D-")]
+
+    assert "| 자료 |" in built
+    assert rows, "대장이 비었다"
+    for row in rows:
+        source = row.rsplit("|", 2)[1].strip()
+        assert tool.EVIDENCE_VALUES.match(source), f"{row[:40]}의 자료 칸이 규약 밖이다: {source!r}"
