@@ -105,6 +105,29 @@ BRIDGE_NOTE = "   **교두보로 못 보냈다.** 고친 뒤 `make artifacts-pus
 KEEP_LINES = 30
 """막혔을 때 보여 줄 꼬리 줄 수 (D-0282). **판정하면서 근거를 버리지 않는다.**"""
 
+MAX_LINES = 90
+"""터진 자리를 통째로 보일 때의 상한 (D-0289). 꼬리가 화면을 덮어도 **이유가 없는 것보다 낫다.**"""
+
+COVERAGE_NOISE = re.compile(
+    r"^(?:[\w./\\-]+\.py\s+\d+\s+\d+\s+\d+%\s*$"
+    r"|Name\s+Stmts\s+Miss\s+Cover"
+    r"|-{10,}\s*$"
+    r"|TOTAL\s+\d+"
+    r"|Required test coverage of"
+    r"|_{5,}\s*coverage:"
+    r"|={5,}\s*tests coverage\s*={5,})"
+)
+"""**꼬리를 먹는 줄** (D-0289). 커버리지 표가 파일당 한 줄씩 140줄을 찍는다.
+
+사용자가 이것을 맞았다 — 꼬리 30줄이 **전부 커버리지 표**여서 «어느 시험이 터졌나»는
+나왔는데 **«왜»는 안 나왔다.** D-0282가 한 줄에서 30줄로 늘린 것이 여기서 다시 막혔다.
+
+**정보가 아니라 잡음을 자른다.** 통과한 실행에서는 이 표가 쓸모 있지만, 막힌 실행에서
+사람이 찾는 것은 **터진 자리**다."""
+
+FAILURE_MARK = re.compile(r"^={3,} (FAILURES|ERRORS) ={3,}")
+"""여기서부터가 이유다. **이 표식이 있으면 꼬리가 아니라 이 자리부터 낸다** (D-0289)."""
+
 
 def blocked(text: str, *, note: str = SAME_COMMAND, keep: int = KEEP_LINES) -> list[str]:
     """`make check`가 막혔을 때 찍을 줄. **잡은 출력의 꼬리를 그대로 낸다** (D-0282).
@@ -121,19 +144,32 @@ def blocked(text: str, *, note: str = SAME_COMMAND, keep: int = KEEP_LINES) -> l
     도구가 판정을 내면 그 근거를 같이 내야 한다. `make ship`이 산출물 판정을 수로 찍게 만든
     것과 같은 규율이다 (D-0269 — *"가리키기만 하면 안 본다"*).
     """
-    lines = text.strip().splitlines() if text.strip() else []
-    head = f"{RED}   막힘{OFF}  {lines[-1] if lines else '(출력이 없다)'}"
-    if len(lines) <= 1:
+    raw = text.strip().splitlines() if text.strip() else []
+    head = f"{RED}   막힘{OFF}  {raw[-1] if raw else '(출력이 없다)'}"
+    if len(raw) <= 1:
         return [head, "", note, ""]
-    tail = lines[-keep:]
+    tail, label = _tail(raw, keep)
     return [
         head,
-        f"{DIM}   ── 잡은 출력 마지막 {len(tail)}줄{OFF}",
+        f"{DIM}   ── {label} {len(tail)}줄{OFF}",
         *(f"   {line}" for line in tail),
         "",
         note,
         "",
     ]
+
+
+def _tail(raw: list[str], keep: int) -> tuple[list[str], str]:
+    """무엇을 보일지 고른다 (D-0289).
+
+    **터진 자리가 있으면 거기부터 낸다.** 없으면 잡음을 뺀 꼬리를 낸다 — 꼬리 30줄이
+    통째로 커버리지 표여서 «왜»가 안 보인 적이 있다.
+    """
+    lines = [line for line in raw if not COVERAGE_NOISE.match(line.strip())]
+    for index, line in enumerate(lines):
+        if FAILURE_MARK.match(line.strip()):
+            return lines[index:][:MAX_LINES], "터진 자리부터"
+    return lines[-keep:], "잡음을 뺀 꼬리"
 
 
 def _git(*arguments: str) -> str:

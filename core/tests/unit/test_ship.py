@@ -377,3 +377,58 @@ def test_main이_그_줄을_찍는다():
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
     assert "last_decision" in called
+
+
+# ------------------------------ 꼬리가 이유를 들고 있는가 (D-0289)
+
+
+def _coverage_noise(rows: int = 140) -> str:
+    """사용자가 실제로 맞은 꼴 — 커버리지 표가 꼬리를 통째로 먹는다."""
+    body = "\n".join(
+        f"hathor/x{index}.py    {index}   {index}   9{index % 10}%" for index in range(rows)
+    )
+    return (
+        "==================== tests coverage ====================\n"
+        "Name                                 Stmts   Miss  Cover\n"
+        "--------------------------------------------------------\n"
+        f"{body}\n"
+        "--------------------------------------------------------\n"
+        "TOTAL                                 7526    858    89%\n"
+        "Required test coverage of 87.0% reached. Total coverage: 88.60%\n"
+    )
+
+
+def test_터진_자리부터_낸다():
+    """**이름은 줬는데 이유를 못 줬다** (D-0289).
+
+    D-0282가 한 줄에서 30줄로 늘렸는데, 그 30줄이 **전부 커버리지 표**였다. 사용자는
+    «어느 시험»만 받고 «왜»는 못 받았다 — 고치려면 같은 명령을 한 번 더 돌려야 한다.
+    """
+    text = (
+        _coverage_noise()
+        + "=================================== FAILURES ===================================\n"
+        "______________________ test_무언가 ______________________\n"
+        "E   torch.OutOfMemoryError: CUDA out of memory.\n"
+        "=========================== short test summary info ============================\n"
+        "FAILED tests/unit/test_x.py::test_무언가\n"
+        "make[1]: *** [Makefile:77: test] Error 1"
+    )
+    printed = "\n".join(SHIP.blocked(text))
+
+    assert "OutOfMemoryError" in printed, "이유가 빠졌다"
+    assert "FAILURES" in printed
+    assert "hathor/x0.py" not in printed, "커버리지 표가 아직 꼬리를 먹는다"
+
+
+def test_터진_표식이_없으면_잡음만_뺀다():
+    """**꼬리가 그대로 쓸모 있을 때가 있다** — `ruff`·`mypy`는 FAILURES를 안 찍는다."""
+    text = _coverage_noise(3) + "tools/x.py:1: error: 무언가\nmake: *** Error 1"
+    printed = "\n".join(SHIP.blocked(text))
+
+    assert "error: 무언가" in printed
+    assert "hathor/x0.py" not in printed
+
+
+def test_출력이_한_줄이면_그_줄을_낸다():
+    printed = "\n".join(SHIP.blocked("Error 1"))
+    assert "Error 1" in printed

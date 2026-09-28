@@ -59,14 +59,20 @@ OK = "deadcheck: ok"
 `무검증 시험`은 함수 안 아무 줄에, 나머지는 그 줄이나 바로 윗줄에 적는다."""
 CEILING = {
     "무검증 시험": 0,
-    "건너뛴 시험": 2,
+    "건너뛴 시험": 15,
     "삼킨 예외": 0,
     "빈 그물": 0,
     "버려진 문서 문자열": 0,
 }
 """프로브별 천장. **정본은 여기 하나다** (D-0223).
 
-`건너뛴 시험` 둘은 실제 음원과 경로 아닌 인자를 건너뛴다 — 장비가 있어야 도는 것이 맞다.
+`건너뛴 시험`은 **2에서 15로 올렸다** (D-0289). 새로 생긴 것이 아니라 **열셋이 안 보였다** —
+프로브가 데코레이터의 점 이름에서 `.skip`만 찾아서 `@requires_gpu` 같은 **이름 뒤에 숨은
+건너뜀**을 한 건도 못 셌다.
+
+그 열다섯이 **내 기기에서 안 도는 시험**이고, 그중 둘(`test_mert_feature_extractor.py:91`
+· `:104`)이 사용자 기기에서 터졌다. **내 `make check` 초록은 그 둘에 대해 아무 말도 안 한다** —
+그 사실을 아무도 세지 않아 나는 초록이라고 보고했다.
 
 `버려진 문서 문자열`은 **0이 못이다** (D-0274). D-0273에서 눈으로 하나 찾았고, 눈으로
 찾았다는 것은 **다음번엔 못 찾는다**는 뜻이다."""
@@ -181,17 +187,38 @@ def probe_unchecked(root: Path = ROOT) -> list[Hit]:
     return found
 
 
+def _skip_aliases(tree: ast.Module) -> set[str]:
+    """`requires_gpu = pytest.mark.skipif(...)` 꼴로 **이름 뒤에 숨은 건너뜀** (D-0289).
+
+    이 프로브가 데코레이터의 점 이름에서 `.skip`만 찾았다. 그래서 `@requires_gpu`는
+    **한 글자도 안 걸렸다** — 실측 선언 2건 대 실물 9건이었고, **안 보이는 일곱이 전부
+    장비가 있어야 도는 시험**이었다. 그 중 둘이 사용자 기기에서 터졌고 내 기기에서는
+    영원히 건너뛰므로 **내 초록은 그 둘에 대해 아무 말도 안 한다.**
+    """
+    aliases: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+            continue
+        if ".skip" in _named(node.value.func):
+            aliases |= {target.id for target in node.targets if isinstance(target, ast.Name)}
+    return aliases
+
+
 def probe_skipped(root: Path = ROOT) -> list[Hit]:
-    """`skip` · `skipif`. **세는 것이 목적이다** — 장비가 필요한 시험은 건너뛰는 것이 맞다."""
+    """`skip` · `skipif`. **세는 것이 목적이다** — 장비가 필요한 시험은 건너뛰는 것이 맞다.
+
+    **이름 뒤에 숨은 것까지 센다** (D-0289). 세는 것이 목적이라면 **안 보이는 것이 가장 나쁘다.**
+    """
     found: list[Hit] = []
     for path in python_files(root, TEST_TREE):
         tree = parsed(path)
         if tree is None:
             continue
+        aliases = _skip_aliases(tree)
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 marks = [_named(one) for one in node.decorator_list]
-                if any(".skip" in mark for mark in marks):
+                if any(".skip" in mark or mark in aliases for mark in marks):
                     found.append(Hit("건너뛴 시험", f"{path.name}:{node.lineno}", node.name))
             elif isinstance(node, ast.Call) and _named(node.func).endswith("pytest.skip"):
                 found.append(Hit("건너뛴 시험", f"{path.name}:{node.lineno}", "pytest.skip()"))
@@ -327,6 +354,12 @@ def _plant(folder: Path) -> None:
         "    print(value)\n\n\n"
         "@pytest.mark.skipif(True, reason='심은 것')\n"
         "def test_건너뛴다():\n"
+        "    assert True\n\n\n"
+        # **이름 뒤에 숨은 건너뜀도 심는다** (D-0289). 이 꼴을 프로브가 한 건도 못 봤고,
+        # 양성 대조는 인라인만 심고 있어서 **죽은 가지를 초록으로 덮고 있었다.**
+        "필요하다 = pytest.mark.skipif(True, reason='이름 뒤에 숨었다')\n\n\n"
+        "@필요하다\n"
+        "def test_이름_뒤에_숨어_건너뛴다():\n"
         "    assert True\n",
         encoding="utf-8",
     )

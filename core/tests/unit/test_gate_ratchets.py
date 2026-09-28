@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from tests.conftest import tool_module as _tool
@@ -164,3 +166,40 @@ def test_뒤집을_것이_없으면_센_수가_0이다() -> None:
 
 def test_관문_도구를_실제로_찾는다() -> None:
     assert len(MUTATE.gate_tools()) >= 20
+
+
+def test_이름_뒤에_숨은_건너뜀도_센다(tmp_path: Path) -> None:
+    """**프로브가 `@requires_gpu`를 한 건도 못 봤다** (D-0289).
+
+    데코레이터의 점 이름에서 `.skip`만 찾았다. 실측 — 선언 2건이라 적혀 있었고 실물은
+    **15건**이었다. 안 보인 열셋이 **전부 장비가 있어야 도는 시험**이고, 그중 둘이
+    사용자 기기에서 터졌다. **내 기기에서는 영원히 건너뛰므로 내 초록은 그 둘에 대해
+    아무 말도 안 한다.**
+
+    양성 대조가 인라인 꼴만 심고 있어서 **죽은 가지를 초록으로 덮고 있었다** — 그래서
+    심는 트리에 이 꼴을 같이 넣고, 여기서 **둘 다** 잡히는지 본다.
+    """
+    DEAD._plant(tmp_path)
+    caught = {hit.what for hit in DEAD.probe_skipped(tmp_path)}
+    assert "test_건너뛴다" in caught, "인라인 꼴을 놓쳤다"
+    assert "test_이름_뒤에_숨어_건너뛴다" in caught, "이름 뒤에 숨은 꼴을 놓쳤다"
+
+
+def test_별칭이_아닌_이름은_안_센다(tmp_path: Path) -> None:
+    """**넓히면 오탐이 늘고 사람이 검사를 끈다.** `pytest.mark.parametrize`는 건너뜀이 아니다."""
+    tests = tmp_path / DEAD.TEST_TREE
+    tests.mkdir(parents=True)
+    (tests / "test_x.py").write_text(
+        "import pytest\n\n\n"
+        "느리다 = pytest.mark.slow\n\n\n"
+        "@느리다\n"
+        "def test_그냥_표식():\n"
+        "    assert True\n",
+        encoding="utf-8",
+    )
+    assert DEAD.probe_skipped(tmp_path) == []
+
+
+def test_천장이_실측과_같다() -> None:
+    """**강제자다.** 2에서 15로 올린 것은 새로 생겨서가 아니라 **안 보여서**다 (D-0289)."""
+    assert DEAD.CEILING["건너뛴 시험"] == len(DEAD.probe_skipped())
