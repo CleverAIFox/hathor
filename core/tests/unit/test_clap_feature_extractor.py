@@ -106,6 +106,16 @@ def _fake_torch() -> ModuleType:
         def __exit__(self, *args: object) -> None:
             return None
 
+    class Tensor:
+        """**실물에 있으니 가짜에도 있어야 한다** (D-0276).
+
+        제품 코드는 이것을 안 쓴다. 그런데 `sys.modules["torch"]`를 **남이 들여다본다** —
+        `scipy`의 `array_api_compat`이 `is_torch_array`에서 `getattr(torch, "Tensor")`를
+        하고, 없으면 `AttributeError`로 죽는다. 가짜 모듈은 **제품 코드만 속이는 것이
+        아니라 그 프로세스 전체를 속인다.**
+        """
+
+    torch.Tensor = Tensor  # type: ignore[attr-defined]
     torch.no_grad = _NoGrad  # type: ignore[attr-defined]
     torch.stack = lambda values: _FakeTensor(  # type: ignore[attr-defined]
         np.stack([value.data for value in values])
@@ -116,7 +126,19 @@ def _fake_torch() -> ModuleType:
 def _extractor(
     monkeypatch: pytest.MonkeyPatch, seen: list[int], dimension: int = DIMENSION
 ) -> ClapFeatureExtractor:
-    """모델도 처리기도 가짜다. **여기서 보는 것은 청크 수와 모양이다.**"""
+    """모델도 처리기도 가짜다. **여기서 보는 것은 청크 수와 모양이다.**
+
+    **가짜를 심기 전에 게으른 임포트를 데운다** (D-0276). `to_clap_waveform`이 함수 안에서
+    `from scipy.signal import resample_poly`를 하는데, 그 임포트가 **가짜 `torch`가 심긴
+    동안** 일어나면 `scipy`가 `sys.modules["torch"]`를 들여다보다 죽는다. 제품에서는 실물
+    `torch`라 안 나는 일이고, **가짜를 심은 시험만의 책임이다.**
+
+    데우지 않으면 이 파일의 다섯 시험 중 **넷이 혼자 돌 때 죽는다** — 전체 실행에서는 첫
+    시험이 `scipy`를 먼저 들여서 우연히 살았다.
+    """
+    if importlib.util.find_spec("scipy") is not None:
+        import scipy.signal  # noqa: F401  데우기 전용
+
     transformers = ModuleType("transformers")
 
     class _Model:
