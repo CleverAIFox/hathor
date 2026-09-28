@@ -64,6 +64,15 @@ class FeatureSource(Protocol):
 
     def iter_vectors(self) -> Iterator[tuple[str, dict[str, Embedding]]]: ...
 
+    def source_keys(self) -> set[str]:
+        """**배열을 안 열고** 곡 키만 낸다 (D-0274).
+
+        `taste compare`는 «임베딩이 있는 곡»만 출제하면 되므로 키만 필요하다. 그 자리가
+        `NpzFeatureStore.read_records()`를 직접 불러서 **묶음을 못 읽었다** — 규약에 없는
+        메서드를 부르면 규약이 있어도 한쪽만 들어온다. 1004곡을 `iter_vectors`로 훑으면
+        MERT 65벌이 메모리에 뜬다.
+        """
+
 
 def store_keys(name: str, keys: tuple[str, ...]) -> tuple[str, ...]:
     """이 저장소에서 읽어야 할 키만 고른다. 이름이 붙으면 `이름:`을 떼고 본다."""

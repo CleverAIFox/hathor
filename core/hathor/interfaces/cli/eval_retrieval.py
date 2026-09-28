@@ -33,7 +33,7 @@ from hathor.interfaces.cli.feature_sources import (
     store_keys,
 )
 from hathor.interfaces.cli.registry import Command
-from hathor.interfaces.cli.roots import DEFAULT_LAYERS_DIRNAME, DEFAULT_OUTPUT_ROOT
+from hathor.interfaces.cli.roots import DEFAULT_FEATURE_DIRNAME, DEFAULT_OUTPUT_ROOT
 from hathor.shared.config.paths import resolve_path
 
 
@@ -103,7 +103,7 @@ def run_eval_retrieval(args: argparse.Namespace) -> int:
         print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
         return 2
 
-    stores = parse_feature_stores(args.features, args.out)
+    stores = parse_feature_stores(args.features, args.out / DEFAULT_FEATURE_DIRNAME)
     merged: dict[str, dict[str, object]] = {}
     coverage: dict[str, int] = {}
     for name, root in stores:
@@ -252,13 +252,17 @@ def _print_report(report: EvaluationReport) -> None:
 
 def load_search_tracks(args: argparse.Namespace, keys: tuple[str, ...]) -> list[SearchTrack]:
     """스캔 태그와 임베딩을 합쳐 검색 대상을 만든다."""
-    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
-
     tags = {track.source_key: track.tags for track in JsonlScanStore(args.out).read_tracks()}
     if not tags:
         raise FileNotFoundError(f"스캔 산출물이 없다: {args.out}")
 
-    store = NpzFeatureStore(args.features or args.out / DEFAULT_LAYERS_DIRNAME)
+    root = args.features or args.out / DEFAULT_FEATURE_DIRNAME
+    if not root.exists():
+        raise FileNotFoundError(f"특징 산출물이 없다: {root}")
+    # **모양을 보고 읽는 쪽을 고른다** (D-0233 · O-69 닫힘 D-0274). 예전에는 여기가
+    # `NpzFeatureStore`를 박아 놓아서 **`--features`로 묶음을 줘도 못 읽었다** —
+    # `search`와 `eval fusion`이 그 자리를 공유하므로 둘 다 묶음을 못 봤다.
+    store = open_feature_source(root, keys)
     if not store.index_path.exists():
         raise FileNotFoundError(f"특징 인덱스가 없다: {store.index_path}")
 

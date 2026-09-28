@@ -13,6 +13,7 @@ import pytest
 from hathor.domain.entities.track_features import TrackFeatures
 from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 from hathor.interfaces.cli.main import main
+from hathor.interfaces.cli.roots import DEFAULT_FEATURE_DIRNAME
 
 if TYPE_CHECKING:  # pragma: no cover - 검사기만 읽는다
     from hathor.application.evaluate_retrieval import EvaluationReport
@@ -58,7 +59,7 @@ def write_scan(root, tracks):
 def build_corpus(tmp_path, albums=4, per_album=4, features_root=None):
     """앨범별 중심 + 곡별 고유 편차를 가진 합성 코퍼스를 디스크에 만든다."""
     generator = np.random.default_rng(11)
-    store = NpzFeatureStore(features_root or tmp_path)
+    store = NpzFeatureStore(features_root or tmp_path / DEFAULT_FEATURE_DIRNAME)
     entries = []
     for album_index in range(albums):
         center = generator.normal(0.0, 1.0, size=(1, DIM))
@@ -139,7 +140,7 @@ def test_eval_retrieval_report_filename_carries_label(tmp_path):
 def test_eval_retrieval_rejects_duplicate_index(tmp_path, capsys):
     """O-7(D-0022) 재발 방어. 중복을 흡수하면 지표가 조용히 틀어진다."""
     build_corpus(tmp_path)
-    store = NpzFeatureStore(tmp_path)
+    store = NpzFeatureStore(tmp_path / DEFAULT_FEATURE_DIRNAME)
     store.write_track(
         TrackFeatures(
             source_key="아티스트0/앨범0/00.mp3",
@@ -153,7 +154,7 @@ def test_eval_retrieval_rejects_duplicate_index(tmp_path, capsys):
 
 def test_eval_retrieval_warns_on_orphan_features(tmp_path, capsys):
     build_corpus(tmp_path)
-    NpzFeatureStore(tmp_path).write_track(
+    NpzFeatureStore(tmp_path / DEFAULT_FEATURE_DIRNAME).write_track(
         TrackFeatures(
             source_key="스캔에없는곡.mp3",
             mixture=np.zeros((CHUNKS, DIM), dtype=np.float32),
@@ -167,7 +168,7 @@ def test_eval_retrieval_warns_on_orphan_features(tmp_path, capsys):
 def test_eval_retrieval_fails_gate_on_noise(tmp_path, capsys):
     """임베딩이 곡 정체성을 못 담으면 비정상 종료한다."""
     generator = np.random.default_rng(2)
-    store = NpzFeatureStore(tmp_path)
+    store = NpzFeatureStore(tmp_path / DEFAULT_FEATURE_DIRNAME)
     entries = []
     for index in range(10):
         source_key = f"아티스트/앨범/{index:02d}.mp3"
@@ -249,7 +250,7 @@ def test_eval_requires_subcommand():
 def test_eval_retrieval_merges_two_feature_stores(tmp_path):
     """서로 다른 추출기 두 벌을 이름으로 네임스페이스해 하나의 뷰로 합친다."""
     other = tmp_path / "baseline-mfcc"
-    build_corpus(tmp_path)
+    build_corpus(tmp_path, features_root=tmp_path)
     build_corpus(tmp_path, features_root=other)
     code = main(
         [
@@ -277,7 +278,7 @@ def test_eval_retrieval_merges_two_feature_stores(tmp_path):
 
 def test_eval_retrieval_requires_names_for_multiple_stores(tmp_path):
     other = tmp_path / "baseline-mfcc"
-    build_corpus(tmp_path)
+    build_corpus(tmp_path, features_root=tmp_path)
     build_corpus(tmp_path, features_root=other)
     with pytest.raises(SystemExit):
         main(
@@ -295,7 +296,7 @@ def test_eval_retrieval_requires_names_for_multiple_stores(tmp_path):
 
 
 def test_eval_retrieval_rejects_duplicate_store_names(tmp_path):
-    build_corpus(tmp_path)
+    build_corpus(tmp_path, features_root=tmp_path)
     with pytest.raises(SystemExit):
         main(
             [
@@ -317,7 +318,7 @@ def test_eval_retrieval_drops_tracks_missing_from_one_store(tmp_path, capsys):
     # 작은 쪽을 먼저 만든다. build_corpus가 스캔 산출물을 덮어쓰므로 마지막
     # 호출이 곡 목록을 정한다. 전체 16곡 중 mfcc에는 12곡만 있는 상태가 된다.
     build_corpus(tmp_path, albums=3, per_album=4, features_root=other)
-    build_corpus(tmp_path)
+    build_corpus(tmp_path, features_root=tmp_path)
     code = main(
         [
             "eval",
@@ -342,7 +343,7 @@ def test_eval_retrieval_drops_tracks_missing_from_one_store(tmp_path, capsys):
 
 def test_eval_retrieval_single_store_keeps_bare_keys(tmp_path):
     """저장소가 하나면 이름 없이 기존 사용법이 그대로 돈다."""
-    build_corpus(tmp_path)
+    build_corpus(tmp_path, features_root=tmp_path)
     assert main(["eval", "retrieval", "--out", str(tmp_path), "--features", str(tmp_path)]) == 0
 
 

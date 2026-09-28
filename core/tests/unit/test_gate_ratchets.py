@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tests.conftest import tool_module as _tool
 
 COVERAGE = _tool("check_coverage")
@@ -87,6 +89,52 @@ def test_빠진_부류는_0으로_센다() -> None:
 
 
 # ------------------------------------------------------------------ mutate_gate
+
+# ------------------------------ 낮은 파이썬에서는 아무 수도 내지 않는다 (D-0275)
+
+
+def test_저장소가_요구하는_파이썬을_한_곳에서_읽는다() -> None:
+    """**정본은 `core/pyproject.toml`이다.** 손으로 적으면 두 곳이 어긋난다 (D-0199)."""
+    assert DEAD.python_floor() == (3, 12)
+
+
+def test_낮은_파이썬이면_돌기를_거부한다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**«0건»이 거짓이 되는 자리다** (D-0275).
+
+    `ast`가 `type X = …`(PEP 695)를 3.12부터 안다. 3.11에서는 그 문장이 든 파일이
+    `SyntaxError`가 되고 `parsed`가 그것을 삼켜 **다섯 프로브에서 조용히 빠졌다** —
+    작성자의 컨테이너가 3.11이라 9파일이 안 보였고, 결함 8건을 **초록으로** 내보냈다.
+    사용자 기기(3.12)에서 터졌다.
+
+    이 저장소가 반복해 당한 «검사가 있는데 안 운다»가 **그 검사 자신에게** 난 자리다.
+    """
+    assert DEAD.too_old() == ""
+
+    monkeypatch.setattr(DEAD.sys, "version_info", (3, 11, 15))
+    reason = DEAD.too_old()
+    assert "3.11.15" in reason and "3.12" in reason
+
+
+def test_못_읽는_파일을_센다() -> None:
+    """**양성 대조** (D-0230). 어느 파이썬도 못 읽는 파일을 심어 우는지 본다."""
+    assert DEAD.planted_unreadable()
+    assert DEAD.unreadable() == [], "이 파이썬이 저장소를 다 못 읽는다"
+
+
+def test_타입_별칭_뒤의_문서_문자열은_정상이다() -> None:
+    """**닻이 셋이다** — 대입 · 주석 대입 · `type X = …` (D-0275).
+
+    첫 판에 셋째를 빼서 **8건을 거짓으로 잡았다.** `Embedding` · `Waveform` 같은 별칭에
+    근거를 적는 것이 이 저장소의 꼴이고, 파이썬이 버리는 것은 대입 뒤와 똑같다.
+    """
+    import ast
+
+    kept = ast.parse('type X = int\n"""닻이 있다."""\n')
+    dropped = ast.parse('type X = int\n"""닻이 있다."""\n"""이건 버려진다."""\n')
+
+    assert DEAD.dropped_docs(kept) == []
+    assert len(DEAD.dropped_docs(dropped)) == 1
+
 
 MUTATE = _tool("mutate_gate")
 

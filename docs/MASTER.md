@@ -500,6 +500,8 @@ D는 제외한다. 현행 생성 모델 품질로 전문가 요구를 충족할 
 | O-63 | 묶음 산출물을 `generate`가 못 읽었다 → 옛 규격 재생성 · 분포가 소수점까지 재현됐다 | D-0203 · D-0211 · D-0212 |
 | O-66 | 대중성 라벨을 무엇으로 세우나 → **밖에서는 못 구한다.** 세 출처가 라이선스·커버리지에 막혔다 | D-0215 · D-0216 |
 | O-68 | 취향 축의 임베딩이 비상업이다 → **상업 가능한 대체재가 없다.** CLAP 단독은 MERT의 27%(M1) · 16%(M2)이고 상업 가능 최선(CLAP+MFCC)도 42% | D-0233 · D-0234 · D-0235 |
+| O-69 | `--features` 없이 도는 명령이 없는 폴더를 열었다 → **증상은 기본값이고 원인은 리더가 하나였다.** 읽는 쪽 셋이 `open_feature_source`를 안 지나 묶음을 줘도 못 읽었다 | D-0269 · D-0270 · D-0274 |
+| O-70 | 버려지는 문서 문자열을 아무 관문도 안 봤다 → `deadcheck` 다섯째 프로브. **눈으로 하나, 프로브로 셋** | D-0273 · D-0274 |
 
 <!-- closed-issues:end -->
 
@@ -2338,6 +2340,8 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0271 | 가짜의 서명까지 면제되고 있었다 | `core/tests/unit/test_gate_types.py::test_포트_가짜가_주석을_갖는다` | 실물 저장소 |
 | D-0272 | 도구를 싣는 자리를 하나로 | `core/tests/unit/test_gate_types.py::test_도구를_싣는_자리가_하나다` | 실물 저장소 |
 | D-0273 | 하위 명령을 한 표에 등재한다 | `core/tests/unit/test_cli_contracts.py::test_등재표와_파서가_같다` | 실물 저장소 |
+| D-0274 | 읽는 기본값이 없는 폴더를 열고 있었다 | `core/tests/unit/test_artifacts_ledger.py::test_읽는_쪽은_모양을_보고_고른다` | 실물 저장소 · 실물 교두보 |
+| D-0275 | 낮은 파이썬에서 `deadcheck`가 «0건»을 거짓으로 냈다 | `core/tests/unit/test_gate_ratchets.py::test_낮은_파이썬이면_돌기를_거부한다` | 실물 저장소 |
 
 <!-- decision-ledger:end -->
 

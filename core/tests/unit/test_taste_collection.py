@@ -10,6 +10,7 @@ from hathor.domain.entities.track_features import TrackFeatures
 from hathor.infrastructure.jsonl_preference_store import JsonlPreferenceStore
 from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 from hathor.interfaces.cli.main import main
+from hathor.interfaces.cli.roots import DEFAULT_FEATURE_DIRNAME
 from tests.unit.test_eval_cli import write_scan
 
 DIM = 8
@@ -18,7 +19,7 @@ CHUNKS = 3
 
 def build_library(tmp_path, count=6):
     """스캔 산출물과 임베딩을 갖춘 최소 라이브러리."""
-    store = NpzFeatureStore(tmp_path / "mert-layers")
+    store = NpzFeatureStore(tmp_path / DEFAULT_FEATURE_DIRNAME)
     entries = []
     for index in range(count):
         source_key = f"가수{index % 3}/앨범/{index:02d}.mp3"

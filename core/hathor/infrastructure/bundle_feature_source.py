@@ -66,6 +66,14 @@ class BundleFeatureSource:
         """묶음에는 인덱스가 없다. **폴더 자체가 그 자리다** — 없으면 없다고 말한다."""
         return self._root
 
+    def source_keys(self) -> set[str]:
+        """**manifest만 센다** (D-0274). 배열을 안 열어야 이 함수가 값이 있다.
+
+        `iter_vectors`로 키를 얻으면 1004곡의 배열을 다 푼다 — `taste compare`가 문항을
+        내려고 그걸 하면 4.5GB가 뜬다.
+        """
+        return {source_key for source_key, _bundle, _manifest in self._store.manifests()}
+
     def iter_vectors(self) -> Iterator[tuple[str, dict[str, Embedding]]]:
         """(곡 키, {배열 이름: 행렬}). **요청한 키만 연다.**
 

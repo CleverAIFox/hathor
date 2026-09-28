@@ -77,7 +77,17 @@ state = "있음"
 what = "코퍼스 조성 분포 — 곡마다 조성·크로마·도수 사전"
 made = "core/hathor/interfaces/cli/ingest_keys_bundles.py"
 regen = "cd core && uv run python -m hathor.cli ingest keys --from-bundles"
-reads = ["eval priors", "eval harmony-output", "eval order", "probe_latent.py", "D-0054"]
+reads = [
+  "generate",
+  "eval harmony-prior",
+  "eval time-drift",
+  "eval harmony-output",
+  "eval harmony-order",
+  "eval chromatic-origin",
+  "eval degree-restriction",
+  "probe_latent.py",
+  "D-0054",
+]
 store = true
 state = "있음"
 
@@ -86,7 +96,7 @@ state = "있음"
 what = "곡별 크로마 시계열 — 창 단위 (D-0105)"
 made = "core/hathor/infrastructure/chroma_series_store.py"
 regen = "cd core && uv run python -m hathor.cli ingest keys --from-bundles --series"
-reads = ["eval order", "eval time-drift", "D-0098"]
+reads = ["generate --transitions", "eval harmony-order", "D-0098"]
 store = true
 state = "있음"
 
@@ -95,7 +105,7 @@ state = "있음"
 what = "곡별 온셋 포락선과 대역 스펙트럼 (O-46 · D-0145)"
 made = "core/hathor/infrastructure/onset_store.py"
 regen = "cd core && uv run python -m hathor.cli ingest onsets"
-reads = ["eval priors --onsets", "D-0143", "D-0170"]
+reads = ["tools/probe_onsets.py", "D-0143", "D-0170"]
 store = true
 state = "있음"
 
@@ -104,9 +114,19 @@ state = "있음"
 what = "MERT 층별 임베딩 — 취향 벡터의 정본 (D-0027 · D-0181)"
 made = "core/hathor/infrastructure/npz_feature_store.py"
 regen = "cd core && uv run python -m hathor.cli ingest features --layers"
-reads = ["eval retrieval", "eval fusion", "probe_latent.py", "D-0181"]
+reads = ["eval retrieval --features", "eval fusion --features", "probe_latent.py", "D-0181"]
 store = true
 state = "있음"
+note = """**결손은 여기서 참이다** (O-69 닫힘 · D-0274). `--audit`이 «어디에도 없다»로 판정하고
+그것이 맞다 — 지운 적이 있고 다시 안 뽑았다.
+
+읽는 쪽의 **기본값이 여기였던 것**이 O-69였다. 네 자리가 `--features` 없이 이 폴더를 열었고
+D-0203이 묶음으로 옮긴 뒤에도 안 따라왔다. 이제 기본값은 `audio`이고 이 폴더는 `--features`로
+줄 때만 열린다. `tools/probe_latent.py`는 색인이 있는 폴더를 **찾아서** 열므로 없으면 조용히
+비는 대신 있는 이름을 찍는다 — 묶음은 색인이 없어 아직 못 읽는다.
+
+**다시 뽑는 것은 `eval retrieval`에는 중복이다** — 묶음이 `mert/<스템>/<층>`을 이미 담는다.
+`probe_latent`에는 중복이 아니다. 그것이 이 계열을 «폐기»로 안 적는 이유다."""
 
 
 [series."baseline-mfcc"]
@@ -140,7 +160,15 @@ state = "있음"
 what = "곡 묶음 — 스템·크로마·매니페스트를 한 파일에 (D-0203)"
 made = "core/hathor/infrastructure/track_bundle_store.py"
 regen = "cd core && uv run python -m hathor.cli ingest all"
-reads = ["ingest keys --from-bundles", "D-0203"]
+reads = [
+  "ingest keys --from-bundles",
+  "search",
+  "eval retrieval",
+  "eval fusion",
+  "taste compare",
+  "D-0203",
+  "D-0274",
+]
 store = true
 state = "있음"
 

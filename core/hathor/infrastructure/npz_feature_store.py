@@ -160,6 +160,15 @@ class NpzFeatureStore:
         """이미 기록된 source_key 집합. 재개 시 건너뛸 대상이다."""
         return {str(record["source_key"]) for record in self.read_records()}
 
+    def source_keys(self) -> set[str]:
+        """`FeatureSource` 규약의 이름 (D-0274). `completed_keys`와 같은 집합이다.
+
+        **이름이 둘인 것이 아니라 뜻이 둘이다.** `completed_keys`는 «배치가 건너뛸 곳»이고
+        `source_keys`는 «읽는 쪽이 고를 수 있는 곡»이다. 이 저장소에서는 같은 값이지만
+        묶음에서는 같은 함수로 낼 수 없다 — 묶음은 인덱스가 없고 manifest를 센다.
+        """
+        return self.completed_keys()
+
     def compact_index(self, *, drop_missing: bool = True) -> CompactReport:
         """중복·고아 기록을 없애고 source_key 순으로 다시 쓴다 (O-7(D-0022) 정리).
 

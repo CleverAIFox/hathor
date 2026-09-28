@@ -343,3 +343,124 @@ def test_ship이_대장_판정을_수로_찍는다() -> None:
 
     assert "check_artifacts.py" in source
     assert "--audit" in source
+
+
+# ------------------------------- `reads`가 실재하는 명령인가 (O-69 닫힘 · D-0274)
+
+
+def _commands() -> tuple[set[str], set[str]]:
+    """(등재된 하위 명령 전부, 최상단 이름). **정본은 `entries()`다** (D-0273)."""
+    from hathor.interfaces.cli.main import entries
+    from hathor.interfaces.cli.registry import names
+
+    registered = set(names(entries()))
+    return registered, {one.split(" ")[0] for one in registered}
+
+
+def reads_that_lie() -> list[str]:
+    """`reads`가 든 «명령»인데 등재표에 없는 것. 계열 이름과 함께 낸다."""
+    registered, tops = _commands()
+    found: list[str] = []
+    for series, entry in sorted(LEDGER.load().items()):
+        for raw in entry["reads"]:
+            words = [one for one in str(raw).split() if not one.startswith("-")]
+            if not words or words[0] not in tops:
+                continue  # 도구 경로 · 결정 번호 · 「미투입」은 명령이 아니다
+            if not any(" ".join(words[:depth]) in registered for depth in (2, 1)):
+                found.append(f"{series}: {raw}")
+    return found
+
+
+def test_읽는_이가_실재하는_명령이다() -> None:
+    """**대장이 없는 명령을 읽는 이로 들고 있었다** (D-0274).
+
+    넷이었다.
+
+    | 계열 | 적혀 있던 것 | 실제 |
+    |---|---|---|
+    | `keys-*.keys.jsonl` | `eval priors` · `eval order` | 그런 명령이 없다 — **모듈 이름이다** |
+    | `keys-*.series` | `eval order` | `eval harmony-order` |
+    | `keys-*.onsets` | `eval priors --onsets` | **그런 깃발이 없다** — `probe_onsets.py`가 읽는다 |
+
+    `eval_priors.py` · `eval_order.py`는 **파일 이름**이고 그 안에 `eval harmony-prior` ·
+    `eval time-drift` · `eval harmony-order`가 들어 있다. 대장을 쓴 것이 작성자이므로
+    **작성자가 모듈 이름을 명령으로 적은 것**이다.
+
+    **D-0273이 등재표를 만들어서 이제 대조할 수 있다.** 그 전에는 명령 이름이 `build_parser`
+    599줄에 흩어져 있어 «실재하는가»를 물을 자리가 없었다.
+
+    **이 검사의 한계를 적어 둔다** — 있는 명령을 틀리게 적은 것은 못 잡는다. `keys-*.series`가
+    `eval time-drift`를 들고 있었고 그 명령은 실재하지만 **그 산출물을 안 읽는다** —
+    `eval_priors.py`에 「series」가 한 번도 안 나온다. 그것은 눈으로 찾았다.
+    """
+    assert reads_that_lie() == []
+
+
+def test_그물이_거짓말을_잡는가() -> None:
+    """**양성 대조** (D-0230). 없는 명령을 심어 먹인다."""
+    registered, _tops = _commands()
+    assert "eval harmony-order" in registered
+    assert "eval order" not in registered, "«eval order»가 생겼으면 위 시험의 근거가 바뀐다"
+
+
+def test_읽는_기본값이_산_계열을_가리킨다() -> None:
+    """**O-69가 바로 이것이었다** (D-0274).
+
+    `--features`를 안 준 네 자리가 `mert-layers`를 열었고 그 계열은 **어디에도 없다.**
+    대장이 생긴 뒤에도 아무도 «코드의 기본값이 대장에서 산 계열인가»를 안 물었다.
+
+    이제 묻는다. 기본값이 가리키는 이름은 **대장에 있고 `state`가 «있음»이어야 한다.**
+    """
+    from hathor.interfaces.cli.roots import DEFAULT_FEATURE_DIRNAME
+
+    entries = LEDGER.load()
+    assert DEFAULT_FEATURE_DIRNAME in entries, f"기본값 {DEFAULT_FEATURE_DIRNAME}이 대장에 없다"
+    assert entries[DEFAULT_FEATURE_DIRNAME]["state"] == "있음"
+
+
+READER_STORES = 0
+"""`args.features`를 받아 저장소를 **직접** 여는 읽는 자리. **0이다** (D-0274).
+
+읽는 쪽은 `open_feature_source`를 거쳐야 한다 — 그것이 모양을 보고 인덱스냐 묶음이냐를
+고른다 (D-0233). 넷 중 하나만 거치고 있었고, 그래서 `search`·`eval fusion`·`taste compare`는
+**`--features`로 묶음을 줘도 못 읽었다.** 쓰는 쪽(`eval layers` · `eval mfcc` · `eval clap` ·
+`lyrics extract`)은 인덱스와 배치 잠금이 필요하므로 직접 연다."""
+
+
+def reader_stores() -> list[str]:
+    """`--features`를 읽으면서 저장소를 직접 여는 **읽는** 자리. 파일:줄로 낸다.
+
+    **쓰는 쪽은 배치 잠금을 든다** — `NpzFeatureStore.batch_lock()`이다 (D-0022). 그것이
+    파일 이름보다 나은 판별이다. `lyrics extract`는 `main.py` 안의 쓰는 쪽이라 이름으로
+    가르면 못 가른다 — 첫 판에 그렇게 짰다가 이 시험에 걸렸다.
+    """
+    import ast
+
+    found: list[str] = []
+    base = ROOT / "core" / "hathor"
+    for path in sorted(base.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "args.features" not in source:
+            continue
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            body = ast.unparse(node)
+            if "batch_lock" in body:
+                continue  # 쓰는 쪽이다
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.Call):
+                    continue
+                name = ast.unparse(inner.func)
+                if name not in ("NpzFeatureStore", "BundleFeatureSource"):
+                    continue
+                if "args.features" in ast.unparse(inner):
+                    where = path.relative_to(base).as_posix()
+                    found.append(f"{where}:{inner.lineno} {node.name}")
+    return found
+
+
+def test_읽는_쪽은_모양을_보고_고른다() -> None:
+    """**D-0274의 강제자.** 읽는 쪽 넷이 이제 다 `open_feature_source`를 지난다."""
+    assert reader_stores() == [], f"직접 여는 자리: {reader_stores()}"

@@ -8,6 +8,7 @@ from hathor.domain.entities.track_features import TrackFeatures
 from hathor.domain.services.seed_search import chunk_timestamp, fuse, representative_chunk
 from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 from hathor.interfaces.cli.main import main
+from hathor.interfaces.cli.roots import DEFAULT_FEATURE_DIRNAME
 from tests.unit.test_eval_cli import write_scan
 
 DIM = 6
@@ -110,7 +111,7 @@ def test_run_rejects_no_seed():
 
 
 def build_library(tmp_path):
-    store = NpzFeatureStore(tmp_path / "mert-layers")
+    store = NpzFeatureStore(tmp_path / DEFAULT_FEATURE_DIRNAME)
     axes = np.eye(DIM, dtype=np.float32)
     entries = [
         ("가수A/곡A.mp3", "가수A", "첫 번째 곡", axes[0]),

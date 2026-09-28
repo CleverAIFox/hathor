@@ -18,6 +18,7 @@
 | 건너뛴 시험 | `skip` · `skipif` — 도는 줄 알았는데 안 돈다 |
 | 삼킨 예외 | `except …: pass` — 실패가 소리 없이 사라진다 |
 | 빈 그물 | 코드에 박힌 경로 · 글롭이 **아무것도 안 가리킨다** — 훑을 것이 0개다 |
+| 버려진 문서 문자열 | 파이썬이 그냥 버리는 문자열 — **적어 둔 근거가 아무 데도 안 붙어 있다** |
 
 ### 생사는 합성 트리에서 묻는다
 
@@ -61,10 +62,14 @@ CEILING = {
     "건너뛴 시험": 2,
     "삼킨 예외": 0,
     "빈 그물": 0,
+    "버려진 문서 문자열": 0,
 }
 """프로브별 천장. **정본은 여기 하나다** (D-0223).
 
-`건너뛴 시험` 둘은 실제 음원과 경로 아닌 인자를 건너뛴다 — 장비가 있어야 도는 것이 맞다."""
+`건너뛴 시험` 둘은 실제 음원과 경로 아닌 인자를 건너뛴다 — 장비가 있어야 도는 것이 맞다.
+
+`버려진 문서 문자열`은 **0이 못이다** (D-0274). D-0273에서 눈으로 하나 찾았고, 눈으로
+찾았다는 것은 **다음번엔 못 찾는다**는 뜻이다."""
 
 
 @dataclass(frozen=True)
@@ -89,10 +94,59 @@ def exempt(lines: list[str], first: int, last: int) -> bool:
 
 
 def parsed(path: Path) -> ast.Module | None:
+    """못 읽으면 `None`. **그 파일은 `unreadable`이 따로 센다** (D-0275).
+
+    프로브마다 여기서 죽으면 한 파일이 다섯 번 운다. 판정은 `main`이 한 번 한다."""
     try:
         return ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError:
         return None
+
+
+def python_floor(root: Path = ROOT) -> tuple[int, int]:
+    """저장소가 요구하는 파이썬. **정본은 `core/pyproject.toml`이다** (D-0199와 같은 규율).
+
+    `tomllib`은 표준 라이브러리이므로 맨 `python3`으로 도는 규약을 깨지 않는다 (D-0256).
+    """
+    import tomllib
+
+    raw = tomllib.loads((root / "core" / "pyproject.toml").read_text(encoding="utf-8"))
+    spec = str(raw["project"]["requires-python"]).lstrip("><=~^ ")
+    major, minor = (int(part) for part in spec.split(".")[:2])
+    return major, minor
+
+
+def too_old() -> str:
+    """이 파이썬이 저장소보다 낮으면 그 사유. **낮으면 이 도구는 아무것도 못 판정한다.**
+
+    `ast`가 `type X = …`(PEP 695)를 3.12부터 안다. 3.11에서는 그 문장이 든 파일이
+    `SyntaxError`가 되고, `parsed`가 그것을 삼켜 **다섯 프로브에서 조용히 빠졌다** (D-0275).
+    """
+    floor = python_floor()
+    if sys.version_info[:2] >= floor:
+        return ""
+    here = ".".join(str(part) for part in sys.version_info[:3])
+    want = ".".join(str(part) for part in floor)
+    return f"이 파이썬은 {here}이고 저장소는 {want} 이상을 쓴다 — 저장소를 못 읽는다"
+
+
+def unreadable(root: Path = ROOT) -> list[str]:
+    """**이 파이썬이 못 읽는 파일** (D-0275). 비어야 아래 다섯 수가 뜻을 갖는다.
+
+    `parsed`가 `SyntaxError`를 삼키고 `None`을 내므로 **못 읽은 파일은 다섯 프로브 전부에서
+    조용히 빠졌다.** 작성자의 컨테이너가 파이썬 3.11이고 저장소는 `type X = …`(3.12)를 쓴다 —
+    9파일이 안 보였고 그래서 결함 8건을 **초록으로** 내보냈다. 사용자 기기(3.12)에서 터졌다.
+
+    이 저장소가 반복해 당한 «검사가 있는데 안 운다»가 **그 검사 자신에게** 난 자리다.
+    """
+    found: list[str] = []
+    for tree_name in (TEST_TREE, *CODE_TREES):
+        for path in python_files(root, tree_name):
+            try:
+                ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+            except SyntaxError as exc:
+                found.append(f"{path.relative_to(root).as_posix()}:{exc.lineno}")
+    return found
 
 
 def _named(node: ast.AST | None) -> str:
@@ -195,11 +249,70 @@ def probe_empty_net(root: Path = ROOT) -> list[Hit]:
     return found
 
 
+def _is_text(node: ast.stmt) -> bool:
+    """이 문장이 «문자열 하나만 덜렁 있는 줄»인가."""
+    return (
+        isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    )
+
+
+def dropped_docs(tree: ast.Module) -> list[tuple[int, str]]:
+    """파이썬이 버리는 문자열 표현식. **어디까지가 문서 문자열인가**가 판정이다.
+
+    살아 있는 셋만 남긴다.
+
+    | 자리 | 파이썬이 | 여기서 |
+    |---|---|---|
+    | 몸통의 첫 문장 | `__doc__`에 넣는다 | 정상 |
+    | 대입 바로 뒤 하나 | 버린다 | **정상** — 이 저장소가 근거를 적는 꼴이고 도구들이 읽는다 |
+    | `type X = …` 뒤 하나 | 버린다 | **정상** — 같은 꼴. 첫 판에 빼서 8건을 거짓으로 잡았다 |
+    | 그 밖의 전부 | 버린다 | **버려진 것** |
+
+    셋째가 실제로 났다 — 대입 하나 뒤에 문자열이 **둘**이었고 둘째는 아무 데도 안 붙었다
+    (D-0273). 둘 다 다른 상수를 설명하려던 것이라 **설명하려던 자리에는 설명이 없었다.**
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list) or not isinstance(
+            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+        ):
+            continue
+        for index, statement in enumerate(body):
+            if index == 0 or not _is_text(statement):
+                continue
+            if isinstance(body[index - 1], ast.Assign | ast.AnnAssign | ast.TypeAlias):
+                continue
+            head = str(getattr(statement.value, "value", ""))[:40].replace("\n", " ")
+            found.append((statement.lineno, head))
+    return found
+
+
+def probe_dropped_doc(root: Path = ROOT) -> list[Hit]:
+    """적어 둔 근거가 아무 데도 안 붙어 있는 자리. **`ruff`도 `mypy`도 이 부류를 안 본다.**"""
+    found: list[Hit] = []
+    for tree_name in (TEST_TREE, *CODE_TREES):
+        for path in python_files(root, tree_name):
+            tree = parsed(path)
+            if tree is None:
+                continue
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for line, head in dropped_docs(tree):
+                if exempt(lines, line - 1, line):
+                    continue
+                where = f"{path.relative_to(root).as_posix()}:{line}"
+                found.append(Hit("버려진 문서 문자열", where, head))
+    return found
+
+
 PROBES: dict[str, Callable[[Path], list[Hit]]] = {
     "무검증 시험": probe_unchecked,
     "건너뛴 시험": probe_skipped,
     "삼킨 예외": probe_swallowed,
     "빈 그물": probe_empty_net,
+    "버려진 문서 문자열": probe_dropped_doc,
 }
 
 
@@ -220,7 +333,9 @@ def _plant(folder: Path) -> None:
     code = folder / "tools"
     code.mkdir(parents=True)
     (code / "planted.py").write_text(
-        "FILES = ('tools/xxx-없는파일.py',)\n\n\n"
+        "FILES = ('tools/xxx-없는파일.py',)\n"
+        '"""붙는 문서 문자열 — 이것은 정상이다."""\n'
+        '"""심은 것 — 대입 뒤 둘째 문자열은 파이썬이 버린다."""\n\n\n'
         "def run() -> None:\n"
         "    try:\n"
         "        open('x')\n"
@@ -228,6 +343,15 @@ def _plant(folder: Path) -> None:
         "        pass\n",
         encoding="utf-8",
     )
+
+
+def planted_unreadable() -> list[str]:
+    """**양성 대조** (D-0275). 어느 파이썬도 못 읽는 파일을 심어 `unreadable`이 우는지 본다."""
+    with tempfile.TemporaryDirectory() as raw:
+        folder = Path(raw)
+        (folder / "tools").mkdir(parents=True)
+        (folder / "tools" / "broken.py").write_text("def (:\n", encoding="utf-8")
+        return unreadable(folder)
 
 
 def positive_control() -> list[str]:
@@ -273,13 +397,32 @@ def main() -> int:
     parser.add_argument("--update", action="store_true", help="천장을 실측으로 맞춘다")
     args = parser.parse_args()
 
+    # **버전이 낮으면 아무 수도 내지 않는다** (D-0275). 낮은 파이썬에서 «0건»은 거짓이다.
+    reason = too_old()
+    if reason:
+        print(f"deadcheck를 돌릴 수 없다: {reason}", file=sys.stderr)
+        return 1
+
     if args.selftest:
         dead = positive_control()
         if dead:
             print(f"심은 결함에 안 우는 프로브: {' · '.join(dead)}", file=sys.stderr)
             return 1
-        print(f"양성 대조 통과 · 프로브 {len(PROBES)}개")
+        if not planted_unreadable():
+            print("못 읽는 파일을 심었는데 `unreadable`이 조용하다", file=sys.stderr)
+            return 1
+        print(f"양성 대조 통과 · 프로브 {len(PROBES)}개 · 못 읽는 파일 감지")
         return 0
+
+    blind = unreadable()
+    if blind:
+        print(
+            f"이 도구가 못 읽은 파일 {len(blind)}개. **아래 수는 전부 덜 센 것이다**",
+            file=sys.stderr,
+        )
+        for line in blind:
+            print(f"  - {line}", file=sys.stderr)
+        return 1
 
     hits = survey()
     seen = counted(hits)

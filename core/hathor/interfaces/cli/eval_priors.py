@@ -19,7 +19,7 @@ from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_drift_o
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
 from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import (
-    DEFAULT_LAYERS_DIRNAME,
+    DEFAULT_FEATURE_DIRNAME,
     DEFAULT_OUTPUT_ROOT,
     DEFAULT_SEARCH_KEY,
 )
@@ -287,7 +287,7 @@ def _build_fusion(parser: argparse.ArgumentParser) -> None:
         "--features",
         type=resolve_path,
         default=None,
-        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_FEATURE_DIRNAME})",
     )
     parser.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
     parser.add_argument("-k", type=int, default=10, help="상위 k개")

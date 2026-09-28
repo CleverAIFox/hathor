@@ -70,6 +70,7 @@ from hathor.interfaces.cli.eval_log import recorded
 from hathor.interfaces.cli.eval_output import report_harmonic_sweep
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
 from hathor.interfaces.cli.extraction import drive_extraction
+from hathor.interfaces.cli.feature_sources import open_feature_source
 from hathor.interfaces.cli.registry import (
     Command,
     Entry,
@@ -79,7 +80,7 @@ from hathor.interfaces.cli.registry import (
     resolve,
 )
 from hathor.interfaces.cli.roots import (
-    DEFAULT_LAYERS_DIRNAME,
+    DEFAULT_FEATURE_DIRNAME,
     DEFAULT_LIBRARY_ROOT_ENV,
     DEFAULT_OUTPUT_ROOT,
     DEFAULT_SEARCH_KEY,
@@ -339,7 +340,7 @@ def _build_taste_compare(parser: argparse.ArgumentParser) -> None:
         "--features",
         type=resolve_path,
         default=None,
-        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_FEATURE_DIRNAME})",
     )
     parser.add_argument("--count", type=int, default=20, help="이번 세션 문항 수")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추출 시드")
@@ -423,7 +424,7 @@ def _build_search(parser: argparse.ArgumentParser) -> None:
         "--features",
         type=resolve_path,
         default=None,
-        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_LAYERS_DIRNAME})",
+        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_FEATURE_DIRNAME})",
     )
     parser.add_argument("--keys", default=DEFAULT_SEARCH_KEY, help="쓸 임베딩 키")
     parser.add_argument("-k", type=int, default=10, help="결과 개수")
@@ -658,17 +659,14 @@ def _run_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-"""이어받기가 같다고 볼 조건 (D-0075).
-
-**하나라도 다르면 새 파일을 연다.** 조건이 섞인 산출물은 무엇을 잰 것인지 알 수 없고,
-그것이 D-0073에서 조건을 행에 적게 만든 이유다. 이어받기가 그 규약을 깨면 안 된다.
-
-`limit`은 뺀다. `--limit 200`으로 돌리다 전량으로 늘리는 것은 같은 조건의 연장이다.
-"""
-
-
 def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
-    """행에 적히는 조건 묶음. 이어받기 판정과 기록이 같은 값을 쓴다."""
+    """행에 적히는 조건 묶음. 이어받기 판정과 기록이 같은 값을 쓴다.
+
+    **이것이 «이어받기가 같다고 볼 조건»이다** (D-0075). 하나라도 다르면 새 파일을 연다 —
+    조건이 섞인 산출물은 무엇을 잰 것인지 알 수 없고, 그것이 D-0073에서 조건을 행에 적게
+    만든 이유다. `limit`은 뺀다 — `--limit 200`으로 돌리다 전량으로 늘리는 것은 같은
+    조건의 연장이다. **이 단락은 함수 위에 떠 있었고 파이썬이 버렸다** (D-0274).
+    """
     return {
         # **`chroma`가 아니라 `chroma_mode`다.** 행에는 이미 `chroma`가 12차원
         # 벡터로 들어 있어 이름이 겹치면 조용히 덮이고, 그러면 이어받기가 영영
@@ -1624,19 +1622,20 @@ def _run_taste_compare(args: argparse.Namespace) -> int:
     from hathor.domain.entities.preference_comparison import PreferenceComparison, Side
     from hathor.domain.services.pair_sampling import presentation_order, sample_pairs
     from hathor.infrastructure.jsonl_preference_store import JsonlPreferenceStore
-    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
     tags = {track.source_key: track.tags for track in JsonlScanStore(args.out).read_tracks()}
     if not tags:
         print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
         return 2
 
-    features = NpzFeatureStore(args.features or args.out / DEFAULT_LAYERS_DIRNAME)
+    # **모양을 보고 고른다** (D-0233 · O-69 닫힘 D-0274). 규약에 없는 `read_records()`를
+    # 불러서 **묶음을 못 읽었다.** 배열 이름은 안 준다 — `source_keys()`는 배열을 안 연다.
+    features = open_feature_source(args.features or args.out / DEFAULT_FEATURE_DIRNAME, ())
     if not features.index_path.exists():
         print(f"특징 인덱스가 없다: {features.index_path}", file=sys.stderr)
         return 2
     # 임베딩이 없는 곡은 출제하지 않는다. 응답을 받아도 모델에 못 쓴다.
-    keys = sorted({str(record["source_key"]) for record in features.read_records()} & set(tags))
+    keys = sorted(features.source_keys() & set(tags))
     if len(keys) < 2:
         print("출제할 수 있는 곡이 둘 미만이다", file=sys.stderr)
         return 2

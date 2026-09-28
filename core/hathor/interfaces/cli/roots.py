@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from hathor.infrastructure.track_bundle_store import BUNDLE_DIRNAME
 from hathor.shared.config.paths import LIBRARY_ROOT_ENV
 
 DEFAULT_LIBRARY_ROOT_ENV = LIBRARY_ROOT_ENV
@@ -30,7 +31,22 @@ argparse는 기본값이 문자열일 때만 `type`을 적용한다. `Path("var/
 `--out`을 명시했을 때와 안 했을 때가 다른 곳을 가리키게 된다.
 """
 DEFAULT_MFCC_DIRNAME = "baseline-mfcc"
+"""`eval mfcc`가 **쓰는** 자리."""
+
 DEFAULT_LAYERS_DIRNAME = "mert-layers"
+"""`eval layers`가 **쓰는** 자리. **읽는 기본값이 아니다** (D-0274).
+
+D-0203이 산출물을 묶음으로 옮긴 뒤에도 읽는 쪽 넷이 이 이름을 기본값으로 쓰고 있었고,
+`--audit`은 이 계열을 **어디에도 없다**고 판정했다 (O-69 닫힘 D-0274). 한 이름이 «쓰는 자리»와 «읽는
+기본값» 두 뜻을 겸하고 있었던 것이 원인이다 — D-0263이 `ship.py`의 `GREEN`에서 잡은 것과
+같은 부류이고, 그쪽은 한 함수 안이었고 이쪽은 파일 넷에 걸쳐 있었다."""
+
+DEFAULT_FEATURE_DIRNAME = BUNDLE_DIRNAME
+"""**읽는 기본값.** `--features`를 안 주면 여는 자리다 (O-69 닫힘 · D-0274).
+
+정본은 `track_bundle_store.BUNDLE_DIRNAME`이다 — 글자를 두 곳에 두면 한쪽만 고쳐진다.
+`open_feature_source`가 모양을 보고 읽는 쪽을 고르므로(D-0233) 여기 묶음을 걸어도 옛
+인덱스 저장소를 `--features`로 주는 길은 그대로 산다."""
 
 DEFAULT_LAYERS = "0,1,2,6"
 """D-0026 실측 후 기본값. layer00이 최선이었고 1·2는 미탐색이다 (O-9).
