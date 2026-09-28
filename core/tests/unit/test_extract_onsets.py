@@ -161,3 +161,25 @@ def test_고르게_뽑는다():
 def test_상한이_곡_수보다_크면_전부다():
     tracks = ["a", "b", "c"]
     assert tracks[:: max(1, len(tracks) // 10)][:10] == tracks
+
+
+# ------------------------------- 폴더에 든 곡 이름 (D-0279)
+
+
+def test_폴더의_곡_이름을_낸다(tmp_path: Path) -> None:
+    """**`interfaces`가 `np.load`로 저장소를 직접 열고 있었다** (D-0279 · GR-2.2).
+
+    npz를 어떻게 여는지는 저장소의 일이다 — 표시 계층은 `numpy`를 들일 이유가 없다.
+    """
+    from hathor.infrastructure.onset_store import source_keys
+
+    write_envelope(tmp_path, "가수/하나.mp3", [0.0, 1.0], hop_seconds=0.01)
+    write_envelope(tmp_path, "가수/둘.mp3", [1.0, 0.0], hop_seconds=0.01)
+
+    assert source_keys(tmp_path) == {"가수/하나.mp3", "가수/둘.mp3"}
+
+
+def test_빈_폴더는_빈_집합이다(tmp_path: Path) -> None:
+    from hathor.infrastructure.onset_store import source_keys
+
+    assert source_keys(tmp_path) == set()

@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import tool_module as _tool
+
 ROOT = Path(__file__).resolve().parents[3]
+
+SHIP = _tool("ship")
 if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
@@ -290,3 +294,32 @@ def test_시험_이름에_메모리_주소가_없다(request: pytest.FixtureRequ
         item.nodeid for item in request.session.items if re.search(r"at 0x[0-9a-f]+", item.nodeid)
     ]
     assert not unstable, f"시험 이름에 주소가 박혔다: {unstable[:3]}"
+
+
+# ------------------------------- 지우는 것과 세는 것 (D-0279)
+
+
+def test_지울_것과_셀_것이_갈려_있다() -> None:
+    """**재생성 가능성이 «지워도 되는가»를 가른다** (D-0279 · `artifacts.toml` R2).
+
+    PLAN §3에 «정리 정책이 `__pycache__`뿐이다»로 적혀 있었다. 세어 보니 `ship.py`는
+    `.backup/`·`.o7-*/`·루트 `*.sh`를 **이미 세고 있었다** — 없던 것은 **부류를 가르는
+    규칙**이었다. 세기만 하는 것이 옳은 자리인지 판단할 근거가 적혀 있지 않았다.
+    """
+    assert set(SHIP.REGENERABLE) & set(SHIP.COUNTED) == set(), "한 패턴이 두 부류에 있다"
+    assert SHIP.REGENERABLE and SHIP.COUNTED, "부류가 비었다"
+
+
+def test_make_clean이_선언과_같은_것을_지운다() -> None:
+    """**선언과 명령이 어긋나면 그중 하나가 거짓말이다** (D-0219와 같은 규율).
+
+    `make clean`이 지우는 것은 «자동으로 지운다»로 선언한 것과 같아야 하고, «세기만
+    한다»는 거기 없어야 한다 — 있으면 사람이 넣은 것이 조용히 사라진다.
+    """
+    body = (ROOT / "Makefile").read_text(encoding="utf-8")
+    target = body.split("\nclean:", 1)[1].split("\nclean-all:", 1)[0]
+
+    for pattern in SHIP.REGENERABLE:
+        assert pattern in target, f"`make clean`이 {pattern}을 안 지운다"
+    for pattern in SHIP.COUNTED:
+        assert pattern not in target, f"`make clean`이 {pattern}을 지운다. 세기만 해야 한다"

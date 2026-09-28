@@ -46,7 +46,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from itertools import pairwise
 
 import numpy as np
@@ -105,3 +105,26 @@ def transition_row(
     if total <= 0.0:
         return tuple([1.0 / len(roots)] * len(roots))
     return tuple(float(value) for value in picked / total)
+
+
+def averaged(matrices: Iterable[Sequence[Sequence[float]]]) -> tuple[tuple[float, ...], ...] | None:
+    """참조곡별 전이 행렬을 **하나로 합친다** (D-0110 · D-0279).
+
+    곡마다 이미 으뜸음으로 돌아가 있으므로 그대로 더하고 합으로 나눈다 — 절대음 공간에서
+    더하면 서로 다른 조성이 겹쳐 뭉개진다 (D-0063 · D-0213).
+
+    **`interfaces/cli/main.py`에 있었다** (D-0279). 표시 계층이 `numpy`를 들이고 있었고
+    GR-2.2가 금지하는 자리다. 계산은 여기, 경로 찾기와 안내 문구는 CLI에 남는다.
+
+    비었거나 무게가 0이면 `None`이다 — **없는 것을 조건으로 쓰지 않는다** (`is_empty`와
+    같은 규율).
+    """
+    total = np.zeros((DEGREE_COUNT, DEGREE_COUNT), dtype=np.float64)
+    seen = 0
+    for matrix in matrices:
+        total += np.asarray(matrix, dtype=np.float64)
+        seen += 1
+    if seen == 0 or float(total.sum()) <= 0.0:
+        return None
+    total /= total.sum()
+    return tuple(tuple(float(value) for value in row) for row in total)

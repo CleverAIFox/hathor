@@ -2345,6 +2345,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0276 | 가짜 `torch`가 `scipy`를 죽였다 | `core/tests/unit/test_gate_isolation.py::test_가짜_모듈을_심는_시험은_혼자_돌아도_통과한다` | 실물 저장소 |
 | D-0277 | `_run_ingest_keys` 352줄을 쪼갠다 | `tools/check_file_size.py` | 실물 저장소 |
 | D-0278 | 배치 잠금이 둘이고 근거가 서로를 반박했다 | `core/tests/unit/test_ingest_resume.py::test_배치_잠금_기법이_한_자리에만_있다` | 실물 저장소 |
+| D-0279 | 표시 계층의 계산 5 → 3 · 지우는 것과 세는 것을 가른다 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하는_자리를_센다` | 실물 저장소 |
 
 <!-- decision-ledger:end -->
 

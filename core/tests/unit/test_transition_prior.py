@@ -101,3 +101,31 @@ def test_빈_사전이면_균등이다():
     empty = np.zeros((DEGREES, DEGREES))
     row = transition_row(empty, 0, MAJOR_ROOTS)
     assert row == pytest.approx((1 / 6,) * 6)
+
+
+# ------------------------------- 참조곡별 행렬 합산 (D-0279)
+
+
+def test_합치면_무게가_1이_된다() -> None:
+    """**곡마다 이미 으뜸음으로 돌아가 있으므로 그대로 더한다** (D-0110)."""
+    from hathor.domain.services.transition_prior import averaged
+
+    one = [[0.0] * 12 for _ in range(12)]
+    one[0][4] = 1.0
+    two = [[0.0] * 12 for _ in range(12)]
+    two[0][7] = 3.0
+
+    found = averaged([one, two])
+
+    assert found is not None
+    assert abs(sum(sum(row) for row in found) - 1.0) < 1e-9
+    assert abs(found[0][4] - 0.25) < 1e-9
+    assert abs(found[0][7] - 0.75) < 1e-9
+
+
+def test_비었거나_무게가_0이면_없다() -> None:
+    """**없는 것을 조건으로 쓰지 않는다** (`is_empty`와 같은 규율)."""
+    from hathor.domain.services.transition_prior import averaged
+
+    assert averaged([]) is None
+    assert averaged([[[0.0] * 12 for _ in range(12)]]) is None

@@ -628,9 +628,7 @@ def _resolve_transition_prior(
     **참조곡이 여럿이면 곡마다 으뜸음으로 돌린 뒤 더한다** (D-0063 · D-0213).
     *"이미 으뜸음 기준"*이라 적고 안 돌려 절대음을 도수로 읽었다. 없으면 `None`이다.
     """
-    import numpy as np
-
-    from hathor.domain.services.harmony_prior import DEGREE_COUNT
+    from hathor.domain.services.transition_prior import averaged
     from hathor.shared.config.paths import repo_root as _root
 
     if not args.transitions:
@@ -645,9 +643,6 @@ def _resolve_transition_prior(
         print("조성 산출물이 없어 회전 기준이 없다. 배열 조건화를 건너뛴다.", file=sys.stderr)
         return None, "없음"
     table = load_transition_priors(root, args.stem_set, source_keys, tonics=load_tonics(store))
-    total = np.zeros((DEGREE_COUNT, DEGREE_COUNT), dtype=np.float64)
-    for matrix in table.values():
-        total += np.asarray(matrix, dtype=np.float64)
     found = len(table)
     if found == 0:
         print(f"참조곡이 시계열 저장분에 없다: {root.name}", file=sys.stderr)
@@ -657,8 +652,12 @@ def _resolve_transition_prior(
             f"참조곡 {len(source_keys)}곡 중 {found}곡만 시계열 저장분에 있다.",
             file=sys.stderr,
         )
-    total /= total.sum()
-    return tuple(tuple(float(v) for v in row) for row in total), f"{root.name} ({found}곡)"
+    # **합치는 것은 도메인이 한다** (D-0279). 여기 `numpy`가 있었고 GR-2.2가 금지한다.
+    blended = averaged(table.values())
+    if blended is None:
+        print(f"시계열 저장분의 전이 무게가 0이다: {root.name}", file=sys.stderr)
+        return None, "없음"
+    return blended, f"{root.name} ({found}곡)"
 
 
 def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | None:

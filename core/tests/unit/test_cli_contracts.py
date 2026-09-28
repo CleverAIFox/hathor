@@ -297,12 +297,15 @@ def test_D0204의_그_명령이_제_러너로_간다():
 
 COMPUTING = (
     "cli/ingest_keys.py",
-    "cli/ingest_onsets.py",
     "cli/keys_report.py",
-    "cli/main.py",
     "cli/tables.py",
 )
-"""`interfaces`에서 `numpy`를 들이는 파일. **다섯이고 0으로 간다** (D-0278).
+"""`interfaces`에서 `numpy`를 들이는 파일. **5 → 3이고 0으로 간다** (D-0278 · D-0279).
+
+| 언제 | 어디 | 어디로 |
+|---|---|---|
+| D-0279 | `cli/main.py` — 전이 행렬 합산 | `domain/services/transition_prior.averaged` |
+| D-0279 | `cli/ingest_onsets.py` — npz를 직접 열기 | `infrastructure/onset_store.source_keys` |
 
 ### 왜 이것을 세나
 

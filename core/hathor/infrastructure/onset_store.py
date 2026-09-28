@@ -91,3 +91,16 @@ def find_envelope_root(root: Path) -> Path | None:
         if any(path.glob("*.npz")):
             return path
     return None
+
+
+def source_keys(folder: Path) -> set[str]:
+    """이 폴더에 든 곡 이름. **없으면 빈 집합이다** (D-0279).
+
+    **`interfaces/cli/ingest_onsets.py`에 있었다.** 표시 계층이 `np.load`로 저장소를 직접
+    열고 있었고 GR-2.2가 금지하는 자리다 — npz를 어떻게 여는지는 이 파일의 일이다.
+    """
+    found: set[str] = set()
+    for path in sorted(folder.glob("*.npz")):
+        with np.load(path, allow_pickle=False) as bundle:
+            found.add(str(bundle["source_key"]))
+    return found

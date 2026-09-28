@@ -14,11 +14,14 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from hathor.application.extract_onsets import HOP_SECONDS, ExtractOnsets
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
-from hathor.infrastructure.onset_store import SUFFIX, envelope_path, write_envelope
+from hathor.infrastructure.onset_store import (
+    SUFFIX,
+    envelope_path,
+    source_keys,
+    write_envelope,
+)
 from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import resolve_root
 from hathor.shared.config.paths import resolve_path
@@ -56,7 +59,7 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
     # 아니게 된다** (D-0113).
     if args.like is not None:
         source = out_root / f"keys-{args.like:g}s{SUFFIX}"
-        wanted = _source_keys(source)
+        wanted = source_keys(source)
         if not wanted:
             print(f"{source}가 비어 있다.", file=sys.stderr)
             return 1
@@ -69,15 +72,6 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
         picked = tracks[::step][: args.limit] if args.limit else tracks
 
     return _write(args, picked, library_root, out_root)
-
-
-def _source_keys(folder: Path) -> set[str]:
-    """폴더에 든 곡 이름. **없으면 빈 집합이다.**"""
-    found: set[str] = set()
-    for path in sorted(folder.glob("*.npz")):
-        with np.load(path, allow_pickle=False) as bundle:
-            found.add(str(bundle["source_key"]))
-    return found
 
 
 def _write(
