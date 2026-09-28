@@ -2413,6 +2413,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0291 | O-58을 닫는다 | `core/tests/unit/test_check_decisions.py::test_지금_대장이_그_규약과_맞다` | 실물 저장소 (결정 기록 291건) |
 | D-0292 | 배치는 셋 다 성공했는데 감사가 같은 것을 두 번 셌다 | `core/tests/unit/test_artifacts_ledger.py::test_대장의_재생성_명령이_실재한다` | 실물 저장소 · 실물 1004곡 배치 |
 | D-0293 | D-0290의 처방이 한 글자도 안 먹었다 | `core/tests/unit/test_gate_isolation.py::test_무리로_묶으면_한_워커로_간다` | 실물 저장소 · 사용자 기기 로그 |
+| D-0294 | 오늘 뽑은 셋이 전부 자기를 설명하지 않는다 | `core/tests/unit/test_artifacts_ledger.py::test_뽑는_경로는_전부_자기를_설명한다` | 실물 저장소 · 사용자 기기 위생 출력 |
 
 <!-- decision-ledger:end -->
 

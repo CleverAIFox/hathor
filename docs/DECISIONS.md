@@ -22896,3 +22896,72 @@ D-0290이 *"유력한 가설은 VRAM 경합"*이라 적었다. **부분적으로
 강제자  `core/tests/unit/test_gate_isolation.py::test_무리로_묶으면_한_워커로_간다`
 
 자료  실물 저장소 · 사용자 기기 로그
+
+---
+
+## D-0294. 오늘 뽑은 셋이 전부 자기를 설명하지 않는다 — 장치는 있었고 부르는 데가 하나였다
+
+- **배경**: 위생 파이프가 전부 초록인데 `var_fsck`가 하나를 찍었다.
+
+      audio               4G   manifest 1004건 · 층 13개 · rev 7180933
+      clap               46M   manifest 1건 · rev e74e898
+      mert-layers       345M   **manifest 없음** · 층 [...] · 768차 (추측)
+      lyrics-hashed      54M   **manifest 없음** · 1024차 (추측)
+      keys-0.01s.onsets 878M   **manifest 없음** · 정체 불명
+      **6개 묶음이 자기를 설명하지 않는다.**
+
+  **오늘 뽑은 셋이 전부 거기 있다.** 사용자가 파이어레인의 자료 관리를 물으며 *"모범 사례 <!--voice-ok-->
+  반영도 안 했고"*라 했고, 그 자리가 여기다.
+
+### 베낄 것이 아니었다 — 이미 있는 것을 마저 쓰는 일이었다
+
+파이어레인은 `shardseal`이 봉인 넷(`code`·`cfg`·`raw`·`out`)을 든다. 우리도 **최소형을
+갖고 있다** — `NpzFeatureStore.write_manifest`가 `repo_revision()`을 같이 쓴다.
+*"코드가 바뀌면 산출물도 다른 것이다."* <!--voice-ok--> D-0233이 만들었다.
+
+**부르는 자리가 하나였다.**
+
+| 뽑는 경로 | 산출물 | manifest |
+|---|---|---|
+| `eval_clap.run` | `clap` | **O** |
+| `eval_extract.run_eval_layers` | `mert-layers` | X |
+| `eval_extract.run_eval_mfcc` | `baseline-mfcc` | X |
+| `_run_lyrics_extract` | `lyrics-hashed` | X |
+| `_extract_features_locked` | 뿌리(옛 경로) | **면제** |
+
+- **후보**: 파이어레인의 봉인 체계를 옮길지, 있는 것을 마저 쓸지.
+  - **`shardseal` 이식** — 봉인 넷은 그쪽 대장 구조(`sources.yaml` 175종 · `landing`
+    입구)를 전제한다. 우리는 계열 20개이고 **입구가 없다.** 통째로 베끼는 것이 가장 쉬운
+    오답이다 (D-0288).
+  - **`write_manifest`를 마저 부른다** — 한 계열에 세 줄, `revision`은 공짜로 따라온다.
+- **선택**: 둘째. **못을 박았다** — 뽑는 경로는 전부 `write_manifest`를 부른다.
+  표식은 `completed_keys` + `args.force`다(«이미 뽑은 곡을 건너뛴다» = 쌓는 경로).
+- **면제는 하나이고 사유를 적는다.** `_extract_features_locked`는 이름 있는 계열이 아니라
+  `var/ingest` **뿌리**에 쓰는 옛 경로다(D-0203이 묶음으로 옮겼다). 거기 manifest를 쓰면
+  `features/`라는 **계열 아닌 폴더가 생겨 격리로 뜬다.** `audio`는 묶음 저장소가 곡마다
+  쓰므로 이미 자기를 설명한다. **죽은 면제도 시험이 잡는다.**
+- **결과**: 시험 4건. 다시 뽑을 필요가 없다 — **모델을 적재하기 전에 쓰므로** 곡이 하나도
+  안 남은 재실행이 몇 초다(`eval_clap`이 그렇게 해 둔 이유다).
+
+### 곁가지 — `main.py`가 다시 못을 넘었다
+
+manifest 세 줄에 1477 → 1494가 됐다. **늘리지 않고 뗐다** — 가사축 넷(빌더 2 · 러너 2)을
+`interfaces/cli/lyrics.py`로 옮겼다. D-0277이 `ingest keys`를 뗀 것과 같은 자리이고,
+사용자가 *"main에다가 다 짱박아 놨었네"*라 한 그 더미다. <!--voice-ok--> **1256 · 258줄.**
+
+### 남기는 것
+
+- **모범 사례를 「없다」고 적기 전에 저장소를 먼저 본다.** 두 판 전에 *"봉인이 없다"*고
+  적었는데 **최소형이 D-0233부터 있었다.** 없는 것은 장치가 아니라 **그 장치를 부르는 자리**였다.
+- **1004곡을 세 번 뽑고도 그것이 무엇인지 파일에 안 적혀 있었다.** 878MB가 교두보로 나갔고
+  거기서도 «정체 불명»이다. **재현 불명 11건이 이렇게 생겼다.**
+- **위생 파이프가 전부 초록인데 이것을 찍었다.** 판정하지 않고 찍기만 하는 도구가 (D-0203)
+  관문 열넷이 못 본 것을 냈다 — **막지 않는 것이 약한 것이 아니다.**
+
+재현
+    cd core && uv run pytest tests/unit/test_artifacts_ledger.py -q
+    make hygiene
+
+강제자  `core/tests/unit/test_artifacts_ledger.py::test_뽑는_경로는_전부_자기를_설명한다`
+
+자료  실물 저장소 · 사용자 기기 위생 출력

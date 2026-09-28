@@ -10,8 +10,20 @@ import argparse
 import sys
 
 from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
+from hathor.domain.ports.audio_analysis import (
+    CHUNK_SECONDS,
+    FEATURE_SAMPLE_RATE,
+    SOURCE_SAMPLE_RATE,
+)
 from hathor.infrastructure.batch_lock import BatchAlreadyRunningError
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
+from hathor.infrastructure.mert_feature_extractor import (
+    DEFAULT_MODEL as MERT_MODEL,
+)
+from hathor.infrastructure.mert_feature_extractor import (
+    layer_key,
+)
+from hathor.infrastructure.mfcc_feature_extractor import FEATURE_DIM as MFCC_DIM
 from hathor.interfaces.cli.extraction import drive_extraction
 from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import (
@@ -41,6 +53,20 @@ def run_eval_mfcc(args: argparse.Namespace) -> int:
         return 2
 
     store = NpzFeatureStore(args.features or args.out / DEFAULT_MFCC_DIRNAME)
+    # **베이스라인도 자기를 설명한다** (D-0294). 비교 대상이 무엇이었는지 모르면 비교가 안 된다.
+    store.write_manifest(
+        DEFAULT_MFCC_DIRNAME,
+        {
+            "model": "mfcc (numpy 직접 구현 · D-0023)",
+            "license": "해당 없음",
+            "sample_rate": SOURCE_SAMPLE_RATE,
+            "chunk_seconds": CHUNK_SECONDS,
+            "dimension": MFCC_DIM,
+            "layers": [],
+            "dtype": "float32",
+            "stems": [],
+        },
+    )
     try:
         with store.batch_lock():
             if not args.force:
@@ -92,6 +118,21 @@ def run_eval_layers(args: argparse.Namespace) -> int:
         return 2
 
     store = NpzFeatureStore(args.features or args.out / DEFAULT_LAYERS_DIRNAME)
+    # **산출물이 자기를 설명한다** (D-0203 · D-0294). 모델을 적재하기 전에 쓴다 — 곡이
+    # 하나도 안 남은 재실행에서도 몇 초면 끝나고 `var_fsck`가 «정체 불명»을 면한다.
+    store.write_manifest(
+        DEFAULT_LAYERS_DIRNAME,
+        {
+            "model": MERT_MODEL,
+            "license": "CC-BY-NC-4.0",
+            "sample_rate": FEATURE_SAMPLE_RATE,
+            "chunk_seconds": CHUNK_SECONDS,
+            "dimension": 768,
+            "layers": [layer_key(index) for index in indices],
+            "dtype": "float32",
+            "stems": [],
+        },
+    )
     try:
         with store.batch_lock():
             if not args.force:

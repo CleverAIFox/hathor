@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import argparse
+import ast
+import inspect
 import re
 from pathlib import Path
 
@@ -557,3 +559,76 @@ def test_대장의_재생성_명령이_실재한다() -> None:
         if missing:
             problems.append(f"{name}: `{path}`가 {missing}를 안 받는다")
     assert not problems, "대장이 없는 명령을 안내한다:\n" + "\n".join(problems)
+
+
+# ------------------------ 산출물이 자기를 설명한다 (D-0203 · D-0294)
+
+CLI = repo_root() / "core" / "hathor" / "interfaces" / "cli"
+
+EXTRACTING = 5
+"""곡을 뽑아 `NpzFeatureStore`에 쌓는 CLI 경로의 수. **세는 값이 있어야 «전부»가 뜻을 갖는다.**
+
+이름 있는 계열 넷(clap · mert-layers · baseline-mfcc · lyrics-hashed)과 **뿌리에 쓰는
+옛 경로 하나**(`ROOT_WRITER`)다. 늘리려면 결정 기록이 든다 (D-0118) — 새 특징 계열이
+생겼다는 뜻이고, 그것은 판단할 일이다."""
+
+ROOT_WRITER = "_extract_features_locked"
+"""**면제 하나. 사유와 함께 적는다** (D-0219와 같은 규율).
+
+이것은 이름 있는 계열이 아니라 `var/ingest` **뿌리**에 쓰는 옛 경로이고(D-0203이 묶음으로
+옮겼다), 거기에 manifest를 쓰면 `features/`라는 계열 아닌 폴더가 생겨 **격리로 뜬다.**
+`audio` 묶음은 `track_bundle_store`가 곡마다 manifest를 쓰므로 이미 자기를 설명한다."""
+
+
+def _extractors() -> dict[str, str]:
+    """곡을 뽑아 쌓는 CLI 함수 → 그 본문. **`completed_keys` + `args.force`가 표식이다.**
+
+    그 둘은 «이미 뽑은 곡을 건너뛴다»는 뜻이고, 건너뛸 것이 있다는 것은 **쌓는 경로**라는 뜻이다.
+    """
+    found: dict[str, str] = {}
+    for path in sorted(CLI.glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "NpzFeatureStore(" not in source:
+            continue
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            body = ast.unparse(node)
+            if all(mark in body for mark in ("NpzFeatureStore(", "completed_keys", "args.force")):
+                found[node.name] = body
+    return found
+
+
+def test_그물이_비지_않았다() -> None:
+    assert len(_extractors()) == EXTRACTING, f"뽑는 경로가 {sorted(_extractors())}다"
+
+
+def test_뽑는_경로는_전부_자기를_설명한다() -> None:
+    """**`var_fsck`가 「6개 묶음이 자기를 설명하지 않는다」를 찍었다** (D-0294).
+
+    실측 — 뽑는 경로 넷 중 `write_manifest`를 부르는 것이 **하나**였다(`clap`). 그래서
+    오늘 뽑은 셋(`mert-layers` · `lyrics-hashed` · `keys-*.onsets`)이 전부 **정체 불명**으로
+    나왔다. 장치는 D-0233부터 있었고 **부르는 자리가 한 곳뿐이었다.**
+
+    manifest는 `repo_revision()`을 같이 든다 — **코드가 바뀌면 산출물도 다른 것이다.**
+    그것이 「재현 불명」을 막는 최소 장치다.
+    """
+    bare = sorted(
+        name
+        for name, body in _extractors().items()
+        if name != ROOT_WRITER and "write_manifest" not in body
+    )
+    assert not bare, f"자기를 설명하지 않는 뽑기 경로: {bare}"
+
+
+def test_면제가_살아_있다() -> None:
+    """**죽은 면제도 잡는다** — 면제해 놓고 그 자리가 사라지면 그 선언은 거짓말이 된다."""
+    assert ROOT_WRITER in _extractors(), f"`{ROOT_WRITER}`가 없다. 면제 선언을 지운다"
+
+
+def test_manifest가_리비전을_든다() -> None:
+    """**코드가 바뀌면 산출물도 다른 것이다.** 그 한 칸이 봉인의 최소형이다."""
+    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
+
+    source = inspect.getsource(NpzFeatureStore.write_manifest)
+    assert "repo_revision()" in source
