@@ -230,6 +230,31 @@ D-0261이 여섯째 계약을 넣고 **`MASTER`의 «계약 5종» 세 곳을 �
 읽는 사람만 틀린 것을 배운다. 그래서 세는 자리를 여기 둔다."""
 
 
+ALBUM_LIFT = re.compile(r"M1(?!\d)[^\n]{0,30}?배")
+"""`M1`의 배수를 인용한 자리 (D-0284).
+
+`M1`은 «같은 앨범 찾기»이고 **그 과제가 곧 앨범 효과다** — 같은 앨범은 마스터링이 같아
+쉽게 맞고 성능이 부푼다 (Mandel & Ellis, ISMIR 2005). 하네스는 그것을 알고 `M2`에서 같은
+앨범을 후보에서 빼는데, **인용이 부푼 쪽을 골랐다.**
+
+밖에 내보일 수는 `M2`다. `M1`을 들려면 **같은 줄에 `M2`나 «앨범»을 같이 적는다** — 읽는
+사람이 그 수가 무엇 위의 수인지 알 수 있어야 한다."""
+
+
+def check_album_lift() -> list[str]:
+    """`M1` 배수를 앨범 효과 언급 없이 인용한 자리 (D-0284)."""
+    problems: list[str] = []
+    for path in living_documents():
+        for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), start=1):
+            if ALBUM_LIFT.search(line) and "M2" not in line and "앨범" not in line:
+                where = path.relative_to(ROOT).as_posix()
+                problems.append(
+                    f"{where}:{number}: `M1` 배수를 앨범 효과 없이 인용했다. "
+                    "같은 줄에 `M2`나 «앨범»을 적는다 (D-0284)"
+                )
+    return problems
+
+
 def check_counts() -> list[str]:
     """문서가 적은 수가 실물과 같은가 (D-0263)."""
     problems: list[str] = []
@@ -253,6 +278,7 @@ def main() -> int:
 
     problems = check_paths() + check_commands() + check_orphan_tools()
     problems += check_wiring() + check_reserved_packages() + check_counts()
+    problems += check_album_lift()
     if problems:
         print(f"문서가 없는 것을 가리키는 자리가 {len(problems)}곳 있다.", file=sys.stderr)
         for problem in problems:

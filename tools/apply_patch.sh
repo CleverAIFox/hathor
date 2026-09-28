@@ -150,6 +150,23 @@ if [[ "$EXPECTED" != "$ACTUAL" ]]; then
   exit 1
 fi
 
+# **도구 체인을 바꾸면 번호를 단다** (D-0039 · D-0286). D-0039가 *"문서 체계·개발 규약·
+# 도구 체인 변경은 부수 결정으로 처리하지 않는다"*고 적고 **세는 것을 안 만들었다.**
+# D-0015가 MASTER.md를 다른 주제의 부수 항목으로 강등했고 **나중에 아무도 못 찾았다.**
+# 실측: 도구 체인을 건드린 커밋 25건 중 결정 기록 없이 간 것이 0건이다 — 구멍이 0이라
+# 못을 박는다 (D-0134). 막는다: 여기서 막으면 패치를 다시 짜면 되고, 안 막으면 그 판단은
+# 영영 번호가 없다.
+TOOLCHAIN="$(echo "$EXPECTED" | grep -E '^(Makefile|\.github/workflows/|\.githooks/)' || true)"
+if [[ -n "$TOOLCHAIN" ]] && ! echo "$EXPECTED" | grep -qx 'docs/DECISIONS.md'; then
+  echo
+  printf '\033[31m도구 체인을 바꾸면서 결정 기록이 없다 (D-0039).\033[0m\n' >&2
+  echo "$TOOLCHAIN" | sed 's/^/  /' >&2
+  echo >&2
+  echo "  부수 결정으로 처리하지 않는다. 별도 번호를 달고 다시 짠다." >&2
+  echo "  붙인 것은 그대로 두었다. 되돌리려면: git apply -R '${PATCH}'" >&2
+  exit 1
+fi
+
 # 검증했으므로 선언된 목록으로만 담는다. 떠난 곳을 담아야 삭제가 커밋에 들어간다.
 declared_paths "$PATCH" | while IFS= read -r file; do git add -- "$file"; done
 git commit -q -m "$MESSAGE"

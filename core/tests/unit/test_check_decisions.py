@@ -483,3 +483,39 @@ def test_대장이_자료_칸을_든다() -> None:
     for row in rows:
         source = row.rsplit("|", 2)[1].strip()
         assert tool.EVIDENCE_VALUES.match(source), f"{row[:40]}의 자료 칸이 규약 밖이다: {source!r}"
+
+
+# ------------------------------------------------- 근거는 사람이 아니라 논거다 (D-0285)
+
+
+def test_귀속만_있고_그_사람의_말이_없으면_잡는다():
+    """**D-0133이 규칙을 적고 세는 것을 안 만들었다** (D-0285).
+
+    규칙이 적혀 있는데 안 지켜지는 것이 GR-0.9의 자리이며, 그것을 **283판 동안**
+    아무도 안 봤다.
+    """
+    records = tool.scan_records(decisions() + record(1, "- **배경**: 사용자가 반대했다.\n"))
+    (problem,) = tool.check_attribution(records)
+    assert "D-0001" in problem
+
+
+def test_그_사람의_말이_남아_있으면_통과한다():
+    """**근거를 지어내라는 검사가 아니다.** 그때 한 말이 남아 있으면 된다."""
+    body = '- **배경**: 사용자가 반대했다 — *"공식 문서인데 형식을 맞추자"*.\n'
+    assert tool.check_attribution(tool.scan_records(decisions() + record(1, body))) == []
+
+
+def test_표제에서_귀속하고_본문에서_인용해도_통과한다():
+    """**줄이 아니라 기록 단위로 본다** — 실재하는 꼴이고 잘못이 아니다."""
+    body = "### 사용자가 전제를 짚었다\n\n그 말은 «분모가 틀렸다»였다.\n"
+    assert tool.check_attribution(tool.scan_records(decisions() + record(1, body))) == []
+
+
+def test_귀속이_없는_기록은_묻지_않는다():
+    records = tool.scan_records(decisions() + record(1, "- **배경**: 수가 어긋났다.\n"))
+    assert tool.check_attribution(records) == []
+
+
+def test_지금_대장이_규약과_맞다():
+    """**강제자다.** 실측 — 귀속 26건 · 근거 없는 것 0건이라 못을 박을 수 있었다 (D-0134)."""
+    assert tool.check_attribution(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []

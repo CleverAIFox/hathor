@@ -135,3 +135,53 @@ def test_폴더가_없으면_그렇게_말한다(tmp_path: Path) -> None:
 
     assert done.returncode != 0
     assert "패치 폴더가 없다" in done.stderr
+
+
+# ------------------------------- 도구 체인을 바꾸면 번호를 단다 (D-0039 · D-0286)
+
+GATE_START = 'TOOLCHAIN="$('
+GATE_END = "\nfi\n"
+
+
+def _gate() -> str:
+    """스크립트에서 **그 관문의 실제 줄**을 떼어 온다.
+
+    글자가 거기 있는지 보는 시험은 D-0283에서 이미 틀렸다 — 문구를 상수로 빼자 동작이
+    그대로인데 빨개졌다. **떼어 와서 돌린다.**
+    """
+    text = SCRIPT.read_text(encoding="utf-8")
+    start = text.index(GATE_START)
+    return text[start : text.index(GATE_END, start) + len(GATE_END)]
+
+
+def _judge(*declared: str) -> int:
+    """선언 목록을 주고 관문을 돌린다. 0이면 통과, 1이면 막힘."""
+    listed = "\n".join(declared)
+    done = subprocess.run(
+        ["bash", "-c", f'EXPECTED="{listed}"\nPATCH=x.patch\n{_gate()}'],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    return done.returncode
+
+
+def test_도구_체인만_바꾸면_막는다() -> None:
+    """**D-0015가 MASTER.md를 남의 결정의 곁가지로 강등했고 아무도 못 찾았다** (D-0039).
+
+    D-0039는 규칙을 적고 **세는 것을 안 만들었다** — 247판 동안. 실측으로 어긴 커밋이
+    0건이라 못을 박는다 (D-0134).
+    """
+    assert _judge("Makefile", "core/hathor/x.py") == 1
+    assert _judge(".github/workflows/ci.yml") == 1
+    assert _judge(".githooks/pre-commit") == 1
+
+
+def test_결정_기록을_같이_담으면_통과한다() -> None:
+    """**바꾸지 말라는 것이 아니라 번호를 달라는 것이다.**"""
+    assert _judge("Makefile", "docs/DECISIONS.md") == 0
+
+
+def test_도구_체인이_아니면_묻지_않는다() -> None:
+    assert _judge("core/hathor/x.py", "docs/PLAN.md") == 0

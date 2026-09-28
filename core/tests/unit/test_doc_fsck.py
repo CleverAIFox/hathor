@@ -136,3 +136,43 @@ def test_맞는_수는_안_잡는다(tmp_path, monkeypatch):
 def test_계약_수를_pyproject에서_센다():
     """**정본은 `core/pyproject.toml` 하나다** (D-0223). 문서가 아니라 선언을 센다."""
     assert CHECKER.contract_count() == 6
+
+
+# ------------------------------- 앨범 효과 위의 수를 대표로 들지 않는다 (D-0284)
+
+
+def test_M1_배수는_앨범_효과를_같이_적는다(monkeypatch, tmp_path):
+    """**인용이 부푼 쪽을 골랐다** (D-0284).
+
+    `M1`은 «같은 앨범 찾기»이고 **그 과제가 곧 앨범 효과다** — 같은 앨범은 마스터링이
+    같아 쉽게 맞는다 (Mandel & Ellis, ISMIR 2005). 하네스는 그것을 알고 `M2`에서 같은
+    앨범을 뺐는데, PLAN이 두 자리에서 `M1 20.4배`를 대표로 들고 있었다.
+
+    **통제는 옳았고 인용이 틀렸다.** 선행연구를 안 봐서 그 이름조차 몰랐다.
+    """
+    bad = tmp_path / "PLAN.md"
+    bad.write_text("검색은 M1 20.4배다.\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [bad])
+    (problem,) = CHECKER.check_album_lift()
+    assert "앨범 효과" in problem
+
+    ok = tmp_path / "OK.md"
+    ok.write_text("M1 20.4배 · M2 14.3배 (앨범 효과를 뺀 수)\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [ok])
+    assert CHECKER.check_album_lift() == []
+
+
+def test_M11은_M1이_아니다(monkeypatch, tmp_path):
+    """**`M11 전이 초과`가 걸렸다** — 첫 판의 정규식이 `M1`을 접두사로 잡았다."""
+    path = tmp_path / "PLAN.md"
+    path.write_text("| 생성 | M11 전이 초과 | 3배 |\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [path])
+    assert CHECKER.check_album_lift() == []
+
+
+def test_지금_문서가_규약과_맞다():
+    """**강제자다.** 살아 있는 문서가 지금 이 규칙을 지킨다."""
+    assert CHECKER.check_album_lift() == []
