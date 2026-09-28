@@ -2416,6 +2416,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0294 | 오늘 뽑은 셋이 전부 자기를 설명하지 않는다 | `core/tests/unit/test_artifacts_ledger.py::test_뽑는_경로는_전부_자기를_설명한다` | 실물 저장소 · 사용자 기기 위생 출력 |
 | D-0295 | 나머지 셋은 저장소가 달라서 닿지 못했다 | `core/tests/unit/test_artifacts_ledger.py::test_리비전을_묻는_자리가_선언과_같다` | 실물 저장소 · 사용자 기기 위생 출력 |
 | D-0296 | 한 칸을 고치고 바로 옆 칸을 안 셌다 | `core/tests/unit/test_artifacts_ledger.py::test_대장의_재생성_명령이_실재한다` | 실물 저장소 |
+| D-0297 | `MAP`이 무작위 없이 나가고 있었다 | `core/tests/unit/test_evaluate_retrieval.py::test_측정값마다_무작위가_같이_나간다` | 실물 1004곡 · `layer00` 검색 실측 |
 
 <!-- decision-ledger:end -->
 

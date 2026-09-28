@@ -236,12 +236,23 @@ def _print_report(report: EvaluationReport) -> None:
         f"(무작위 {consistency.random_median_rank:.1f})"
     )
     for metric in report.metrics:
+        # **재서 낸 수마다 그 옆에 무작위가 붙는다** (D-0297). `MAP`은 무작위 없이 나가고
+        # 있었다 — 화면의 «무작위»는 `P@k`의 것이라 읽는 사람이 `MAP`을 판정할 수 없었다.
         print(
-            f"  {metric.name:<10} P@{report.config.k} {metric.measured.precision_at_k:.4f}  "
-            f"MAP@{report.config.k} {metric.measured.map_at_k:.4f}  "
-            f"쿼리 {metric.measured.queries:>4}  "
-            f"| 무작위 {metric.random.precision_at_k:.4f} "
-            f"({metric.precision_lift:.1f}배)"
+            f"  {metric.name:<10} "
+            f"P@{report.config.k} {metric.measured.precision_at_k:.4f} "
+            f"(무작위 {metric.random.precision_at_k:.4f})  "
+            f"MAP@{report.config.k} {metric.measured.map_at_k:.4f} "
+            f"(무작위 {metric.random.map_at_k:.4f})  "
+            f"쿼리 {metric.measured.queries:>4}"
+        )
+        # **배수는 따로 둔다** (D-0284 · D-0297). MIR 표준이 아니고, 실측에서 **순위를
+        # 뒤집었다** — `layer00`이 배수로는 M1 20.4 > M2 14.3인데 절대 `P@10`으로는
+        # M2 0.2503 » M1 0.0699이다. 지우지는 않는다. 옛 기록이 그 수로 적혀 있다.
+        print(
+            f"  {'':<10} 배수 P@{report.config.k} {metric.precision_lift:.1f}배 · "
+            f"MAP@{report.config.k} {metric.map_lift:.1f}배 "
+            "(**MIR 표준이 아니다** · 인용은 절대값으로 · D-0284)"
         )
     if not report.metrics:
         print("  M1/M2는 계산하지 않았다 (**붕괴 판정** · D-0234).")

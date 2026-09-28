@@ -24,6 +24,7 @@ from hathor.domain.services.embedding_pooling import (
 )
 from hathor.domain.services.isotropy import center, mean_direction
 from hathor.domain.services.retrieval_metrics import cosine_similarity, top1_accuracy
+from hathor.shared.config.paths import repo_root
 
 
 def part(record: dict[str, object], *path: str) -> dict[str, object]:
@@ -509,3 +510,44 @@ def test_작은_코퍼스에서_잡음을_근접실패로_읽지_않는다():
     report = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)))).run(tracks)
     assert report.consistency.random_median_rank <= report.config.k, "이 시험의 전제"
     assert report.collapsed
+
+
+# ------------------ 재서 낸 수는 옆에 무작위를 달고 나간다 (D-0297)
+
+SUMMARY = repo_root() / "core" / "hathor" / "interfaces" / "cli" / "eval_retrieval.py"
+
+MEASURED = ("precision_at_k", "measured.map_at_k")
+"""화면에 나가는 측정값. **각각 무작위 짝이 있어야 한다.**"""
+
+
+def _printed() -> str:
+    """지표 한 줄을 찍는 자리의 소스."""
+    source = SUMMARY.read_text(encoding="utf-8")
+    start = source.index("for metric in report.metrics:")
+    return source[start : source.index("if not report.metrics:", start)]
+
+
+def test_측정값마다_무작위가_같이_나간다() -> None:
+    """**`MAP`이 무작위 없이 나가고 있었다** (D-0297).
+
+    화면의 «무작위»는 `P@k`의 것이었다. 그래서 `MAP@10 0.1956`을 읽은 사람이 그 수가
+    좋은지 나쁜지 **판정할 수 없었다** — 이 파일의 `LabeledMetric`이 *"베이스라인 없이
+    인용하는 것을 구조적으로 막는다"*고 적어 놓고 그 자신이 막지 못했다.
+    """
+    block = _printed()
+    for name in ("measured.precision_at_k", "measured.map_at_k"):
+        pair = name.replace("measured.", "random.")
+        assert name in block, f"{name}을 안 찍는다"
+        assert pair in block, f"{name}을 찍으면서 {pair}를 안 찍는다"
+
+
+def test_배수는_표준이_아니라고_같이_적는다() -> None:
+    """**실측에서 순위를 뒤집었다** (D-0284 · D-0297).
+
+    `layer00` 실측 — 배수로는 M1 20.4 > M2 14.3인데 절대 `P@10`으로는 M2 0.2503 »
+    M1 0.0699다. 과제마다 관련 문서 수가 달라 `P@k` 상한이 다르기 때문이다. 배수를
+    지우지는 않는다(옛 기록이 그 수로 적혀 있다). **혼자 나가지 못하게 한다.**
+    """
+    block = _printed()
+    assert "배" in block, "배수를 아예 안 찍는다 — 옛 기록과 이을 수 없다"
+    assert "표준이 아니다" in block, "배수를 표식 없이 찍는다"
