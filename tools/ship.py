@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -164,6 +165,22 @@ def check_git() -> list[str]:
     if behind and behind != "0":
         problems.append(f"원격이 {behind}개 앞선다. `git pull --rebase` 뒤에 다시 친다")
     return problems
+
+
+def last_decision() -> str:
+    """대장의 **마지막 결정 번호와 건수** (D-0287).
+
+    **왜 내보내는 자리에서 찍나.** 다음 판을 짜는 쪽이 *"어디까지 붙었나"*를 모르면
+    이미 붙은 패치를 또 붙이라고 적는다. 실제로 그랬다 — D-0283이 푸시까지 끝난 뒤
+    *"아직 안 붙었다"*는 지시가 나갔고, 사람은 **자기가 뭘 지웠나** 의심했다.
+
+    이 한 줄이 그 자리를 막는다. `make ship` 출력에 번호가 찍히면 **그 번호가 다음
+    지시의 기준**이 된다 — D-0283이 「낡은 자료로 내린 초록이 빨강보다 나쁘다」고
+    적은 것과 같은 자리이고, 이번에는 그 낡은 자료가 **사람의 머릿속**에 있었다.
+    """
+    text = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    found = re.findall(r"^## (D-\d{4})\.", text, re.MULTILINE)
+    return f"{found[-1]} · 총 {len(found)}건" if found else "(없다)"
 
 
 def count_leftovers() -> list[str]:
@@ -298,6 +315,9 @@ def main() -> int:
     else:
         ahead = _git("rev-list", "--count", "@{upstream}..HEAD")
         print(f"{GREEN}   통과{OFF}  미푸시 커밋 {ahead or '0'}개")
+
+    print(f"{DIM}── 기록{OFF}")
+    print(f"   마지막 결정  {last_decision()}")
 
     print(f"{DIM}── CI (직전 커밋){OFF}")
     for line in ci_verdict():

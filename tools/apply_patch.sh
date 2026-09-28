@@ -103,6 +103,20 @@ if [[ -n "$WHICH" ]]; then
 fi
 printf '패치: %s\n' "$(basename "$PATCH")"
 
+# **이 패치가 무엇 위에 서는가** (D-0287). 패치는 직전 판 위에서 뽑히는데 **그 사실이
+# 패치 어디에도 안 적혀 있었다.** 그래서 사람이 *"D0283을 붙이고 D0284를 붙여라"*는
+# 지시를 받고 D0283이 **이미 붙어 있는지** 알 길이 없었다 — 실제로 이미 붙어 있었고
+# 그 판 전체가 헛돌았다. 선행을 결정 번호로 적는다. **해시가 아니다** — 미러와 실물
+# 저장소는 이력이 달라 해시가 안 맞는다. 결정 번호는 내용이라 어디서나 같다.
+NEEDS="$(grep -m1 '^# hathor-needs:' "$PATCH" 2>/dev/null | sed 's/^# hathor-needs:[[:space:]]*//' || true)"
+if [[ -n "$NEEDS" ]]; then
+  for want in $NEEDS; do
+    if ! grep -q "^## ${want}\." docs/DECISIONS.md; then
+      die "선행 ${want}이 대장에 없다. 그 패치를 먼저 붙인다 (D-0287)"
+    fi
+  done
+fi
+
 if git apply --reverse --check "$PATCH" >/dev/null 2>&1; then
   ok "이미 적용돼 있다. 아무것도 하지 않는다 (멱등)."
   exit 0

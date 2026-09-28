@@ -185,3 +185,61 @@ def test_결정_기록을_같이_담으면_통과한다() -> None:
 
 def test_도구_체인이_아니면_묻지_않는다() -> None:
     assert _judge("core/hathor/x.py", "docs/PLAN.md") == 0
+
+
+# ------------------------------------- 이 패치가 무엇 위에 서는가 (D-0287)
+
+NEEDS_START = 'NEEDS="$('
+NEEDS_END = "\nfi\n"
+
+
+def _needs_gate() -> str:
+    """스크립트에서 선행 검사의 **실제 줄**을 떼어 온다."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    start = text.index(NEEDS_START)
+    return text[start : text.index(NEEDS_END, start) + len(NEEDS_END)]
+
+
+def _needs(declared: str, ledger: str, folder: Path) -> int:
+    """선행 선언과 대장을 주고 관문을 돌린다. 0이면 통과, 1이면 막힘."""
+    (folder / "docs").mkdir(parents=True, exist_ok=True)
+    (folder / "docs" / "DECISIONS.md").write_text(ledger, encoding="utf-8")
+    patch = folder / "x.patch"
+    patch.write_text(declared, encoding="utf-8")
+    done = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'die() {{ echo "$1" >&2; exit 1; }}\nPATCH="{patch}"\n{_needs_gate()}',
+        ],
+        cwd=folder,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    return done.returncode
+
+
+def test_선행이_대장에_없으면_막는다(tmp_path: Path) -> None:
+    """**D-0283이 이미 붙었는지 아무도 몰랐다** (D-0287).
+
+    패치는 직전 판 위에서 뽑히는데 **그 사실이 패치 어디에도 없었다.** 그래서 이미
+    푸시까지 끝난 패치를 또 붙이라는 지시가 나갔고, 사람은 자기가 뭘 지웠나 의심했다.
+    """
+    assert _needs("# hathor-needs: D-0283\n", "## D-0282. 제목\n", tmp_path) == 1
+
+
+def test_선행이_있으면_통과한다(tmp_path: Path) -> None:
+    assert _needs("# hathor-needs: D-0283\n", "## D-0283. 제목\n", tmp_path) == 0
+
+
+def test_여럿을_선언하면_전부_본다(tmp_path: Path) -> None:
+    ledger = "## D-0283. 하나\n\n## D-0284. 둘\n"
+    assert _needs("# hathor-needs: D-0283 D-0284\n", ledger, tmp_path) == 0
+    assert _needs("# hathor-needs: D-0283 D-0285\n", ledger, tmp_path) == 1
+
+
+def test_선언이_없는_옛_패치는_막지_않는다(tmp_path: Path) -> None:
+    """**옛 패치가 실재한다.** 표식이 없다고 막으면 되돌릴 수 없는 것이 생긴다."""
+    assert _needs("# hathor-commit: 무언가\n", "## D-0001. 제목\n", tmp_path) == 0

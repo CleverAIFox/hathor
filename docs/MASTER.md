@@ -2405,6 +2405,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0284 | 281판 동안 선행연구를 안 봤다 | `core/tests/unit/test_doc_fsck.py::test_M1_배수는_앨범_효과를_같이_적는다` | 실물 저장소 · 웹 검색 (원문 전량 미독) |
 | D-0285 | 「사용자가 반대했다 25곳」은 이미 0곳이었다 | `core/tests/unit/test_check_decisions.py::test_지금_대장이_규약과_맞다` | 실물 저장소 (결정 기록 284건) |
 | D-0286 | 「기계가 가를 수 없는 4건」 중 셋은 이미 기계가 가르고 있었다 | `core/tests/unit/test_apply_patch.py::test_도구_체인만_바꾸면_막는다` | 실물 저장소 (커밋 70건 · 결정 기록 286건) |
+| D-0287 | 이미 붙은 패치를 또 붙이라고 했다 | `core/tests/unit/test_apply_patch.py::test_선행이_대장에_없으면_막는다` | 실물 저장소 · 사용자 기기 로그 |
 
 <!-- decision-ledger:end -->
 

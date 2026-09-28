@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -334,3 +336,44 @@ def test_원격을_읽고_판정한다() -> None:
     assert '"fetch"' in body, "원격을 안 읽고 판정한다"
     assert "HEAD..@{upstream}" in body, "받을 것을 안 센다"
     assert "못 읽었다" in body, "못 읽었을 때 0으로 찍으면 거짓이다"
+
+
+# --------------------------- 내보내는 자리가 어디까지 갔는지 말한다 (D-0287)
+
+
+def test_마지막_결정_번호를_낸다():
+    """**다음 판을 짜는 쪽이 「어디까지 붙었나」를 몰랐다** (D-0287).
+
+    D-0283이 푸시까지 끝난 뒤 *"아직 안 붙었다"*는 지시가 나갔다. 사람은 그 지시를
+    믿고 돌렸고 실패를 보고 **자기가 뭘 지웠나** 의심했다. 낡은 자료로 내린 판정이
+    빨강보다 나쁘다는 것을 D-0283이 적었고, 이번에는 그 낡은 자료가 사람 머릿속에 있었다.
+    """
+    line = SHIP.last_decision()
+    assert re.fullmatch(r"D-\d{4} · 총 \d+건", line), line
+
+
+def test_대장이_비면_그렇게_말한다(monkeypatch, tmp_path):
+    """**«없다»와 «0건»을 가르지 못하면 빈 대장이 조용히 지나간다** (D-0230)."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "DECISIONS.md").write_text("# 결정 기록\n", encoding="utf-8")
+    monkeypatch.setattr(SHIP, "ROOT", tmp_path)
+    assert SHIP.last_decision() == "(없다)"
+
+
+def test_main이_그_줄을_찍는다():
+    """**강제자다.** 재기만 하고 안 찍으면 이 관문은 아무 일도 안 한다.
+
+    **글자가 어디 있는지 보지 않는다** — D-0283에서 그렇게 틀렸다. `main` 안에서
+    `last_decision`이 **불리는가**를 `ast`로 본다.
+    """
+    source = Path(str(SHIP.__file__)).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    (main,) = [
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main"
+    ]
+    called = {
+        node.func.id
+        for node in ast.walk(main)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "last_decision" in called
