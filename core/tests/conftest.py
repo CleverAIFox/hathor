@@ -56,12 +56,17 @@ def gpu_bound(item: pytest.Item) -> bool:
     )
 
 
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """GPU를 잡는 시험을 한 무리로 묶는다 (D-0290).
+    """GPU를 잡는 시험을 한 무리로 묶는다 (D-0290 · D-0293).
 
     `--dist loadgroup`이 같은 `xdist_group`을 **한 워커에** 보낸다. 이 기기의 가용 VRAM은
-    4.8GB이고(D-0218) MERT·CLAP·Demucs가 **다른 워커에 동시에 실리면** 카드에 모델이 둘
-    올라간다. 워커 경계는 시험 수가 바뀔 때마다 움직이므로 **언제 겹칠지는 운이다.**
+    4.8GB이고(D-0218) MERT·Demucs가 **다른 워커에 동시에 실리면** 카드에 모델이 둘 올라간다.
+    워커 경계는 시험 수가 바뀔 때마다 움직이므로 **언제 겹칠지는 운이다.**
+
+    **`tryfirst`가 없으면 한 글자도 안 먹는다** (D-0293). `xdist`가 제 `collection_modifyitems`
+    에서 표식을 읽어 노드 아이디에 무리 이름을 붙이는데, 그때 이 훅이 아직 안 돌았으면
+    **표식이 없는 것으로 읽는다.** 실측 — 없으면 `gw0·gw1·gw2`로 흩어지고 있으면 셋 다 `gw0`다.
     """
     for item in items:
         if gpu_bound(item):

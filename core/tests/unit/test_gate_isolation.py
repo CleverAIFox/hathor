@@ -192,21 +192,38 @@ def test_가짜를_심는_시험은_무리에_안_든다() -> None:
 
 
 def test_무리로_묶으면_한_워커로_간다(tmp_path: Path) -> None:
-    """**강제자다** — `--dist loadgroup`이 실제로 모으는가 (양성 대조).
+    """**강제자다 — 그런데 첫 판은 배선이 아니라 기법을 봤다** (D-0293).
 
-    설정만 바꾸고 동작을 안 보면, 다음 판에 `-n auto`만 남아도 조용히 흩어진다.
+    D-0290의 이 시험은 합성 트리에 `@pytest.mark.xdist_group('gpu')`를 **직접 적었다.**
+    그것은 «`loadgroup`이 무리를 한 워커로 보내는가»를 물을 뿐이고, 실제 배선은
+    **`conftest`의 훅이 그 표식을 붙이는가**다. 둘은 다르고, **기법은 맞는데 배선이 죽어
+    있었다** — `tryfirst`가 없어서 `xdist`가 표식을 못 봤다.
+
+    그래서 여기는 **저장소의 훅 자신**을 심어 돌린다. 표식은 한 글자도 안 적는다.
     """
     tests = tmp_path / "t"
     tests.mkdir()
-    for name in ("a", "b"):
+    (tests / "conftest.py").write_text(
+        f"import sys\nsys.path.insert(0, {str(CORE)!r})\n"
+        "from tests.conftest import pytest_collection_modifyitems  # noqa: F401\n",
+        encoding="utf-8",
+    )
+    seen = tmp_path / "seen"
+    for name in ("a", "b", "c"):
         (tests / f"test_{name}.py").write_text(
             "import os, pytest\n"
-            "@pytest.mark.xdist_group('gpu')\n"
+            'needs = pytest.mark.skipif(False, reason="transformers 또는 CUDA 없음")\n\n'
+            "@needs\n"
             f"def test_{name}():\n"
-            f"    (os.environ['PYTEST_XDIST_WORKER'] + ' {name}\\n') and None\n"
-            f"    open({str(tmp_path / 'seen')!r}, 'a').write(os.environ['PYTEST_XDIST_WORKER'])\n",
+            f"    open({str(seen)!r}, 'a').write(os.environ['PYTEST_XDIST_WORKER'] + ' ')\n",
             encoding="utf-8",
         )
+    # **채우는 시험을 둔다.** 워커보다 시험이 적으면 어차피 한 워커로 몰려 통과한다.
+    for index in range(40):
+        (tests / f"test_fill{index}.py").write_text(
+            f"def test_fill{index}() -> None:\n    assert True\n", encoding="utf-8"
+        )
+
     subprocess.run(
         (
             sys.executable,
@@ -216,7 +233,7 @@ def test_무리로_묶으면_한_워커로_간다(tmp_path: Path) -> None:
             "-q",
             "--no-cov",
             "-n",
-            "4",
+            "6",
             "--dist",
             "loadgroup",
             "-p",
@@ -228,5 +245,6 @@ def test_무리로_묶으면_한_워커로_간다(tmp_path: Path) -> None:
         text=True,
         check=False,
     )
-    seen = (tmp_path / "seen").read_text(encoding="utf-8")
-    assert len(set(seen.replace("gw", " gw").split())) == 1, f"흩어졌다: {seen}"
+    workers = seen.read_text(encoding="utf-8").split()
+    assert len(workers) == 3, f"셋이 다 안 돌았다: {workers}"
+    assert len(set(workers)) == 1, f"흩어졌다: {workers}"
