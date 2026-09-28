@@ -12,8 +12,7 @@ import re
 import unicodedata
 from typing import TYPE_CHECKING
 
-import numpy as np
-
+from hathor.application.key_distribution import OFF_CENTS, Ambiguity
 from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
 
 if TYPE_CHECKING:
@@ -99,65 +98,41 @@ def _pad(text: str, align: str, width: int) -> str:
     return " " * gap + text
 
 
-def ambiguity_report(
-    *,
-    modes: Sequence[str],
-    ambiguous: np.ndarray,
-    relative: Sequence[bool],
-    floor: float,
-    tunings: Sequence[float],
-) -> list[str]:
-    """조성 애매함 보고의 뒷부분 (O-22(닫힘 D-0201) · O-54 · D-0185).
+def ambiguity_report(found: Ambiguity) -> list[str]:
+    """조성 애매함 보고 (O-22(닫힘 D-0201) · O-54 · D-0185).
 
-    `--eda`가 크로마 상한을 **장조 0.6626 · 단조 0.3409**로 봤다. 조성 라벨이
-    나온 바로 그 자료가 반토막이므로, **애매함이 단조에 몰려 있는지**가 그 원인을
-    가른다.
+    `--eda`가 크로마 상한을 **장조 0.6626 · 단조 0.3409**로 봤다. 조성 라벨이 나온 바로 그
+    자료가 반토막이므로, **애매함이 단조에 몰려 있는지**가 그 원인을 가른다.
 
-    **바닥은 하나다.** `random_baseline`은 무작위 크로마 2000개이며 곡과 짝이 없고
-    어느 선법인지도 안 낸다 — 선법별로 가를 수 없으므로 둘 다 같은 값과 견준다.
-    **전체 바닥을 부분집합에 갖다 대는 것과는 다르다** (D-0182에서 그렇게 틀렸다).
-
-    **`main.py`에 안 넣는다.** 래칫이 2902줄에서 막았고 그 파일은 이미 빚이다 —
-    *"되돌리거나 쪼갠다"*를 따랐다 (D-0185).
+    **수는 안 만든다** (D-0280). 여기 `numpy`로 마스크를 세고 있었고 표시 계층이 계산하는
+    자리였다 — 분모를 틀린 자리가 둘(D-0057 · D-0182)이었고 그때는 **출력 문자열로만**
+    확인할 수 있었다. 이제 `application/key_distribution`이 수를 내고 시험이 그것을 직접 본다.
     """
-    kinds = np.asarray(modes)
-    flags = np.asarray(ambiguous, dtype=bool)
-    near = np.asarray(relative, dtype=bool)
-    total, held_all = len(kinds), int(flags.sum())
     lines = [
-        f"\n애매({KEY_MARGIN_FLOOR} 미만)  코퍼스 {held_all / total:.1%}  무작위 {floor:.1%}",
-        f"2등이 나란한조 — 전체 대비          {float(near.mean()):.1%}",
+        f"\n애매({KEY_MARGIN_FLOOR} 미만)  코퍼스 {found.ambiguous_share:.1%}"
+        f"  무작위 {found.floor:.1%}",
+        f"2등이 나란한조 — 전체 대비          {found.relative_share:.1%}",
     ]
-    # **애매함의 원인은 애매한 곡 안에서 재야 한다** (D-0057). 전체 대비로 재면
-    # 확신도 높은 곡의 2등까지 섞여 희석된다 — 분모가 틀린 지표였다.
-    if held_all:
-        share = float(near[flags].mean())
+    if found.relative_in_ambiguous is not None:
+        count, share = found.relative_in_ambiguous
         lines.append(
-            f"2등이 나란한조 — 애매한 곡 안에서   {share:.1%}"
-            f"  ({int(near[flags].sum())}/{held_all})"
+            f"2등이 나란한조 — 애매한 곡 안에서   {share:.1%}  ({count}/{found.ambiguous})"
         )
-    lines.append(f"\n선법마다 (O-54) · 무작위 바닥은 {floor:.1%} 하나다")
-    for name in ("major", "minor"):
-        picked = kinds == name
-        count = int(picked.sum())
-        if not count:
-            continue
-        inside = near[picked & flags]
-        held = f"{float(inside.mean()):>6.1%}" if inside.size else "     -"
+    lines.append(f"\n선법마다 (O-54) · 무작위 바닥은 {found.floor:.1%} 하나다")
+    for mode in found.modes:
+        inside = mode.relative_in_ambiguous
+        held = f"{inside:>6.1%}" if inside is not None else "     -"
         lines.append(
-            f"  {name:<8}{count:>5}곡  애매 {float(flags[picked].mean()):>6.1%}"
-            f"  나란한조 {float(near[picked].mean()):>6.1%}  애매 안에서 {held}"
+            f"  {mode.name:<8}{mode.count:>5}곡  애매 {mode.ambiguous:>6.1%}"
+            f"  나란한조 {mode.relative:>6.1%}  애매 안에서 {held}"
         )
     lines.append("  **무작위 바닥에 붙으면 그 선법에서는 격차가 판별을 못 한다**")
 
-    # **`if tunings`로 거르지 않는다.** 0.0이 거짓이라 정확히 0센트인 곡이 통째로
-    # 빠진다 — D-0057에서 분모 오류를 적어놓고 같은 세션에 또 냈다.
-    if len(tunings):
-        cents = np.asarray(tunings, dtype=float)
-        off = int((np.abs(cents) > 10).sum())
+    if found.tuning is not None:
+        tuning = found.tuning
         lines.append(
-            f"\n조율 편차  중앙값 {float(np.median(cents)):+.1f}센트 · "
-            f"|편차|>10센트 {off}곡 ({off / len(cents):.1%})"
+            f"\n조율 편차  중앙값 {tuning.median_cents:+.1f}센트 · "
+            f"|편차|>{OFF_CENTS:g}센트 {tuning.off_count}곡 ({tuning.off_share:.1%})"
         )
 
     lines += [

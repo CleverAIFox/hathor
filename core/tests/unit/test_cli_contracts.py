@@ -295,17 +295,14 @@ def test_D0204의_그_명령이_제_러너로_간다():
 
 # ------------------------------- 계산이 표시 계층에 있다 (GR-2.2 · D-0278)
 
-COMPUTING = (
-    "cli/ingest_keys.py",
-    "cli/keys_report.py",
-    "cli/tables.py",
-)
-"""`interfaces`에서 `numpy`를 들이는 파일. **5 → 3이고 0으로 간다** (D-0278 · D-0279).
+COMPUTING = ("cli/ingest_keys.py",)
+"""`interfaces`에서 `numpy`를 들이는 파일. **5 → 3 → 1이고 0으로 간다** (D-0278 ~ D-0280).
 
 | 언제 | 어디 | 어디로 |
 |---|---|---|
 | D-0279 | `cli/main.py` — 전이 행렬 합산 | `domain/services/transition_prior.averaged` |
 | D-0279 | `cli/ingest_onsets.py` — npz를 직접 열기 | `infrastructure/onset_store.source_keys` |
+| D-0280 | `keys_report` · `tables` — 중앙값 · 비율 | `application/key_distribution` |
 
 ### 왜 이것을 세나
 

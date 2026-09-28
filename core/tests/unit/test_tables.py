@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-import numpy as np
-
+from hathor.application.key_distribution import ambiguity
 from hathor.interfaces.cli.tables import _display_width, ambiguity_report, render_table
 
 
-def _report(modes, ambiguous, relative, floor=0.30, tunings=()):
-    return "\n".join(
-        ambiguity_report(
-            modes=modes,
-            ambiguous=np.asarray(ambiguous, dtype=bool),
-            relative=relative,
-            floor=floor,
-            tunings=tunings,
-        )
+def _numbers(modes, ambiguous, relative, floor=0.30, tunings=()):
+    """수를 낸다. **응용이 하는 일이다** (D-0280)."""
+    return ambiguity(
+        modes=list(modes),
+        ambiguous=[bool(flag) for flag in ambiguous],
+        relative=list(relative),
+        floor=floor,
+        tunings=list(tunings),
     )
+
+
+def _report(modes, ambiguous, relative, floor=0.30, tunings=()):
+    """글자를 만든다. **표시 계층이 하는 일이다.**"""
+    return "\n".join(ambiguity_report(_numbers(modes, ambiguous, relative, floor, tunings)))
 
 
 def test_선법마다_따로_낸다():
@@ -89,3 +92,41 @@ def test_부호와_소수점이_있는_형식도_읽는다():
 
     assert lines[2].strip() == "-0.5000"
     assert len(lines[2]) == 10
+
+
+# ------------------------------- 수를 글자 없이 본다 (D-0280)
+
+
+def test_분모가_애매한_곡이다():
+    """**D-0057이 틀린 자리를 수로 직접 본다** (D-0280).
+
+    전에는 이것을 **출력 문자열로만** 확인할 수 있었다 — 계산과 글자가 한 함수에 있었고,
+    분모가 틀렸는지 보려면 `%`로 찍힌 값을 역산해야 했다.
+    """
+    found = _numbers(
+        ["major"] * 4,
+        [1, 1, 0, 0],
+        [True, False, True, True],
+    )
+
+    assert found.ambiguous == 2
+    assert found.relative_share == 0.75, "전체 대비"
+    assert found.relative_in_ambiguous == (1, 0.5), "애매한 곡 안에서 — 분모가 2다"
+
+
+def test_애매한_곡이_없으면_없다고_낸다():
+    """**0.0과 «없다»는 다르다.** 0.0으로 접으면 «나란한조가 0%»로 읽힌다."""
+    found = _numbers(["major", "minor"], [0, 0], [True, True])
+
+    assert found.ambiguous == 0
+    assert found.relative_in_ambiguous is None
+    assert all(mode.relative_in_ambiguous is None for mode in found.modes)
+
+
+def test_조율이_정확히_0센트인_곡을_센다():
+    """**`if tunings`로 거르면 0.0이 거짓이라 통째로 빠진다** (D-0057)."""
+    found = _numbers(["major"], [0], [False], tunings=[0.0, 0.0])
+
+    assert found.tuning is not None
+    assert found.tuning.median_cents == 0.0
+    assert found.tuning.off_count == 0
