@@ -100,7 +100,10 @@ KEEPER = re.compile(r"^강제자  (.+)$", re.MULTILINE)
 """누가 이 판단을 지키나. **`강제자 없음 — 사유:` 꼴로 부재도 선언한다.**"""
 
 NODE = re.compile(r"`([\w./-]+\.py)::([\w가-힣_]+)`")
-"""`파일::함수`까지 적은 강제자. **파일까지만 적은 것은 여기 안 걸린다** (O-58)."""
+"""`파일::함수`까지 적은 강제자. **파일까지만 적은 것은 여기 안 걸린다** — 그쪽은 `BARE`가 든다."""
+
+BARE = re.compile(r"`([\w./가-힣-]+\.py)(::[\w가-힣_]+)?`")
+"""강제자가 든 경로 하나. **함수 부분은 있을 수도 없을 수도 있다.**"""
 
 
 def _functions(path: Path) -> set[str] | None:
@@ -115,10 +118,34 @@ def _functions(path: Path) -> set[str] | None:
     }
 
 
-def check_keepers(records: list[Record]) -> list[str]:
-    """강제자가 가리키는 **시험 함수가 실재하는가** (O-58 · D-0288).
+NODE_FROM = 270
+"""**시험 강제자에 함수까지 적기 시작한 번호** (O-58 닫힘 D-0291).
 
-    **O-58이 적은 그 병이다** — *"강제자 `tests/test_x.py`처럼 파일까지만 적으면, 그 파일이
+O-58 (닫힘 D-0291)이 *"강제자가 파일까지만 가리킨다 — 검사도 파일이 있는지만
+본다"*고 적었다. <!--voice-ok-->
+D-0191이 그렇게 났다 — 적은 파일이 그 함수를 안 보는데도 초록이었다.
+
+**소급하지 않는다.** 옛 156건에 함수를 지금 붙이면 «그때 무엇이 지켰나»가 아니라
+«지금 무엇이 지키나»가 되고, 그것은 추가 전용이 막으려는 것이다 (GR-0.2 · D-0081).
+`FORMAT_ENFORCED_FROM`과 같은 꼴로 **번호를 끊는다.**
+
+**실측으로 270을 골랐다.** D-0270부터 D-0290까지 시험 강제자 중 함수가 없는 것이
+**0건**이다 — 그 뒤로 이미 그렇게 쓰고 있었고 **아무도 그것을 세지 않았다.**
+구멍이 0인 자리에 못을 박는다 (D-0134)."""
+
+TEST_TREE = "core/tests/"
+"""여기를 가리키면 함수까지 묻는다.
+
+**도구를 가리키는 강제자 44건은 다른 꼴이다** — `tools/check_file_size.py`가 강제자면
+**래칫 자체가 지키는 것**이고 그 안에 함수가 따로 없다. 그것까지 묻으면 오탐이고,
+오탐은 사람이 검사를 끄게 만든다."""
+
+
+def check_keepers(records: list[Record]) -> list[str]:
+    """강제자가 가리키는 **시험 함수가 실재하는가** (O-58 닫힘 D-0288).
+
+    **O-58 (닫힘 D-0291)이 적은 그 병이다** — *"강제자 `tests/test_x.py`처럼 파일까지만
+    적으면, 그 파일이
     해당 함수를 안 봐도 초록이다."* D-0191이 그렇게 났다. 그 뒤로도 아무도 안 셌다.
 
     실측: 함수까지 적은 강제자 65건 중 **4건이 없는 함수를 가리키고 있었다.** 넷 다
@@ -126,7 +153,7 @@ def check_keepers(records: list[Record]) -> list[str]:
     쪼개면서 옛 이름이 기록에 남았다. **고치는 판마다 강제자를 안 따라갔다.**
 
     **파일까지만 적은 205건은 여기 안 걸린다.** 못은 구멍이 0인 데에만 박는다 (D-0134) —
-    함수까지 적은 쪽은 넷을 고치니 0이고, 파일까지만 적은 쪽은 O-58이 계속 든다.
+    함수까지 적은 쪽은 넷을 고치니 0이고, 파일까지만 적은 쪽은 O-58 (닫힘 D-0291)이 계속 든다.
     """
     problems: list[str] = []
     for record in records:
@@ -140,6 +167,23 @@ def check_keepers(records: list[Record]) -> list[str]:
             elif function not in known:
                 problems.append(
                     f"{record.identifier}의 강제자가 없는 함수를 가리킨다: "
-                    f"{path_text}::{function} (O-58 · D-0288)"
+                    f"{path_text}::{function} (O-58 닫힘 D-0288)"
                 )
+        problems += _bare_files(record)
     return problems
+
+
+def _bare_files(record: Record) -> list[str]:
+    """`NODE_FROM` 뒤의 기록이 시험 파일을 **함수 없이** 가리키는가 (O-58 닫힘 D-0291)."""
+    if record.number < NODE_FROM:
+        return []
+    found = KEEPER.search(record.body)
+    if found is None or found.group(1).startswith("없음"):
+        return []
+    return [
+        f"{record.identifier}의 강제자가 시험 파일까지만 가리킨다: {path_text}. "
+        f"`{path_text}::함수` 꼴로 적는다 — 그 파일이 그 함수를 안 봐도 초록이었다 "
+        "(O-58 닫힘 D-0291)"
+        for path_text, node in BARE.findall(found.group(1))
+        if path_text.startswith(TEST_TREE) and not node
+    ]

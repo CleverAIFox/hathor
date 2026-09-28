@@ -561,3 +561,44 @@ def test_파일까지만_적은_것은_안_묻는다():
 def test_지금_대장의_강제자가_전부_실재한다():
     """**강제자다.** 넷을 고쳐 0이 됐고 0이 못이다."""
     assert evidence.check_keepers(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
+
+
+# --------------------- 시험 강제자는 함수까지 가리킨다 (O-58 · D-0291)
+
+
+def _keeper(number: int, line: str) -> list[str]:
+    records = tool.scan_records(decisions() + record(number, f"{line}\n"))
+    found: list[str] = evidence.check_keepers(records)
+    return found
+
+
+def test_새_기록이_파일까지만_적으면_잡는다():
+    """**D-0191이 그렇게 났다** — 적은 파일이 그 함수를 안 보는데도 초록이었다 (O-58)."""
+    (problem,) = _keeper(291, "강제자  `core/tests/unit/test_check_decisions.py`")
+    assert "파일까지만" in problem
+
+
+def test_함수까지_적으면_통과한다():
+    here = "test_check_decisions.py::test_함수까지_적으면_통과한다"
+    assert _keeper(291, f"강제자  `core/tests/unit/{here}`") == []
+
+
+def test_옛_기록은_안_묻는다():
+    """**소급하지 않는다** (GR-0.2 · D-0081). 옛 156건에 지금 함수를 붙이면
+    «그때 무엇이 지켰나»가 «지금 무엇이 지키나»로 바뀐다."""
+    assert _keeper(269, "강제자  `core/tests/unit/test_check_decisions.py`") == []
+
+
+def test_도구를_가리키면_안_묻는다():
+    """**래칫 자체가 강제자인 꼴이 44건 있다** — 그 안에 함수가 따로 없다.
+    묻으면 오탐이고, 오탐은 사람이 검사를 끄게 만든다."""
+    assert _keeper(291, "강제자  `tools/check_file_size.py`") == []
+
+
+def test_강제자_없음_선언은_안_묻는다():
+    assert _keeper(291, "강제자 없음 — 사유: 방향 결정이다") == []
+
+
+def test_지금_대장이_그_규약과_맞다():
+    """**강제자다.** D-0270 이후 구멍이 0이라 못을 박을 수 있었다 (D-0134)."""
+    assert evidence.check_keepers(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
