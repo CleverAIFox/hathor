@@ -33,8 +33,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
-import numpy as np
-
+from hathor.application.replay_keys import recompute
 from hathor.domain.services.key_estimation import (
     HARMONIC_STRENGTH,
     PROFILE_TEMPERLEY,
@@ -42,13 +41,12 @@ from hathor.domain.services.key_estimation import (
     chroma_series,
     estimate_key,
     estimate_tuning_cents,
-    subtract_harmonics,
     to_mono,
 )
 from hathor.domain.services.key_estimation import (
     chroma as chroma_of,
 )
-from hathor.domain.services.stem_sets import STEM_SETS
+from hathor.domain.services.stem_sets import STEM_SETS, mix
 from hathor.infrastructure.batch_lock import BatchAlreadyRunningError, batch_lock
 from hathor.infrastructure.chroma_series_store import write_series
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
@@ -69,7 +67,7 @@ if TYPE_CHECKING:
     import argparse
 
     from hathor.domain.entities.scanned_track import ScannedTrack
-    from hathor.domain.ports.audio_analysis import StemSeparator, StereoWaveform
+    from hathor.domain.ports.audio_analysis import Chroma, StemSeparator, StereoWaveform
 
 
 LOCK_NAME = "ingest-keys"
@@ -105,7 +103,7 @@ class _Target(NamedTuple):
 class _Measured(NamedTuple):
     """곡 하나에서 잰 것."""
 
-    chroma: np.ndarray
+    chroma: Chroma
     estimate: KeyEstimate
     cents: float
 
@@ -121,22 +119,10 @@ def _replayed(args: argparse.Namespace) -> list[dict[str, object]]:
         rows = [json.loads(line) for line in stream if line.strip()]
     if (strength := ingest_keys_bundles.replay_strength(rows, args)) is None:
         raise _StopError(2)  # 이미 뺀 배음을 또 빼지 않는다 (D-0211)
-    recomputed = 0
-    for row in rows:
-        saved = row.get("chroma")
-        if saved is None:
-            continue
-        # **저장된 크로마로 다시 판정한다** (D-0059). 프로파일과 배음 감산을
-        # 바꿔 가며 실험할 수 있고 음원도 GPU도 필요 없다. 크로마를 뽑는
-        # 것만 리전이고 알고리즘 실험은 어느 기기에서든 돈다.
-        vector = subtract_harmonics(np.asarray(saved, dtype=np.float64), strength)
-        total = float(vector.sum())
-        if total <= 0:
-            continue
-        estimate = estimate_key(np.asarray(vector / total, dtype=np.float32), profile=args.profile)
-        row.update(estimate.as_record())
-        row["profile"] = args.profile
-        recomputed += 1
+    # **저장된 크로마로 다시 판정한다** (D-0059). 프로파일과 배음 감산을 바꿔 가며 실험할 수
+    # 있고 음원도 GPU도 필요 없다 — 크로마를 뽑는 것만 리전이고 알고리즘 실험은 어디서든 돈다.
+    # **계산은 응용이 한다** (D-0281).
+    recomputed = recompute(rows, strength=strength, profile=args.profile)
     note = (
         f" · {recomputed}곡을 프로파일 {args.profile} · 배음 {args.harmonic:g}로 재판정"
         if recomputed
@@ -256,8 +242,7 @@ def _stem_bundle(
     stems = separator.separate(waveform)
     bundle: dict[str, dict[str, list[float]]] = {}
     for name, parts in STEM_SETS.items():
-        stacked = np.stack([stems[part] for part in parts])
-        mixed = to_mono(np.asarray(stacked.sum(axis=0), dtype=np.float32))
+        mixed = to_mono(mix(stems, parts))
         middle = mixed.size // 2
         # **`full`은 생성 경로가, `head`/`tail`은 판정이 쓴다** (D-0074).
         # 반쪽은 홀드아웃 전용이라 전량 배치에서는 굳이 뽑지 않아도 된다.

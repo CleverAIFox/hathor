@@ -6,6 +6,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from hathor.domain.ports.audio_analysis import StereoWaveform
+
 MIX_SOURCE = "mix"
 """전체 믹스 크로마를 가리키는 출처 이름. 스템 조합 이름과 같은 자리에 쓴다."""
 
@@ -61,3 +70,18 @@ def stems_overlap(left: str, right: str) -> bool:
     실측 0.5572가 그 겹침만으로 설명 가능한 값이었다 — **통과를 못 읽었다.**
     """
     return bool(stem_parts(left) & stem_parts(right))
+
+
+def mix(stems: Mapping[str, StereoWaveform], parts: Sequence[str]) -> StereoWaveform:
+    """이 조합의 스템을 하나로 합친다 (D-0073 · D-0281).
+
+    **더한 신호의 크로마를 다시 뽑아야 한다.** 스템별 크로마를 저장해 두고 나중에 더하는
+    편이 싸지만, 크로마는 크기 스펙트럼이라 신호의 합에 대해 **선형이 아니다** — 스템
+    크로마의 합은 합친 신호의 크로마와 다르다. O-27 (a · 닫힘 D-0074)가 성립하는지 판정하는
+    자리에서 근사를 끼우지 않는다.
+
+    **`interfaces/cli`에 있었다** (D-0281). 조합이 무엇인지 아는 자리가 조합을 어떻게
+    합치는지도 안다 — 그것이 표시 계층이 `numpy`를 들이던 마지막 이유였다.
+    """
+    stacked = np.stack([stems[part] for part in parts])
+    return np.asarray(stacked.sum(axis=0), dtype=np.float32)

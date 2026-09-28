@@ -181,3 +181,29 @@ def test_features_exits_3_when_batch_locked(tmp_path, capsys):
     captured = capsys.readouterr().err
     assert "배치가 이미 실행 중이다" in captured
     assert "끝내거나 죽인" in captured
+
+
+# ------------------------------- 저장된 크로마로 다시 판정한다 (D-0281)
+
+
+def test_재판정이_행을_다시_쓴다():
+    """**음원도 GPU도 없이 프로파일을 바꿔 본다** (D-0059)."""
+    from hathor.application.replay_keys import recompute
+
+    rows: list[dict[str, object]] = [
+        {"chroma": [1.0] + [0.0] * 11, "key": "옛 판정", "correlation": 0.0}
+    ]
+
+    assert recompute(rows, strength=0.0, profile="temperley") == 1
+    assert rows[0]["key"] != "옛 판정"
+    assert rows[0]["profile"] == "temperley"
+
+
+def test_크로마가_없거나_무게가_0이면_그대로_둔다():
+    """**0으로 나누면 `numpy`가 조용히 `nan`을 내고 그것이 분포 보고로 간다** (D-0281)."""
+    from hathor.application.replay_keys import recompute
+
+    rows: list[dict[str, object]] = [{"key": "그대로"}, {"chroma": [0.0] * 12, "key": "그대로"}]
+
+    assert recompute(rows, strength=0.0, profile="temperley") == 0
+    assert [row["key"] for row in rows] == ["그대로", "그대로"]

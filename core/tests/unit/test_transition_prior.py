@@ -129,3 +129,29 @@ def test_비었거나_무게가_0이면_없다() -> None:
 
     assert averaged([]) is None
     assert averaged([[[0.0] * 12 for _ in range(12)]]) is None
+
+
+# ------------------------------- 스템 조합 합치기 (D-0281)
+
+
+def test_조합의_스템을_더한다() -> None:
+    """**더한 신호의 크로마를 다시 뽑아야 한다** (D-0073).
+
+    스템 크로마의 합은 합친 신호의 크로마와 다르다 — 크로마는 크기 스펙트럼이라 신호의
+    합에 대해 선형이 아니다. 그래서 여기서 나오는 것은 **크로마가 아니라 파형**이다.
+    """
+    import numpy as np
+
+    from hathor.domain.services.stem_sets import mix
+
+    stems = {
+        "other": np.full((2, 4), 1.0, dtype=np.float32),
+        "bass": np.full((2, 4), 0.5, dtype=np.float32),
+        "vocals": np.full((2, 4), 0.25, dtype=np.float32),
+    }
+
+    found = mix(stems, ("other", "bass"))
+
+    assert found.shape == (2, 4)
+    assert found.dtype == np.float32
+    assert float(found[0][0]) == 1.5, "쓰지 않은 스템이 섞이면 안 된다"

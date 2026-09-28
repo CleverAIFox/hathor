@@ -293,16 +293,10 @@ def test_D0204의_그_명령이_제_러너로_간다():
     assert resolve(main.entries(), args) is main._run_ingest_all
 
 
-# ------------------------------- 계산이 표시 계층에 있다 (GR-2.2 · D-0278)
+# ------------------------------- 계산이 표시 계층에 있다 (GR-2.2 · D-0281)
 
-COMPUTING = ("cli/ingest_keys.py",)
-"""`interfaces`에서 `numpy`를 들이는 파일. **5 → 3 → 1이고 0으로 간다** (D-0278 ~ D-0280).
-
-| 언제 | 어디 | 어디로 |
-|---|---|---|
-| D-0279 | `cli/main.py` — 전이 행렬 합산 | `domain/services/transition_prior.averaged` |
-| D-0279 | `cli/ingest_onsets.py` — npz를 직접 열기 | `infrastructure/onset_store.source_keys` |
-| D-0280 | `keys_report` · `tables` — 중앙값 · 비율 | `application/key_distribution` |
+COMPUTING: tuple[str, ...] = ()
+"""`interfaces`에서 `numpy`를 들이는 파일. **0이고 0이 못이다** (D-0278 ~ D-0281).
 
 ### 왜 이것을 세나
 
@@ -311,25 +305,28 @@ GR-2.2가 *"interfaces에 로직 금지"*라고 적혀 있고 `main.py`가 4161�
 (`check_file_size`) **방향**에 계약이 붙었다 (`import-linter`). 그런데 **깊이는 아무도 안
 봤다** — 표시 계층이 얼마나 계산하는지다.
 
-사용자가 그것을 지적했다 — *"아키텍처가 완전 개 엉망진창이네. 개발 원칙 철저하게 하자고
-했는데 main에다가 다 짱박아 놨었네."* 실측 —
+`interfaces`가 가장 큰 계층이지만 **길이만으로는 로직이라고 못 한다** — 문장 수준 호출의
+82%가 `print`·`add_argument`이고 이 저장소는 근거를 문서 문자열에 적는다. **`numpy`는
+다르다: 수를 계산하지 않으면 들일 이유가 없다.**
 
-| 계층 | `numpy`를 들이는 파일 |
-|---|---|
-| `domain` | 13 / 45 |
-| `application` | 12 / 21 |
-| `infrastructure` | 12 / 27 |
-| **`interfaces`** | **5 / 24** |
+### 다섯을 어디로 보냈나
 
-`interfaces`가 5494줄로 가장 큰 계층이지만 **그것만으로는 로직이라고 못 한다** — 문장 수준
-호출의 82%가 `print`·`add_argument`이고 이 저장소는 근거를 문서 문자열에 적는다. **`numpy`는
-다르다.** 수를 계산하지 않으면 들일 이유가 없다.
+| 언제 | 어디 | 어디로 |
+|---|---|---|
+| D-0279 | `main` — 전이 행렬 합산 | `domain/services/transition_prior.averaged` |
+| D-0279 | `ingest_onsets` — npz 직접 열기 | `infrastructure/onset_store.source_keys` |
+| D-0280 | `keys_report` · `tables` — 중앙값 · 비율 | `application/key_distribution` |
+| D-0281 | `ingest_keys` — 재판정 | `application/replay_keys.recompute` |
+| D-0281 | `ingest_keys` — 스템 조합 합치기 | `domain/services/stem_sets.mix` |
+| D-0281 | `ingest_keys` — `np.ndarray` 주석 | `domain/ports/audio_analysis.Chroma` |
 
-### 왜 래칫인가
+**마지막 하나는 계산이 아니라 이름이었다.** `_Measured.chroma: np.ndarray`라고 적혀 있어서
+`numpy`를 들였다 — 모양에 이름을 주니 들일 이유가 사라졌다.
 
-다섯을 한 판에 옮기면 계산이 어느 계층으로 가야 하는지를 다섯 번 동시에 판단해야 한다.
-**줄어들기만 하는 수**로 두면 한 판에 하나씩 옳게 옮길 수 있고, 늘리려면 결정 기록이
-필요하다 (D-0118). `check_file_size`가 예외표를 내리는 것과 같은 규율이다."""
+### 못이다
+
+늘리려면 결정 기록이 필요하다 (D-0118). 래칫이 아니라 못인 이유는 **0이기 때문이다** —
+「구멍이 0일 때 못 박는다」(D-0134)."""
 
 
 def computing_files() -> list[str]:
@@ -342,12 +339,21 @@ def computing_files() -> list[str]:
     )
 
 
-def test_표시_계층이_계산하는_자리를_센다():
-    """**D-0278의 강제자.** 줄면 이 목록을 줄이고, 늘리려면 결정 기록을 쓴다."""
-    found = computing_files()
-    assert found == list(COMPUTING), f"목록이 어긋난다: {found}"
+def test_표시_계층이_계산하지_않는다():
+    """**D-0281의 강제자.** 하나라도 생기면 빨개진다."""
+    assert computing_files() == list(COMPUTING)
 
 
-def test_계산_자리_목록이_비어_있지_않다():
-    """**세는 그물이 비면 «0건»이 거짓으로 참이 된다** (D-0230)."""
-    assert COMPUTING, "목록이 비었다. 0이 되면 이 시험을 못으로 바꾼다"
+def test_계산은_아래_계층이_한다():
+    """**세는 그물이 비면 «0건»이 거짓으로 참이 된다** (D-0230).
+
+    표시 계층에 `numpy`가 0인 것은 «계산을 안 한다»여야지 «어디서도 안 한다»면 안 된다.
+    """
+    base = TOOLS.parent / "core" / "hathor"
+    below = sorted(
+        path.relative_to(base).parts[0]
+        for path in base.rglob("*.py")
+        if "import numpy" in path.read_text(encoding="utf-8")
+    )
+    assert set(below) == {"application", "domain", "engines", "infrastructure"}, below
+    assert "interfaces" not in below

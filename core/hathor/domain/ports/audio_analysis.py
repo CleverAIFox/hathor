@@ -107,6 +107,13 @@ class LayeredFeatureExtractor(Protocol):
     def extract_layers(self, waveform: StereoWaveform) -> dict[str, Embedding]: ...
 
 
+type Chroma = np.ndarray[tuple[int], np.dtype[np.float32]]
+"""피치클래스 12차원 에너지. 합이 1이다 (`key_estimation.chroma`가 낸다).
+
+**모양이 `Waveform`과 같아도 뜻이 다르다** (D-0281). 표시 계층이 `np.ndarray`라고 적고
+있었고 그래서 `numpy`를 들였다 — 이름이 있으면 들일 이유가 없다."""
+
+
 type PitchTrack = np.ndarray[tuple[int], np.dtype[np.float32]]
 """프레임별 기본 주파수(Hz). 무성 구간은 `NaN`이다."""
 
