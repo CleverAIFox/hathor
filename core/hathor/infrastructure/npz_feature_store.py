@@ -270,20 +270,9 @@ class NpzFeatureStore:
         묶음 저장소는 곡마다 manifest를 쓰지만 여기는 **저장소 하나에 한 장**이다 —
         같은 배치가 같은 모델로 전 곡을 뽑기 때문이다. `var_fsck`가 이 파일을 읽는다.
         """
-        from hathor.infrastructure.track_bundle_store import repo_revision
+        from hathor.infrastructure import artifact_manifest
 
-        self._root.mkdir(parents=True, exist_ok=True)
-        path = self._root / f"{name}{MANIFEST_SUFFIX}"
-        written = {
-            **manifest,
-            "revision": repo_revision(),
-            "written_at": datetime.now(UTC).isoformat(),
-        }
-        path.write_text(
-            json.dumps(written, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        return path
+        return artifact_manifest.write(self._root, name, manifest)
 
     def write_summary(self, summary: dict[str, object]) -> Path:
         """실행별 요약. 인덱스와 달리 덮어쓰지 않고 실행마다 남긴다."""

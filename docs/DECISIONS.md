@@ -22965,3 +22965,67 @@ manifest 세 줄에 1477 → 1494가 됐다. **늘리지 않고 뗐다** — 가
 강제자  `core/tests/unit/test_artifacts_ledger.py::test_뽑는_경로는_전부_자기를_설명한다`
 
 자료  실물 저장소 · 사용자 기기 위생 출력
+
+---
+
+## D-0295. 나머지 셋은 저장소가 달라서 닿지 못했다 — 쓰는 자리를 꺼냈다
+
+- **배경**: D-0294가 뽑는 경로 셋에 manifest를 붙였고 **재실행이 몇 초였다.**
+
+      이미 추출된 1004곡을 건너뛴다 / 처리할 곡이 없다
+      baseline-mfcc  manifest 1건 · rev edfa005
+      lyrics-hashed  manifest 1건 · rev edfa005
+      mert-layers    manifest 1건 · 층 4개 · rev edfa005
+      **3개 묶음이 자기를 설명하지 않는다.**  ← 6에서 3으로
+
+  남은 셋은 **저장소가 다르다.** `write_manifest`가 `NpzFeatureStore`의 메서드라 온셋
+  878MB · 크로마 시계열 37MB · 평가 6MB는 **그 메서드에 닿을 길이 없었다.**
+
+### 쓰는 자리를 꺼냈다
+
+`infrastructure/artifact_manifest.py` 하나가 쓰고 저장소들이 불러 쓴다.
+`NpzFeatureStore.write_manifest`는 그것을 부르는 세 줄이 됐다.
+
+| 산출물 | 저장소 | 쓰는 자리 |
+|---|---|---|
+| `keys-*.onsets` | 함수 모음(`onset_store`) | `ingest onsets` — **뽑을 것이 없어도 쓴다** |
+| `keys-*.series` | 함수 모음(`chroma_series_store`) | `ingest keys` — **이어받기가 멈추기 전에 쓴다** |
+| `eval` | `JsonEvaluationStore` | 리포트를 쓸 때마다 |
+
+**둘 다 「일찍 끝나는 경로」가 함정이었다.** `ingest keys`는 전 곡이 이미 있으면
+`_StopError(0)`으로 끝나고, `ingest onsets`는 «전부 있다»로 끝난다 — manifest를 그 뒤에
+두면 **다 뽑힌 산출물이 영영 «정체 불명»이다.** D-0294에서 `eval_clap`이 *"모델을 적재하기 <!--voice-ok-->
+전에 쓴다"*고 적어 둔 것과 같은 이유이고, 이번에는 그 이유가 **두 번째로** 쓰였다.
+
+- **후보**: 쓰는 자리를 어디 둘지.
+  - **저장소마다 각각 쓴다** — 넷이 되고, **한쪽만 고쳐진다** (D-0272).
+  - **`NpzFeatureStore`를 나머지도 쓰게 한다** — 온셋은 npz가 아니다. 규격이 안 맞는다.
+  - **쓰는 자리를 모듈로 꺼낸다** — 저장소는 «무엇을 적을지»만 정한다.
+- **선택**: 셋째.
+- **꼴이 둘인 것은 남긴다.** `track_bundle_store`는 **곡마다** 쓰고 새 모듈은 **저장소 하나에
+  한 장** 쓴다. 단위가 다르면 파일도 다르고, 억지로 합치면 «곡마다»가 «저장소 하나»를
+  덮어쓴다. **선언으로 못을 박았다** — 셋째 모듈이 생기면 빨개진다.
+- **결과**: `make check` 통과. 다음 실행부터 셋 다 자기를 설명한다.
+
+### 옛 산출물은 다시 돌려야 한다 — 그런데 몇 초다
+
+`keys-20260916T115536Z.series`는 2026-09-16 것이고 지금 manifest가 없다. `ingest keys`를
+**같은 설정으로** 다시 부르면 `_target`이 곡을 하나도 안 뽑고 끝나면서 manifest만 쓴다.
+설정은 그 `.keys.jsonl` 첫 행에 적혀 있다 (D-0073) — `doctor`가 `mean · 분리 · temperley`로 찍는다.
+
+### 남기는 것
+
+- **저장소가 넷인데 규약은 하나여야 한다.** 메서드로 두면 그 저장소만 지킨다 — 878MB가
+  그렇게 밖에 남았다.
+- **일찍 끝나는 경로가 두 번 함정이었다.** 「멱등이라 아무것도 안 했다」는 **아무것도 안
+  적었다**와 같은 뜻이 되기 쉽다.
+- **6 → 3 → 0은 한 판에 안 됐다.** D-0294가 「장치는 있고 부르는 데가 하나」라고 적었는데,
+  **닿지 못하는 저장소가 셋 더 있다는 것은 그때 안 셌다.**
+
+재현
+    cd core && uv run pytest tests/unit/test_artifacts_ledger.py -q
+    make hygiene
+
+강제자  `core/tests/unit/test_artifacts_ledger.py::test_리비전을_묻는_자리가_선언과_같다`
+
+자료  실물 저장소 · 사용자 기기 위생 출력

@@ -627,8 +627,37 @@ def test_면제가_살아_있다() -> None:
 
 
 def test_manifest가_리비전을_든다() -> None:
-    """**코드가 바뀌면 산출물도 다른 것이다.** 그 한 칸이 봉인의 최소형이다."""
-    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
+    """**코드가 바뀌면 산출물도 다른 것이다.** 그 한 칸이 봉인의 최소형이다 (D-0294)."""
+    from hathor.infrastructure import artifact_manifest
 
-    source = inspect.getsource(NpzFeatureStore.write_manifest)
-    assert "repo_revision()" in source
+    assert "repo_revision()" in inspect.getsource(artifact_manifest.write)
+
+
+REVISION_WRITERS = {
+    "core/hathor/infrastructure/artifact_manifest.py",
+    "core/hathor/infrastructure/track_bundle_store.py",
+}
+"""리비전을 묻는 모듈. **둘이고 꼴이 둘이다** (D-0295).
+
+| 모듈 | 꼴 |
+|---|---|
+| `artifact_manifest` | **저장소 하나에 한 장** — 같은 배치가 같은 설정으로 전 곡을 뽑는다 |
+| `track_bundle_store` | **곡마다 한 장** — 묶음은 곡이 단위다 (D-0203) |
+
+**하나로 합치지 않는다.** 단위가 다르면 파일도 다르고, 억지로 합치면 «곡마다»가 «저장소
+하나»를 덮어쓴다. 셋째가 생기면 그때가 의심할 자리다 (D-0272)."""
+
+
+def test_리비전을_묻는_자리가_선언과_같다() -> None:
+    """**벌 수보다 꼴 가짓수가 위험하다** (D-0272 · D-0295).
+
+    저장소가 넷인데(npz · 온셋 · 크로마 시계열 · 평가) manifest는 같은 것이어야 한다.
+    넷이 각각 쓰면 **한쪽만 고쳐지고**, 그러면 `var_fsck`가 읽는 칸이 계열마다 달라진다.
+    """
+    writers = {
+        path.relative_to(repo_root()).as_posix()
+        for path in sorted((repo_root() / "core" / "hathor").rglob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call) and "repo_revision" in ast.unparse(node.func)
+    }
+    assert writers == REVISION_WRITERS, f"리비전을 묻는 모듈이 달라졌다: {sorted(writers)}"

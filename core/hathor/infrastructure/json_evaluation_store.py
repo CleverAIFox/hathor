@@ -33,6 +33,7 @@ class JsonEvaluationStore:
 
     def write(self, record: dict[str, object], label: str) -> Path:
         self._root.mkdir(parents=True, exist_ok=True)
+        self.describe()
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         path = self._root / f"{stamp}-{safe_label(label)}{REPORT_SUFFIX}"
         path.write_text(
@@ -40,3 +41,23 @@ class JsonEvaluationStore:
             encoding="utf-8",
         )
         return path
+
+    def describe(self) -> Path:
+        """이 폴더가 무엇인지 적는다 (D-0295).
+
+        **다른 계열과 다르다** — 여기는 특징이 아니라 **평가 리포트와 실행 기록**이고,
+        결정 기록의 `재현` 절이 가리키는 자리다 (D-0250). 층도 차원도 없지만 «정체 불명»은
+        아니어야 한다. 실행마다 덮어써도 내용이 같으므로 값이 싸다.
+        """
+        from hathor.infrastructure import artifact_manifest
+
+        return artifact_manifest.write(
+            self._root,
+            EVAL_DIRNAME,
+            {
+                "what": "평가 리포트와 실행 기록 — 결정 기록의 «재현»이 가리키는 자리 (D-0250)",
+                "dtype": "json",
+                "layers": [],
+                "stems": [],
+            },
+        )

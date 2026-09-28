@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hathor.application.extract_onsets import HOP_SECONDS, ExtractOnsets
+from hathor.infrastructure import artifact_manifest
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
 from hathor.infrastructure.onset_store import (
     SUFFIX,
@@ -83,6 +84,19 @@ def _write(
     D-0143이 주기 오차 0.8%로 위상이 뭉개지는 것을 실측했다.
     """
     folder = out_root / f"keys-{args.hop:g}s{SUFFIX}"
+    # **산출물이 자기를 설명한다** (D-0203 · D-0295). 뽑을 것이 없어도 쓴다 — 878MB가
+    # 이미 있는데 «정체 불명»이던 자리다.
+    artifact_manifest.write(
+        folder,
+        folder.name,
+        {
+            "what": "곡별 온셋 포락선과 대역 스펙트럼 (O-46 · D-0145)",
+            "hop_seconds": args.hop,
+            "dtype": "float32",
+            "layers": [],
+            "stems": [],
+        },
+    )
     pending = [
         track
         for track in picked

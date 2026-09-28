@@ -47,6 +47,7 @@ from hathor.domain.services.key_estimation import (
     chroma as chroma_of,
 )
 from hathor.domain.services.stem_sets import STEM_SETS, mix
+from hathor.infrastructure import artifact_manifest
 from hathor.infrastructure.batch_lock import BatchAlreadyRunningError, batch_lock
 from hathor.infrastructure.chroma_series_store import write_series
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
@@ -153,6 +154,22 @@ def _target(args: argparse.Namespace, out_root: Path) -> _Target:
     # **시계열은 산출물 이름을 따라간다** (D-0105). 이어받기가 정한 파일과 짝이
     # 안 맞으면 어느 jsonl의 시계열인지 알 수 없다.
     series_root = out_root / saved.name.replace(".keys.jsonl", ".series")
+    if args.series is not None:
+        # **이어받기가 일찍 멈추기 전에 쓴다** (D-0295). 전 곡이 이미 있으면 아래에서
+        # `_StopError(0)`으로 끝나므로, 그 뒤에 두면 **다 뽑힌 산출물이 영영 «정체 불명»이다.**
+        artifact_manifest.write(
+            series_root,
+            series_root.name,
+            {
+                "what": "곡별 크로마 시계열 — 창 단위 (D-0105)",
+                "window_seconds": args.series,
+                "chroma": args.chroma,
+                "aggregate": args.aggregate,
+                "dtype": "float32",
+                "layers": [],
+                "stems": ["mix"],
+            },
+        )
     if broken > max(1, int(len(done) * BROKEN_LINE_TOLERANCE)):
         print(
             f"{saved.name}에 깨진 줄이 {broken}개다. **동시 실행으로 섞였을 수 있다.**\n"
