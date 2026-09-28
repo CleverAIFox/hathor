@@ -2328,11 +2328,11 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0200 | 죽은 손잡이 하나와, 모든 표가 어긋나 있었다 | `core/tests/unit/test_tables.py::test_한글_머리글이_값과_어긋나지_않는다` | 실물 저장소 |
 | D-0201 | 배음 감산을 켠다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_고정_집합_바닥이_전체_바닥보다_낮다` | 합성 · 실물 1004곡 |
 | D-0203 | 산출물을 전부 버리고 한 패스로 다시 뽑는다 | `core/tests/unit/test_ingest_all.py::test_디코딩과_분리를_곡당_한_번만_한다` | 실물 기기 · 산출물 |
-| D-0204 | 새 하위 명령이 조용히 스캔으로 갔다 | `core/tests/unit/test_cli_contracts.py::test_ingest_하위_명령이_전부_배선돼_있다` | 해당 없음 |
+| D-0204 | 새 하위 명령이 조용히 스캔으로 갔다 | `core/tests/unit/test_cli_contracts.py::test_D0204의_그_명령이_제_러너로_간다` | 해당 없음 |
 | D-0205 | 마지막 층을 소스마다 두 번 담았다 | `core/tests/unit/test_ingest_all.py::test_마지막_층을_두_번_담지_않는다` | 실물 3곡 |
 | D-0206 | O-46의 비교선이 섰다 | `core/tests/unit/test_determinism.py` | 실물 1004곡 |
 | D-0207 | 화음이 마디 머리에만 울렸다 | `core/tests/unit/test_arrangement.py::test_소리가_끊기지_않는다` | 실물 1003곡 |
-| D-0208 | 떨어지는 기본이 네 갈래인데 검사는 하나만 봤다 | `core/tests/unit/test_cli_contracts.py::test_하위_명령이_전부_배선돼_있다` | 실물 저장소 |
+| D-0208 | 떨어지는 기본이 네 갈래인데 검사는 하나만 봤다 | `core/tests/unit/test_cli_contracts.py::test_등재표와_파서가_같다` | 실물 저장소 |
 | D-0209 | 정상을 잔해로 찍고 있었다 | `core/tests/unit/test_var_fsck.py::test_한_실행이_낸_파일_셋을_한_묶음으로_센다` | 실물 산출물 |
 | D-0211 | 묶음에서 옛 규격을 다시 쓴다 | `core/tests/unit/test_keys_from_bundles.py::test_생성_경로의_옛_로더가_새_산출물을_읽는다` | 해당 없음 |
 | D-0213 | 배열 사전이 절대음이었다 | `core/tests/unit/test_keys_from_bundles.py::test_조성이_달라도_같은_진행이면_같은_사전이다` | 실물 참조곡 10시드 |
@@ -2397,8 +2397,8 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0276 | 가짜 `torch`가 `scipy`를 죽였다 | `core/tests/unit/test_gate_isolation.py::test_가짜_모듈을_심는_시험은_혼자_돌아도_통과한다` | 실물 저장소 |
 | D-0277 | `_run_ingest_keys` 352줄을 쪼갠다 | `tools/check_file_size.py` | 실물 저장소 |
 | D-0278 | 배치 잠금이 둘이고 근거가 서로를 반박했다 | `core/tests/unit/test_ingest_resume.py::test_배치_잠금_기법이_한_자리에만_있다` | 실물 저장소 |
-| D-0279 | 표시 계층의 계산 5 → 3 · 지우는 것과 세는 것을 가른다 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하는_자리를_센다` | 실물 저장소 |
-| D-0280 | 표시 계층의 계산 3 → 1 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하는_자리를_센다` | 실물 저장소 |
+| D-0279 | 표시 계층의 계산 5 → 3 · 지우는 것과 세는 것을 가른다 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하지_않는다` | 실물 저장소 |
+| D-0280 | 표시 계층의 계산 3 → 1 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하지_않는다` | 실물 저장소 |
 | D-0281 | 표시 계층의 계산 1 → 0 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하지_않는다` | 실물 저장소 |
 | D-0282 | `make ship`이 막히면서 근거를 버렸다 | `core/tests/unit/test_ship.py::test_막혔을_때_꼬리를_보여_준다` | 실물 저장소 · 사용자 기기 로그 |
 | D-0283 | 두 판 연속 막혔다 | `core/tests/unit/test_ship.py::test_실패한_자리는_꼬리를_낸다` | 실물 저장소 · 사용자 기기 로그 |
@@ -2406,6 +2406,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0285 | 「사용자가 반대했다 25곳」은 이미 0곳이었다 | `core/tests/unit/test_check_decisions.py::test_지금_대장이_규약과_맞다` | 실물 저장소 (결정 기록 284건) |
 | D-0286 | 「기계가 가를 수 없는 4건」 중 셋은 이미 기계가 가르고 있었다 | `core/tests/unit/test_apply_patch.py::test_도구_체인만_바꾸면_막는다` | 실물 저장소 (커밋 70건 · 결정 기록 286건) |
 | D-0287 | 이미 붙은 패치를 또 붙이라고 했다 | `core/tests/unit/test_apply_patch.py::test_선행이_대장에_없으면_막는다` | 실물 저장소 · 사용자 기기 로그 |
+| D-0288 | 파이어레인이 한 수 위인 자리를 넷 재서 둘을 가져왔다 | `core/tests/unit/test_check_decisions.py::test_지금_대장의_강제자가_전부_실재한다` | 실물 저장소 · 실물 `fire-lane` 저장소 |
 
 <!-- decision-ledger:end -->
 

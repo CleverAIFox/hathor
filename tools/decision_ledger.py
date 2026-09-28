@@ -20,6 +20,7 @@ D-0280이 조성 분포에서 **수와 글자**를 가른 것과 같은 자리�
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 HEADING = re.compile(r"^## (D-\d{4})\. (.+?)\s*$", re.MULTILINE)
 """`## D-XXXX. 제목` 한 줄. **긁는 자리가 하나다** (D-0286)."""
@@ -92,3 +93,28 @@ EVIDENCE_VALUES = re.compile(r"^(합성|해당 없음|불명|실물 \S.*|합성 
 
 **인용은 안 센다.** 남의 기록에서 가져온 수는 그 기록의 칸이 든다. 아직 안 잰
 것(«실측 필요»)은 `해당 없음`이다 — 그 기준이 없으면 같은 기록이 세션마다 달리 분류된다."""
+
+
+@dataclass(frozen=True)
+class Record:
+    number: int
+    identifier: str
+    title: str
+    body: str
+
+
+def scan_records(text: str) -> list[Record]:
+    """`## D-XXXX. 제목` 단위로 자른다. 본문은 다음 표제 직전까지다."""
+    found: list[Record] = []
+    matches = list(HEADING.finditer(text))
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        found.append(
+            Record(
+                number=int(match.group(1)[2:]),
+                identifier=match.group(1),
+                title=match.group(2),
+                body=text[match.end() : end],
+            )
+        )
+    return found

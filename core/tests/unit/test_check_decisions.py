@@ -28,6 +28,7 @@ from hathor.shared.config.paths import repo_root
 sys.path.insert(0, str(repo_root() / "tools"))
 
 import check_decisions as tool
+import decision_evidence as evidence
 
 HEAD = "# 결정 기록\n\n"
 DECISIONS = repo_root() / "docs" / "DECISIONS.md"
@@ -422,7 +423,7 @@ _LEDGER_SOURCE = """
 
 def test_전_기록에_자료_칸이_있다() -> None:
     """**D-0265의 강제자.** 264건을 읽어 전수로 채웠으므로 구멍이 0이다."""
-    assert tool.check_evidence(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
+    assert evidence.check_evidence(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
 
 
 def _evidence(body: str) -> list[str]:
@@ -431,7 +432,7 @@ def _evidence(body: str) -> list[str]:
     text = decisions(1) + record(2, body)
     return [
         line
-        for line in tool.check_evidence(tool.scan_records(text))
+        for line in evidence.check_evidence(tool.scan_records(text))
         if "D-0002" in line or "천장" in line
     ]
 
@@ -466,7 +467,7 @@ def test_불명은_값으로는_맞고_천장에_걸린다() -> None:
 
     그래서 `불명`이 값으로는 허용되고 천장이 0이다 — 쓰려면 손이 한 번 멈춘다.
     """
-    assert tool.UNKNOWN_EVIDENCE == 0
+    assert evidence.UNKNOWN_EVIDENCE == 0
 
     problems = _evidence(f"{BODY}\n자료  불명\n")
     assert not [line for line in problems if "규약 밖" in line]
@@ -482,7 +483,9 @@ def test_대장이_자료_칸을_든다() -> None:
     assert rows, "대장이 비었다"
     for row in rows:
         source = row.rsplit("|", 2)[1].strip()
-        assert tool.EVIDENCE_VALUES.match(source), f"{row[:40]}의 자료 칸이 규약 밖이다: {source!r}"
+        assert evidence.EVIDENCE_VALUES.match(source), (
+            f"{row[:40]}의 자료 칸이 규약 밖이다: {source!r}"
+        )
 
 
 # ------------------------------------------------- 근거는 사람이 아니라 논거다 (D-0285)
@@ -495,27 +498,66 @@ def test_귀속만_있고_그_사람의_말이_없으면_잡는다():
     아무도 안 봤다.
     """
     records = tool.scan_records(decisions() + record(1, "- **배경**: 사용자가 반대했다.\n"))
-    (problem,) = tool.check_attribution(records)
+    (problem,) = evidence.check_attribution(records)
     assert "D-0001" in problem
 
 
 def test_그_사람의_말이_남아_있으면_통과한다():
     """**근거를 지어내라는 검사가 아니다.** 그때 한 말이 남아 있으면 된다."""
     body = '- **배경**: 사용자가 반대했다 — *"공식 문서인데 형식을 맞추자"*.\n'
-    assert tool.check_attribution(tool.scan_records(decisions() + record(1, body))) == []
+    assert evidence.check_attribution(tool.scan_records(decisions() + record(1, body))) == []
 
 
 def test_표제에서_귀속하고_본문에서_인용해도_통과한다():
     """**줄이 아니라 기록 단위로 본다** — 실재하는 꼴이고 잘못이 아니다."""
     body = "### 사용자가 전제를 짚었다\n\n그 말은 «분모가 틀렸다»였다.\n"
-    assert tool.check_attribution(tool.scan_records(decisions() + record(1, body))) == []
+    assert evidence.check_attribution(tool.scan_records(decisions() + record(1, body))) == []
 
 
 def test_귀속이_없는_기록은_묻지_않는다():
     records = tool.scan_records(decisions() + record(1, "- **배경**: 수가 어긋났다.\n"))
-    assert tool.check_attribution(records) == []
+    assert evidence.check_attribution(records) == []
 
 
 def test_지금_대장이_규약과_맞다():
     """**강제자다.** 실측 — 귀속 26건 · 근거 없는 것 0건이라 못을 박을 수 있었다 (D-0134)."""
-    assert tool.check_attribution(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
+    assert (
+        evidence.check_attribution(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
+    )
+
+
+# ------------------------------ 강제자가 가리키는 함수가 실재하는가 (O-58 · D-0288)
+
+
+def test_없는_함수를_가리키면_잡는다():
+    """**O-58이 적고 아무도 안 센 병이다** (D-0288).
+
+    실측 — 함수까지 적은 강제자 65건 중 **4건이 없는 함수를 가리켰다.** 넷 다 내가
+    시험 이름을 바꾸고 기록을 안 따라간 것이다 (D-0273 · D-0281).
+    """
+    body = "강제자  `core/tests/unit/test_check_decisions.py::test_없는이름_입니다`\n"
+    (problem,) = evidence.check_keepers(tool.scan_records(decisions() + record(1, body)))
+    assert "없는 함수" in problem
+
+
+def test_실재하는_함수는_통과한다():
+    here = "test_check_decisions.py::test_실재하는_함수는_통과한다"
+    body = f"강제자  `core/tests/unit/{here}`\n"
+    assert evidence.check_keepers(tool.scan_records(decisions() + record(1, body))) == []
+
+
+def test_없는_파일을_가리키면_잡는다():
+    body = "강제자  `core/tests/unit/test_없는파일.py::test_x`\n"
+    (problem,) = evidence.check_keepers(tool.scan_records(decisions() + record(1, body)))
+    assert "없는 파일" in problem
+
+
+def test_파일까지만_적은_것은_안_묻는다():
+    """**구멍이 0인 데에만 못을 박는다** (D-0134). 파일까지만 적은 205건은 O-58이 든다."""
+    body = "강제자  `core/tests/unit/test_없는파일.py`\n"
+    assert evidence.check_keepers(tool.scan_records(decisions() + record(1, body))) == []
+
+
+def test_지금_대장의_강제자가_전부_실재한다():
+    """**강제자다.** 넷을 고쳐 0이 됐고 0이 못이다."""
+    assert evidence.check_keepers(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []

@@ -218,8 +218,49 @@ def contract_count() -> int:
     return body.count("[[tool.importlinter.contracts]]")
 
 
+LEDGER = ("<!-- decision-ledger:begin -->", "<!-- decision-ledger:end -->")
+"""결정 대장이 사는 자리. **표식 밖의 `| D-xxxx |` 행은 안 센다** — `MASTER`에는
+기록 번호를 드는 표가 대장 말고도 있고, 전부 세면 230과 223처럼 **말없이 갈린다.**"""
+
+
+def _ledger() -> list[str]:
+    """대장 행의 `자료` 칸. 행 수는 길이다."""
+    body = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    if LEDGER[0] not in body:
+        return []
+    inside = body.split(LEDGER[0])[1].split(LEDGER[1])[0]
+    return [source.strip() for source in re.findall(r"(?m)^\| D-\d{4} \|.*\| ([^|]+) \|$", inside)]
+
+
+def ledger_rows() -> int:
+    """결정 대장의 행 수 — **강제자를 적은 기록의 수**다 (D-0193)."""
+    return len(_ledger())
+
+
+def synthetic_rows() -> int:
+    """대장에서 **`자료 합성`으로만 선 판단**의 수 (D-0265). PLAN §3이 이 수를 든다."""
+    return sum(1 for source in _ledger() if source == "합성")
+
+
+def open_issues() -> int:
+    """열린 질문의 수. **`check_decisions`가 표 자체는 이미 보고, 여기는 산문의 수를 본다.**"""
+    body = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    inside = body.split("<!-- open-issues:begin -->")[-1].split("<!-- open-issues:end -->")[0]
+    return len(re.findall(r"(?m)^\| O-\d+ \|", inside))
+
+
+BOLD = r"\*{0,2}(\d+)\*{0,2}\s*"
+"""수 하나. **굵게를 양쪽 다 받는다** — 이 문서들은 크기를 `**24**`로 적는다.
+
+한쪽만 받다가 `대장 **201**건`을 못 찾았다. 못 찾는 축은 **조용히 통과한다** — 그것이
+`docnum_check`가 2026-09-02에 메운 구멍과 같은 꼴이다."""
+
+
 COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
-    ("import-linter 계약", re.compile(r"(?:계약|import-linter)\s*\*{0,2}(\d+)종"), contract_count),
+    ("import-linter 계약", re.compile(rf"(?:계약|import-linter)\s*{BOLD}종"), contract_count),
+    ("결정 대장", re.compile(rf"대장\s*{BOLD}건\s*중"), ledger_rows),
+    ("합성으로만 선 판단", re.compile(rf"합성\s*{BOLD}\s*·"), synthetic_rows),
+    ("열린 질문", re.compile(rf"열린 질문\s*{BOLD}건"), open_issues),
 )
 """문서가 **세어서 적은 수**와 실물 (D-0263).
 
@@ -227,7 +268,23 @@ D-0261이 여섯째 계약을 넣고 **`MASTER`의 «계약 5종» 세 곳을 �
 도구도 실재하므로 이 검사의 다른 눈에는 안 걸렸다 — **숫자만 틀렸다.**
 
 경로가 틀리면 명령이 죽어서 알게 되지만, **수가 틀리면 아무 일도 안 일어난다.**
-읽는 사람만 틀린 것을 배운다. 그래서 세는 자리를 여기 둔다."""
+읽는 사람만 틀린 것을 배운다. 그래서 세는 자리를 여기 둔다.
+
+### 축이 하나에서 넷이 됐다 (D-0288)
+
+`fire-lane`이 같은 자리를 `docgen.py`로 풀었다 — 정본이 있는 값마다 **축**을 선언하고,
+문서는 그 수를 **들기만 한다.** 그쪽 실측이 이랬다: 전수 절 수가 **하루에 네 번** 손으로
+맞춰졌고(1,004 → 1,017 → 1,030 → 1,033 → 1,036), *"손으로 적으면 낡는다"*고 적은 절
+자신이 낡아 있었다.
+
+우리도 같은 값을 물었다. **「대장 201건 중」이 실물 223일 때까지 아무도 안 셌다** — 그
+줄이 사는 표의 머리말이 *"크기를 재서 적는다. 안 재고 적으면 영원히 다음 세션이다"*다.
+
+**블록 표식(`<!--gen: 축-->`)은 안 쓴다.** 그쪽 수는 제목 줄에 살고 우리 수는 **표 칸
+안에** 사는데, 빈 줄이 표를 끊는다(`check_doc_style`). 대신 **라벨 옆의 수**를 읽는다 —
+그쪽이 2026-09-02에 「정답이 파일 어딘가에 있나」만 보던 구멍을 메운 방식이다.
+
+**정본이 없는 값은 축으로 안 만든다.** «1004곡»·«281판»은 그때의 실측이고 축이 아니다."""
 
 
 ALBUM_LIFT = re.compile(r"M1(?!\d)[^\n]{0,30}?배")
@@ -264,17 +321,62 @@ def check_counts() -> list[str]:
             where = path.relative_to(ROOT).as_posix()
             for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 problems += [
-                    f"{where}:{number} {name}이 {said}종이라 적혔는데 실물은 {real}종이다"
+                    f"{where}:{number} «{name}»을 {said}이라 적었는데 실물은 {real}이다. "
+                    "`make docs-fix` (D-0263 · D-0288)"
                     for said in pattern.findall(line)
                     if int(said) != real
                 ]
     return problems
 
 
+def fix_counts() -> list[str]:
+    """축의 수를 **실물로 갈아 넣는다** (D-0288). 고친 자리를 낸다.
+
+    **관문은 이것을 안 부른다.** `--check`만 돈다 — 관문이 문서를 고치면 **사람이 무엇이
+    바뀌었는지 모르고**, 그러면 잘못 센 축이 조용히 문서를 망친다 (`fire-lane`의 같은 판단).
+
+    **표기는 안 건드린다.** 라벨도 «건»도 굵게도 그대로 두고 **숫자만** 간다 — 안 그러면
+    다음 판에 정규식이 제 자리를 못 찾는다.
+
+    **왜 쓰는 쪽이 필요한가.** 대장은 판마다 한 행씩 는다. 검사만 있으면 **사람이 매번 손으로
+    맞추고**, 손으로 맞추는 것이 이 관문이 막으려던 바로 그것이다.
+    """
+    changed: list[str] = []
+    for name, pattern, count in COUNTED:
+        real = str(count())
+        for path in living_documents():
+            body = path.read_text(encoding="utf-8")
+            lines = body.split("\n")
+            for index, line in enumerate(lines):
+                if not pattern.search(line):
+                    continue
+
+                def swap(found: re.Match[str], real: str = real) -> str:
+                    """**숫자만 간다.** 라벨도 굵게도 그대로 둔다."""
+                    return found.group(0).replace(found.group(1), real)
+
+                fixed = pattern.sub(swap, line)
+                if fixed != line:
+                    lines[index] = fixed
+                    changed.append(
+                        f"{path.relative_to(ROOT).as_posix()}:{index + 1} «{name}» → {real}"
+                    )
+            path.write_text("\n".join(lines), encoding="utf-8")
+    return changed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="문서 ↔ 실물 대조 (D-0189)")
     parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
-    parser.parse_args()
+    parser.add_argument("--fix", action="store_true", help="축의 수를 실물로 갈아 넣는다 (D-0288)")
+    args = parser.parse_args()
+
+    if args.fix:
+        changed = fix_counts()
+        for line in changed:
+            print(line)
+        print(f"축 {len(COUNTED)}개 · 고친 자리 {len(changed)}곳")
+        return 0
 
     problems = check_paths() + check_commands() + check_orphan_tools()
     problems += check_wiring() + check_reserved_packages() + check_counts()

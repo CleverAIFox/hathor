@@ -1,4 +1,4 @@
-.PHONY: artifacts-audit mutate up up-ml down logs ps mlflow-sync flow sync tidy hygiene gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
+.PHONY: docs-fix artifacts-audit mutate up up-ml down logs ps mlflow-sync flow sync tidy hygiene gh-setup bot runner smoke check quick lint type arch test cov cov-bump docs size resize clean clean-all setup env doctor apply proposal artifacts-push artifacts-pull artifacts-verify artifacts
 
 up:            ## core 프로파일만 기동 (8GB 노드 기준)
 	docker compose up -d
@@ -56,6 +56,9 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 
 size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117)
 	python3 tools/check_file_size.py
+
+docs-fix:      ## 문서가 든 수를 실물로 갈아 넣는다. **관문은 안 고친다** (D-0288)
+	python3 tools/doc_fsck.py --fix
 
 resize:        ## 래칫을 내린다. 올리려면 GROW=1 + 결정 기록 (D-0118)
 	python3 tools/check_file_size.py --update $(if $(GROW),--allow-growth,)

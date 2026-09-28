@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from tests.conftest import tool_module
@@ -116,7 +117,7 @@ def test_계약_수가_어긋나면_잡는다(tmp_path, monkeypatch):
 
     problems = CHECKER.check_counts()
     assert len(problems) == 1
-    assert "5종이라 적혔는데 실물은 6종이다" in problems[0]
+    assert "5" in problems[0] and "6" in problems[0]
 
 
 def test_맞는_수는_안_잡는다(tmp_path, monkeypatch):
@@ -176,3 +177,73 @@ def test_M11은_M1이_아니다(monkeypatch, tmp_path):
 def test_지금_문서가_규약과_맞다():
     """**강제자다.** 살아 있는 문서가 지금 이 규칙을 지킨다."""
     assert CHECKER.check_album_lift() == []
+
+
+# --------------------------------- 문서가 든 수는 사람이 세지 않는다 (D-0288)
+
+
+def test_축이_넷이다():
+    """**세는 그물이 비면 «전부 맞다»가 거짓으로 참이 된다** (D-0230).
+
+    축이 하나였다 — 문서에 손으로 적힌 수가 214개인데 기계가 보는 것은 `계약 N종`
+    하나뿐이었다. 그 사이에 **「대장 201건 중」이 실물 223일 때까지** 아무도 안 셌고,
+    그 줄이 사는 표의 머리말이 *"크기를 재서 적는다"*다.
+    """
+    assert len(CHECKER.COUNTED) == 4, [name for name, _, _ in CHECKER.COUNTED]
+
+
+def test_축마다_정본이_수를_낸다():
+    """**정본이 없는 값은 축이 아니다.** 셋 다 실제로 세어져야 한다."""
+    for name, _pattern, count in CHECKER.COUNTED:
+        assert isinstance(count(), int), name
+        assert count() > 0, f"{name}의 정본이 0을 낸다 — 세는 자리를 의심한다"
+
+
+def test_대장은_표식_안만_센다():
+    """**표식 밖의 `| D-xxxx |` 행이 있다** — 전부 세면 230, 대장은 223이다."""
+    body = (CHECKER.ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    everywhere = len(re.findall(r"(?m)^\| D-\d{4} \|", body))
+    assert CHECKER.ledger_rows() < everywhere
+
+
+def test_틀린_수를_잡는다(monkeypatch, tmp_path):
+    """**라벨 옆의 수를 읽는다.** 파일 어딘가에 정답이 있으면 통과하던 꼴이 아니다."""
+    path = tmp_path / "PLAN.md"
+    path.write_text("대장 201건 중 합성 24 · 나머지\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [path])
+    monkeypatch.setattr(CHECKER, "COUNTED", (("결정 대장", CHECKER.COUNTED[1][1], lambda: 223),))
+    (problem,) = CHECKER.check_counts()
+    assert "201" in problem and "223" in problem
+
+
+def test_지금_문서의_수가_전부_맞다():
+    """**강제자다.** 이 시험이 D-0288 판에서 바로 한 건을 잡았다."""
+    assert CHECKER.check_counts() == []
+
+
+def test_고치는_쪽은_표기를_안_건드린다(monkeypatch, tmp_path):
+    """**숫자만 간다** (D-0288). 라벨이 바뀌면 다음 판에 정규식이 제 자리를 못 찾는다."""
+    path = tmp_path / "PLAN.md"
+    path.write_text("| 빚 | 대장 **201**건 중 합성 24 · 나머지 |\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [path])
+    monkeypatch.setattr(CHECKER, "COUNTED", (("결정 대장", CHECKER.COUNTED[1][1], lambda: 224),))
+
+    (changed,) = CHECKER.fix_counts()
+
+    assert "224" in changed
+    assert path.read_text(encoding="utf-8") == "| 빚 | 대장 **224**건 중 합성 24 · 나머지 |\n"
+
+
+def test_고친_뒤에는_검사가_조용하다(monkeypatch, tmp_path):
+    """**쓰는 쪽과 보는 쪽이 같은 축을 읽는다.** 아니면 고쳐도 계속 빨갛다."""
+    path = tmp_path / "PLAN.md"
+    path.write_text("대장 1건 중 합성 24 · 나머지\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [path])
+    monkeypatch.setattr(CHECKER, "COUNTED", (("결정 대장", CHECKER.COUNTED[1][1], lambda: 224),))
+
+    assert CHECKER.check_counts()
+    CHECKER.fix_counts()
+    assert CHECKER.check_counts() == []

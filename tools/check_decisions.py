@@ -70,17 +70,17 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from decision_evidence import check_attribution, check_evidence, check_keepers
 from decision_ledger import (
-    EVIDENCE,
-    EVIDENCE_VALUES,
     HEADING,
     LEDGER_BEGIN,
     LEDGER_END,
+    Record,
     build_ledger,
+    scan_records,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -154,31 +154,6 @@ BLANK_RECORD = "(결번)"
 """내용이 유실된 번호의 표제 표시. **번호를 조용히 비우지 않는다** (D-0080)."""
 
 
-@dataclass(frozen=True)
-class Record:
-    number: int
-    identifier: str
-    title: str
-    body: str
-
-
-def scan_records(text: str) -> list[Record]:
-    """`## D-XXXX. 제목` 단위로 자른다. 본문은 다음 표제 직전까지다."""
-    found: list[Record] = []
-    matches = list(HEADING.finditer(text))
-    for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        found.append(
-            Record(
-                number=int(match.group(1)[2:]),
-                identifier=match.group(1),
-                title=match.group(2),
-                body=text[match.end() : end],
-            )
-        )
-    return found
-
-
 def check_numbering(records: list[Record]) -> list[str]:
     """번호가 중복이거나 비었는가. **D-0076이 이 검사에 걸렸을 것이다.**"""
     problems: list[str] = []
@@ -247,79 +222,6 @@ def check_sections(records: list[Record]) -> list[str]:
         if has_candidates != has_choice:
             missing = "선택" if has_candidates else "후보"
             problems.append(f"{record.identifier}에 `- **{missing}**`이 없다. 둘은 짝이다")
-    return problems
-
-
-UNKNOWN_EVIDENCE = 0
-"""`자료 불명`의 천장 (D-0265). **지금 0이다.**
-
-264건을 전수로 채우면서 하나도 `불명`이 안 나왔다 — **«재현 불명»과 «자료 불명»은
-다르다.** 명령이 사라진 11건도 무엇으로 쟀는지는 적고 있었다. 산출물은 없어졌지만
-자료의 정체는 남아 있다.
-
-늘리려면 결정 기록이 필요하다 (D-0118). **모르는 것을 «해당 없음»으로 숨기는 쪽이
-훨씬 쉬우므로** 이 천장이 그 길을 막는다."""
-
-
-def check_evidence(records: list[Record]) -> list[str]:
-    """기록마다 `자료` 칸이 있고 값이 규약 안인가 (D-0265).
-
-    **전 기록에 건다.** `FORMAT_ENFORCED_FROM` 뒤로 미루지 않는다 — 264건을 읽어 전수로
-    채웠으므로 구멍이 0이고, **구멍이 0일 때 못 박는다** (D-0134 · D-0261).
-    """
-    problems: list[str] = []
-    unknown = 0
-    for record in records:
-        found = EVIDENCE.search(record.body)
-        if found is None:
-            problems.append(
-                f"{record.identifier}에 `자료` 칸이 없다. 값은 {EVIDENCE_VALUES.pattern}"
-            )
-            continue
-        value = found.group(1).strip()
-        if not EVIDENCE_VALUES.match(value):
-            problems.append(f"{record.identifier}의 `자료` 값이 규약 밖이다: {value!r}")
-        if value == "불명":
-            unknown += 1
-    if unknown > UNKNOWN_EVIDENCE:
-        problems.append(f"`자료 불명`이 {unknown}건으로 천장 {UNKNOWN_EVIDENCE}건을 넘는다")
-    return problems
-
-
-ATTRIBUTION = re.compile(
-    r"사용자[가는]?\s*[^\n]{0,20}?(반대했|골랐|정했|택했|판정했|지시했|승인했|거부했|요구했|물었|짚었|시켰)"
-)
-"""판단을 **사람에게 귀속시킨 자리** (D-0133 · D-0285).
-
-D-0133이 *"결정의 근거는 사람이 아니라 논거다"*라고 적고 **세는 것을 안 만들었다.** <!--voice-ok-->
-PLAN은 그 뒤로 «25곳»이라고 적어 뒀는데 실측은 **26건 귀속 · 근거 없는 것 0건**이다 —
-갚혀 있는 빚을 두 해 가까이 장부에 남겨 둔 셈이다."""
-
-QUOTED = re.compile(r'\*"[^"]+"\*|«[^»]+»|"[^"]{4,}"')
-"""그 사람의 말이 기록 안에 남아 있는가.
-
-**줄이 아니라 기록 단위로 본다.** 표제(«사용자가 전제를 짚었다»)에서 귀속하고 본문에서
-인용하는 꼴이 실재하며, 그것은 잘못이 아니다 — 읽는 사람이 **무엇이 판단을 움직였는지**
-그 기록 안에서 확인할 수 있으면 된다."""
-
-
-def check_attribution(records: list[Record]) -> list[str]:
-    """사람에게 귀속시킨 기록이 그 사람의 말을 같이 들고 있는가 (D-0285).
-
-    **전 기록에 건다.** `FORMAT_ENFORCED_FROM` 뒤로 미루지 않는다 — 실측으로 구멍이
-    0이고, **구멍이 0일 때 못 박는다** (D-0134).
-
-    D-0133이 «소급 안 한다»고 적은 것은 **근거를 지어내지 않기 위해서**였다. 이 검사는
-    근거를 지어내라고 하지 않는다 — **그때 그 사람이 한 말**이 남아 있기를 요구할 뿐이고,
-    실측상 전 기록이 이미 그렇다.
-    """
-    problems: list[str] = []
-    for record in records:
-        if ATTRIBUTION.search(record.body) and not QUOTED.search(record.body):
-            problems.append(
-                f"{record.identifier}이 판단을 사람에게 귀속시키면서 그 사람의 말이 없다. "
-                "무엇이 판단을 움직였는지 그 자리에 적는다 (D-0133 · D-0285)"
-            )
     return problems
 
 
@@ -519,6 +421,7 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_sections(records),
         *check_evidence(records),
         *check_attribution(records),
+        *check_keepers(records),
         *check_supersession(records),
         *check_open_issues(issues),
         *check_issue_references(issues, records),
