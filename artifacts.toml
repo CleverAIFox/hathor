@@ -255,3 +255,21 @@ why = """**현재 코드가 이 이름을 안 쓴다.** `find_keys_store`는 `*.
 `--audit`이 찍는다. 남은 것: 어느 판이 이 이름을 썼나. `git log -S` 로 찾는다."""
 reads = ["미투입 — 정체가 풀리면 D-0108의 자료인지 가른다"]
 store = true
+
+
+[series.".ingest-keys.lock"]
+what = "`ingest keys` 배치 잠금 — 같은 산출물에 둘이 못 쓰게 한다 (D-0077)"
+made = "core/hathor/infrastructure/batch_lock.py"
+regen = "cd core && uv run python -m hathor.cli ingest keys"
+reads = ["ingest keys", "D-0077", "D-0278"]
+store = false
+state = "임시"
+why = """**산출물이 아니다.** `flock`은 열린 파일 기술자에 붙는 잠금이라 **파일을 지우지
+않는다** — 커널이 fd 수명에 묶어 관리하므로 프로세스가 어떻게 죽든 잠금은 풀리고 파일만
+남는다. 한 번도 안 돌린 기기에는 없고 한 번 돌린 기기에는 남으므로 «있음»도 «미생성»도
+그것을 말하지 못한다.
+
+**지워서 없애지 않는다** (D-0278). `release()`에서 unlink하면 등재할 것이 사라지지만 그것은
+R3가 금지하는 자리이고 **사실상 격리와 이름만 다르다.**
+
+`store = false`가 강제된다 — 잠금을 교두보에 복사해 오면 **없는 배치의 잠금**이 된다."""

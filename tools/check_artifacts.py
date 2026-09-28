@@ -74,7 +74,20 @@ UNDER_STUDY = "조사중"
 `why`에 **무엇을 확인했고 무엇이 남았는지**를 적는 것이 필수다. 그것이 없으면
 «조사중»은 그냥 «안 봤다»의 다른 이름이다."""
 
-STATES = ("있음", UNMADE, "폐기", UNDER_STUDY)
+TRANSIENT = "임시"
+"""**돌 때 생기고 남아도 되는 것 — 산출물이 아니다** (D-0278).
+
+`flock` 잠금 파일이 그렇다. 커널이 fd 수명에 묶어 관리하므로 **파일을 지우지 않는다.**
+한 번도 안 돌린 기기에는 없고, 한 번 돌린 기기에는 남는다 — 있음도 미생성도 폐기도 조사중도
+그것을 말하지 못한다.
+
+**지워서 없애는 길은 막았다.** `release()`에서 unlink하면 «등재할 것이 없다»가 되지만 그것은
+R3가 금지하는 자리이고 **사실상 격리와 이름만 다르다.** 사용자의 판정이다 — *"unlink하면
+그게 사실상 쿼런틴하고 이름만 다르지 같은 역할 아니냐."*
+
+`store`가 거짓으로 강제된다. 잠금을 교두보에 복사해 오면 **없는 배치의 잠금**이 된다."""
+
+STATES = ("있음", UNMADE, "폐기", UNDER_STUDY, TRANSIENT)
 """계열의 상태 (D-0266). 파이어레인 `lakecheck` L1 — *"reserved인데 파일이 있나 ·
 active인데 0건인가"* — 와 같은 자리다.
 
@@ -83,6 +96,7 @@ active인데 0건인가"* — 와 같은 자리다.
 | `있음` | **결손이다** | 정상 |
 | `미생성` | 정상 — 아직 안 만들었다 | **선언이 낡았다** |
 | `폐기` | 정상 — 지워도 되는 것이었다 | 정상. 판정의 근거로 남긴다 |
+| `임시` | 정상 — 아직 안 돌렸다 | 정상 — 돌렸고 남았다 |
 
 `미생성`을 빼면 `taste`(취향 라벨 0건 · D-0028)가 영원히 결손으로 뜬다. **정상을 빨갛게
 찍는 검사는 꺼진다** (D-0126 · D-0129에서 되풀이 확인한 것이다)."""
@@ -113,6 +127,12 @@ UNDER_STUDY_CEILING = 1
 
 `해당 없음`이 첫 번째였다 (D-0265에서 18건을 되돌렸다)."""
 
+TRANSIENT_CEILING = 1
+"""`임시`의 천장 (D-0278). **지금 1이다** — `.ingest-keys.lock`.
+
+면제는 세어야 면제다. 늘리려면 결정 기록이 필요하다 (D-0118) — 「산출물이 아니다」가 두
+번째 쓰레기통이 되는 길을 막는다. `조사중`에 천장을 둔 것과 같은 자리다."""
+
 QUARANTINE_CEILING = 0
 """대장에 없는 계열의 천장 (D-0266). **0이다** — R3가 «없는 산출물»이라 부르는 것이다.
 
@@ -130,6 +150,12 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
     problems: list[str] = []
     if not entries:
         return ["대장이 비었다. `artifacts.toml`에 계열이 하나도 없다"]
+    transient = sum(1 for entry in entries.values() if entry.get("state") == TRANSIENT)
+    if transient > TRANSIENT_CEILING:
+        problems.append(
+            f"`{TRANSIENT}`가 {transient}개로 천장 {TRANSIENT_CEILING}개를 넘는다. "
+            "**면제는 세어야 면제다** — 결정 기록이 필요하다 (D-0118)"
+        )
     for name, entry in sorted(entries.items()):
         if any(isinstance(value, str) and value.startswith(TODO) for value in entry.values()):
             problems.append(f"{name}에 `{TODO}`가 남았다. **붙여 넣고 잊을 수 없다** (D-0268)")
@@ -154,6 +180,14 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
                 problems.append(f"{name}의 `why`에 «남은 것»이 없다. 다음 손이 어디를 볼지 적는다")
         if entry.get("regen") == RETIRED and not entry.get("why"):
             problems.append(f"{name}은 폐기인데 `why`가 없다. **왜 지웠는지가 그 파일의 뜻이다**")
+        if state == TRANSIENT:
+            if entry.get("store") is not False:
+                problems.append(
+                    f"{name}은 임시인데 `store`가 거짓이 아니다. "
+                    "잠금을 교두보에 복사하면 **없는 배치의 잠금**이 된다"
+                )
+            if not entry.get("why"):
+                problems.append(f"{name}은 임시인데 `why`가 없다. **왜 산출물이 아닌지를 적는다**")
         if entry.get("regen") == CANNOT:
             if not entry.get("why"):
                 problems.append(f"{name}은 재생성 불가인데 `why`가 없다")
@@ -261,7 +295,7 @@ def audit(entries: dict[str, dict[str, object]], base: Path, store: Path | None 
     `keys,eval`뿐이다 (`ship.DEFAULT_ONLY`). 한쪽만 보면 **정상을 결손으로 찍고**, 그런
     검사는 꺼진다. 어디에도 없을 때만 결손이다.
 
-    `state`가 `미생성`·`폐기`인 계열은 실물이 없어도 결손이 아니다.
+    `state`가 `미생성`·`폐기`·`조사중`·`임시`인 계열은 실물이 없어도 결손이 아니다.
     """
     found = dict(folded(base))
     if store is not None:
@@ -272,7 +306,7 @@ def audit(entries: dict[str, dict[str, object]], base: Path, store: Path | None 
         missing=sorted(
             name
             for name in declared - seen
-            if entries[name].get("state") not in (UNMADE, RETIRED, UNDER_STUDY)
+            if entries[name].get("state") not in (UNMADE, RETIRED, UNDER_STUDY, TRANSIENT)
         ),
         orphan=sorted(seen - declared),
         stale=sorted(name for name in declared & seen if entries[name].get("state") == UNMADE),

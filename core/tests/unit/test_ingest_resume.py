@@ -10,7 +10,11 @@ import os
 
 import pytest
 
-from hathor.interfaces.cli.keys_resume import BatchLock, keys_settings, resume_target
+from hathor.infrastructure.batch_lock import BatchAlreadyRunningError, batch_lock, lock_path
+from hathor.interfaces.cli.keys_resume import keys_settings, resume_target
+from tests.conftest import tool_module as _tool
+
+LEDGER = _tool("check_artifacts")
 
 
 def settings(**overrides):
@@ -124,64 +128,96 @@ def test_설정에_크로마_벡터와_겹치는_이름이_없다():
     assert "chroma_mode" in settings()
 
 
-# ------------------------------------------------ 동시 실행 방지 (D-0077)
+# ------------------------------------------------ 동시 실행 방지 (D-0077 · D-0278)
 
 
-def test_살아_있는_다른_프로세스의_락에는_막힌다(tmp_path):
+def test_잡은_동안_다른_실행은_막힌다(tmp_path):
     """**같은 파일에 둘이 append하면 줄이 섞여 파일이 깨진다.**
 
-    D-0075 이전에는 실행마다 새 파일이라 겹칠 일이 없었다. 이어받기를 넣은 순간
-    생긴 문제이고, 실제로 배치가 둘 떠서 49곡짜리 파일이 5곡으로 보였다.
+    D-0075 이전에는 실행마다 새 파일이라 겹칠 일이 없었다. 이어받기를 넣은 순간 생긴
+    문제이고, 실제로 배치가 둘 떠서 49곡짜리 파일이 5곡으로 보였다.
 
-    PID 1(init)은 항상 살아 있고 우리 프로세스가 아니다. 다른 프로세스가 잡고 있는
-    상태를 그것으로 흉내낸다.
+    **`flock`은 열린 파일 기술자에 붙는다** — 같은 프로세스에서 두 번 열어도 막힌다
+    (D-0278). 예전 PID 파일은 같은 PID면 그냥 통과시켰다.
     """
-    lock = BatchLock(tmp_path)
-    lock.path.parent.mkdir(parents=True, exist_ok=True)
-    lock.path.write_text("1", encoding="utf-8")
-    assert lock.acquire() == 1
-    assert lock.path.read_text(encoding="utf-8").strip() == "1"
+    with (
+        batch_lock(tmp_path, "ingest-keys"),
+        pytest.raises(BatchAlreadyRunningError),
+        batch_lock(tmp_path, "ingest-keys"),
+    ):
+        pass
 
 
-def test_같은_프로세스는_다시_잡을_수_있다(tmp_path):
-    lock = BatchLock(tmp_path)
-    assert lock.acquire() is None
-    assert lock.acquire() is None
+def test_풀리면_다음_실행이_잡는다(tmp_path):
+    """나가면 커널이 푼다. **나가는 길이 몇이든 푼다** — 그것이 PID 파일과 다른 점이다."""
+    with batch_lock(tmp_path, "ingest-keys"):
+        pass
+
+    entered = False
+    with batch_lock(tmp_path, "ingest-keys"):
+        entered = True
+    assert entered, "풀린 잠금을 다시 못 잡았다"
 
 
-def test_죽은_프로세스의_락은_가져간다(tmp_path):
-    """**손으로 지우게 하면 결국 지우고 돌린다.**
+def test_예외로_나가도_풀린다(tmp_path):
+    """**옛 `BatchLock`은 나가는 길마다 `release()`를 손으로 불렀다** (셋이었다)."""
+    with pytest.raises(RuntimeError), batch_lock(tmp_path, "ingest-keys"):
+        raise RuntimeError("도중에 죽는다")
 
-    강제 종료 뒤 유령 락이 남아 막히면, 사람은 락을 지우는 습관을 들이고 그러면
-    락이 없는 것과 같아진다. 죽은 PID면 그냥 가져간다.
+    entered = False
+    with batch_lock(tmp_path, "ingest-keys"):
+        entered = True
+    assert entered, "예외로 나간 뒤 잠금이 남았다"
+
+
+def test_잠금_파일은_남고_대장에_등재돼_있다(tmp_path):
+    """**지워서 없애지 않는다** (D-0278).
+
+    `flock`은 파일을 지우지 않는다. 지우면 등재할 것이 사라지지만 그것은 R3가 금지하는
+    자리이고 **사실상 격리와 이름만 다르다** — 사용자의 판정이다.
     """
-    lock = BatchLock(tmp_path)
-    lock.path.parent.mkdir(parents=True, exist_ok=True)
-    lock.path.write_text("999999", encoding="utf-8")  # 없을 가능성이 매우 높은 PID
-    assert lock.acquire() is None
-    assert lock.path.read_text(encoding="utf-8").strip() == str(os.getpid())
+    with batch_lock(tmp_path, "ingest-keys"):
+        pass
+    path = lock_path(tmp_path, "ingest-keys")
+    assert path.exists(), "잠금 파일이 사라졌다. 지우면 대장에 등재할 것이 없어진다"
+    assert path.name == ".ingest-keys.lock"
+
+    entries = LEDGER.load()
+    assert path.name in entries, "잠금 파일이 대장에 없다 (R3)"
+    assert entries[path.name]["state"] == "임시"
+    assert entries[path.name]["store"] is False
 
 
-def test_깨진_락_파일은_무시한다(tmp_path):
-    lock = BatchLock(tmp_path)
-    lock.path.parent.mkdir(parents=True, exist_ok=True)
-    lock.path.write_text("피디가아님", encoding="utf-8")
-    assert lock.acquire() is None
+def test_내용은_사람이_읽는_것이다(tmp_path):
+    """잠금 판정에는 쓰지 않는다. **깨진 내용도 잠금을 망치지 않는다.**"""
+    path = lock_path(tmp_path, "ingest-keys")
+    path.write_text("피디가아님", encoding="utf-8")
+    with batch_lock(tmp_path, "ingest-keys"):
+        assert f"pid={os.getpid()}" in path.read_text(encoding="utf-8")
 
 
-def test_해제하면_다른_실행이_잡는다(tmp_path):
-    lock = BatchLock(tmp_path)
-    lock.acquire()
-    lock.release()
-    assert not lock.path.exists()
+def test_배치_잠금_기법이_한_자리에만_있다():
+    """**기법을 두 번 적으면 근거가 갈린다** (D-0278).
 
+    합치기 전에 둘이었고 **두 문서 문자열이 서로의 방식을 «나쁜 쪽»으로 적고 있었다** —
+    한쪽은 「손으로 지우면 결국 지운다」며 PID 파일을 고르고, 다른 쪽은 「PID 파일이면
+    죽은 잠금이 다음을 막는다」며 버렸다. 늘리려면 결정 기록이 필요하다 (D-0118).
 
-def test_남의_락은_해제하지_않는다(tmp_path):
-    lock = BatchLock(tmp_path)
-    lock.path.parent.mkdir(parents=True, exist_ok=True)
-    lock.path.write_text("999999", encoding="utf-8")
-    lock.release()
-    assert lock.path.exists()
+    **`LOCK_NB`로 센다.** `npz_feature_store`가 인덱스 append에 `LOCK_EX`(차단)를 하나 더
+    쓰는데 그것은 **다른 일**이다 — 그 자리 주석이 «O_APPEND 자체로 이미 원자적이고 잠금은
+    그 보장을 코드에 드러내기 위한 것»이라 적고 있다. 배치 중복을 막는 것은 비차단 잠금뿐이다.
+    **첫 실행에 그 셋째 자리를 잡았고**, 그래서 세는 낱말을 좁혔다 — 남이 선언해 둔 의도를
+    정규식이 편하려고 지우지 않는다.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "hathor"
+    found = sorted(
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*.py")
+        if "LOCK_NB" in path.read_text(encoding="utf-8")
+    )
+    assert found == ["infrastructure/batch_lock.py"], found
 
 
 # ------------------------------------------------ 손상 감지 (D-0077)

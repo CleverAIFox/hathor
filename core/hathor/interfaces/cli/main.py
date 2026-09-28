@@ -32,6 +32,7 @@ from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
 )
 from hathor.domain.value_objects.key import Key
+from hathor.infrastructure.batch_lock import BatchAlreadyRunningError
 from hathor.infrastructure.chroma_series_store import (
     find_series_root,
     load_transition_priors,
@@ -50,6 +51,7 @@ from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzLookup,
 )
 from hathor.infrastructure.mutagen_tag_extractor import MutagenTagExtractor
+from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 from hathor.interfaces.cli import (
     eval_clap,
     eval_extract,
@@ -919,7 +921,6 @@ def _run_ingest_features(args: argparse.Namespace) -> int:
     이미 끝난 곡은 인덱스를 보고 건너뛴다. 재개 판정은 실행 정책이라
     유스케이스가 아니라 여기에 둔다.
     """
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
 
     try:
         with NpzFeatureStore(args.out).batch_lock():
@@ -935,7 +936,6 @@ def _extract_features_locked(args: argparse.Namespace) -> int:
     from hathor.infrastructure.demucs_separator import DemucsStemSeparator
     from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
     from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
-    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
     tracks = list(JsonlScanStore(args.out).read_tracks())
     if not tracks:
@@ -971,7 +971,6 @@ def _run_ingest_compact(args: argparse.Namespace) -> int:
     정리하지 않으면 인덱스를 읽는 모든 후속 작업이 같은 곡을 여러 번
     본다. 유사도 행렬과 검색 지표가 조용히 틀어진다.
     """
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
 
     store = NpzFeatureStore(args.out)
     if not store.index_path.exists():
@@ -1264,7 +1263,6 @@ def _run_lyrics_extract(args: argparse.Namespace) -> int:
     """
     from hathor.application.extract_lyrics import ExtractLyrics
     from hathor.infrastructure.hashed_lyrics_extractor import HashedLyricsExtractor
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
 
     tracks = list(JsonlScanStore(args.out).read_tracks())
     if not tracks:

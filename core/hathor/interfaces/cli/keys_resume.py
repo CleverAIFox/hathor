@@ -5,6 +5,9 @@
 조건의 산출물에 이어 쓴다»(D-0075 · D-0077)를 이룬다.
 
 **이름의 밑줄을 뗐다.** 모듈이 갈리면 `_keys_settings`는 남의 사적 이름을 부르는 것이 된다.
+
+**잠금은 여기 없다** (D-0278). `BatchLock`이 이 자리에 있었는데 **파일 잠금은 인프라다** —
+`infrastructure/batch_lock.py` 하나로 합쳤다.
 """
 
 from __future__ import annotations
@@ -56,68 +59,6 @@ BROKEN_LINE_TOLERANCE = 0.02
 동시 실행으로 줄이 섞였다는 뜻이며, **조용히 건너뛰면 49곡이 5곡으로 보인다.**
 실제로 그렇게 됐고 그때는 파일이 이미 못 쓰게 된 뒤였다.
 """
-
-
-class BatchLock:
-    """산출물 디렉터리마다 하나만 돌게 한다 (D-0077).
-
-    ### 왜 필요해졌나
-
-    D-0075 이전에는 실행마다 새 타임스탬프 파일을 썼으므로 두 개가 동시에 돌아도
-    겹치지 않았다. **같은 파일에 이어 쓰게 만든 순간 생긴 문제다.**
-
-    `cd core`가 실패했는데도 뒤 명령이 실행돼 배치가 둘 떴고, 둘째가 첫째의 49곡을
-    읽고 이어받아 **같은 파일에 동시에 append했다.** 줄이 섞여 파일이 깨졌다.
-
-    ### 죽은 프로세스의 락은 자동으로 푼다
-
-    락 파일에 PID를 적고, 그 PID가 살아 있지 않으면 가져간다. 그러지 않으면 강제
-    종료 뒤 손으로 지워야 하고, **손으로 지우게 하면 결국 지우고 돌리게 된다.**
-
-    **이것이 예외 안전을 대신한다.** 추출 도중 예외로 죽으면 락 파일이 남지만, 그
-    PID는 이미 없으므로 다음 실행이 그냥 가져간다. `try/finally`로 감싸려면 본문
-    전체를 들여써야 하고, 그 재들여쓰기가 이 함수에서는 위험이 더 크다.
-    """
-
-    def __init__(self, root: Path, name: str = "ingest-keys") -> None:
-        self.path = root / f".{name}.lock"
-
-    def _holder(self) -> int | None:
-        try:
-            return int(self.path.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
-            return None
-
-    @staticmethod
-    def _alive(pid: int) -> bool:
-        import os
-
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        except OSError:
-            return True
-        return True
-
-    def acquire(self) -> int | None:
-        """잡으면 `None`, 이미 살아 있는 주인이 있으면 그 PID를 낸다."""
-        import os
-
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        holder = self._holder()
-        if holder is not None and holder != os.getpid() and self._alive(holder):
-            return holder
-        self.path.write_text(str(os.getpid()), encoding="utf-8")
-        return None
-
-    def release(self) -> None:
-        import os
-
-        if self._holder() == os.getpid():
-            self.path.unlink(missing_ok=True)
 
 
 def resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, set[str], int]:

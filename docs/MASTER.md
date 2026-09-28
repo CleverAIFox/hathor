@@ -2344,6 +2344,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0275 | 낮은 파이썬에서 `deadcheck`가 «0건»을 거짓으로 냈다 | `core/tests/unit/test_gate_ratchets.py::test_낮은_파이썬이면_돌기를_거부한다` | 실물 저장소 |
 | D-0276 | 가짜 `torch`가 `scipy`를 죽였다 | `core/tests/unit/test_gate_isolation.py::test_가짜_모듈을_심는_시험은_혼자_돌아도_통과한다` | 실물 저장소 |
 | D-0277 | `_run_ingest_keys` 352줄을 쪼갠다 | `tools/check_file_size.py` | 실물 저장소 |
+| D-0278 | 배치 잠금이 둘이고 근거가 서로를 반박했다 | `core/tests/unit/test_ingest_resume.py::test_배치_잠금_기법이_한_자리에만_있다` | 실물 저장소 |
 
 <!-- decision-ledger:end -->
 

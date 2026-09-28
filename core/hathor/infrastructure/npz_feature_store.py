@@ -13,7 +13,6 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
-import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -24,6 +23,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from hathor.domain.ports.audio_analysis import Embedding
+from hathor.infrastructure.batch_lock import batch_lock, lock_path
 
 if TYPE_CHECKING:
     from hathor.domain.entities.track_features import TrackFeatures
@@ -35,13 +35,10 @@ MIXTURE_KEY = "mixture"
 VECTORS_DIRNAME = "vectors"
 KEY_HASH_LENGTH = 16
 BACKUP_SUFFIX = ".bak"
-BATCH_LOCK_NAME = ".batch.lock"
+BATCH_NAME = "batch"
+"""배치 잠금의 이름. 파일은 `batch_lock.lock_path`가 짓는다 (D-0278)."""
 MANIFEST_SUFFIX = ".manifest.json"
 """산출물이 자기를 설명하는 자리. **묶음 저장소와 같은 이름을 쓴다** (D-0203 · `var_fsck`)."""
-
-
-class BatchAlreadyRunningError(RuntimeError):
-    """같은 산출물 디렉터리에서 배치가 이미 돌고 있다 (O-7(D-0022))."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +105,7 @@ class NpzFeatureStore:
 
     @property
     def batch_lock_path(self) -> Path:
-        return self._root / BATCH_LOCK_NAME
+        return lock_path(self._root, BATCH_NAME)
 
     @contextmanager
     def batch_lock(self) -> Iterator[None]:
@@ -118,32 +115,12 @@ class NpzFeatureStore:
         append는 O_APPEND + 200바이트라 리눅스에서 이미 원자적이었고,
         실제로 데이터도 깨지지 않았다. 막아야 하는 것은 프로세스 수준이다.
 
-        PID 파일이 아니라 flock을 쓴다. 이 배치는 절전·발열·마운트 해제로
-        네 번 죽었고 그때마다 정리 코드가 돌지 않았다. PID 파일이었다면
-        죽은 잠금이 남아 다음 실행을 막는다. flock은 커널이 fd 수명에
-        묶어 관리하므로 프로세스가 어떻게 죽든 자동으로 풀린다.
-
-        내용은 사람이 읽기 위한 것이고 잠금 판정에는 쓰지 않는다.
+        **기법은 `infrastructure/batch_lock.py` 하나다** (D-0278). 이 파일에 `flock`을
+        직접 적어 두었더니 `interfaces/cli`에 PID 파일 방식이 하나 더 생겼고, 두 문서
+        문자열이 서로의 방식을 «나쁜 쪽»으로 적고 있었다.
         """
-        self._root.mkdir(parents=True, exist_ok=True)
-        handle = self.batch_lock_path.open("a+", encoding="utf-8")
-        try:
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError as exc:
-                handle.seek(0)
-                holder = handle.read().strip() or "(미상)"
-                raise BatchAlreadyRunningError(
-                    f"배치가 이미 실행 중이다: {self.batch_lock_path} — {holder}"
-                ) from exc
-            handle.seek(0)
-            handle.truncate()
-            stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-            handle.write(f"pid={os.getpid()} started={stamp}\n")
-            handle.flush()
+        with batch_lock(self._root, BATCH_NAME):
             yield
-        finally:
-            handle.close()  # 닫으면 잠금이 풀린다
 
     def read_records(self) -> list[dict[str, object]]:
         """인덱스를 기록 순서대로 읽는다. 중복은 그대로 둔다."""

@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from hathor.infrastructure.batch_lock import BatchAlreadyRunningError
 from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import resolve_root
 from hathor.shared.config.paths import resolve_path
@@ -64,7 +65,7 @@ def run(args: argparse.Namespace, library_root: Path) -> int:
     )
     from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
     from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
+    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
     # 진행 출력 · 실패 처리 · 요약을 여기서 다시 짜지 않는다. 형식이 갈리면 두 산출물을
     # 나란히 못 놓는다 — 그것이 이 명령의 목적이다.

@@ -49,6 +49,7 @@ from hathor.domain.services.key_estimation import (
     chroma as chroma_of,
 )
 from hathor.domain.services.stem_sets import STEM_SETS
+from hathor.infrastructure.batch_lock import BatchAlreadyRunningError, batch_lock
 from hathor.infrastructure.chroma_series_store import write_series
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
@@ -56,7 +57,6 @@ from hathor.interfaces.cli import ingest_keys_bundles
 from hathor.interfaces.cli.keys_report import report
 from hathor.interfaces.cli.keys_resume import (
     BROKEN_LINE_TOLERANCE,
-    BatchLock,
     keys_settings,
     resume_target,
 )
@@ -70,6 +70,10 @@ if TYPE_CHECKING:
 
     from hathor.domain.entities.scanned_track import ScannedTrack
     from hathor.domain.ports.audio_analysis import StemSeparator, StereoWaveform
+
+
+LOCK_NAME = "ingest-keys"
+"""잠금 이름. 파일은 `var/ingest/.ingest-keys.lock`이고 **대장에 등재돼 있다** (D-0278)."""
 
 
 class _StopError(Exception):
@@ -142,8 +146,12 @@ def _replayed(args: argparse.Namespace) -> list[dict[str, object]]:
     return rows
 
 
-def _target(args: argparse.Namespace, out_root: Path, lock: BatchLock) -> _Target:
-    """이어받을 파일을 정하고 잠금을 잡는다 (D-0075 · D-0077)."""
+def _target(args: argparse.Namespace, out_root: Path) -> _Target:
+    """이어받을 파일을 정한다 (D-0075). **잠금은 부르는 쪽이 쥔다** (D-0278).
+
+    예전에는 이 안에서 잠금을 잡고 나가는 길마다 `lock.release()`를 손으로 불렀다 — 세
+    자리였고 하나만 빠뜨려도 유령 잠금이 남았다. 컨텍스트 매니저가 그 셋을 없앤다.
+    """
     root = resolve_root(args.root)
     tracks = list(JsonlScanStore(out_root).read_tracks())
     if args.limit is not None:
@@ -155,22 +163,11 @@ def _target(args: argparse.Namespace, out_root: Path, lock: BatchLock) -> _Targe
     # **이어받을 파일을 먼저 정한다** (D-0075). 조건이 같은 최근 산출물이 있으면
     # 거기에 붙이고, 이미 처리한 곡은 건너뛴다.
     settings = keys_settings(args)
-    # **같은 산출물에 둘이 못 쓰게 한다** (D-0077). 이어받기가 같은 파일에
-    # append하므로, 동시에 돌면 줄이 섞여 파일이 통째로 깨진다.
-    lock = BatchLock(out_root)
-    holder = lock.acquire()
-    if holder is not None:
-        print(
-            f"이미 다른 추출이 돌고 있다 (PID {holder}). 끝나기를 기다리거나 그 쪽을 멈춘다.",
-            file=sys.stderr,
-        )
-        raise _StopError(1)
     saved, done, broken = resume_target(out_root, settings)
     # **시계열은 산출물 이름을 따라간다** (D-0105). 이어받기가 정한 파일과 짝이
     # 안 맞으면 어느 jsonl의 시계열인지 알 수 없다.
     series_root = out_root / saved.name.replace(".keys.jsonl", ".series")
     if broken > max(1, int(len(done) * BROKEN_LINE_TOLERANCE)):
-        lock.release()
         print(
             f"{saved.name}에 깨진 줄이 {broken}개다. **동시 실행으로 섞였을 수 있다.**\n"
             f"  조용히 건너뛰면 처리한 곡 수를 잘못 세고 그 위에 이어 쓴다.\n"
@@ -182,13 +179,12 @@ def _target(args: argparse.Namespace, out_root: Path, lock: BatchLock) -> _Targe
         print(f"이어받는다: {saved.name} · 이미 {len(done)}곡", file=sys.stderr, flush=True)
     remaining = [track for track in tracks if track.source_key not in done]
     if not remaining:
-        lock.release()
         print(f"이미 전부 처리했다: {saved}\n")
         raise _StopError(0)
     return _Target(saved, series_root, done, settings, remaining, tracks, root)
 
 
-def _separator(args: argparse.Namespace, lock: BatchLock) -> StemSeparator | None:
+def _separator(args: argparse.Namespace) -> StemSeparator | None:
     """`--separate`면 Demucs를 **한 번만** 적재한다. 못 낼 스템을 요구하면 멈춘다."""
     separator = None
     if args.separate:
@@ -200,7 +196,6 @@ def _separator(args: argparse.Namespace, lock: BatchLock) -> StemSeparator | Non
             part for parts in STEM_SETS.values() for part in parts if part not in separator.sources
         ]
         if missing:
-            lock.release()
             print(
                 f"모델이 내지 않는 스템을 요구한다: {sorted(set(missing))} "
                 f"(가진 것: {separator.sources})",
@@ -357,9 +352,16 @@ def _record(
 
 def _extracted(args: argparse.Namespace, out_root: Path) -> list[dict[str, object]]:
     """음원을 디코드해 행을 쌓는다. **행마다 즉시 쓴다.**"""
-    lock = BatchLock(out_root)
-    target = _target(args, out_root, lock)
-    separator = _separator(args, lock)
+    # **같은 산출물에 둘이 못 쓰게 한다** (D-0077). 이어받기가 같은 파일에 append하므로,
+    # 동시에 돌면 줄이 섞여 파일이 통째로 깨진다. **나가는 길이 몇이든 커널이 풀어 준다.**
+    with batch_lock(out_root, LOCK_NAME):
+        return _rows(args, out_root)
+
+
+def _rows(args: argparse.Namespace, out_root: Path) -> list[dict[str, object]]:
+    """잠금을 쥔 채 행을 쌓는다."""
+    target = _target(args, out_root)
+    separator = _separator(args)
     saved, series_root = target.saved, target.series_root
     done, remaining, tracks, root = target.done, target.remaining, target.tracks, target.root
     decoder = FfmpegAudioDecoder()
@@ -399,7 +401,6 @@ def _extracted(args: argparse.Namespace, out_root: Path) -> list[dict[str, objec
                 flush=True,
             )
     stream.close()
-    lock.release()
     print(
         f"저장: {saved} · 크로마 {args.chroma} · 프로파일 {args.profile}"
         f" · gamma {args.gamma:g} · 배음 {args.harmonic:g} · 집계 {args.aggregate}"
@@ -421,6 +422,9 @@ def run(args: argparse.Namespace) -> int:
             rows = _replayed(args)
         else:
             rows = _extracted(args, out_root)
+    except BatchAlreadyRunningError as exc:
+        print(f"{exc}. 끝나기를 기다리거나 그 쪽을 멈춘다.", file=sys.stderr)
+        return 1
     except _StopError as stop:
         return stop.code
     return report(rows, args)

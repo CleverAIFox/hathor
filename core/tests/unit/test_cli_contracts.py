@@ -291,3 +291,63 @@ def test_D0204의_그_명령이_제_러너로_간다():
 
     args = build_parser().parse_args(["ingest", "all"])
     assert resolve(main.entries(), args) is main._run_ingest_all
+
+
+# ------------------------------- 계산이 표시 계층에 있다 (GR-2.2 · D-0278)
+
+COMPUTING = (
+    "cli/ingest_keys.py",
+    "cli/ingest_onsets.py",
+    "cli/keys_report.py",
+    "cli/main.py",
+    "cli/tables.py",
+)
+"""`interfaces`에서 `numpy`를 들이는 파일. **다섯이고 0으로 간다** (D-0278).
+
+### 왜 이것을 세나
+
+GR-2.2가 *"interfaces에 로직 금지"*라고 적혀 있고 `main.py`가 4161줄이 된 것이 그 규약이
+검사 없이 잊혔다는 증거였다 (D-0116 · D-0117). 그래서 **길이**에 래칫이 붙었고
+(`check_file_size`) **방향**에 계약이 붙었다 (`import-linter`). 그런데 **깊이는 아무도 안
+봤다** — 표시 계층이 얼마나 계산하는지다.
+
+사용자가 그것을 지적했다 — *"아키텍처가 완전 개 엉망진창이네. 개발 원칙 철저하게 하자고
+했는데 main에다가 다 짱박아 놨었네."* 실측 —
+
+| 계층 | `numpy`를 들이는 파일 |
+|---|---|
+| `domain` | 13 / 45 |
+| `application` | 12 / 21 |
+| `infrastructure` | 12 / 27 |
+| **`interfaces`** | **5 / 24** |
+
+`interfaces`가 5494줄로 가장 큰 계층이지만 **그것만으로는 로직이라고 못 한다** — 문장 수준
+호출의 82%가 `print`·`add_argument`이고 이 저장소는 근거를 문서 문자열에 적는다. **`numpy`는
+다르다.** 수를 계산하지 않으면 들일 이유가 없다.
+
+### 왜 래칫인가
+
+다섯을 한 판에 옮기면 계산이 어느 계층으로 가야 하는지를 다섯 번 동시에 판단해야 한다.
+**줄어들기만 하는 수**로 두면 한 판에 하나씩 옳게 옮길 수 있고, 늘리려면 결정 기록이
+필요하다 (D-0118). `check_file_size`가 예외표를 내리는 것과 같은 규율이다."""
+
+
+def computing_files() -> list[str]:
+    """`interfaces`에서 `numpy`를 들이는 파일. 경로로 낸다."""
+    base = TOOLS.parent / "core" / "hathor" / "interfaces"
+    return sorted(
+        path.relative_to(base).as_posix()
+        for path in base.rglob("*.py")
+        if "import numpy" in path.read_text(encoding="utf-8")
+    )
+
+
+def test_표시_계층이_계산하는_자리를_센다():
+    """**D-0278의 강제자.** 줄면 이 목록을 줄이고, 늘리려면 결정 기록을 쓴다."""
+    found = computing_files()
+    assert found == list(COMPUTING), f"목록이 어긋난다: {found}"
+
+
+def test_계산_자리_목록이_비어_있지_않다():
+    """**세는 그물이 비면 «0건»이 거짓으로 참이 된다** (D-0230)."""
+    assert COMPUTING, "목록이 비었다. 0이 되면 이 시험을 못으로 바꾼다"

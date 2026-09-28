@@ -10,6 +10,7 @@ import argparse
 import sys
 
 from hathor.application.extract_features import ExtractFeatures, ExtractLayerFeatures
+from hathor.infrastructure.batch_lock import BatchAlreadyRunningError
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
 from hathor.interfaces.cli.extraction import drive_extraction
 from hathor.interfaces.cli.registry import Command
@@ -32,7 +33,7 @@ def run_eval_mfcc(args: argparse.Namespace) -> int:
     """
     from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
     from hathor.infrastructure.mfcc_feature_extractor import MfccFeatureExtractor
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
+    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
     tracks = list(JsonlScanStore(args.out).read_tracks())
     if not tracks:
@@ -74,7 +75,7 @@ def run_eval_layers(args: argparse.Namespace) -> int:
     """
     from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
     from hathor.infrastructure.mert_feature_extractor import MertFeatureExtractor
-    from hathor.infrastructure.npz_feature_store import BatchAlreadyRunningError, NpzFeatureStore
+    from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 
     try:
         indices = tuple(int(token) for token in args.layers.split(",") if token.strip())

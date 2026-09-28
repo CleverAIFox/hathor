@@ -12,9 +12,9 @@ import numpy as np
 import pytest
 
 from hathor.domain.entities.track_features import TrackFeatures
+from hathor.infrastructure.batch_lock import BatchAlreadyRunningError
 from hathor.infrastructure.npz_feature_store import (
     MIXTURE_KEY,
-    BatchAlreadyRunningError,
     NpzFeatureStore,
     features_as_record,
     vector_filename,
