@@ -507,11 +507,19 @@ def test_스탬프_접기를_안_깬다(tmp_path: Path) -> None:
 
 # ------------------- 대장이 부르는 재생성 명령이 실재하는가 (D-0292)
 
-CLI_CALL = re.compile(r"hathor\.cli\s+([\w-]+)(?:\s+([\w-]+))?((?:\s+--[\w-]+)*)")
-"""`... -m hathor.cli <무리> [<명령>] [--손잡이 ...]`.
+CLI_CALL = re.compile(r"(?:hathor\.cli\s+)?\b(\w[\w-]*)(?:\s+(?!-)(\w[\w-]*))?((?:\s+--[\w-]+)*)")
+"""`[... -m hathor.cli] <무리> [<명령>] [--손잡이 ...]`.
 
-**대장의 `regen`은 사람에게 주는 안내다.** `--audit`이 결손마다 그 줄을 찍고, 사람은
-그것을 그대로 친다."""
+**두 꼴을 다 받는다** (D-0296). `regen`은 `cd core && uv run python -m hathor.cli ingest
+onsets`처럼 통째로 적고, `reads`는 `eval retrieval --view lyrics`처럼 **명령만** 적는다.
+`hathor.cli`를 요구하던 첫 판은 `reads`에서 **한 건도 못 봤다.**
+
+**하위 명령은 `-`로 시작하지 않는다.** 그 조건을 빼자 `generate --transitions`의
+`--transitions`가 하위 명령으로 읽혀 «없는 명령»이 됐다 — **실재하는데 거짓 경보였고,
+거짓 경보는 진짜 경보를 죽인다** (`fire-lane` MASTER §18-13).
+
+**대장의 이 칸들은 사람에게 주는 안내다.** `--audit`이 결손마다 `regen`을 찍고 사람은
+그것을 그대로 친다. `reads`는 «이 산출물을 지우면 무엇이 죽나»를 말한다."""
 
 
 def _cli_paths() -> dict[str, argparse.ArgumentParser]:
@@ -541,24 +549,47 @@ def test_대장의_재생성_명령이_실재한다() -> None:
     D-0288이 파이어레인의 `argcheck`를 보고 *"Makefile 호출 17개 · 못 받는 인자 0"*이라
     재놓고, **대장이 부르는 명령은 한 번도 안 쟀다.** 안내가 없는 것보다 **틀린 안내가 나쁘다.**
     """
+    problems = [
+        f"{name}.{field}: {why}"
+        for name, entry in LEDGER.load().items()
+        for field in CHECKED_FIELDS
+        for why in _dead(entry.get(field))
+    ]
+    assert not problems, "대장이 없는 명령을 안내한다:\n" + "\n".join(problems)
+
+
+CHECKED_FIELDS = ("regen", "reads")
+"""명령이 적히는 칸. **둘이다** (D-0296).
+
+D-0292가 `regen`만 봤다. 바로 옆 `reads`에도 **죽은 명령이 둘 있었다** —
+`eval retrieval --view lyrics`인데 `--view`는 없는 인자다(실물은 `--features` · `--keys`).
+
+한 칸을 고치면서 같은 꼴을 안 세는 것이 D-0283이 적은 그 실패다. **그 저장소에서 또 했다.**"""
+
+
+def _dead(raw: object) -> list[str]:
+    """이 칸이 적은 CLI 호출 중 **실재하지 않는 것**. 문자열이든 목록이든 받는다."""
+    entries = raw if isinstance(raw, list) else [raw]
     known = _cli_paths()
     problems: list[str] = []
-    for name, entry in LEDGER.load().items():
-        regen = str(entry.get("regen", ""))
-        found = CLI_CALL.search(regen)
+    for one in entries:
+        text = str(one or "")
+        found = CLI_CALL.search(text)
         if not found:
             continue
         group, command, flags = found.group(1), found.group(2), found.group(3) or ""
         path = " ".join(part for part in (group, command) if part)
         parser = known.get(path)
         if parser is None:
-            problems.append(f"{name}: `{path}`라는 명령이 없다")
+            # **결정 번호·산문은 명령이 아니다.** `reads`에는 `D-0181` 같은 것도 든다.
+            if group in _cli_paths():
+                problems.append(f"`{path}`라는 명령이 없다")
             continue
         handles = {option for action in parser._actions for option in action.option_strings}
         missing = sorted(set(re.findall(r"--[\w-]+", flags)) - handles)
         if missing:
-            problems.append(f"{name}: `{path}`가 {missing}를 안 받는다")
-    assert not problems, "대장이 없는 명령을 안내한다:\n" + "\n".join(problems)
+            problems.append(f"`{path}`가 {missing}를 안 받는다")
+    return problems
 
 
 # ------------------------ 산출물이 자기를 설명한다 (D-0203 · D-0294)
