@@ -39,6 +39,35 @@ def pytest_configure(config: pytest.Config) -> None:
     sys.dont_write_bytecode = True
 
 
+GPU_GROUP = "gpu"
+"""장비를 같이 쓰는 시험을 **한 워커로 모으는** 이름 (D-0290)."""
+
+GPU_REASON = "CUDA"
+"""건너뜀 사유에 이 글자가 있으면 그 시험은 **GPU를 잡는다.**
+
+**파일 목록을 손으로 들지 않는다.** 목록은 낡고, 새 GPU 시험이 조용히 밖에 남는다.
+이미 선언된 사유를 읽는다 — «transformers 또는 CUDA 없음» · «demucs 또는 CUDA 없음»."""
+
+
+def gpu_bound(item: pytest.Item) -> bool:
+    """이 시험이 GPU를 잡는가. **선언된 건너뜀 사유로 판정한다** (D-0290)."""
+    return any(
+        GPU_REASON in str(mark.kwargs.get("reason", "")) for mark in item.iter_markers("skipif")
+    )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """GPU를 잡는 시험을 한 무리로 묶는다 (D-0290).
+
+    `--dist loadgroup`이 같은 `xdist_group`을 **한 워커에** 보낸다. 이 기기의 가용 VRAM은
+    4.8GB이고(D-0218) MERT·CLAP·Demucs가 **다른 워커에 동시에 실리면** 카드에 모델이 둘
+    올라간다. 워커 경계는 시험 수가 바뀔 때마다 움직이므로 **언제 겹칠지는 운이다.**
+    """
+    for item in items:
+        if gpu_bound(item):
+            item.add_marker(pytest.mark.xdist_group(GPU_GROUP))
+
+
 @pytest.fixture(autouse=True)
 def isolate_machine_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """**검사는 기기 상태에 의존하지 않는다** (D-0071).

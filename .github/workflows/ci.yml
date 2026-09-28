@@ -116,7 +116,7 @@ jobs:
         run: uv run lint-imports
 
       - name: Test
-        run: uv run pytest --cov=hathor -q -n auto
+        run: uv run pytest --cov=hathor -q -n auto --dist loadgroup
 
       - name: Coverage ratchet
         working-directory: .

@@ -127,3 +127,106 @@ def test_가짜_모듈을_심는_시험은_혼자_돌아도_통과한다() -> No
             broken.append(f"{node_id}\n{done.stdout[-1200:]}")
 
     assert not broken, "혼자 돌면 죽는 시험이 있다:\n" + "\n".join(broken)
+
+
+# --------------------------------- 장비를 같이 쓰는 시험은 한 워커로 (D-0290)
+
+GPU_BOUND = 5
+"""GPU를 실제로 잡는 시험의 수. **세는 값이 있어야 «전부»가 뜻을 갖는다** (D-0230).
+
+mert 3 · demucs 2다. `test_clap_feature_extractor`는 **가짜 모듈을 심으므로 카드를 안
+잡는다** — 그 여섯은 D-0276이 드는 자리이고 여기가 아니다. 섞으면 이 수가 거짓이 된다."""
+
+
+def _collected(*paths: str) -> dict[str, int]:
+    """`-m xdist_group`으로 실제 수집해서 무리에 든 시험을 파일별로 센다.
+
+    **표식이 붙었는지 소스로 안 본다.** 훅이 붙이는 것이라 소스에는 한 글자도 없다 —
+    D-0283에서 글자 자리를 보는 시험이 틀린 그 자리다.
+
+    `addopts`가 이미 `-q`라 수집 출력은 `파일: 수` 꼴이다. 노드 아이디를 세려고 `-v`를
+    얹으면 **이 시험이 저장소 설정에 기대게 된다.**
+    """
+    done = subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            "--no-cov",
+            "-p",
+            "no:cacheprovider",
+            "-m",
+            "xdist_group",
+            *paths,
+        ),
+        cwd=CORE,
+        env=_clean_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    found: dict[str, int] = {}
+    for line in done.stdout.splitlines():
+        name, _, count = line.rpartition(": ")
+        if name.endswith(".py") and count.strip().isdigit():
+            found[name] = int(count)
+    return found
+
+
+def test_GPU를_잡는_시험만_무리에_든다() -> None:
+    """**목록을 손으로 안 든다** (D-0290). 이미 선언된 건너뜀 사유를 읽는다.
+
+    손목록은 낡고, 새 GPU 시험이 조용히 밖에 남는다 — 그 시험은 다시 경합에 노출되고
+    **왜 가끔 터지는지 아무도 모른다.**
+    """
+    found = _collected("tests/unit")
+    total = sum(found.values())
+    assert total == GPU_BOUND, f"무리에 든 시험이 {total}개다: {found}"
+
+
+def test_가짜를_심는_시험은_무리에_안_든다() -> None:
+    """**가짜 모듈은 카드를 안 잡는다.** 섞으면 `GPU_BOUND`가 거짓이 된다."""
+    assert _collected("tests/unit/test_clap_feature_extractor.py") == {}
+
+
+def test_무리로_묶으면_한_워커로_간다(tmp_path: Path) -> None:
+    """**강제자다** — `--dist loadgroup`이 실제로 모으는가 (양성 대조).
+
+    설정만 바꾸고 동작을 안 보면, 다음 판에 `-n auto`만 남아도 조용히 흩어진다.
+    """
+    tests = tmp_path / "t"
+    tests.mkdir()
+    for name in ("a", "b"):
+        (tests / f"test_{name}.py").write_text(
+            "import os, pytest\n"
+            "@pytest.mark.xdist_group('gpu')\n"
+            f"def test_{name}():\n"
+            f"    (os.environ['PYTEST_XDIST_WORKER'] + ' {name}\\n') and None\n"
+            f"    open({str(tmp_path / 'seen')!r}, 'a').write(os.environ['PYTEST_XDIST_WORKER'])\n",
+            encoding="utf-8",
+        )
+    subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "pytest",
+            str(tests),
+            "-q",
+            "--no-cov",
+            "-n",
+            "4",
+            "--dist",
+            "loadgroup",
+            "-p",
+            "no:cacheprovider",
+        ),
+        cwd=CORE,
+        env=_clean_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    seen = (tmp_path / "seen").read_text(encoding="utf-8")
+    assert len(set(seen.replace("gw", " gw").split())) == 1, f"흩어졌다: {seen}"

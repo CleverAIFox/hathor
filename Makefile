@@ -74,12 +74,12 @@ type:          ## 제품 · 관문 도구 · 검사 코드. **셋 다 본다** (
 arch:
 	cd core && uv run lint-imports
 test:
-	cd core && uv run pytest --cov=hathor -q -n auto
+	cd core && uv run pytest --cov=hathor -q -n auto --dist loadgroup
 	python3 tools/check_coverage.py
 
 quick:         ## 고치는 동안 도는 고리. **관문이 아니다** — 커버리지·문서·타입은 `make check` (D-0238)
 	cd core && uv run ruff check . ../tools
-	cd core && uv run pytest -q -n auto --no-cov
+	cd core && uv run pytest -q -n auto --dist loadgroup --no-cov
 
 cov-bump:      ## 커버리지 바닥을 실측 - 1로 올린다. 숫자는 core/pyproject.toml 하나 (D-0223)
 	python3 tools/check_coverage.py --update

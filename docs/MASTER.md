@@ -2408,6 +2408,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0287 | 이미 붙은 패치를 또 붙이라고 했다 | `core/tests/unit/test_apply_patch.py::test_선행이_대장에_없으면_막는다` | 실물 저장소 · 사용자 기기 로그 |
 | D-0288 | 파이어레인이 한 수 위인 자리를 넷 재서 둘을 가져왔다 | `core/tests/unit/test_check_decisions.py::test_지금_대장의_강제자가_전부_실재한다` | 실물 저장소 · 실물 `fire-lane` 저장소 |
 | D-0289 | 초록이라고 보고한 시험 열다섯은 내 기기에서 한 번도 안 돈다 | `core/tests/unit/test_ship.py::test_터진_자리부터_낸다` | 실물 저장소 · 사용자 기기 로그 |
+| D-0290 | 혼자 돌면 초록이다 | `core/tests/unit/test_gate_isolation.py::test_GPU를_잡는_시험만_무리에_든다` | 실물 저장소 · 사용자 기기 로그 |
 
 <!-- decision-ledger:end -->
 
