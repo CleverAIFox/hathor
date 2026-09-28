@@ -91,8 +91,32 @@ def test_upstream이_없으면_막는다(monkeypatch):
 
 
 def test_깨끗하면_안_막는다(monkeypatch):
-    monkeypatch.setattr(SHIP, "_git", lambda *a: "" if a[0] == "status" else "origin/main")
+    """**원격 읽기도 흉내낸다** (D-0283). 망 없는 기기에서 빨개지면 그 시험은 환경을 잰다."""
+    monkeypatch.setattr(
+        SHIP, "_git", lambda *a: "" if a[0] in ("status", "rev-list") else "origin/main"
+    )
+    monkeypatch.setattr(SHIP, "_run", lambda *a: (0, ""))
     assert SHIP.check_git() == []
+
+
+def test_원격이_앞서면_막는다(monkeypatch):
+    """**«미푸시 2개»를 찍고 곧바로 거절당한 자리다** (D-0283)."""
+    monkeypatch.setattr(
+        SHIP,
+        "_git",
+        lambda *a: "2" if a[0] == "rev-list" else ("" if a[0] == "status" else "origin/main"),
+    )
+    monkeypatch.setattr(SHIP, "_run", lambda *a: (0, ""))
+    (problem,) = SHIP.check_git()
+    assert "원격이 2개 앞선다" in problem and "pull --rebase" in problem
+
+
+def test_원격을_못_읽으면_판정하지_않는다(monkeypatch):
+    """**망이 없는 기기에서 «0개»라고 찍으면 그것이 거짓이다.**"""
+    monkeypatch.setattr(SHIP, "_git", lambda *a: "" if a[0] == "status" else "origin/main")
+    monkeypatch.setattr(SHIP, "_run", lambda *a: (1, "fatal: 못 붙었다"))
+    (problem,) = SHIP.check_git()
+    assert "원격을 못 읽었다" in problem
 
 
 def test_check는_안_받는다():
@@ -145,8 +169,12 @@ def test_교두보가_배를_가라앉히지_않는다():
     밀려갔는지 모른 채 다시 친다. 실제로 `make ship`이 push 뒤에 역추적을 뿜고 죽었다.
     """
     source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
-    tail = source.split('sync_artifacts.py", "push"', 1)[1]
-    assert "교두보로 못 보냈다" in tail
+    assert "교두보로 못 보냈다" in source
+
+    # **글자 자리가 아니라 동작을 본다** (D-0283). 문구를 상수로 빼자 옛 글자 검사가
+    # 빨개졌는데 동작은 그대로였다 — 자리를 세던 검사였다.
+    tail = source[source.index('sync_artifacts.py", "push"') :]
+    assert "return 1" not in tail, "교두보 실패가 push를 «실패»로 만들면 안 된다"
     assert "return code" not in tail, "교두보 실패가 종료 코드를 잡으면 배가 가라앉는다"
 
 
@@ -257,3 +285,52 @@ def test_출력이_없으면_한_줄로_끝낸다() -> None:
     """**없는 꼬리를 꾸며 내지 않는다.**"""
     assert any("출력이 없다" in line for line in SHIP.blocked(""))
     assert len(SHIP.blocked("한 줄뿐")) == 4
+
+
+# ------------------------------- 실패는 전부 꼬리를 낸다 (D-0283)
+
+
+def failure_branches() -> list[str]:
+    """`code != 0`을 보고 **멈추거나 «막힘»을 찍으면서** 꼬리를 안 내는 자리.
+
+    알리기만 하고 넘어가는 자리는 세지 않는다 — CI를 못 읽는 것과 교두보가 없는 것은
+    **막힘이 아니라 소식이다** (D-0068 · D-0239).
+    """
+    import ast
+
+    source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.If):
+            continue
+        test = ast.unparse(node.test)
+        if "code != 0" not in test:
+            continue
+        body = "\n".join(ast.unparse(one) for one in node.body)
+        stops = "return 1" in body or "막힘" in body
+        if stops and "blocked(" not in body:
+            found.append(f"ship.py:{node.lineno} {test}")
+    return found
+
+
+def test_실패한_자리는_꼬리를_낸다() -> None:
+    """**판정을 내면 근거를 같이 낸다** (D-0282 · D-0283).
+
+    D-0282가 `make check` 한 자리만 고쳤고 **같은 꼴이 두 자리 남아 있었다** — `git push`와
+    교두보 보내기다. 사용자가 그 다음 판에서 바로 `git push` 실패를 맞았고, 찍힌 것은 또
+    한 줄이었다. **한 벌을 고칠 때 같은 꼴을 세지 않으면 그 자리가 다음 실패다** (D-0272).
+    """
+    assert failure_branches() == []
+
+
+def test_원격을_읽고_판정한다() -> None:
+    """**`git fetch` 없이 «미푸시 N개»를 찍으면 그 수는 마지막으로 읽은 원격 기준이다.**
+
+    그 사이 원격이 움직이면 초록을 찍어 놓고 곧바로 거절당한다 (D-0283).
+    """
+    source = (ROOT / "tools" / "ship.py").read_text(encoding="utf-8")
+    body = source[source.index("def check_git(") : source.index("def count_leftovers(")]
+
+    assert '"fetch"' in body, "원격을 안 읽고 판정한다"
+    assert "HEAD..@{upstream}" in body, "받을 것을 안 센다"
+    assert "못 읽었다" in body, "못 읽었을 때 0으로 찍으면 거짓이다"

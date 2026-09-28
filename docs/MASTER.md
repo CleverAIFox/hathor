@@ -2349,6 +2349,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0280 | 표시 계층의 계산 3 → 1 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하는_자리를_센다` | 실물 저장소 |
 | D-0281 | 표시 계층의 계산 1 → 0 | `core/tests/unit/test_cli_contracts.py::test_표시_계층이_계산하지_않는다` | 실물 저장소 |
 | D-0282 | `make ship`이 막히면서 근거를 버렸다 | `core/tests/unit/test_ship.py::test_막혔을_때_꼬리를_보여_준다` | 실물 저장소 · 사용자 기기 로그 |
+| D-0283 | 두 판 연속 막혔다 | `core/tests/unit/test_ship.py::test_실패한_자리는_꼬리를_낸다` | 실물 저장소 · 사용자 기기 로그 |
 
 <!-- decision-ledger:end -->
 

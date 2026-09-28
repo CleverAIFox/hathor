@@ -96,11 +96,16 @@ def _run(*command: str) -> tuple[int, str]:
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
+SAME_COMMAND = "**같은 명령이 여기서 빨갰다.** 위 꼬리에 터진 자리가 있다."
+PUSH_NOTE = "**밀지 못했다.** 원격이 앞서 있으면 `git pull --rebase` 뒤 다시 친다."
+BRIDGE_NOTE = "   **교두보로 못 보냈다.** 고친 뒤 `make artifacts-push` (커밋은 이미 밀었다)"
+"""기본 사유 문구. 부르는 쪽이 자기 문구를 준다 (D-0283)."""
+
 KEEP_LINES = 30
 """막혔을 때 보여 줄 꼬리 줄 수 (D-0282). **판정하면서 근거를 버리지 않는다.**"""
 
 
-def blocked(text: str, keep: int = KEEP_LINES) -> list[str]:
+def blocked(text: str, *, note: str = SAME_COMMAND, keep: int = KEEP_LINES) -> list[str]:
     """`make check`가 막혔을 때 찍을 줄. **잡은 출력의 꼬리를 그대로 낸다** (D-0282).
 
     예전에는 **마지막 한 줄**만 찍었다.
@@ -118,14 +123,14 @@ def blocked(text: str, keep: int = KEEP_LINES) -> list[str]:
     lines = text.strip().splitlines() if text.strip() else []
     head = f"{RED}   막힘{OFF}  {lines[-1] if lines else '(출력이 없다)'}"
     if len(lines) <= 1:
-        return [head, "", "`make check`를 따로 돌려 본다.", ""]
+        return [head, "", note, ""]
     tail = lines[-keep:]
     return [
         head,
         f"{DIM}   ── 잡은 출력 마지막 {len(tail)}줄{OFF}",
         *(f"   {line}" for line in tail),
         "",
-        "**같은 명령이 여기서 빨갰다.** 위 꼬리에 터진 자리가 있다.",
+        note,
         "",
     ]
 
@@ -136,13 +141,28 @@ def _git(*arguments: str) -> str:
 
 
 def check_git() -> list[str]:
-    """워킹트리 · 브랜치 · 미푸시 커밋. **깨끗하지 않으면 내보내지 않는다.**"""
+    """워킹트리 · 브랜치 · 원격과의 거리. **깨끗하지 않으면 내보내지 않는다.**
+
+    **원격을 읽고 판정한다** (D-0283). 예전에는 `git fetch` 없이 `@{upstream}..HEAD`를 셌고,
+    그 기준은 **마지막으로 읽은 원격**이다 — 그 사이 원격이 움직이면 *"미푸시 커밋 2개"*로
+    초록을 찍어 놓고 곧바로 `git push`가 거절당한다. 사용자가 그것을 두 판 연속 맞았다.
+
+    **못 읽으면 못 읽었다고 말한다.** 망이 없는 기기에서 «0개»라고 찍으면 그것이 거짓이다.
+    """
     problems: list[str] = []
     dirty = _git("status", "--porcelain", "--untracked-files=no")
     if dirty:
         problems.append(f"워킹트리에 커밋 안 된 변경이 {len(dirty.splitlines())}개 있다")
     if not _git("rev-parse", "--abbrev-ref", "@{upstream}"):
         problems.append("upstream이 없다. `git push -u origin <브랜치>`")
+        return problems
+    code, _text = _run("git", "fetch", "--quiet")
+    if code != 0:
+        problems.append("원격을 못 읽었다 (`git fetch` 실패). 거리를 모르므로 판정하지 않는다")
+        return problems
+    behind = _git("rev-list", "--count", "HEAD..@{upstream}")
+    if behind and behind != "0":
+        problems.append(f"원격이 {behind}개 앞선다. `git pull --rebase` 뒤에 다시 친다")
     return problems
 
 
@@ -269,7 +289,13 @@ def main() -> int:
     problems = check_git()
     for line in problems:
         print(f"{RED}   막힘{OFF}  {line}")
-    if not problems:
+    if problems:
+        # **막힘이라고 찍고 밀지 않는다** (D-0283). 예전에는 찍기만 하고 그대로 내려가
+        # `git push`를 쳤다 — 그 자리에서 거절당했고 사람은 **빨간 줄을 두 번** 봤다.
+        if args.push:
+            print("\n`git` 쪽을 먼저 정리한다. **밀지 않았다.**")
+            return 1
+    else:
         ahead = _git("rev-list", "--count", "@{upstream}..HEAD")
         print(f"{GREEN}   통과{OFF}  미푸시 커밋 {ahead or '0'}개")
 
@@ -311,16 +337,20 @@ def main() -> int:
 
     print(f"\n{DIM}── push{OFF}")
     code, text = _run("git", "push")
-    print(text.strip().splitlines()[-1] if text else "")
     if code != 0:
+        for line in blocked(text, note=PUSH_NOTE):
+            print(line)
         return 1
-    code, text = _run("python3", "tools/sync_artifacts.py", "push", *only_flags(args.only))
     print(text.strip().splitlines()[-1] if text else "")
+    code, text = _run("python3", "tools/sync_artifacts.py", "push", *only_flags(args.only))
     if code != 0:
+        for line in blocked(text, note=BRIDGE_NOTE):
+            print(line)
         # **교두보가 배를 가라앉히지 않는다** (D-0068 · D-0239). `git push`는 이미 끝났고,
         # 외장 드라이브가 빠졌거나 DrvFs가 토라진 것으로 «내보내기 실패»를 찍으면
         # 사람은 무엇이 밀려갔는지 모른 채 다시 친다.
-        print("   **교두보로 못 보냈다.** 고친 뒤 `make artifacts-push` (커밋은 이미 밀었다)")
+        return 0
+    print(text.strip().splitlines()[-1] if text else "")
     return 0
 
 
