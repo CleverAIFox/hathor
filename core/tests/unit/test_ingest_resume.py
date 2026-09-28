@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from hathor.interfaces.cli.main import BatchLock, _keys_settings, _resume_target
+from hathor.interfaces.cli.keys_resume import BatchLock, keys_settings, resume_target
 
 
 def settings(**overrides):
@@ -25,7 +25,7 @@ def settings(**overrides):
         "series": None,
     }
     base.update(overrides)
-    return _keys_settings(argparse.Namespace(**base))
+    return keys_settings(argparse.Namespace(**base))
 
 
 def write(path, rows):
@@ -44,7 +44,7 @@ def rows_for(config, count, *, start=0):
 
 
 def test_산출물이_없으면_새_파일을_연다(tmp_path):
-    target, done, _ = _resume_target(tmp_path, settings())
+    target, done, _ = resume_target(tmp_path, settings())
     assert target.name.startswith("keys-")
     assert done == set()
 
@@ -52,7 +52,7 @@ def test_산출물이_없으면_새_파일을_연다(tmp_path):
 def test_조건이_같으면_이어받는다(tmp_path):
     config = settings()
     write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(config, 5))
-    target, done, _ = _resume_target(tmp_path, config)
+    target, done, _ = resume_target(tmp_path, config)
     assert target.name == "keys-20260821T100000Z.keys.jsonl"
     assert len(done) == 5
     assert "가수-곡0.mp3" in done
@@ -72,7 +72,7 @@ def test_조건이_같으면_이어받는다(tmp_path):
 def test_조건이_하나라도_다르면_새_파일이다(tmp_path, field, value):
     """**조건이 섞인 산출물은 무엇을 잰 것인지 알 수 없다** (D-0073)."""
     write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(settings(), 5))
-    target, done, _ = _resume_target(tmp_path, settings(**{field: value}))
+    target, done, _ = resume_target(tmp_path, settings(**{field: value}))
     assert target.name != "keys-20260821T100000Z.keys.jsonl"
     assert done == set()
 
@@ -83,7 +83,7 @@ def test_잘린_마지막_줄을_건너뛴다(tmp_path):
     path = write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(config, 3))
     with path.open("a", encoding="utf-8") as stream:
         stream.write('{"source_key": "잘린')
-    target, done, _ = _resume_target(tmp_path, config)
+    target, done, _ = resume_target(tmp_path, config)
     assert target == path
     assert len(done) == 3
 
@@ -92,7 +92,7 @@ def test_가장_최근_파일을_고른다(tmp_path):
     config = settings()
     write(tmp_path / "keys-20260101T000000Z.keys.jsonl", rows_for(config, 2))
     write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(config, 7, start=100))
-    target, done, _ = _resume_target(tmp_path, config)
+    target, done, _ = resume_target(tmp_path, config)
     assert target.name == "keys-20260821T100000Z.keys.jsonl"
     assert len(done) == 7
 
@@ -103,14 +103,14 @@ def test_조건_미기록_옛_산출물은_잇지_않는다(tmp_path):
         tmp_path / "keys-20260818T000000Z.keys.jsonl",
         [{"source_key": "옛곡.mp3", "chroma": [1 / 12] * 12}],
     )
-    target, done, _ = _resume_target(tmp_path, settings())
+    target, done, _ = resume_target(tmp_path, settings())
     assert target.name != "keys-20260818T000000Z.keys.jsonl"
     assert done == set()
 
 
 def test_빈_파일은_건너뛴다(tmp_path):
     (tmp_path / "keys-20260821T100000Z.keys.jsonl").write_text("", encoding="utf-8")
-    _, done, _broken = _resume_target(tmp_path, settings())
+    _, done, _broken = resume_target(tmp_path, settings())
     assert done == set()
 
 
@@ -194,7 +194,7 @@ def test_깨진_줄이_많으면_세어_낸다(tmp_path):
     with path.open("a", encoding="utf-8") as stream:
         for _ in range(10):
             stream.write('{"source_key": "섞인\n')
-    _, done, broken = _resume_target(tmp_path, config)
+    _, done, broken = resume_target(tmp_path, config)
     assert len(done) == 4
     assert broken == 10
 
@@ -204,7 +204,7 @@ def test_잘린_한_줄은_손상으로_보지_않는다(tmp_path):
     path = write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(config, 30))
     with path.open("a", encoding="utf-8") as stream:
         stream.write('{"source_key": "잘린')
-    _, done, broken = _resume_target(tmp_path, config)
+    _, done, broken = resume_target(tmp_path, config)
     assert len(done) == 30
     assert broken == 1
 
@@ -225,7 +225,7 @@ def test_스템_조합이_늘면_새_파일이다(tmp_path):
     old = settings()
     old["stem_sets"] = ["other"]
     write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(old, 5))
-    target, done, _ = _resume_target(tmp_path, settings())
+    target, done, _ = resume_target(tmp_path, settings())
     assert target.name != "keys-20260821T100000Z.keys.jsonl"
     assert done == set()
 
@@ -235,14 +235,14 @@ def test_스템_조합이_안_적힌_옛_산출물은_이어받지_않는다(tmp
     old = settings()
     del old["stem_sets"]
     write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(old, 5))
-    target, _, _ = _resume_target(tmp_path, settings())
+    target, _, _ = resume_target(tmp_path, settings())
     assert target.name != "keys-20260821T100000Z.keys.jsonl"
 
 
 def test_이어받지_않는_이유를_알린다(tmp_path, capsys):
     """**조용히 새 파일을 열지 않는다** (D-0100). 모르면 한 시간 반을 다시 쓴다."""
     write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(settings(), 5))
-    _resume_target(tmp_path, settings(halves=True))
+    resume_target(tmp_path, settings(halves=True))
     error = capsys.readouterr().err
     assert "이어받지 않는다" in error
     assert "halves" in error
@@ -259,7 +259,7 @@ def test_시계열_창_길이가_조건에_들어간다():
 
 def test_시계열_창_길이가_다르면_새_파일이다(tmp_path):
     write(tmp_path / "keys-20260821T100000Z.keys.jsonl", rows_for(settings(series=1.0), 5))
-    target, done, _ = _resume_target(tmp_path, settings(series=2.0))
+    target, done, _ = resume_target(tmp_path, settings(series=2.0))
     assert target.name != "keys-20260821T100000Z.keys.jsonl"
     assert done == set()
 
@@ -275,7 +275,7 @@ def test_이어받지_않는_이유를_한_줄로_찍는다(tmp_path, capsys):
         tmp_path / "keys-20260820T100000Z.keys.jsonl",
         rows_for(settings(profile="temperley", separate=False), 5),
     )
-    _resume_target(tmp_path, settings(halves=True))
+    resume_target(tmp_path, settings(halves=True))
     lines = [line for line in capsys.readouterr().err.splitlines() if line.strip()]
     assert len(lines) == 1, lines
     assert "halves" in lines[0]

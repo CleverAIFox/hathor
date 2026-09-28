@@ -23,22 +23,18 @@ from hathor.domain.entities.generation_job import GenerationJob, Stage
 from hathor.domain.entities.resolution_record import ResolutionRecord
 from hathor.domain.entities.resolved_identity import ResolutionState
 from hathor.domain.services.key_estimation import (
-    HARMONIC_STRENGTH,
     KEY_MARGIN_FLOOR,
-    PROFILE_TEMPERLEY,
     KeyEstimate,
 )
 from hathor.domain.services.midi_writer import DEFAULT_TEMPO_BPM
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
-    STEM_SETS,
 )
 from hathor.domain.value_objects.key import Key
 from hathor.infrastructure.chroma_series_store import (
     find_series_root,
     load_transition_priors,
-    write_series,
 )
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
@@ -62,12 +58,11 @@ from hathor.interfaces.cli import (
     eval_priors,
     eval_retrieval,
     eval_vocabulary,
-    ingest_keys_bundles,
+    ingest_keys,
     ingest_onsets,
 )
 from hathor.interfaces.cli.doctor import run_doctor
 from hathor.interfaces.cli.eval_log import recorded
-from hathor.interfaces.cli.eval_output import report_harmonic_sweep
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
 from hathor.interfaces.cli.extraction import drive_extraction
 from hathor.interfaces.cli.feature_sources import open_feature_source
@@ -86,7 +81,7 @@ from hathor.interfaces.cli.roots import (
     DEFAULT_SEARCH_KEY,
     resolve_root,
 )
-from hathor.interfaces.cli.tables import ambiguity_report, parse_key, replay_refusal
+from hathor.interfaces.cli.tables import parse_key
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
     load_dotenv,
@@ -183,80 +178,6 @@ def _build_generate(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-references", type=int, default=5, help="참조곡 상한 (D-0011)")
     parser.add_argument(
         "--chroma", choices=("cq", "linear"), default="cq", help="조성 추정 크로마 방식"
-    )
-
-
-def _build_ingest_keys(parser: argparse.ArgumentParser) -> None:
-    """`hathor ingest keys` 인자."""
-    parser.add_argument("--out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트")
-    parser.add_argument("--root", type=resolve_path, default=None, help="라이브러리 루트")
-    parser.add_argument(
-        "--chroma",
-        choices=("cq", "linear"),
-        default="cq",
-        help="크로마 방식. linear는 D-0056 이전 베이스라인이다",
-    )
-    parser.add_argument("--limit", type=int, default=None, help="앞에서 N곡만")
-    ingest_keys_bundles.add_argument(parser)
-    parser.add_argument(
-        "--replay",
-        type=resolve_path,
-        default=None,
-        help="저장된 keys.jsonl을 재분석. 디코딩하지 않는다",
-    )
-    parser.add_argument(
-        "--tuning",
-        action="store_true",
-        help="조율 편차도 잰다 (D-0057). 11배 느려지므로 표본에만 쓴다",
-    )
-    parser.add_argument(
-        "--profile",
-        choices=("krumhansl", "temperley"),
-        default=PROFILE_TEMPERLEY,
-        help="조성 프로파일. temperley가 기본이다 (D-0201)",
-    )
-    parser.add_argument(
-        "--gamma", type=float, default=0.0, help="로그 압축. 0이 끔이며 기본이다 (D-0058)"
-    )
-    parser.add_argument(
-        "--harmonic",
-        type=float,
-        default=HARMONIC_STRENGTH,
-        help=f"배음 감산 강도. 기본 {HARMONIC_STRENGTH:g} (D-0201)",
-    )
-    parser.add_argument(
-        "--harmonic-sweep",
-        action="store_true",
-        help="배음 강도 0~1을 한 번에 훑어 표로 낸다 (D-0060). --replay와 함께 쓴다",
-    )
-    parser.add_argument(
-        "--series",
-        type=float,
-        default=None,
-        metavar="초",
-        help="크로마 시계열을 이 창 길이로 함께 뽑아 npz에 저장한다 (O-32 · D-0105)",
-    )
-    parser.add_argument(
-        "--halves",
-        action="store_true",
-        help="앞뒤 반쪽 크로마도 뽑는다 (D-0062). `eval harmony-prior`가 이것을 요구한다",
-    )
-    parser.add_argument(
-        "--separate",
-        action="store_true",
-        help="타악을 분리하고 스템 조합별 크로마도 뽑는다 (O-27 (a) · D-0073). GPU 필요",
-    )
-    parser.add_argument(
-        "--aggregate",
-        choices=("mean", "median"),
-        default="mean",
-        help="전곡을 한 번에 변환할지(mean) 창별 중앙값을 낼지(median). O-27 후보 (b) · D-0065",
-    )
-    parser.add_argument(
-        "--window-seconds",
-        type=float,
-        default=10.0,
-        help="--aggregate median의 창 길이(초)",
     )
 
 
@@ -659,168 +580,6 @@ def _run_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-def _keys_settings(args: argparse.Namespace) -> dict[str, object]:
-    """행에 적히는 조건 묶음. 이어받기 판정과 기록이 같은 값을 쓴다.
-
-    **이것이 «이어받기가 같다고 볼 조건»이다** (D-0075). 하나라도 다르면 새 파일을 연다 —
-    조건이 섞인 산출물은 무엇을 잰 것인지 알 수 없고, 그것이 D-0073에서 조건을 행에 적게
-    만든 이유다. `limit`은 뺀다 — `--limit 200`으로 돌리다 전량으로 늘리는 것은 같은
-    조건의 연장이다. **이 단락은 함수 위에 떠 있었고 파이썬이 버렸다** (D-0274).
-    """
-    return {
-        # **`chroma`가 아니라 `chroma_mode`다.** 행에는 이미 `chroma`가 12차원
-        # 벡터로 들어 있어 이름이 겹치면 조용히 덮이고, 그러면 이어받기가 영영
-        # 안 걸린다. 실제로 그렇게 썼다가 잡았다.
-        "chroma_mode": args.chroma,
-        "profile": args.profile,
-        "gamma": args.gamma,
-        "harmonic": args.harmonic,
-        "aggregate": args.aggregate,
-        "separated": bool(args.separate),
-        "halves": bool(args.halves),
-        # **어떤 스템 조합을 뽑았는지가 조건이다** (D-0100). 예전에는 `separated`만
-        # 있어서, `STEM_SETS`에 조합을 하나 더해도 "이미 전부 처리했다"로 건너뛰었다.
-        # 실제로 D-0099가 `bass`를 더한 뒤 그 일이 났다 — **새 스템이 없는 파일에
-        # 이어붙으려 했고, 없는 것을 찾다가 0곡이 됐다.**
-        "stem_sets": sorted(STEM_SETS) if args.separate else [],
-        # **시계열 창 길이도 조건이다** (D-0100). 다른 창으로 뽑은 산출물에
-        # 이어붙으면 창 길이가 섞이고, 섞인 시계열은 무엇을 잰 것인지 알 수 없다.
-        "series_seconds": args.series,
-    }
-
-
-BROKEN_LINE_TOLERANCE = 0.02
-"""이어받을 때 견디는 깨진 줄 비율 (D-0077).
-
-끊기면 **마지막 한 줄**이 잘려 있을 수 있고 그것은 정상이다. 그보다 많이 깨졌다면
-동시 실행으로 줄이 섞였다는 뜻이며, **조용히 건너뛰면 49곡이 5곡으로 보인다.**
-실제로 그렇게 됐고 그때는 파일이 이미 못 쓰게 된 뒤였다.
-"""
-
-
-class BatchLock:
-    """산출물 디렉터리마다 하나만 돌게 한다 (D-0077).
-
-    ### 왜 필요해졌나
-
-    D-0075 이전에는 실행마다 새 타임스탬프 파일을 썼으므로 두 개가 동시에 돌아도
-    겹치지 않았다. **같은 파일에 이어 쓰게 만든 순간 생긴 문제다.**
-
-    `cd core`가 실패했는데도 뒤 명령이 실행돼 배치가 둘 떴고, 둘째가 첫째의 49곡을
-    읽고 이어받아 **같은 파일에 동시에 append했다.** 줄이 섞여 파일이 깨졌다.
-
-    ### 죽은 프로세스의 락은 자동으로 푼다
-
-    락 파일에 PID를 적고, 그 PID가 살아 있지 않으면 가져간다. 그러지 않으면 강제
-    종료 뒤 손으로 지워야 하고, **손으로 지우게 하면 결국 지우고 돌리게 된다.**
-
-    **이것이 예외 안전을 대신한다.** 추출 도중 예외로 죽으면 락 파일이 남지만, 그
-    PID는 이미 없으므로 다음 실행이 그냥 가져간다. `try/finally`로 감싸려면 본문
-    전체를 들여써야 하고, 그 재들여쓰기가 이 함수에서는 위험이 더 크다.
-    """
-
-    def __init__(self, root: Path, name: str = "ingest-keys") -> None:
-        self.path = root / f".{name}.lock"
-
-    def _holder(self) -> int | None:
-        try:
-            return int(self.path.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
-            return None
-
-    @staticmethod
-    def _alive(pid: int) -> bool:
-        import os
-
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        except OSError:
-            return True
-        return True
-
-    def acquire(self) -> int | None:
-        """잡으면 `None`, 이미 살아 있는 주인이 있으면 그 PID를 낸다."""
-        import os
-
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        holder = self._holder()
-        if holder is not None and holder != os.getpid() and self._alive(holder):
-            return holder
-        self.path.write_text(str(os.getpid()), encoding="utf-8")
-        return None
-
-    def release(self) -> None:
-        import os
-
-        if self._holder() == os.getpid():
-            self.path.unlink(missing_ok=True)
-
-
-def _resume_target(out_root: Path, settings: dict[str, object]) -> tuple[Path, set[str], int]:
-    """이어받을 파일과 이미 처리한 `source_key`를 낸다 (D-0075).
-
-    **켜야 하는 옵션으로 두지 않는다.** `--resume`을 붙여야 이어받게 하면 붙이는 것을
-    잊고, 잊으면 한 시간 반이 다시 사라진다. 조건이 같은 최근 파일이 있으면 그냥 잇고,
-    조건이 하나라도 다르면 새 파일을 연다.
-
-    깨진 줄은 건너뛴다. 중간에 끊기면 마지막 줄이 잘려 있을 수 있다.
-    """
-    import json
-    from datetime import UTC, datetime
-
-    # **후보가 열 개면 열 줄이 나온다** (D-0106). 가장 조건이 적게 다른 하나만 찍는다 —
-    # 그것이 "무엇을 바꾸면 이어받는가"에 가장 가까운 답이다.
-    skipped: list[tuple[str, list[str]]] = []
-    if out_root.is_dir():
-        for path in sorted(out_root.glob("keys-*.keys.jsonl"), reverse=True):
-            done: set[str] = set()
-            matched = False
-            broken = 0
-            total = 0
-            try:
-                with path.open(encoding="utf-8") as stream:
-                    for line in stream:
-                        if not line.strip():
-                            continue
-                        total += 1
-                        try:
-                            row = json.loads(line)
-                        except ValueError:
-                            broken += 1
-                            continue  # 잘린 마지막 줄이면 정상, 많으면 손상이다
-                        if not matched:
-                            differing = [
-                                key for key, value in settings.items() if row.get(key) != value
-                            ]
-                            if differing:
-                                # **조용히 새 파일을 열지 않는다** (D-0100). 이어받기가
-                                # 안 걸린 것을 모르면 한 시간 반을 다시 쓴다.
-                                skipped.append((path.name, differing))
-                                break
-                            matched = True
-                        source = row.get("source_key")
-                        if source:
-                            done.add(str(source))
-            except OSError:
-                continue
-            if matched:
-                return path, done, broken
-
-    if skipped:
-        name, differing = min(skipped, key=lambda entry: len(entry[1]))
-        extra = f" (다른 후보 {len(skipped) - 1}개)" if len(skipped) > 1 else ""
-        print(
-            f"이어받지 않는다: {name} · 조건이 다르다 ({', '.join(differing)}){extra}",
-            file=sys.stderr,
-        )
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    return out_root / f"keys-{stamp}.keys.jsonl", set(), 0
-
-
 def _resolve_harmony_prior(
     args: argparse.Namespace, source_keys: list[str], estimates: dict[str, KeyEstimate]
 ) -> tuple[tuple[float, ...] | None, str]:
@@ -920,360 +679,6 @@ def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | Non
     if not usable:
         return None
     return tuple(float(value) for value in merge_degree_priors(usable))
-
-
-def _run_ingest_keys(args: argparse.Namespace) -> int:
-    """코퍼스 조성 분포를 실측한다 (O-22(닫힘 D-0201)).
-
-    **정답 라벨이 없으므로 분포와 베이스라인으로 검사한다.** 맞다는 증명은
-    할 수 없고 틀렸다는 신호만 잡을 수 있다.
-
-    결과를 JSONL로 남긴다. 디코딩이 곡당 수 초라 재분석 때마다 다시 돌리면
-    실험 회전이 느려진다 — 지표를 만들어두고 보지 않게 되는 원인이다 (D-0030).
-    """
-    import json
-    from collections import Counter
-
-    import numpy as np
-
-    from hathor.domain.services.key_estimation import (
-        BLACK_KEYS,
-        chroma_series,
-        estimate_key,
-        estimate_tuning_cents,
-        random_baseline,
-        relative_key,
-        subtract_harmonics,
-        to_mono,
-    )
-    from hathor.domain.services.key_estimation import (
-        chroma as chroma_of,
-    )
-    from hathor.domain.value_objects.key import Key, Mode
-
-    out_root = Path(args.out)
-    rows: list[dict[str, object]] = []
-
-    if args.from_bundles:  # 옛 규격을 다시 쓰고 같은 보고로 이어 간다 (O-63 · D-0211)
-        if not (rows := ingest_keys_bundles.run(args) or []):
-            return 2
-    elif args.replay is not None:
-        if refusal := replay_refusal(args):
-            print(refusal, file=sys.stderr)
-            return 2
-
-        with args.replay.open(encoding="utf-8") as stream:
-            rows = [json.loads(line) for line in stream if line.strip()]
-        if (strength := ingest_keys_bundles.replay_strength(rows, args)) is None:
-            return 2  # 이미 뺀 배음을 또 빼지 않는다 (D-0211)
-        recomputed = 0
-        for row in rows:
-            saved = row.get("chroma")
-            if saved is None:
-                continue
-            # **저장된 크로마로 다시 판정한다** (D-0059). 프로파일과 배음 감산을
-            # 바꿔 가며 실험할 수 있고 음원도 GPU도 필요 없다. 크로마를 뽑는
-            # 것만 리전이고 알고리즘 실험은 어느 기기에서든 돈다.
-            vector = subtract_harmonics(np.asarray(saved, dtype=np.float64), strength)
-            total = float(vector.sum())
-            if total <= 0:
-                continue
-            estimate = estimate_key(
-                np.asarray(vector / total, dtype=np.float32), profile=args.profile
-            )
-            row.update(estimate.as_record())
-            row["profile"] = args.profile
-            recomputed += 1
-        note = (
-            f" · {recomputed}곡을 프로파일 {args.profile} · 배음 {args.harmonic:g}로 재판정"
-            if recomputed
-            else " · 저장된 크로마가 없어 기록된 판정을 그대로 쓴다"
-        )
-        print(f"재분석: {args.replay} ({len(rows)}곡){note}. 디코딩하지 않는다.\n")
-    else:
-        root = resolve_root(args.root)
-        tracks = list(JsonlScanStore(out_root).read_tracks())
-        if args.limit is not None:
-            tracks = tracks[: args.limit]
-        if not tracks:
-            print("스캔 산출물이 없다. --out 경로를 확인한다.", file=sys.stderr)
-            return 1
-
-        # **이어받을 파일을 먼저 정한다** (D-0075). 조건이 같은 최근 산출물이 있으면
-        # 거기에 붙이고, 이미 처리한 곡은 건너뛴다.
-        settings = _keys_settings(args)
-        # **같은 산출물에 둘이 못 쓰게 한다** (D-0077). 이어받기가 같은 파일에
-        # append하므로, 동시에 돌면 줄이 섞여 파일이 통째로 깨진다.
-        lock = BatchLock(out_root)
-        holder = lock.acquire()
-        if holder is not None:
-            print(
-                f"이미 다른 추출이 돌고 있다 (PID {holder}). 끝나기를 기다리거나 그 쪽을 멈춘다.",
-                file=sys.stderr,
-            )
-            return 1
-        saved, done, broken = _resume_target(out_root, settings)
-        # **시계열은 산출물 이름을 따라간다** (D-0105). 이어받기가 정한 파일과 짝이
-        # 안 맞으면 어느 jsonl의 시계열인지 알 수 없다.
-        series_root = out_root / saved.name.replace(".keys.jsonl", ".series")
-        if broken > max(1, int(len(done) * BROKEN_LINE_TOLERANCE)):
-            lock.release()
-            print(
-                f"{saved.name}에 깨진 줄이 {broken}개다. **동시 실행으로 섞였을 수 있다.**\n"
-                f"  조용히 건너뛰면 처리한 곡 수를 잘못 세고 그 위에 이어 쓴다.\n"
-                f"  파일을 확인하고 지운 뒤 다시 실행한다: {saved}",
-                file=sys.stderr,
-            )
-            return 1
-        if done:
-            print(f"이어받는다: {saved.name} · 이미 {len(done)}곡", file=sys.stderr, flush=True)
-        remaining = [track for track in tracks if track.source_key not in done]
-        if not remaining:
-            lock.release()
-            print(f"이미 전부 처리했다: {saved}\n")
-            return 0
-
-        decoder = FfmpegAudioDecoder()
-        separator = None
-        if args.separate:
-            # **모델을 한 번만 적재한다.** 곡마다 적재하면 8초씩 200번을 버린다.
-            from hathor.infrastructure.demucs_separator import DemucsStemSeparator
-
-            separator = DemucsStemSeparator()
-            missing = [
-                part
-                for parts in STEM_SETS.values()
-                for part in parts
-                if part not in separator.sources
-            ]
-            if missing:
-                lock.release()
-                print(
-                    f"모델이 내지 않는 스템을 요구한다: {sorted(set(missing))} "
-                    f"(가진 것: {separator.sources})",
-                    file=sys.stderr,
-                )
-                return 1
-        failed = 0
-        saved.parent.mkdir(parents=True, exist_ok=True)
-        # **행마다 즉시 쓴다.** 전에는 1004곡을 메모리에 쌓고 마지막에 한 번 썼다.
-        # 중간에 끊기면 전부 사라졌고, GPU로 한 시간 반짜리 작업에서 실제로 겪었다.
-        stream = saved.open("a", encoding="utf-8")
-        for index, track in enumerate(remaining, start=1):
-            path = root / track.source_key
-            try:
-                present = path.exists()
-            except OSError as error:
-                print(f"음원 경로를 열 수 없다({error}): {track.source_key[:40]}", file=sys.stderr)
-                failed += 1
-                continue
-            if not present:
-                failed += 1
-                continue
-            try:
-                waveform = decoder.decode(path)
-                # **크로마를 함께 저장한다** (D-0059). 디코딩이 곡당 수 초라
-                # 프로파일·배음 실험마다 다시 돌리면 실험 회전이 느려진다.
-                # 크로마만 있으면 음원 없는 기기에서도 알고리즘을 바꿔 볼 수 있다.
-                extracted = chroma_of(
-                    to_mono(waveform),
-                    mode=args.chroma,
-                    gamma=args.gamma,
-                    harmonic=args.harmonic,
-                    aggregate=args.aggregate,
-                    window_seconds=args.window_seconds,
-                )
-                if args.series is not None:
-                    # **같은 디코드·같은 분리를 쓴다.** 시계열 전용 배치를 따로 만들면
-                    # 이어받기·잠금·진행 표시를 복사해야 하고, 그러면 한쪽만 고쳐진다.
-                    write_series(
-                        series_root,
-                        track.source_key,
-                        "mix",
-                        chroma_series(
-                            to_mono(waveform),
-                            window_seconds=args.series,
-                            mode=args.chroma,
-                            gamma=args.gamma,
-                            harmonic=args.harmonic,
-                        ),
-                    )
-                estimate = estimate_key(extracted, profile=args.profile)
-                cents = (
-                    estimate_tuning_cents(to_mono(waveform))
-                    if args.tuning and args.chroma == "cq"
-                    else 0.0
-                )
-            except Exception:
-                failed += 1
-                continue
-            record: dict[str, object] = {
-                # **행마다 조건을 적는다** (D-0073). 파일 이름만 봐서는 `mean`인지
-                # `median`인지, 몇 곡인지, 분리했는지 알 수 없었다. 실제로 리전에
-                # 여섯 개가 쌓인 채 어느 것이 무엇인지 모르는 상태가 됐다.
-                **settings,
-                "window_seconds": args.window_seconds if args.aggregate == "median" else None,
-                "limit": args.limit,
-                "source_key": track.source_key,
-                **estimate.as_record(),
-                "tuning_cents": cents,
-                "profile": args.profile,
-                "chroma": [round(float(value), 6) for value in extracted],
-            }
-            if args.separate:
-                # **조합마다 크로마를 실제로 뽑는다.** 스템별 크로마를 저장해 두고
-                # 나중에 더하는 편이 싸지만, 크로마는 크기 스펙트럼이라 신호의 합에
-                # 대해 선형이 아니다 — 스템 크로마의 합은 합친 신호의 크로마와 다르다.
-                # **(a)가 성립하는지 판정하는 자리에서 근사를 끼우지 않는다.**
-                assert separator is not None
-                stems = separator.separate(waveform)
-                bundle: dict[str, dict[str, list[float]]] = {}
-                for name, parts in STEM_SETS.items():
-                    stacked = np.stack([stems[part] for part in parts])
-                    mixed = to_mono(np.asarray(stacked.sum(axis=0), dtype=np.float32))
-                    middle = mixed.size // 2
-                    # **`full`은 생성 경로가, `head`/`tail`은 판정이 쓴다** (D-0074).
-                    # 반쪽은 홀드아웃 전용이라 전량 배치에서는 굳이 뽑지 않아도 된다.
-                    if args.series is not None and len(parts) == 1:
-                        # **조합은 시계열로 안 뽑는다** (D-0106). `other+bass`류는 화성
-                        # 사전을 고르려고 만든 것이고(D-0073), 순서 작업이 쓰는 것은
-                        # `other`(화음)와 `bass`(독립 관측)다. 시계열 한 번이 전곡
-                        # 크로마 한 번과 같은 비용이라 조합 둘이 곡당 1.7초를 버린다.
-                        write_series(
-                            series_root,
-                            track.source_key,
-                            name,
-                            chroma_series(
-                                mixed,
-                                window_seconds=args.series,
-                                mode=args.chroma,
-                                gamma=args.gamma,
-                                harmonic=args.harmonic,
-                            ),
-                        )
-                    segments = [("full", mixed)]
-                    if args.halves:
-                        segments += [("head", mixed[:middle]), ("tail", mixed[middle:])]
-                    bundle[name] = {
-                        side: [
-                            round(float(value), 6)
-                            for value in chroma_of(
-                                segment,
-                                mode=args.chroma,
-                                gamma=args.gamma,
-                                harmonic=args.harmonic,
-                                aggregate=args.aggregate,
-                                window_seconds=args.window_seconds,
-                            )
-                        ]
-                        for side, segment in segments
-                    }
-                record["stems"] = bundle
-            if args.halves:
-                # **조성을 앞반쪽에서만 추정한다** (D-0062). 곡 전체에서 추정하면
-                # 뒷반쪽이 회전 정렬에 관여해 홀드아웃이 성립하지 않는다.
-                mono = to_mono(waveform)
-                middle = mono.size // 2
-                halves = {}
-                for name, segment in (("head", mono[:middle]), ("tail", mono[middle:])):
-                    halves[name] = chroma_of(
-                        segment,
-                        mode=args.chroma,
-                        gamma=args.gamma,
-                        harmonic=args.harmonic,
-                        aggregate=args.aggregate,
-                        window_seconds=args.window_seconds,
-                    )
-                head_estimate = estimate_key(halves["head"], profile=args.profile)
-                record["chroma_head"] = [round(float(value), 6) for value in halves["head"]]
-                record["chroma_tail"] = [round(float(value), 6) for value in halves["tail"]]
-                record["key_head"] = str(head_estimate.key)
-                record["margin_head"] = round(head_estimate.margin, 4)
-            rows.append(record)
-            stream.write(json.dumps(record, ensure_ascii=False) + "\n")
-            stream.flush()
-            if index % 50 == 0:
-                print(
-                    f"  {index}/{len(remaining)}"
-                    f"{f' (누적 {len(done) + index}/{len(tracks)})' if done else ''}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-        stream.close()
-        lock.release()
-        print(
-            f"저장: {saved} · 크로마 {args.chroma} · 프로파일 {args.profile}"
-            f" · gamma {args.gamma:g} · 배음 {args.harmonic:g} · 집계 {args.aggregate}"
-            f"{f'({args.window_seconds:g}초 창)' if args.aggregate == 'median' else ''}"
-            f" (실패·부재 {failed})\n"
-        )
-
-    if not rows:
-        print("추정된 곡이 없다.", file=sys.stderr)
-        return 1
-
-    if args.harmonic_sweep:
-        return report_harmonic_sweep(rows, args.profile)
-
-    total = len(rows)
-    correlations = np.asarray([float(str(row["correlation"])) for row in rows])
-    margins = np.asarray([float(str(row["margin"])) for row in rows])
-
-    def parse(text: str) -> Key:
-        tonic, mode = str(text).rsplit(" ", 1)
-        return Key(tonic=tonic, mode=Mode(mode))
-
-    keys = [parse(str(row["key"])) for row in rows]
-    runner_ups = [parse(str(row["runner_up"])) for row in rows]
-
-    modes: Counter[str] = Counter(key.mode.value for key in keys)
-    tonics: Counter[str] = Counter(key.tonic for key in keys)
-    is_relative = [relative_key(key) == other for key, other in zip(keys, runner_ups, strict=True)]
-    ambiguous_flags = margins < KEY_MARGIN_FLOOR
-
-    print(f"곡 {total}개\n")
-    print("선법")
-    for mode, count in modes.most_common():
-        print(f"  {mode:<6} {count:5d}  {count / total:6.1%}")
-
-    black = sum(1 for key in keys if key.tonic in BLACK_KEYS)
-    print(f"  검은건반 으뜸음  {black:5d}  {black / total:6.1%}   ← O-23 지표 (D-0061)")
-
-    print("\n조성 교차표 (으뜸음 / 선법)")
-    print(f"  {'':<4}{'major':>7}{'minor':>7}{'합계':>7}")
-    for tonic, _ in tonics.most_common():
-        major = sum(1 for key in keys if key.tonic == tonic and key.mode is Mode.MAJOR)
-        minor = sum(1 for key in keys if key.tonic == tonic and key.mode is Mode.MINOR)
-        print(f"  {tonic:<4}{major:>7}{minor:>7}{major + minor:>7}")
-
-    # **베이스라인도 같은 프로파일로 잰다** (D-0059). 하한이 프로파일마다 달라
-    # (Krumhansl 0.6192 · Temperley 0.5488) 고정값을 쓰면 비교가 성립하지 않는다.
-    base_profile = str(rows[0].get("profile", "krumhansl"))
-    base_correlation, base_margin = random_baseline(profile=base_profile, harmonic=args.harmonic)
-    print("\n지표 대 무작위 베이스라인")
-    print(f"  {'':<10}{'코퍼스':>10}{'무작위':>10}{'차이':>10}")
-    for name, actual, base in (
-        ("상관", correlations, base_correlation),
-        ("격차", margins, base_margin),
-    ):
-        gap = float(np.median(actual) - np.median(base))
-        print(
-            f"  {name:<10}{float(np.median(actual)):>10.4f}"
-            f"{float(np.median(base)):>10.4f}{gap:>+10.4f}"
-        )
-
-    print(
-        "\n".join(
-            ambiguity_report(
-                modes=[key.mode.value for key in keys],
-                ambiguous=ambiguous_flags,
-                relative=is_relative,
-                floor=float((base_margin < KEY_MARGIN_FLOOR).mean()),
-                tunings=[float(str(row["tuning_cents"])) for row in rows if "tuning_cents" in row],
-            )
-        )
-    )
-    return 0
 
 
 def _run_generate_midi(args: argparse.Namespace) -> int:
@@ -1977,12 +1382,7 @@ def entries() -> tuple[Entry, ...]:
             "ingest_command",
             (
                 *ingest_onsets.COMMANDS,
-                Command(
-                    "keys",
-                    "코퍼스 조성 분포 실측 (D-0054 · O-22(닫힘 D-0201))",
-                    _build_ingest_keys,
-                    _run_ingest_keys,
-                ),
+                *ingest_keys.COMMANDS,
                 Command("scan", "라이브러리 스캔", _build_ingest_scan, _run_ingest_scan),
                 Command(
                     "resolve",

@@ -2343,6 +2343,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0274 | 읽는 기본값이 없는 폴더를 열고 있었다 | `core/tests/unit/test_artifacts_ledger.py::test_읽는_쪽은_모양을_보고_고른다` | 실물 저장소 · 실물 교두보 |
 | D-0275 | 낮은 파이썬에서 `deadcheck`가 «0건»을 거짓으로 냈다 | `core/tests/unit/test_gate_ratchets.py::test_낮은_파이썬이면_돌기를_거부한다` | 실물 저장소 |
 | D-0276 | 가짜 `torch`가 `scipy`를 죽였다 | `core/tests/unit/test_gate_isolation.py::test_가짜_모듈을_심는_시험은_혼자_돌아도_통과한다` | 실물 저장소 |
+| D-0277 | `_run_ingest_keys` 352줄을 쪼갠다 | `tools/check_file_size.py` | 실물 저장소 |
 
 <!-- decision-ledger:end -->
 
