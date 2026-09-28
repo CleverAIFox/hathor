@@ -33,6 +33,7 @@ resample_poly`를 한다. 그 임포트가 가짜가 심긴 동안 일어나면 
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -84,6 +85,21 @@ def planting_tests() -> list[str]:
     return found
 
 
+INHERITED = ("COV_CORE_", "COVERAGE_", "PYTEST_")
+"""자식이 물려받으면 안 되는 환경변수의 머리 (D-0282).
+
+부모가 `--cov`로 돌면 `pytest-cov`가 `.pth` 훅을 심어 **모든 파이썬 자식이 측정을 시작한다.**
+그 자식이 또 `pytest`면 부모의 측정 자리에 자기 자료를 쓴다 — 여섯 자식이 그렇게 한다.
+
+**자식은 이 관문이 묻는 것만 대답해야 한다** — «혼자 돌면 통과하는가»다. 부모의 측정을
+물려받으면 그 답에 부모가 섞인다."""
+
+
+def _clean_env() -> dict[str, str]:
+    """부모의 측정·캐시 설정을 뺀 환경."""
+    return {name: value for name, value in os.environ.items() if not name.startswith(INHERITED)}
+
+
 def test_그물이_비지_않았다() -> None:
     """**세는 그물이 비면 «전부 통과»가 거짓으로 참이 된다** (D-0230)."""
     found = planting_tests()
@@ -100,8 +116,9 @@ def test_가짜_모듈을_심는_시험은_혼자_돌아도_통과한다() -> No
     broken: list[str] = []
     for node_id in planting_tests():
         done = subprocess.run(
-            (sys.executable, "-m", "pytest", node_id, "-q", "--no-cov"),
+            (sys.executable, "-m", "pytest", node_id, "-q", "--no-cov", "-p", "no:cacheprovider"),
             cwd=CORE,
+            env=_clean_env(),
             capture_output=True,
             text=True,
             check=False,

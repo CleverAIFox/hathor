@@ -227,3 +227,33 @@ def test_건너뛴_것은_빨강이_아니다(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
 
     assert "초록" in " ".join(SHIP.ci_verdict())
+
+
+# ------------------------------- 판정하면서 근거를 버리지 않는다 (D-0282)
+
+
+def test_막혔을_때_꼬리를_보여_준다() -> None:
+    """**«어느 단계»만 알려 주고 «어느 시험»은 안 알려 줬다** (D-0282).
+
+    사용자가 `make check`를 초록으로 돌린 **바로 뒤** `make ship`에서 막혔고, 찍힌 것은
+    마지막 한 줄뿐이었다.
+
+        막힘  make[1]: *** [Makefile:74: test] Error 1
+
+    그리고 안내가 *"`make check`를 먼저 초록으로 만든다"*였다 — **방금 초록이었으므로 그
+    안내는 사람을 제자리에 세운다.**
+    """
+    text = "\n".join([f"줄 {number}" for number in range(100)] + ["FAILED tests/x.py::test_y"])
+    lines = SHIP.blocked(text)
+
+    assert "FAILED tests/x.py::test_y" in lines[0], "마지막 줄은 그대로 머리에 온다"
+    body = "\n".join(lines)
+    assert "줄 99" in body and "줄 71" in body, "꼬리 30줄이 있다"
+    assert "줄 40" not in body, "전부 찍지는 않는다"
+    assert "같은 명령이 여기서 빨갰다" in body
+
+
+def test_출력이_없으면_한_줄로_끝낸다() -> None:
+    """**없는 꼬리를 꾸며 내지 않는다.**"""
+    assert any("출력이 없다" in line for line in SHIP.blocked(""))
+    assert len(SHIP.blocked("한 줄뿐")) == 4

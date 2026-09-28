@@ -48,7 +48,6 @@ import argparse
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import tidy
@@ -95,6 +94,40 @@ OUTSIDE = (".venv", "var", "node_modules")
 def _run(*command: str) -> tuple[int, str]:
     done = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
     return done.returncode, (done.stdout + done.stderr).strip()
+
+
+KEEP_LINES = 30
+"""막혔을 때 보여 줄 꼬리 줄 수 (D-0282). **판정하면서 근거를 버리지 않는다.**"""
+
+
+def blocked(text: str, keep: int = KEEP_LINES) -> list[str]:
+    """`make check`가 막혔을 때 찍을 줄. **잡은 출력의 꼬리를 그대로 낸다** (D-0282).
+
+    예전에는 **마지막 한 줄**만 찍었다.
+
+        막힘  make[1]: *** [Makefile:74: test] Error 1
+
+    그 줄은 «어느 단계»만 알려 주고 «어느 시험»은 안 알려 준다. 그리고 안내가
+    *"`make check`를 먼저 초록으로 만든다"*였는데, 사용자는 **바로 앞에서 그것을 초록으로
+    돌린 뒤**였다 — 같은 명령이 한 번은 초록이고 한 번은 빨갰으므로 그 안내는 **거짓말이고
+    사람을 제자리에 세운다.**
+
+    도구가 판정을 내면 그 근거를 같이 내야 한다. `make ship`이 산출물 판정을 수로 찍게 만든
+    것과 같은 규율이다 (D-0269 — *"가리키기만 하면 안 본다"*).
+    """
+    lines = text.strip().splitlines() if text.strip() else []
+    head = f"{RED}   막힘{OFF}  {lines[-1] if lines else '(출력이 없다)'}"
+    if len(lines) <= 1:
+        return [head, "", "`make check`를 따로 돌려 본다.", ""]
+    tail = lines[-keep:]
+    return [
+        head,
+        f"{DIM}   ── 잡은 출력 마지막 {len(tail)}줄{OFF}",
+        *(f"   {line}" for line in tail),
+        "",
+        "**같은 명령이 여기서 빨갰다.** 위 꼬리에 터진 자리가 있다.",
+        "",
+    ]
 
 
 def _git(*arguments: str) -> str:
@@ -227,8 +260,8 @@ def main() -> int:
     print(f"{DIM}── 규약 (make check){OFF}")
     code, text = _run("make", "check")
     if code != 0:
-        print(f"{RED}   막힘{OFF}  {text.strip().splitlines()[-1] if text else ''}")
-        print("\n`make check`를 먼저 초록으로 만든다.", file=sys.stderr)
+        for line in blocked(text):
+            print(line)
         return 1
     print(f"{GREEN}   통과{OFF}")
 
