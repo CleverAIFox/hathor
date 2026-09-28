@@ -12,6 +12,7 @@ D-0118은 합성 자료로 왕복만 확인하고 냈다. **왕복은 전부 통
 from __future__ import annotations
 
 import errno
+import os
 import pathlib
 import sys
 from pathlib import Path
@@ -399,3 +400,67 @@ def test_봉인이_자기_근거를_든다() -> None:
 
     assert 'sealed[name] = [*mark, "same"]' not in source
     assert "sealed[name] = [*mark, mine_digest]" in source
+
+
+# --------------------- 못 읽는 자리에서 멈추지 않는다 — 파일도 (D-0298)
+
+
+BLOCKED = "막힌것.npz"
+"""`stat`이 막히는 파일 하나. **DrvFs에서 실제로 났다** (D-0298)."""
+
+REAL_SCANDIR = os.scandir
+"""진짜 `scandir`. **대역을 끼우기 전에 잡아 둔다** — 안 그러면 대역이 자기를 부른다."""
+
+
+class _Entry:
+    """`os.scandir`의 항목 하나. `BLOCKED`에서만 `stat`이 죽는다."""
+
+    def __init__(self, entry: os.DirEntry[str]) -> None:
+        self._entry = entry
+        self.path = entry.path
+        self.name = entry.name
+
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+        return self._entry.is_dir(follow_symlinks=follow_symlinks)
+
+    def is_file(self, *, follow_symlinks: bool = True) -> bool:
+        return self._entry.is_file(follow_symlinks=follow_symlinks)
+
+    def stat(self) -> os.stat_result:
+        if self.name == BLOCKED:
+            raise OSError(errno.ENOMEM, "Cannot allocate memory", self.path)
+        return self._entry.stat()
+
+
+class _Scan:
+    """`os.scandir` 대역. **진짜 폴더를 읽고** 항목만 갈아 끼운다."""
+
+    def __init__(self, path: str | Path) -> None:
+        self._inner = REAL_SCANDIR(path)
+
+    def __enter__(self) -> list[_Entry]:
+        return [_Entry(one) for one in self._inner]
+
+    def __exit__(self, *_exc: object) -> None:
+        self._inner.close()
+
+
+def test_못_읽는_파일이_있어도_나머지를_센다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**D-0239가 폴더에만 걸어 둔 규율이 파일에 없었다** (D-0298).
+
+    DrvFs 교두보에서 `entry.stat()`이 `OSError: [Errno 12] Cannot allocate memory`로
+    죽었고, 그것이 `try`의 **밖**이라 만 이천 개 순회가 통째로 넘어갔다. 1004개짜리 온셋
+    계열이 들어온 날 났다 — `git push`는 끝난 뒤였고 교두보만 못 갔다.
+
+    **같은 오류·같은 자리가 두 번째다.** 그때 폴더를 감싸면서 파일을 안 봤다.
+    """
+    for name in ("좋은것1.npz", BLOCKED, "좋은것2.npz"):
+        (tmp_path / name).write_bytes(b"x")
+    monkeypatch.setattr(tool.os, "scandir", _Scan)
+
+    seen = tool.walk(tmp_path)
+
+    assert set(seen) == {"좋은것1.npz", "좋은것2.npz"}, "막힌 하나가 나머지를 죽였다"
+    assert BLOCKED in capsys.readouterr().err, "무엇이 막혔는지 화면에 안 남는다"

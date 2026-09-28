@@ -23138,3 +23138,65 @@ D-0284가 *"배수 보고는 MIR 표준이 아니다"*라고 적었다. <!--voic
 강제자  `core/tests/unit/test_evaluate_retrieval.py::test_측정값마다_무작위가_같이_나간다`
 
 자료  실물 1004곡 · `layer00` 검색 실측
+
+---
+
+## D-0298. 같은 오류가 같은 자리에서 두 번째 났다 — 폴더는 감싸고 파일은 안 감쌌다
+
+- **배경**: `make ship`이 푸시를 끝낸 뒤 교두보에서 넘어졌다.
+
+      ── push
+         b3dd010..e2c548a  main -> main
+         막힘  OSError: [Errno 12] Cannot allocate memory:
+               '/mnt/f/…/keys-0.01s.onsets/fdc8a016c65e377d.npz'
+           File "tools/sync_artifacts.py", line 151, in iter_stats
+             stamp = entry.stat()
+
+  **D-0239가 고친 그 오류다.** 그 머리말이 이렇게 적고 있다 — *"DrvFs 교두보(만 이천 개)에서 <!--voice-ok-->
+  그러다 `OSError: [Errno 12] Cannot allocate memory`로 죽었다 — `git push`가 끝난 뒤에
+  `make ship`이 넘어졌다."* **문장까지 똑같다.**
+
+### 규율을 한 겹에만 걸었다
+
+`iter_stats`의 `try/except OSError`가 **`os.scandir`만** 감싼다. `entry.stat()`은 그 밖에 있다.
+
+    try:
+        with os.scandir(current) as entries:  ← 감쌌다
+            rows = list(entries)
+    except OSError as failure:
+        …건너뛴다
+    for entry in rows:
+        …
+        stamp = entry.stat()                  ← 안 감쌌다
+
+같은 함수의 머리말이 *"못 읽는 폴더에서 멈추지 않는다. 한 폴더가 막히면 알리고 지나간다"*고 <!--voice-ok-->
+적는다. **파일에는 그 규율이 없었다** — 파일 하나가 막히면 만 이천 개 순회가 통째로 죽는다.
+
+**터진 계기는 D-0295·어제 배치다.** `keys-0.01s.onsets` 1004개가 들어와 교두보가 12,638개가
+됐고, 그중 하나에서 `stat`이 막혔다.
+
+- **후보**: 셋.
+  - **재시도한다** — DrvFs가 일시적이라는 근거가 없다. **지어내는 것이다.**
+  - **`stat`을 안 부른다** — 크기·시각으로 «이미 있는가»를 판정하므로 뺄 수 없다.
+  - **폴더와 같이 건너뛴다** — 알리고 지나간다.
+- **선택**: 셋째. **건너뛴 파일은 «없는 것»이 되어 다시 보내진다.** 그쪽이 안전하다 —
+  못 읽은 것을 «있다»로 세면 **보내야 할 것을 안 보낸다.**
+- **결과**: 시험 1건 + 양성 대조. 고침을 떼면 빨개지고 붙이면 초록이다.
+
+### 남기는 것
+
+- **규율을 한 겹에 걸고 다음 겹을 안 본다.** 오늘만 다섯 번째다 — D-0292(`regen`만) ·
+  D-0293(기법만) · D-0296(`reads` 빠짐) · D-0297(`P@k`만) · 여기(폴더만).
+  **공통점은 「고칠 때 같은 물음을 한 겹 아래에 다시 안 던졌다」다.**
+- **머리말이 규율을 적었는데 코드가 절반만 지켰다.** D-0239는 옳게 판단했고 옳게 적었다.
+  **적용 범위만 좁았고, 그 범위를 세는 것이 없었다.**
+- **커밋은 나갔고 교두보만 못 갔다.** D-0283이 만든 순서(밀고 나서 교두보) 덕에 손해가
+  백업 지연뿐이다. **그 판단이 여기서 값을 했다.**
+
+재현
+    cd core && uv run pytest tests/unit/test_sync_artifacts.py -q
+    make artifacts-push
+
+강제자  `core/tests/unit/test_sync_artifacts.py::test_못_읽는_파일이_있어도_나머지를_센다`
+
+자료  실물 저장소 · 사용자 기기 로그 (교두보 12,638개)

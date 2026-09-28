@@ -148,7 +148,20 @@ def iter_stats(base: Path) -> Iterator[tuple[str, int, int]]:
             if entry.is_dir(follow_symlinks=False):
                 pending.append(Path(entry.path))
             elif entry.is_file(follow_symlinks=False) and not entry.name.endswith(TRANSIENT):
-                stamp = entry.stat()
+                # **`stat`도 막힌다** (D-0298). D-0239가 폴더에 이 규율을 걸어 놓고
+                # **파일에는 안 걸었다** — DrvFs에서 `entry.stat()`이 `Errno 12`로 죽으면
+                # 만 이천 개 순회가 통째로 넘어간다. 실제로 그렇게 났다.
+                #
+                # **건너뛰면 그 파일은 «없는 것»이 되어 다시 보내진다.** 안전한 쪽이다 —
+                # 못 읽은 것을 «있다»로 세면 **보내야 할 것을 안 보낸다.**
+                try:
+                    stamp = entry.stat()
+                except OSError as failure:
+                    print(
+                        f"  읽지 못했다: {entry.path} — {failure.strerror or failure}",
+                        file=sys.stderr,
+                    )
+                    continue
                 yield (
                     Path(entry.path).relative_to(base).as_posix(),
                     stamp.st_size,
@@ -164,8 +177,11 @@ def iter_files(base: Path) -> Iterator[tuple[str, int]]:
     **`OSError: [Errno 12] Cannot allocate memory`**로 죽었다 — `git push`가 끝난 뒤에
     `make ship`이 넘어졌다. 여기서는 폴더 하나를 열고 **바로 닫는다.**
 
-    **못 읽는 폴더에서 멈추지 않는다.** 한 폴더가 막히면 알리고 지나간다 — 교두보가
+    **못 읽는 자리에서 멈추지 않는다.** 폴더든 파일이든 막히면 알리고 지나간다 — 교두보가
     반쯤 읽히는 것이 아예 안 읽히는 것보다 낫고, 무엇이 막혔는지는 화면에 남는다.
+
+    **파일에 이 규율이 없었다** (D-0298). D-0239가 폴더에만 걸어서, 1004개짜리 온셋 계열이
+    들어오자 `entry.stat()`이 `Errno 12`로 죽고 **같은 자리가 다시 났다.**
     """
     for name, size, _stamp in iter_stats(base):
         yield name, size

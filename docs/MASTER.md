@@ -2417,6 +2417,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0295 | 나머지 셋은 저장소가 달라서 닿지 못했다 | `core/tests/unit/test_artifacts_ledger.py::test_리비전을_묻는_자리가_선언과_같다` | 실물 저장소 · 사용자 기기 위생 출력 |
 | D-0296 | 한 칸을 고치고 바로 옆 칸을 안 셌다 | `core/tests/unit/test_artifacts_ledger.py::test_대장의_재생성_명령이_실재한다` | 실물 저장소 |
 | D-0297 | `MAP`이 무작위 없이 나가고 있었다 | `core/tests/unit/test_evaluate_retrieval.py::test_측정값마다_무작위가_같이_나간다` | 실물 1004곡 · `layer00` 검색 실측 |
+| D-0298 | 같은 오류가 같은 자리에서 두 번째 났다 | `core/tests/unit/test_sync_artifacts.py::test_못_읽는_파일이_있어도_나머지를_센다` | 실물 저장소 · 사용자 기기 로그 (교두보 12,638개) |
 
 <!-- decision-ledger:end -->
 
