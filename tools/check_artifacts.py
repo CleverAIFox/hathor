@@ -50,6 +50,7 @@ import re
 import sys
 import tomllib
 from datetime import UTC, datetime
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import NamedTuple
 
@@ -255,6 +256,30 @@ def folded(base: Path) -> dict[str, str]:
     return {STAMP.sub("*", path.name): path.name for path in base.iterdir()}
 
 
+def resolved(found: dict[str, str], declared: set[str]) -> dict[str, str]:
+    """실물 이름을 **선언된 이름에 붙인다** (D-0292).
+
+    `folded()`는 `*`를 **실행 스탬프**로만 푼다. 그런데 대장의 `*`가 늘 스탬프인 것은
+    아니다 — `keys-*.onsets`의 `*`는 **홉 값**(`0.01s`)이고 `--hop`으로 갈린다.
+
+    그래서 `keys-0.01s.onsets`가 어디에도 안 붙어 **결손과 격리로 두 번 세어졌다.**
+    같은 것 하나가 «없다»와 «모르는 것이다»로 동시에 찍혔고, 사람은 그것을 배치가
+    실패한 것으로 읽는다 — 1004곡이 다 들어온 뒤였다.
+
+    **둘 이상에 맞으면 안 붙인다.** 골라 주면 그 선택이 조용하고, 조용한 선택은
+    다음 사람이 못 본다 — 격리로 남겨 사람이 판정한다.
+    """
+    matched: dict[str, str] = {}
+    globs = [name for name in declared if "*" in name]
+    for name, real in found.items():
+        if name in declared:
+            matched[name] = real
+            continue
+        hits = [one for one in globs if fnmatch(name, one)]
+        matched[hits[0] if len(hits) == 1 else name] = real
+    return matched
+
+
 def store_side() -> Path | None:
     """교두보의 `var/ingest`. **경로 파서를 새로 쓰지 않는다** (D-0199).
 
@@ -300,8 +325,9 @@ def audit(entries: dict[str, dict[str, object]], base: Path, store: Path | None 
     found = dict(folded(base))
     if store is not None:
         found = {**folded(store), **found}
-    seen = set(found)
     declared = set(entries)
+    found = resolved(found, declared)
+    seen = set(found)
     return Verdict(
         missing=sorted(
             name

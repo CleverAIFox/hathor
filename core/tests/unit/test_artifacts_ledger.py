@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import argparse
+import re
 from pathlib import Path
 
 from hathor.shared.config.paths import repo_root
@@ -464,3 +466,94 @@ def reader_stores() -> list[str]:
 def test_읽는_쪽은_모양을_보고_고른다() -> None:
     """**D-0274의 강제자.** 읽는 쪽 넷이 이제 다 `open_feature_source`를 지난다."""
     assert reader_stores() == [], f"직접 여는 자리: {reader_stores()}"
+
+
+# ------------------------- `*`가 스탬프만은 아니다 (D-0292)
+
+
+def test_스탬프가_아닌_별표도_붙는다(tmp_path: Path) -> None:
+    """**같은 것 하나가 결손과 격리로 두 번 세어졌다** (D-0292).
+
+    `folded()`는 `*`를 **실행 스탬프**로만 푼다. 그런데 `keys-*.onsets`의 `*`는
+    **홉 값**이고 `--hop`으로 갈린다. 배치가 1004곡을 다 넣은 뒤에 감사가 *"어디에도
+    없다"*와 *"대장에 없는 계열이다"*를 **동시에** 찍었고, 사람은 그것을 실패로 읽었다.
+    """
+    (tmp_path / "keys-0.01s.onsets").mkdir()
+    entries: dict[str, dict[str, object]] = {"keys-*.onsets": {"state": "있음"}}
+
+    seen = LEDGER.audit(entries, tmp_path)
+
+    assert seen.normal == 1
+    assert seen.missing == []
+    assert seen.orphan == []
+    assert seen.examples["keys-*.onsets"] == "keys-0.01s.onsets", "재려면 실물 이름이 필요하다"
+
+
+def test_둘_이상에_맞으면_안_붙인다(tmp_path: Path) -> None:
+    """**골라 주면 그 선택이 조용하다.** 격리로 남겨 사람이 판정한다."""
+    found = LEDGER.resolved({"a-1.x": "a-1.x"}, {"a-*.x", "a-1.*"})
+    assert found == {"a-1.x": "a-1.x"}
+
+
+def test_스탬프_접기를_안_깬다(tmp_path: Path) -> None:
+    """**옛 동작이 그대로다.** 넓히면서 좁은 쪽을 깨면 격리가 우수수 뜬다."""
+    (tmp_path / "keys-20260101T000000Z.series").mkdir()
+    entries: dict[str, dict[str, object]] = {"keys-*.series": {"state": "있음"}}
+
+    assert LEDGER.audit(entries, tmp_path).normal == 1
+
+
+# ------------------- 대장이 부르는 재생성 명령이 실재하는가 (D-0292)
+
+CLI_CALL = re.compile(r"hathor\.cli\s+([\w-]+)(?:\s+([\w-]+))?((?:\s+--[\w-]+)*)")
+"""`... -m hathor.cli <무리> [<명령>] [--손잡이 ...]`.
+
+**대장의 `regen`은 사람에게 주는 안내다.** `--audit`이 결손마다 그 줄을 찍고, 사람은
+그것을 그대로 친다."""
+
+
+def _cli_paths() -> dict[str, argparse.ArgumentParser]:
+    """등재된 명령 경로 → 그 명령의 파서. **글자를 긁지 않고 표를 읽는다** (D-0273)."""
+    from hathor.interfaces.cli.main import build_parser
+
+    found: dict[str, argparse.ArgumentParser] = {}
+
+    def walk(parser: argparse.ArgumentParser, trail: tuple[str, ...]) -> None:
+        found[" ".join(trail)] = parser
+        for action in parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for name, sub in action.choices.items():
+                    walk(sub, (*trail, name))
+
+    walk(build_parser(), ())
+    return found
+
+
+def test_대장의_재생성_명령이_실재한다() -> None:
+    """**감사가 없는 명령을 치라고 안내했다** (D-0292).
+
+    실측 — 선언 20개 중 **둘이 죽어 있었다.** `ingest lyrics`는 그런 명령이 없고
+    (실물은 `lyrics extract`), `ingest features`는 `--layers`를 안 받는다
+    (실물은 `eval layers`). **둘 다 결손이라 매 `make ship`마다 찍히고 있었다.**
+
+    D-0288이 파이어레인의 `argcheck`를 보고 *"Makefile 호출 17개 · 못 받는 인자 0"*이라
+    재놓고, **대장이 부르는 명령은 한 번도 안 쟀다.** 안내가 없는 것보다 **틀린 안내가 나쁘다.**
+    """
+    known = _cli_paths()
+    problems: list[str] = []
+    for name, entry in LEDGER.load().items():
+        regen = str(entry.get("regen", ""))
+        found = CLI_CALL.search(regen)
+        if not found:
+            continue
+        group, command, flags = found.group(1), found.group(2), found.group(3) or ""
+        path = " ".join(part for part in (group, command) if part)
+        parser = known.get(path)
+        if parser is None:
+            problems.append(f"{name}: `{path}`라는 명령이 없다")
+            continue
+        handles = {option for action in parser._actions for option in action.option_strings}
+        missing = sorted(set(re.findall(r"--[\w-]+", flags)) - handles)
+        if missing:
+            problems.append(f"{name}: `{path}`가 {missing}를 안 받는다")
+    assert not problems, "대장이 없는 명령을 안내한다:\n" + "\n".join(problems)

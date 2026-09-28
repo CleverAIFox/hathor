@@ -2411,6 +2411,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0289 | 초록이라고 보고한 시험 열다섯은 내 기기에서 한 번도 안 돈다 | `core/tests/unit/test_ship.py::test_터진_자리부터_낸다` | 실물 저장소 · 사용자 기기 로그 |
 | D-0290 | 혼자 돌면 초록이다 | `core/tests/unit/test_gate_isolation.py::test_GPU를_잡는_시험만_무리에_든다` | 실물 저장소 · 사용자 기기 로그 |
 | D-0291 | O-58을 닫는다 | `core/tests/unit/test_check_decisions.py::test_지금_대장이_그_규약과_맞다` | 실물 저장소 (결정 기록 291건) |
+| D-0292 | 배치는 셋 다 성공했는데 감사가 같은 것을 두 번 셌다 | `core/tests/unit/test_artifacts_ledger.py::test_대장의_재생성_명령이_실재한다` | 실물 저장소 · 실물 1004곡 배치 |
 
 <!-- decision-ledger:end -->
 

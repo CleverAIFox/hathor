@@ -113,7 +113,7 @@ state = "있음"
 [series."mert-layers"]
 what = "MERT 층별 임베딩 — 취향 벡터의 정본 (D-0027 · D-0181)"
 made = "core/hathor/infrastructure/npz_feature_store.py"
-regen = "cd core && uv run python -m hathor.cli ingest features --layers"
+regen = "cd core && uv run python -m hathor.cli eval layers"
 reads = ["eval retrieval --features", "eval fusion --features", "probe_latent.py", "D-0181"]
 store = true
 state = "있음"
@@ -150,7 +150,7 @@ state = "있음"
 [series."lyrics-hashed"]
 what = "가사 구간 임베딩 — 원문은 안 남기고 해시와 벡터만 (D-0046)"
 made = "core/hathor/infrastructure/hashed_lyrics_extractor.py"
-regen = "cd core && uv run python -m hathor.cli ingest lyrics"
+regen = "cd core && uv run python -m hathor.cli lyrics extract"
 reads = ["eval retrieval --view lyrics", "D-0046"]
 store = true
 state = "있음"
