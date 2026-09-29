@@ -1,4 +1,4 @@
-"""배열 조건화 판정의 단위 검사 (O-32 · D-0112)."""
+"""배열 조건화 판정의 단위 검사 (O-32 닫힘 D-0113 · O-72 · D-0112 · D-0311)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from hathor.application.evaluate_harmony_output import OutputCondition, Referenc
 from hathor.application.evaluate_order_conditioning import (
     EvaluateOrderConditioning,
     OrderReference,
+    OrderReport,
+    PairedGain,
     holding_indices,
     references_from,
     restrict_transition,
@@ -311,3 +313,75 @@ def test_hold는_곡마다_다른_값이_쓰인다():
     assert mixed.self_distances != uniform.self_distances
     # **첫 곡은 hold가 0이라 안 움직여야 한다.** 움직이면 곡 경계가 샌 것이다
     assert mixed.self_distances[0] == uniform.self_distances[0]
+
+
+# ------------- 음성 대조를 빼야 O-32가 닫힌다 (D-0311)
+
+
+def _report(self_d: list[float], other_d: list[float]) -> OrderReport:
+    return OrderReport(
+        condition=OutputCondition(),
+        reference_count=len(self_d),
+        self_distances=tuple(self_d),
+        other_distances=tuple(other_d),
+    )
+
+
+def test_음성_대조가_스스로_판정_규칙을_통과할_수_있다() -> None:
+    """**실물에서 그랬다** (D-0311). 전이 없이도 +0.1133 · t=17.12 · 곡승률 89.0%.
+
+    첫 판은 *"질 수 있다 — 전이를 안 주면 -0.007로 음수다"*라고 적었고 **그것이 합성
+    자료의 수였다.** 실물 코퍼스에서는 `--priors`의 도수가 전이 행렬에 물든다.
+    """
+    control = _report([0.45] * 40, [0.57] * 40)
+    assert control.carries_reference_order, "이 시험이 고정하는 것은 «통과한다»는 사실이다"
+    gain = PairedGain(without=control, with_transition=_report([0.45] * 40, [0.57] * 40))
+    assert gain.control_passes
+    # 두 줄이 같으면 이득이 0이고, 그러면 조건화했다고 말하지 않는다.
+    assert gain.gain == pytest.approx(0.0)
+    assert not gain.transition_conditions
+
+
+def test_짝지은_이득이_전이_몫만_센다() -> None:
+    """곡별로 빼므로 **음성 대조가 통째로 빠진다.**"""
+    control = _report([0.45, 0.45], [0.57, 0.57])
+    treated = _report([0.21, 0.21], [0.64, 0.64])
+    gain = PairedGain(without=control, with_transition=treated)
+    # (0.64-0.21) - (0.57-0.45) = 0.43 - 0.12 = 0.31
+    assert gain.gain == pytest.approx(0.31)
+    assert gain.win_rate == pytest.approx(1.0)
+
+
+def test_이_자는_질_수_있다() -> None:
+    """**질 수 없는 지표는 비교가 아니다** (D-0062 · O-25 (2))."""
+    control = _report([0.45] * 30, [0.57] * 30)
+    # 전이를 켜도 음성 대조와 같으면 이득이 0이라 문턱을 못 넘는다.
+    assert not PairedGain(without=control, with_transition=control).transition_conditions
+    # 전이가 오히려 나쁘면 음수다.
+    worse = _report([0.50] * 30, [0.55] * 30)
+    beaten = PairedGain(without=control, with_transition=worse)
+    assert beaten.gain < 0.0
+    assert not beaten.transition_conditions
+
+
+def test_곡_수가_다르면_짝지을_수_없다() -> None:
+    """**다른 곡 집합을 빼면 그 차는 아무것도 아니다.**"""
+    gain = PairedGain(without=_report([0.4] * 3, [0.5] * 3), with_transition=_report([0.2], [0.6]))
+    assert not gain.aligned
+    assert gain.gain == 0.0
+    assert not gain.transition_conditions
+
+
+def test_실물_수치가_판정을_바꾼다() -> None:
+    """**실측 그대로다** (D-0311). 한 줄만 보면 참, 짝지으면 다시 재야 한다.
+
+    전이 있음 gap 0.4308 · 전이 없음 gap 0.1133 — 한 줄만 보는 옛 규칙은 둘 다 통과한다.
+    """
+    control = _report([0.4555] * 200, [0.5687] * 200)
+    treated = _report([0.2122] * 200, [0.6430] * 200)
+    assert control.carries_reference_order is False or control.gap > 0.0
+    assert treated.gap == pytest.approx(0.4308, abs=1e-4)
+    assert control.gap == pytest.approx(0.1132, abs=1e-4)
+    assert PairedGain(without=control, with_transition=treated).gain == pytest.approx(
+        0.3176, abs=1e-4
+    )

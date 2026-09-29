@@ -40,6 +40,7 @@ def run_eval_harmony_order(args: argparse.Namespace) -> int:
     from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
     from hathor.application.evaluate_order_conditioning import (
         EvaluateOrderConditioning,
+        PairedGain,
         references_from,
         sweep_self_transition,
     )
@@ -114,8 +115,28 @@ def run_eval_harmony_order(args: argparse.Namespace) -> int:
         rows,
     ):
         print(text)
-    verdict = reports["전이 있음"].carries_reference_order
-    print(f"\n판정: **{'출력이 참조곡의 배열을 담는다' if verdict else '안 담는다'}**\n")
+    gain = PairedGain(without=reports["전이 없음"], with_transition=reports["전이 있음"])
+    print()
+    for text in render_table(
+        (
+            ("짝지은이득", "<12"),
+            ("이득", ">9.4f"),
+            ("표준오차", ">10.4f"),
+            ("t", ">8.2f"),
+            ("곡승률", ">9.1%"),
+        ),
+        [("전이-없음", gain.gain, gain.standard_error, gain.t_statistic, gain.win_rate)],
+    ):
+        print(text)
+    if gain.control_passes:
+        control = reports["전이 없음"].gap
+        print(
+            f"  ⚠ **음성 대조가 스스로 판정 규칙을 통과한다** (`other-self` {control:+.4f}).\n"
+            "    전이 사전 없이도 참이므로 **그 줄만 보는 판정은 뜻이 없다** (D-0311).\n"
+            "    누설 경로는 도수다 — `--priors`가 그 곡의 것이라 전이 행렬이 도수에 물든다."
+        )
+    passed = "전이 사전이 배열을 조건화한다" if gain.transition_conditions else "조건화하지 않는다"
+    print(f"\n판정: **{passed}**  (짝지은 이득 기준 · D-0311)\n")
     if args.use_hold:
         _report_hold(references, reports["전이 있음"], reports["전이+유지"])
     if args.self_transition_sweep is not None:
@@ -132,8 +153,12 @@ def run_eval_harmony_order(args: argparse.Namespace) -> int:
     print("(어휘를 넓히기만 해도 거리가 +0.054 공짜로 오른 D-0094와 같은 함정이다).")
     print("**`self`는 출력의 전이와 그 곡의 전이 사전의 거리**이고 `other`는 다른 곡의 것이다.")
     print("D-0062가 화성 어휘에서 쓴 구조를 그대로 쓴다.")
-    print("**`전이 없음` 줄이 음성 대조다** — 순서를 시드가 정하면 둘이 같아야 한다.")
-    print("**문턱이 t > 3이다.** 이 판정이 O-32를 닫으므로 승인 문턱이다 (D-0098).")
+    print("**`전이 없음` 줄이 음성 대조다** — 첫 판은 «순서를 시드가 정하면 둘이 같다»고")
+    print("적었고 **합성에서는 -0.007이었다.** 실물에서는 +0.1133이 나왔다 (D-0311) —")
+    print("`--priors`가 그 곡의 도수 사전이라 **전이 행렬이 도수에 물든다.**")
+    print("**그래서 판정은 짝지은 이득이 든다** — 같은 곡·같은 시드에서 전이를 켠 것과")
+    print("끈 것의 차다. 두 줄의 표준오차를 따로 합치면 짝짓기를 버린다 (D-0087 · D-0300).")
+    print("**문턱이 t > 3이다.** 이 판정이 O-72를 닫으므로 승인 문턱이다 (D-0098 · D-0311).")
     if args.use_hold:
         print("**`전이+유지`는 곡마다 그 곡의 유지 확률을 건 선이다** (O-37 · D-0123).")
         print("`전이 있음`이 그 음성 대조이며 같은 참조곡·같은 시드다. **내려간다** (D-0125) —")

@@ -42,6 +42,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -54,6 +55,9 @@ from hathor.application.evaluate_harmony_output import (
 )
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.engines.compose.harmony_generator import generate_harmony, vocabulary_roots
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 OTHER_SAMPLES = 4
 """곡마다 `other`를 몇 번 뽑을 것인가. **한 곡만 쓰면 코퍼스 순서에 값이 달린다.**"""
@@ -150,12 +154,104 @@ class OrderReport:
         """**사전 등록한 판정 규칙이다** (D-0112 · GR-6.5).
 
         1. `other`가 `self`보다 크다.
-        2. `t > 3` — **승인 문턱이다.** 이 판정이 O-32를 닫는다 (D-0098의 규율).
+        2. `t > 3` — **승인 문턱이다** (D-0098의 규율). 이 판정이 O-32 (닫힘 D-0113)를
+           닫는 데 쓰였다.
         3. **곡 과반**에서 그렇다.
 
-        **질 수 있다.** 전이 사전을 안 주면 `other - self`가 -0.007로 음수다.
+        **이 규칙 혼자로는 O-72를 못 닫는다** (D-0311). 첫 판은 *"질 수 있다 — 전이
+        사전을 안 주면 `other - self`가 -0.007로 음수다"*라고 적었는데 **그것이 합성
+        자료의 수였다.** 실물 1004곡 코퍼스에서는 전이 사전 없이도 **+0.1133 · t=17.12 ·
+        곡승률 89.0%**가 나온다 — **음성 대조가 이 규칙을 스스로 통과한다.**
+
+        누설 경로는 도수다. `--priors`가 그 곡의 도수 사전이라 자주 나오는 도수가 전이
+        행렬의 행·열에서도 커진다. **전이 행렬은 도수의 함수가 아니지만 도수에 물든다.**
+
+        **O-72를 닫는 것은 `PairedGain`이다** — 같은 곡·같은 시드에서 전이를 켠 것과
+        끈 것의 차. 이 속성은 «한쪽 선이 서 있는가»만 말한다.
         """
         return self.gap > 0.0 and self.t_statistic > 3.0 and self.win_rate > 0.5
+
+
+@dataclass(frozen=True, slots=True)
+class PairedGain:
+    """전이를 켠 것과 끈 것의 **곡별 짝지은 차** (D-0311).
+
+    **음성 대조가 0이 아니었다.** `eval harmony-order`가 *"순서를 시드가 정하면 둘이
+    같아야 한다"*고 화면에 적어 두고, 실물에서 전이 없이도 `other - self`가 +0.1133이
+    나왔다. 그 줄을 안 빼면 «전이 사전이 작동한다»와 «도수 사전이 순서에 물든다»가
+    한 수에 섞인다.
+
+    **두 실행이 같은 곡·같은 시드를 쓴다** — `references`가 같은 순서다. 그래서 곡별로
+    빼고, 그 차의 표준오차를 낸다. 두 줄의 표준오차를 따로 합치면 짝짓기를 버리는 것이고
+    구간이 실제보다 넓어진다 (D-0300이 부트스트랩에서 같은 것을 했다).
+    """
+
+    without: OrderReport
+    with_transition: OrderReport
+
+    @property
+    def _paired(self) -> NDArray[np.float64]:
+        off = np.asarray(self.without.other_distances) - np.asarray(self.without.self_distances)
+        on = np.asarray(self.with_transition.other_distances) - np.asarray(
+            self.with_transition.self_distances
+        )
+        return np.asarray(on - off, dtype=np.float64)
+
+    @property
+    def aligned(self) -> bool:
+        """두 실행의 곡 수가 같은가. **다르면 짝지을 수 없다.**"""
+        return (
+            self.without.reference_count == self.with_transition.reference_count
+            and self.without.reference_count > 0
+        )
+
+    @property
+    def gain(self) -> float:
+        """전이 사전이 **더한** 몫. 음성 대조를 뺀 값이다."""
+        return float(np.mean(self._paired)) if self.aligned else 0.0
+
+    @property
+    def standard_error(self) -> float:
+        if not self.aligned or self.without.reference_count < 2:
+            return 0.0
+        return float(np.std(self._paired, ddof=1) / np.sqrt(self._paired.size))
+
+    @property
+    def t_statistic(self) -> float:
+        return self.gain / self.standard_error if self.standard_error > 0 else 0.0
+
+    @property
+    def win_rate(self) -> float:
+        return float(np.mean(self._paired > 0.0)) if self.aligned else 0.0
+
+    @property
+    def control_passes(self) -> bool:
+        """**음성 대조가 스스로 판정 규칙을 통과하는가.** 참이면 경고를 찍는다."""
+        return self.without.carries_reference_order
+
+    @property
+    def transition_conditions(self) -> bool:
+        """**O-72를 닫는 규칙이다** (D-0311).
+
+        1. 짝지은 이득이 양수다.
+        2. `t > 3` — D-0098이 세운 승인 문턱을 그대로 쓴다.
+        3. **곡 과반**에서 그렇다.
+
+        **질 수 있다.** 전이 사전이 도수 누설 이상을 안 주면 이득이 0 근처가 되고
+        `t`가 문턱을 못 넘는다 — 그것이 이 규칙이 비교인 이유다 (D-0062).
+        """
+        return self.gain > 0.0 and self.t_statistic > 3.0 and self.win_rate > 0.5
+
+    def as_record(self) -> dict[str, object]:
+        return {
+            "gain": round(self.gain, 6),
+            "standard_error": round(self.standard_error, 6),
+            "t_statistic": round(self.t_statistic, 4),
+            "win_rate": round(self.win_rate, 4),
+            "control_gap": round(self.without.gap, 6),
+            "control_passes": self.control_passes,
+            "transition_conditions": self.transition_conditions,
+        }
 
 
 class EvaluateOrderConditioning:

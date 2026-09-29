@@ -2456,6 +2456,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0308 | 갚은 빚이 PLAN에 눌러앉아 있었다 | `core/tests/unit/test_doc_style.py::test_PLAN에_취소선이_남으면_잡는다` | 실물 PLAN 빚 표 14행 전수 |
 | D-0309 | 규율은 옆 표가 아니라 §0 규약 절에 있었다 | `core/tests/unit/test_plan_counts.py::test_합성만으로_선_강제자_수가_대장과_같다` | 실물 PLAN 전수 · 대장 243행 |
 | D-0310 | 없는 명령을 또 줬다 | `core/tests/unit/test_doc_commands.py::test_현재형_문서의_명령이_실재한다` | 실물 1004곡 사전 · 8마디 출력 쌍 100 · 현재형 문서 3개 전수 |
+| D-0311 | 음성 대조가 스스로 판정 규칙을 통과했다 | `core/tests/unit/test_evaluate_order_conditioning.py::test_음성_대조가_스스로_판정_규칙을_통과할_수_있다` | 실물 200곡 64마디 · 전이 있음/없음 두 선 |
 
 <!-- decision-ledger:end -->
 
