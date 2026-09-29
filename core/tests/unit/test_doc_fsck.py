@@ -182,14 +182,17 @@ def test_지금_문서가_규약과_맞다():
 # --------------------------------- 문서가 든 수는 사람이 세지 않는다 (D-0288)
 
 
-def test_축이_넷이다():
+def test_축이_다섯이다():
     """**세는 그물이 비면 «전부 맞다»가 거짓으로 참이 된다** (D-0230).
 
     축이 하나였다 — 문서에 손으로 적힌 수가 214개인데 기계가 보는 것은 `계약 N종`
     하나뿐이었다. 그 사이에 **「대장 201건 중」이 실물 223일 때까지** 아무도 안 셌고,
     그 줄이 사는 표의 머리말이 *"크기를 재서 적는다"*다.
+
+    **넷에서 다섯이 됐다 (D-0307)**: `재현 불명`이 PLAN에 **16**으로 적혀 있고 실물이
+    **11**이었다. 축을 놓자마자 *"11이라 적었는데 실물은 1"*로 걸렸다.
     """
-    assert len(CHECKER.COUNTED) == 4, [name for name, _, _ in CHECKER.COUNTED]
+    assert len(CHECKER.COUNTED) == 5, [name for name, _, _ in CHECKER.COUNTED]
 
 
 def test_축마다_정본이_수를_낸다():
@@ -247,3 +250,28 @@ def test_고친_뒤에는_검사가_조용하다(monkeypatch, tmp_path):
     assert CHECKER.check_counts()
     CHECKER.fix_counts()
     assert CHECKER.check_counts() == []
+
+
+def _counted(pattern: str) -> int:
+    """결정 기록에서 그 꼴로 시작하는 줄의 수. **도구와 다른 길로 센다.**"""
+    body = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    return len(re.findall(f"(?m){pattern}", body))
+
+
+def test_재현_불명을_센다() -> None:
+    """**PLAN이 16이라 적고 실물은 11이었다** (D-0307).
+
+    `재현`은 *"지금 이 수치를 다시 내는 명령"*이라 조사하면 줄어드는 수다 (D-0136).
+    줄어드는 수는 문서에서 낡고, **수가 틀려도 아무 일이 안 일어난다** (D-0263).
+    """
+    assert CHECKER.unknown_reproductions() == _counted("^재현 불명")
+    # 축이 실제로 표에 실려 있어야 `--fix`가 그 자리를 고친다.
+    assert "재현 불명" in {name for name, _, _ in CHECKER.COUNTED}
+
+
+def test_재현_불명_축이_틀린_수를_잡는다() -> None:
+    """**세는 그물이 비면 «0건»이 거짓으로 참이 된다** (D-0230)."""
+    pattern = next(rule for name, rule, _ in CHECKER.COUNTED if name == "재현 불명")
+    assert pattern.search("| 재현 불명 **11건** |") is not None
+    assert pattern.search("| 재현 불명 1건 |") is not None
+    assert pattern.search("재현 불명 — 이 수치를 내는 명령을 못 찾았다") is None

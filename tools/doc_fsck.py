@@ -242,6 +242,19 @@ def synthetic_rows() -> int:
     return sum(1 for source in _ledger() if source == "합성")
 
 
+def unknown_reproductions() -> int:
+    """`재현 불명`으로 남은 기록의 수 (D-0307). PLAN §3의 빚 행이 이 수를 든다.
+
+    **PLAN이 16이라 적고 실물은 11이었다.** 다섯이 어디서 줄었는지 아무도 모른다 — 수가
+    틀려도 아무 일이 안 일어나는 자리이기 때문이다 (D-0263의 논거 그대로).
+
+    `재현`은 *"지금 이 수치를 다시 내는 명령"*이라 **현재 사실이고 조사할 수 있다**
+    (D-0136). 조사하면 줄어드는 수이므로 **세는 자리가 필요하다.**
+    """
+    body = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    return len(re.findall(r"(?m)^재현 불명", body))
+
+
 def open_issues() -> int:
     """열린 질문의 수. **`check_decisions`가 표 자체는 이미 보고, 여기는 산문의 수를 본다.**"""
     body = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
@@ -261,6 +274,7 @@ COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("결정 대장", re.compile(rf"대장\s*{BOLD}건\s*중"), ledger_rows),
     ("합성으로만 선 판단", re.compile(rf"합성\s*{BOLD}\s*·"), synthetic_rows),
     ("열린 질문", re.compile(rf"열린 질문\s*{BOLD}건"), open_issues),
+    ("재현 불명", re.compile(rf"재현 불명\s*{BOLD}건"), unknown_reproductions),
 )
 """문서가 **세어서 적은 수**와 실물 (D-0263).
 

@@ -357,3 +357,25 @@ def test_불명도_기술이다():
     """**모르는 것을 빈칸으로 두면 안 보이고 적어 두면 세어진다.**"""
     body = "## D-0001. 제목\n\n- **배경**: x\n\n강제자 없음 — 사유: x\n재현 불명 — 못 찾았다\n"
     assert CHECKER.check_records("d.md", body) == []
+
+
+def test_PLAN에_취소선이_남으면_잡는다() -> None:
+    """**미래 문서가 과거를 이고 가면 안 된다** (D-0308).
+
+    빚 표 14행 중 **13행이 취소선**이었고 남은 진짜 빚 하나가 그 안에 묻혀 있었다.
+    규율은 이미 옆 표에 있었다 — *"닫힌 질문은 여기 없다"*.
+    """
+    assert CHECKER.check_plan_leftovers() == []
+
+
+def test_취소선_못이_실제로_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**아무것도 못 잡는 검사는 늘 통과하는 하네스와 같다** (GR-0.9 · D-0071)."""
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "PLAN.md").write_text(
+        "| 빚 | 크기 |\n|---|---|\n| ~~다 갚았다~~ | 0 |\n- ~~이것도~~\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    found = CHECKER.check_plan_leftovers()
+    assert len(found) == 2
+    assert "MASTER.md" in found[0]

@@ -441,6 +441,33 @@ def shingles(text: str) -> dict[str, int]:
     return found
 
 
+def check_plan_leftovers() -> list[str]:
+    """**끝난 것이 `PLAN.md`에 남아 있는가** (D-0308).
+
+    PLAN은 미래 문서다. 갚은 빚에 취소선을 그어 두고 남기면 **미래 문서가 과거를 이고
+    간다** — 실측에서 빚 표 14행 중 **13행이 취소선**이었다. 남은 진짜 빚은 하나였고
+    그 하나가 열세 줄에 묻혀 있었다.
+
+    **이 규율은 이미 옆 표에 있었다.** PLAN §2가 *"닫힌 질문은 여기 없다. 닫히면 근거는
+    결정 기록으로, 한 줄 색인은 `MASTER.md` 닫힘표로 간다"*라고 적어 두었고, **빚 표만
+    그것을 안 따랐다.** 한 층위에 쓴 규칙을 옆 표에 안 쓴 자리다.
+
+    **`MASTER.md`는 안 본다.** 거기 갚음표가 사는 자리이며, 그 표의 행은 취소선 없이
+    평서문으로 적는다 — 끝난 것을 끝난 자리에 적는 것은 취소선이 필요 없다.
+    """
+    body = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    found = [
+        line.strip()
+        for line in body.splitlines()
+        if line.startswith("| ~~") or line.lstrip().startswith("- ~~")
+    ]
+    return [
+        f"docs/PLAN.md에 끝난 항목이 남아 있다: {line[:60]}. "
+        "근거는 결정 기록으로, 한 줄 색인은 `MASTER.md`로 옮기고 여기서 지운다 (D-0308)"
+        for line in found
+    ]
+
+
 def check_duplicates() -> list[str]:
     """문서 둘이 **같은 세 줄**을 들고 있는가 (D-0043 · D-0262).
 
@@ -465,7 +492,7 @@ def check_duplicates() -> list[str]:
 
 
 def check() -> list[str]:
-    problems: list[str] = list(check_sixth_document()) + check_duplicates()
+    problems: list[str] = list(check_sixth_document()) + check_duplicates() + check_plan_leftovers()
     for path in targets():
         name = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
