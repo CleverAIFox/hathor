@@ -29,6 +29,18 @@ DEFAULT_STEM_SET = "other"
 ALL_STEMS = frozenset({"other", "bass", "vocals", "drums"})
 """Demucs가 내는 네 갈래. `mix`가 담는 것이 이것이다."""
 
+SERIES_STEMS: tuple[str, ...] = (MIX_SOURCE, "other", "bass", "vocals")
+"""크로마 **시계열**이 실제로 뽑히는 이름 (D-0106 · D-0302).
+
+**조합은 시계열로 안 뽑는다** — `ingest_keys._stem_bundle`이 `len(parts) == 1`일 때만
+쓰고, `mix`는 `_measure`가 따로 쓴다. `STEM_SETS`에는 `other+bass`류가 있지만 시계열
+파일은 없다.
+
+**이름 목록이 없어서 고를 수 있게 돼 있었다** (D-0302). `eval chord-quality`가
+`sorted(STEM_SETS)`를 선택지로 내놓아 `other+bass`를 고를 수 있었고, 고르면 *"창이
+없다"*로 끝난다 — 규칙이 코드 주석에만 있고 어휘가 되지 않은 자리다.
+"""
+
 STEM_SETS: dict[str, tuple[str, ...]] = {
     "other": ("other",),
     "other+bass": ("other", "bass"),

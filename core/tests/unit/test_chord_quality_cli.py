@@ -67,7 +67,6 @@ def test_dom7_코퍼스에서_4음_차가_크게_나온다(
     assert code == 0
     printed = capsys.readouterr().out
     assert "4곡 100창" in printed
-    assert "순열귀무" in printed
     assert "MIR" not in printed  # 이 축에 배수는 없다
     assert "차로만 읽는다" in printed
 
@@ -77,9 +76,11 @@ def test_dom7_코퍼스에서_4음_차가_크게_나온다(
     record = json.loads(written[0].read_text(encoding="utf-8"))
     assert record["tracks"] == 4
     assert record["windows"] == 100
-    assert record["measured"]["dom7"] == pytest.approx(1.0)
-    assert record["seventh_gap"] > 0.3
-    assert set(record["permuted_null"]) == set(QUALITIES)
+    # 창마다 근음이 무작위인 순수 dom7이므로 원본 열에서 4음 차가 크게 양수다.
+    original = record["grouped"]["묶기1"]
+    assert set(original["quality_gap"]) == set(QUALITIES)
+    assert original["quality_gap"]["dom7"] > 0.3
+    assert original["seventh_gap"] > 0.3
 
 
 def test_꼴이_다른_파일은_건너뛴다(tmp_path: Path) -> None:

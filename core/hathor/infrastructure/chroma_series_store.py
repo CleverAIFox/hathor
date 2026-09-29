@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,6 +16,7 @@ import numpy as np
 from hathor.domain.services.chord_rhythm import hold_probability
 from hathor.domain.services.harmony_quality import DEGREE_COUNT
 from hathor.domain.services.transition_prior import is_empty, transition_prior
+from hathor.infrastructure import artifact_manifest
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -118,6 +120,37 @@ def load_hold_probabilities(
             series = np.asarray(bundle["series"], dtype=np.float64)
         found[source_key] = hold_probability(series)
     return found
+
+
+def load_series(root: Path, stem_set: str) -> list[NDArray[np.float64]]:
+    """시계열 폴더의 곡별 창 행렬. **곡 경계를 지우지 않는다** (D-0302).
+
+    `load_windows`는 곡 경계를 지워 이웃 관계가 사라진다. 지속 창 판정(`sustained_mask`)과
+    창 묶기(`group_series`)는 둘 다 **같은 곡 안의 순서**를 쓰므로 경계가 필요하다 —
+    곡 경계를 넘어 묶으면 마지막 창과 다음 곡 첫 창이 한 화음으로 평균된다.
+    """
+    found: list[NDArray[np.float64]] = []
+    for path in sorted(root.glob(f"*-{stem_set}.npz")):
+        with np.load(path, allow_pickle=False) as bundle:
+            series = np.asarray(bundle["series"], dtype=np.float64)
+        if series.ndim != 2 or series.shape[0] == 0 or series.shape[1] != DEGREE_COUNT:
+            continue
+        found.append(series)
+    return found
+
+
+def series_settings(root: Path) -> dict[str, object]:
+    """시계열 폴더의 선언 (창 길이 · 크로마 종류). 없으면 빈 사전이다.
+
+    **창 길이가 화면에 없었다** (D-0302 · D-0073 계열). 화음 품질 보고가 *"창 단위"*라고
+    적으면서 그 창이 몇 초인지 안 찍었다 — 같은 표를 다른 창 길이로 두 번 내면 읽는
+    사람이 구분할 수 없다.
+    """
+    path = root / f"{root.name}{artifact_manifest.SUFFIX}"
+    if not path.exists():
+        return {}
+    loaded: object = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {}
 
 
 def load_windows(root: Path, stem_set: str) -> tuple[NDArray[np.float64], int]:

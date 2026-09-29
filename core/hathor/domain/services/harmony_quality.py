@@ -205,3 +205,38 @@ def rotated_windows(windows: NDArray[np.float64], *, seed: int) -> NDArray[np.fl
     shifts = np.asarray(generator.integers(0, DEGREE_COUNT, size=frame.shape[0]), dtype=np.int64)
     columns = (np.arange(DEGREE_COUNT).reshape(1, -1) - shifts.reshape(-1, 1)) % DEGREE_COUNT
     return np.take_along_axis(frame, columns, axis=1)
+
+
+SUSTAINED_FLOOR = 0.80
+"""창이 **한 화음을 지속하고 있다고 볼** 건너뛴 이웃 코사인 기준 (D-0302).
+
+창이 화음 전환을 걸치면 두 3화음이 겹쳐 4음으로 보인다. **C maj와 A min이 한 창에
+들어가면 정확히 `Am7`의 음들이다** — 실측 `m7` 신호가 그 번짐일 수 있다.
+
+**인접 이웃으로는 못 가른다.** 50/50 블렌드 창은 양옆 순수 화음과 코사인이 0.93쯤이라
+문턱 0.90을 그냥 통과한다. 실측에서 확인했다 — 번짐만으로 만든 합성 코퍼스에서 인접
+문턱 0.90이 `m7` +0.3597을 +0.3777로 **오히려 올렸다.**
+
+**건너뛴 이웃을 본다.** 창 `i`가 전환이면 `i-1`과 `i+1`이 **서로** 다르다. 같은 합성
+자료에서 0.80이 +0.2148을 -0.0760으로 뒤집었고, 진짜 지속 `m7` 코퍼스에서는 +0.7676을
++0.8688로 올렸다 — **두 경우를 반대 방향으로 가른다.**
+"""
+
+
+def sustained_mask(
+    series: NDArray[np.float64], *, floor: float = SUSTAINED_FLOOR
+) -> NDArray[np.bool_]:
+    """건너뛴 이웃(`i-1`, `i+1`)끼리 코사인이 `floor` 이상인 창 (D-0302).
+
+    **양 끝 창은 빠진다.** 건너뛸 이웃이 한쪽뿐이라 판정할 근거가 없다. 창이 셋 미만인
+    곡은 전부 빠진다 — **없는 것을 있다고 하지 않는다.**
+    """
+    frame = np.asarray(series, dtype=np.float64)
+    if frame.ndim != 2 or frame.shape[1] != DEGREE_COUNT:
+        raise ValueError(f"창 행렬은 (창, {DEGREE_COUNT}) 꼴이어야 한다")
+    keep = np.zeros(frame.shape[0], dtype=np.bool_)
+    if frame.shape[0] < 3:
+        return keep
+    unit = frame / np.maximum(np.linalg.norm(frame, axis=1, keepdims=True), 1e-12)
+    keep[1:-1] = np.einsum("ij,ij->i", unit[:-2], unit[2:]) >= floor
+    return keep
