@@ -49,6 +49,8 @@ import re
 import sys
 from pathlib import Path
 
+from decision_ledger import keeper_text
+
 ROOT = Path(__file__).resolve().parent.parent
 
 DOCUMENTS = (
@@ -246,6 +248,15 @@ def _field(body: str, name: str) -> str:
     return "\n".join(line for line in body.splitlines() if line.startswith(name))
 
 
+def _has_keeper(body: str) -> bool:
+    """`강제자` 칸이 있는가. **`강제자 없음 — 사유:` 선언도 칸이다** (D-0132 · D-0304).
+
+    `keeper_text`는 대장에 실릴 내용만 읽으므로 «없음» 선언에 `None`을 낸다. 존재 여부는
+    줄 머리로 묻는다 — 둘은 다른 질문이고, 한 함수로 합치면 «없음»이 «칸이 없다»가 된다.
+    """
+    return bool(_field(body, "강제자"))
+
+
 def check_records(name: str, text: str) -> list[str]:
     """결정 기록의 필수 절.
 
@@ -263,7 +274,7 @@ def check_records(name: str, text: str) -> list[str]:
             continue
         if "- **배경**" not in body:
             problems.append(f"{name}: {number}에 `- **배경**`이 없다")
-        if int(number[2:]) >= ENFORCER_FROM and not _field(body, "강제자"):
+        if int(number[2:]) >= ENFORCER_FROM and not _has_keeper(body):
             problems.append(
                 f"{name}: {number}에 `강제자` 기술이 없다. "
                 "`강제자  tools/xxx.py` 또는 `강제자 없음 — 사유: …`"
@@ -279,7 +290,7 @@ def check_records(name: str, text: str) -> list[str]:
                 f"D-{UNKNOWN_UNTIL + 1:04d}부터는 못 쓴다 (D-0250) — "
                 "평가는 찍은 것을 남기므로 그 산출물을 내는 명령을 적는다"
             )
-        for raw in ENFORCER_PATH.findall(_field(body, "강제자")):
+        for raw in ENFORCER_PATH.findall(keeper_text(body) or ""):
             if not (ROOT / raw).exists():
                 problems.append(
                     f"{name}: {number}의 강제자 `{raw}`가 없다. 지웠거나 옮겼으면 이 줄을 고친다"

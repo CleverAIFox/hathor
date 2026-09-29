@@ -18,7 +18,7 @@ import ast
 import re
 from pathlib import Path
 
-from decision_ledger import EVIDENCE, EVIDENCE_VALUES, Record
+from decision_ledger import EVIDENCE, EVIDENCE_VALUES, Record, keeper_text
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -122,9 +122,6 @@ def check_attribution(records: list[Record]) -> list[str]:
     return problems
 
 
-KEEPER = re.compile(r"^강제자  (.+)$", re.MULTILINE)
-"""누가 이 판단을 지키나. **`강제자 없음 — 사유:` 꼴로 부재도 선언한다.**"""
-
 NODE = re.compile(r"`([\w./-]+\.py)::([\w가-힣_]+)`")
 """`파일::함수`까지 적은 강제자. **파일까지만 적은 것은 여기 안 걸린다** — 그쪽은 `BARE`가 든다."""
 
@@ -167,6 +164,23 @@ TEST_TREE = "core/tests/"
 오탐은 사람이 검사를 끄게 만든다."""
 
 
+def check_keeper_text(records: list[Record]) -> list[str]:
+    """`강제자` 칸이 **비어 있지 않은가** (D-0304).
+
+    머리만 두고 들여쓰기를 잊으면 `keeper_text`가 빈 문자열을 낸다. 그러면 대장에서 행이
+    빠지고 함수 실재도 안 보게 되는데 **아무 검사도 그것을 안 봤다** — 네 판이 그 상태로
+    열일곱 관문을 통과했다.
+
+    **전 기록에 건다.** 지금 빈 칸이 0이므로 못을 박는다 (D-0134).
+    """
+    return [
+        f"{record.identifier}의 `강제자` 칸이 비어 있다. 같은 줄에 두 칸 뒤로 적거나 "
+        "다음 줄들을 네 칸 들여쓴다 — 비면 대장에서 조용히 빠진다 (D-0304)"
+        for record in records
+        if keeper_text(record.body) == ""
+    ]
+
+
 def check_keepers(records: list[Record]) -> list[str]:
     """강제자가 가리키는 **시험 함수가 실재하는가** (O-58 닫힘 D-0288).
 
@@ -178,15 +192,19 @@ def check_keepers(records: list[Record]) -> list[str]:
     **내가 이름을 바꾼 것**이다 — D-0273이 배선 시험 둘을 새로 쓰고, D-0281이 계산 시험을
     쪼개면서 옛 이름이 기록에 남았다. **고치는 판마다 강제자를 안 따라갔다.**
 
+    **강제자 읽기는 `decision_ledger.keeper_text`가 든다** (D-0304). 여기에도 정규식이
+    있었고 `^강제자  (.+)$`였다 — 머리만 두고 들여쓴 꼴을 못 읽어 **네 판의 함수 실재를
+    조용히 안 봤다.** 대장과 `check_doc_style`도 각자 다르게 틀렸다.
+
     **파일까지만 적은 205건은 여기 안 걸린다.** 못은 구멍이 0인 데에만 박는다 (D-0134) —
     함수까지 적은 쪽은 넷을 고치니 0이고, 파일까지만 적은 쪽은 O-58 (닫힘 D-0291)이 계속 든다.
     """
     problems: list[str] = []
     for record in records:
-        found = KEEPER.search(record.body)
-        if found is None:
+        found = keeper_text(record.body)
+        if not found:
             continue
-        for path_text, function in NODE.findall(found.group(1)):
+        for path_text, function in NODE.findall(found):
             known = _functions(ROOT / path_text)
             if known is None:
                 problems.append(f"{record.identifier}의 강제자가 없는 파일을 가리킨다: {path_text}")
@@ -203,13 +221,13 @@ def _bare_files(record: Record) -> list[str]:
     """`NODE_FROM` 뒤의 기록이 시험 파일을 **함수 없이** 가리키는가 (O-58 닫힘 D-0291)."""
     if record.number < NODE_FROM:
         return []
-    found = KEEPER.search(record.body)
-    if found is None or found.group(1).startswith("없음"):
+    found = keeper_text(record.body)
+    if not found:
         return []
     return [
         f"{record.identifier}의 강제자가 시험 파일까지만 가리킨다: {path_text}. "
         f"`{path_text}::함수` 꼴로 적는다 — 그 파일이 그 함수를 안 봐도 초록이었다 "
         "(O-58 닫힘 D-0291)"
-        for path_text, node in BARE.findall(found.group(1))
+        for path_text, node in BARE.findall(found)
         if path_text.startswith(TEST_TREE) and not node
     ]

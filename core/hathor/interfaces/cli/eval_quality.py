@@ -21,7 +21,7 @@ from hathor.application.evaluate_chord_quality import (
     sweep_sustained,
 )
 from hathor.domain.services.harmony_quality import QUALITIES
-from hathor.domain.services.stem_sets import SERIES_STEMS, stem_parts
+from hathor.domain.services.stem_sets import POLYPHONIC_STEMS, SERIES_STEMS, stem_parts
 from hathor.infrastructure.chroma_series_store import find_series_root, load_series, series_settings
 from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
 from hathor.interfaces.cli.registry import Command
@@ -59,14 +59,26 @@ def _sweep_lines(sweep: QualitySweep) -> list[str]:
     return render_table(spec, rows)
 
 
-def _root_warning(stem: str) -> str | None:
-    """근음이 빠진 스템인가 (교란 1 · D-0302)."""
-    if "bass" in stem_parts(stem):
-        return None
-    return (
-        f"  ⚠ 스템 `{stem}`은 베이스를 뺀 것이라 **근음을 버린다** (D-0073 표). 7화음은 근음과\n"
-        "    7음의 대비로 갈리므로 교란이다 — `--stem mix`로 같이 재서 견준다 (D-0302)."
-    )
+def warnings(stem: str) -> list[str]:
+    """이 스템으로 화음 품질을 재는 것이 무엇을 놓치는가 (D-0302 · D-0303).
+
+    **둘은 다른 결함이다.** 근음 누락은 판정을 3음 쪽으로 기울이고(교란 1), 단선율은
+    판정 자체를 뜻 없게 만든다. 하나만 찍으면 나머지를 안 본다.
+    """
+    found: list[str] = []
+    if stem not in POLYPHONIC_STEMS:
+        found.append(
+            f"  ⚠ 스템 `{stem}`은 사실상 **단선율이다** (D-0099가 겹치지 않는 관측으로 둔 것이며\n"
+            "    화성 사전이 아니다). 창에 한 음만 실리면 어느 템플릿도 안 맞는데 `argmax`는\n"
+            "    그래도 하나를 고른다 — **이 표의 수를 화음 어휘로 인용하지 않는다** (D-0303)."
+        )
+    if "bass" not in stem_parts(stem):
+        found.append(
+            f"  ⚠ 스템 `{stem}`은 베이스를 뺀 것이라 **근음을 버린다** (D-0073 표).\n"
+            "    7화음은 근음과 7음의 대비로 갈리므로 교란이다 —"
+            " `--stem mix`로 같이 재서 견준다 (D-0302)."
+        )
+    return found
 
 
 def _resolve(args: argparse.Namespace) -> Path | None:
@@ -109,7 +121,7 @@ def run_eval_chord_quality(args: argparse.Namespace) -> int:
         f"── 화음 품질 어휘 · {root.name} · 스템 {args.stem} · 창 {span}초 · "
         f"{len(songs)}곡 {total}창"
     )
-    if (warning := _root_warning(args.stem)) is not None:
+    for warning in warnings(args.stem):
         print(warning)
 
     grouped = sweep_groups(songs, seed=args.seed)
@@ -163,4 +175,4 @@ CHORD_QUALITY = Command(
 """`eval` 표에 실리는 것. **등재는 `eval_priors.COMMANDS`가 든다** — `main.py`가 못에 박혀
 있어 묶음 하나를 더 들일 자리가 없다 (D-0302)."""
 
-__all__ = ["CHORD_QUALITY", "GROUPS", "MISSING", "run_eval_chord_quality"]
+__all__ = ["CHORD_QUALITY", "GROUPS", "MISSING", "run_eval_chord_quality", "warnings"]

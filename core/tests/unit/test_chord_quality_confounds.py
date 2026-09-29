@@ -23,12 +23,13 @@ from hathor.domain.services.harmony_quality import (
     SUSTAINED_FLOOR,
     sustained_mask,
 )
+from hathor.domain.services.stem_sets import SERIES_STEMS
 from hathor.infrastructure.chroma_series_store import (
     load_series,
     series_settings,
     write_series,
 )
-from hathor.interfaces.cli.eval_quality import MISSING
+from hathor.interfaces.cli.eval_quality import MISSING, warnings
 from hathor.interfaces.cli.main import main
 
 HOLD = 3
@@ -162,3 +163,30 @@ def test_선언이_있으면_창_길이를_읽는다(tmp_path: Path) -> None:
 def test_빈_칸_표식이_수가_아니다() -> None:
     """표에 `—`가 들어가려면 열이 문자열이어야 한다. 수 형식이면 0으로 채워진다."""
     assert MISSING == "—"
+
+
+# ---------------- 스템마다 무엇을 놓치는지 찍는다 (D-0302 · D-0303)
+
+
+def test_스템별_경고가_갈린다() -> None:
+    """**둘은 다른 결함이다.** 근음 누락은 판정을 기울이고 단선율은 뜻을 없앤다.
+
+    `bass`는 근음을 담으므로 교란 1 경고가 없지만 **단선율이라 화음 판정 대상이 아니다** —
+    첫 판에서 근음만 물어 `bass`가 경고 없이 통과했다 (D-0303).
+    """
+    assert warnings("mix") == []
+    assert [len(warnings(stem)) for stem in ("other", "bass", "vocals")] == [1, 1, 2]
+    assert "근음을 버린다" in warnings("other")[0]
+    assert "단선율" in warnings("bass")[0]
+
+
+def test_단선율_경고가_인용하지_말라고_적는다() -> None:
+    """**수가 나오는 것과 뜻이 있는 것은 다르다.** `argmax`는 늘 하나를 고른다."""
+    assert "인용하지 않는다" in warnings("bass")[0]
+
+
+@pytest.mark.parametrize("stem", SERIES_STEMS)
+def test_시계열이_있는_스템만_고를_수_있다(stem: str) -> None:
+    """**D-0106이 조합은 안 뽑기로 했다.** `other+bass`를 고르면 «창이 없다»로 끝난다."""
+    assert stem in ("mix", "other", "bass", "vocals")
+    assert "+" not in stem

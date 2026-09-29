@@ -73,7 +73,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from decision_evidence import check_attribution, check_evidence, check_keepers
+from decision_evidence import (
+    check_attribution,
+    check_evidence,
+    check_keeper_text,
+    check_keepers,
+)
 from decision_ledger import (
     HEADING,
     LEDGER_BEGIN,
@@ -421,6 +426,7 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_sections(records),
         *check_evidence(records),
         *check_attribution(records),
+        *check_keeper_text(records),
         *check_keepers(records),
         *check_supersession(records),
         *check_open_issues(issues),

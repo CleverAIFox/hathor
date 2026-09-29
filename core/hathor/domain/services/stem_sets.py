@@ -29,6 +29,18 @@ DEFAULT_STEM_SET = "other"
 ALL_STEMS = frozenset({"other", "bass", "vocals", "drums"})
 """Demucs가 내는 네 갈래. `mix`가 담는 것이 이것이다."""
 
+POLYPHONIC_STEMS: tuple[str, ...] = (MIX_SOURCE, "other")
+"""화음을 **동시에 여러 음으로** 담는 스템 (D-0303).
+
+`bass`와 `vocals`는 사실상 단선율이다. 창 하나에 한 음만 실리면 3음·4음 템플릿이 어느
+것도 맞지 않고, `argmax`는 그래도 하나를 고른다 — **뜻 없는 수가 표에 실린다.** 베이스는
+분산화음으로 화음을 그릴 수 있으므로 «불가능»이 아니라 «약하다»이고, 그래서 거부하지 않고
+경고한다. 거부하면 아직 해 보지 않은 측정을 미리 막는 것이다.
+
+D-0099가 `bass`·`vocals`를 둔 이유는 **겹치지 않는 두 관측**이며 화성 사전이 아니다 —
+`STEM_SETS` 표가 이미 그렇게 적어 두었다.
+"""
+
 SERIES_STEMS: tuple[str, ...] = (MIX_SOURCE, "other", "bass", "vocals")
 """크로마 **시계열**이 실제로 뽑히는 이름 (D-0106 · D-0302).
 

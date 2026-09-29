@@ -2420,6 +2420,11 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0296 | 한 칸을 고치고 바로 옆 칸을 안 셌다 | `core/tests/unit/test_artifacts_ledger.py::test_대장의_재생성_명령이_실재한다` | 실물 저장소 |
 | D-0297 | `MAP`이 무작위 없이 나가고 있었다 | `core/tests/unit/test_evaluate_retrieval.py::test_측정값마다_무작위가_같이_나간다` | 실물 1004곡 · `layer00` 검색 실측 |
 | D-0298 | 같은 오류가 같은 자리에서 두 번째 났다 | `core/tests/unit/test_sync_artifacts.py::test_못_읽는_파일이_있어도_나머지를_센다` | 실물 저장소 · 사용자 기기 로그 (교두보 12,638개) |
+| D-0300 | O-64가 적은 측정이 원리적으로 불가능하다 | `core/tests/unit/test_harmony_quality.py::test_다이어토닉_7음만_나오는_음정이_없다` | 합성 · 실물 균등난수 2만 창(편향 실측) · 합성 화음 창(판정 확인) · 코퍼스 실측은 미실행 |
+| D-0301 | 규약을 인용해서 일을 안 했다 | `core/tests/unit/test_check_decisions.py::test_자료_확인은_뒤_번호만_가리킨다` | 해당 없음 |
+| D-0302 | 화음 품질 첫 실측 | `core/tests/unit/test_chord_quality_confounds.py::test_번짐만으로_생긴_m7은_두_자에서_뒤집힌다` | 합성 · 실물 1004곡 230096창 (`other`) · 교란 판정은 합성 두 코퍼스 |
+| D-0303 | 「커지면 X」에는 귀무 하나로 모자란다 | `core/tests/unit/test_chord_quality_confounds.py::test_스템별_경고가_갈린다` | 합성 |
+| D-0304 | 강제자를 여러 줄로 적었더니 파서 셋이 다 놓쳤다 | `core/tests/unit/test_decision_ledger.py::test_여러_줄_강제자를_읽는다` | 실물 대장 238행 · 기록 303건 |
 
 <!-- decision-ledger:end -->
 

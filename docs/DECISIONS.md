@@ -23420,15 +23420,15 @@ PLAN이 *"24건은 지표 도구와 생성 경로이고 실물 측정에는 코�
       --features var/ingest/mert-layers --keys layer00 --bootstrap 1000
 
 강제자
-    core/tests/unit/test_harmony_quality.py::test_다이어토닉_7음만_나오는_음정이_없다
-    core/tests/unit/test_harmony_quality.py::test_코사인_argmax에_화음수_편향이_있다
-    core/tests/unit/test_harmony_quality.py::test_z_표준화가_편향을_내리되_없애지는_못한다
-    core/tests/unit/test_harmony_quality.py::test_순환_회전은_품질_축의_귀무가_아니다
-    core/tests/unit/test_harmony_quality.py::test_평평한_창은_빠진다
-    core/tests/unit/test_retrieval_metrics.py::test_부트스트랩은_실측과_베이스라인에_같은_추출을_쓴다
-    core/tests/unit/test_retrieval_metrics.py::test_쿼리가_모자라면_구간을_내지_않는다
-    core/tests/unit/test_retrieval_metrics.py::test_쿼리_집합이_다르면_거부한다
-    core/tests/unit/test_evaluate_retrieval.py::test_구간은_실측과_무작위를_같이_찍는다
+    `core/tests/unit/test_harmony_quality.py::test_다이어토닉_7음만_나오는_음정이_없다`
+    `core/tests/unit/test_harmony_quality.py::test_코사인_argmax에_화음수_편향이_있다`
+    `core/tests/unit/test_harmony_quality.py::test_z_표준화가_편향을_내리되_없애지는_못한다`
+    `core/tests/unit/test_harmony_quality.py::test_순환_회전은_품질_축의_귀무가_아니다`
+    `core/tests/unit/test_harmony_quality.py::test_평평한_창은_빠진다`
+    `core/tests/unit/test_retrieval_metrics.py::test_부트스트랩은_실측과_베이스라인에_같은_추출을_쓴다`
+    `core/tests/unit/test_retrieval_metrics.py::test_쿼리가_모자라면_구간을_내지_않는다`
+    `core/tests/unit/test_retrieval_metrics.py::test_쿼리_집합이_다르면_거부한다`
+    `core/tests/unit/test_evaluate_retrieval.py::test_구간은_실측과_무작위를_같이_찍는다`
 
 자료  합성 · 실물 균등난수 2만 창(편향 실측) · 합성 화음 창(판정 확인) · 코퍼스 실측은 미실행
 
@@ -23497,15 +23497,19 @@ D-0132·D-0136이 그 둘을, **D-0265가 `자료`를 264건에 전수로 소급
     make docs-fix && git diff --stat docs/MASTER.md
 
 강제자
-    core/tests/unit/test_check_decisions.py::test_자료_확인은_뒤_번호만_가리킨다
-    core/tests/unit/test_check_decisions.py::test_자료_확인_표식이_대장에_실린다
-    tools/decision_evidence.py::_confirmation
+    `core/tests/unit/test_check_decisions.py::test_자료_확인은_뒤_번호만_가리킨다`
+    `core/tests/unit/test_check_decisions.py::test_자료_확인_표식이_대장에_실린다`
+    `tools/decision_evidence.py::_confirmation`
 
 자료  해당 없음
 
 ---
 
 ## D-0302. 화음 품질 첫 실측 — 4음은 귀무보다 낮고, 내가 근음 없는 스템을 기본값으로 박았다
+
+> **갱신됨 — D-0303.** 이 판의 경고는 *"근음을 담고 있는가"*만 물었고 **`bass`가 경고 없이 <!--voice-ok-->
+> 통과했다** — 베이스는 근음 그 자체지만 사실상 단선율이라 화음 판정 대상이 아니다. 그리고
+> 이 판이 적은 방향 규칙이 한 번 틀렸던 것에서 **O-25 여섯째 줄**이 나왔다 (D-0303).
 
 - **갱신**: D-0300
 - **닫음**: O-64의 전제
@@ -23627,11 +23631,154 @@ O-64는 *"생성물이 3화음만 써서 클래식하게 들린다"*는 청취�
     cd core && uv run python -m hathor.cli eval chord-quality --stem mix
 
 강제자
-    core/tests/unit/test_chord_quality_confounds.py::test_번짐만으로_생긴_m7은_두_자에서_뒤집힌다
-    core/tests/unit/test_chord_quality_confounds.py::test_진짜_m7은_두_자에서_더_커진다
-    core/tests/unit/test_chord_quality_confounds.py::test_인접_이웃으로는_못_가른다
-    core/tests/unit/test_chord_quality_confounds.py::test_잴_창이_없으면_None이다
-    core/tests/unit/test_chord_quality_confounds.py::test_곡_경계를_넘어_묶지_않는다
-    core/tests/unit/test_chord_quality_confounds.py::test_보고가_창_길이와_근음_경고를_찍는다
+    `core/tests/unit/test_chord_quality_confounds.py::test_번짐만으로_생긴_m7은_두_자에서_뒤집힌다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_진짜_m7은_두_자에서_더_커진다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_인접_이웃으로는_못_가른다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_잴_창이_없으면_None이다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_곡_경계를_넘어_묶지_않는다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_보고가_창_길이와_근음_경고를_찍는다`
 
 자료  합성 · 실물 1004곡 230096창 (`other`) · 교란 판정은 합성 두 코퍼스
+
+---
+
+## D-0303. 「커지면 X」에는 귀무 하나로 모자란다 — O-25에 여섯째 줄을 적는다
+
+> **갱신됨 — D-0304.** 이 판의 `강제자`를 여러 줄로 적었더니 **파서 셋이 다 놓쳤고 대장이
+> D-0298에서 끊겼다.** D-0300부터 넷이 빠져 있었다. 파서를 `keeper_text` 한 자리로 모으고
+> 빈 칸을 잡는 못을 박았다 (D-0304).
+
+- **갱신**: D-0302
+- **배경**: D-0302에서 교란을 쓸 자를 만들고 읽기 규칙을 적었다. *"묶으면 번짐이 늘어나니 <!--voice-ok-->
+  차가 커지면 번짐이다."* **합성으로 돌려 보니 반대였다** — 묶기는 번짐을 늘리지 않고
+  평탄화한다. O-25의 다섯 줄을 다 지켰는데 걸리지 않았다.
+
+### 귀무는 방향을 안 알려 준다
+
+O-25 (4)는 *"판정 규칙이 귀무 자료에서 어떻게 나오는지 먼저 돌려 본다"*이고 (5)는 *"귀무가
+실측 구조를 재현하는지 본다"*다. 둘 다 **신호가 없을 때 얼마인가**를 묻는다.
+
+「커지면 X」는 그것을 안 묻는다. **신호가 있을 때 어느 쪽으로 가는가**를 묻는 규칙이고,
+귀무 하나로는 답이 안 나온다 — 귀무에는 갈 방향이 없다.
+
+- **후보**: (a) 규칙을 적을 때 방향도 실측한다 / (b) 「커지면」 꼴 규칙을 아예 안 쓴다 /
+  (c) 방향 어휘를 문서열에서 세는 검사를 만든다
+- **선택**: **(a).** 그리고 **(c)는 하지 않는다.**
+- **근거**: (b)는 쓸 수 있는 자를 버리는 것이다 — 방향 규칙은 실제로 번짐과 진짜를
+  **반대로** 갈랐다. (c)는 *"커진다"·"줄면"·"뒤집히면"* 같은 낱말을 세는 것인데 설명하는
+  문서열에도 잔뜩 들어 있어 오탐이 쏟아진다. **거짓 경보는 진짜 경보를 죽인다** — GR-0.8이
+  *"검사하지 않기로 한 것은 그 이유를 남긴다"*고 적은 자리다.
+- **결과**: O-25에 여섯째 줄. **반대 방향 합성 둘을 지어 두 값이 반대로 움직이는지 본다.**
+  같은 방향이면 자가 그 둘을 못 가르는 것이고, 붙여 놓으면 아무것도 못 잡는 하네스가 된다
+  (D-0071). 강제는 기계가 아니라 **기록의 `강제자`에 두 방향 시험을 적는 것**으로 한다.
+
+### 같은 판에서 구멍 하나가 더 보였다 — `bass`가 경고 없이 통과했다
+
+D-0302의 경고는 *"근음을 담고 있는가"*만 물었다. `bass`는 근음 그 자체이므로 통과한다.
+**그런데 베이스는 사실상 단선율이다** — 창에 한 음만 실리면 3음·4음 템플릿이 어느 것도 안
+맞는데 `argmax`는 그래도 하나를 고른다. **수는 나오고 뜻은 없다.**
+
+| 스템 | 경고 |
+|---|---|
+| `mix` | 없음 |
+| `other` | 근음을 버린다 |
+| `bass` | **단선율이다** |
+| `vocals` | 단선율이다 · 근음을 버린다 |
+
+- **거부하지 않고 경고한다.** 베이스는 분산화음으로 화음을 그릴 수 있으므로 «불가능»이
+  아니라 «약하다»다. 거부하면 아직 해 보지 않은 측정을 미리 막는다.
+- **경고를 두 갈래로 나눴다.** 하나로 합치면 `vocals`에서 둘 중 하나만 보인다.
+- D-0099가 `bass`·`vocals`를 둔 이유는 **겹치지 않는 두 관측**이며 화성 사전이 아니다 —
+  `STEM_SETS` 표가 이미 그렇게 적어 두었고 **또 안 읽었다.**
+
+### 남기는 것
+
+- **규칙을 한 갈래로만 물으면 다른 갈래가 통과한다.** D-0302의 경고는 «근음»만 물었고
+  `bass`가 통과했다. 같은 병이 D-0292·D-0296·D-0297·D-0298에 있었고 **이번은 층위가
+  아니라 축이 하나 모자랐다.**
+- **자를 만든 판에서 그 자의 읽기 규칙까지 실측한다.** 안 하면 자는 맞고 읽기가 틀린 상태로
+  초록이 뜬다 — 검사가 통과하므로 **아무도 안 본다.**
+
+재현
+    cd core && uv run pytest tests/unit/test_chord_quality_confounds.py -q -k 스템
+    cd core && uv run python -m hathor.cli eval chord-quality --stem bass
+
+강제자
+    `core/tests/unit/test_chord_quality_confounds.py::test_스템별_경고가_갈린다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_단선율_경고가_인용하지_말라고_적는다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_번짐만으로_생긴_m7은_두_자에서_뒤집힌다`
+    `core/tests/unit/test_chord_quality_confounds.py::test_진짜_m7은_두_자에서_더_커진다`
+
+자료  합성
+
+---
+
+## D-0304. 강제자를 여러 줄로 적었더니 파서 셋이 다 놓쳤다 — 대장이 네 판을 버렸다
+
+- **갱신**: D-0303
+- **배경**: D-0303을 쓰고 합성 강제자 수를 다시 세다가 **대장이 D-0298에서 끊긴 것**을
+  봤다. D-0300·D-0301·D-0302·D-0303이 없었다. 셋 다 `강제자`를 적었고 열일곱 관문을
+  통과하고 푸시까지 갔다.
+
+### 한 줄이 100자를 못 넘으니 여러 줄로 적었다
+
+기존 꼴은 `강제자  \`A\` · \`B\``다. 시험을 아홉 개 적으면 100자를 넘고, 줄 길이는 전 기록에
+강제된다 (D-0081). 그래서 머리만 두고 다음 줄들을 들여썼다.
+
+    강제자
+        `core/tests/unit/test_harmony_quality.py::test_...`
+        `core/tests/unit/test_harmony_quality.py::test_...`
+
+**그 꼴을 아무도 못 읽었다.** 파서가 세 군데 있었고 **셋 다 다르게 틀렸다.**
+
+| 자리 | 정규식 | 결과 |
+|---|---|---|
+| `decision_ledger.build_ledger` | `^강제자  (\S.*)$` | 안 맞아 **행을 버렸다** |
+| `decision_evidence.KEEPER` | `^강제자  (.+)$` | 안 맞아 **함수 실재를 안 봤다** |
+| `check_doc_style._field` | `line.startswith("강제자")` | 머리만 잡아 **경로 검사가 0건** |
+
+- **후보**: (a) 네 판을 한 줄 꼴로 고친다 / (b) 여러 줄 꼴을 읽는 파서를 **한 자리에**
+  두고 셋이 그것을 쓴다 / (c) 강제자를 하나만 적는다
+- **선택**: **(b).**
+- **근거**: (a)는 줄 길이 제한에 걸리고, 같은 상황이 다음 판에서 또 온다 — 시험이 아홉 개인
+  판은 계속 나온다. (c)는 정보를 버린다. **대장이 첫 항목만 싣는 것은 대장의 선택이고, 기록이
+  전부 적는 것은 기록의 일이다** — 표가 좁다고 기록을 줄이지 않는다.
+- **결과**: `decision_ledger.keeper_text`가 두 꼴을 다 읽고 세 자리가 그것을 쓴다. 대장이
+  **234행 → 238행**으로 늘었다. 합성 23 · 합성+실물 21 · 실물 166 · 해당없음 28.
+
+### 백틱도 안 씌우고 있었다
+
+`ENFORCER_PATH`는 `` `경로.py` ``만 잡는다. 네 판의 들여쓴 줄에는 백틱이 없었으므로, 파서를
+고쳐도 경로가 문자열로만 남는다. 22줄에 백틱을 씌웠다 — **표기 소급 수정이며 D-0081이 허용하는
+쪽이다** (D-0301이 같은 근거로 `자료` 칸을 고쳤다).
+
+### 못을 같은 판에 박는다
+
+`강제자` 머리만 두고 들여쓰기를 잊으면 `keeper_text`가 **빈 문자열**을 낸다. 그러면 다시
+조용히 빠진다. `check_keeper_text`가 그것을 잡는다 — **지금 빈 칸이 0이므로 박는다** (D-0134).
+
+- **«칸이 있는가»와 «내용이 무엇인가»는 다른 질문이다.** `강제자 없음 — 사유: …` 선언은
+  칸이 **있는** 것이고 대장에는 안 실린다. 한 함수로 합치면 «없음»이 «칸이 없다»가 되므로
+  `_has_keeper`(존재)와 `keeper_text`(내용)를 갈랐다.
+
+### 남기는 것
+
+- **같은 것을 읽는 자리가 셋이면 셋 다 틀릴 수 있다.** 이 저장소는 `series_path`(D-0105)와
+  `part`(D-0264)에서 이미 같은 이유로 한 자리로 모았다. **강제자는 안 모았고 그래서 났다.**
+- **형식을 못 맞춰서 우회한 자리는 우회한 사람이 안다.** 나는 100자 제한을 피해 들여썼고
+  그 순간 세 검사 밖으로 나갔다. **형식을 피할 때 무엇이 그 형식을 읽는지 본다.**
+- **가장 조용한 실패는 «세는 그물에서 빠지는 것»이다** (D-0230). 틀린 수가 실리면 검사가
+  잡지만, 행이 없으면 아무도 없다는 것을 모른다 — **네 판 연속으로 그랬다.**
+
+재현
+    python3 tools/check_decisions.py --check
+    cd core && uv run pytest tests/unit/test_decision_ledger.py -q
+    python3 -c "import sys; sys.path.insert(0,'tools'); from decision_ledger import build_ledger; print(build_ledger(open('docs/DECISIONS.md',encoding='utf-8').read()).count(chr(10)))"
+
+강제자
+    `core/tests/unit/test_decision_ledger.py::test_여러_줄_강제자를_읽는다`
+    `core/tests/unit/test_decision_ledger.py::test_빈_강제자_칸을_잡는다`
+    `core/tests/unit/test_decision_ledger.py::test_없음_선언은_칸이_있는_것이다`
+    `core/tests/unit/test_decision_ledger.py::test_지금_대장에_최근_판이_전부_있다`
+
+자료  실물 대장 238행 · 기록 303건

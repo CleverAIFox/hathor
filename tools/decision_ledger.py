@@ -48,10 +48,10 @@ def build_ledger(text: str) -> str:
     """
     rows = []
     for identifier, title, body in records_with_body(text):
-        found = re.search(r"^강제자  (\S.*)$", body, re.MULTILINE)
-        if not found:
+        text_found = keeper_text(body)
+        if not text_found:
             continue
-        keeper = found.group(1).strip().replace("`", "").split(" · ")[0]
+        keeper = text_found.replace("`", "").split(" · ")[0]
         source = EVIDENCE.search(body)
         evidence = source.group(1).strip() if source else "—"
         rows.append(f"| {identifier} | {title.split(' — ')[0].strip()} | `{keeper}` | {evidence} |")
@@ -59,6 +59,36 @@ def build_ledger(text: str) -> str:
     # **표식과 표 사이를 빈 줄로 띄운다.** HTML 주석은 표 머리로 안 읽히고,
     # `check_doc_style`이 *"산문이 표를 끊는다"*로 문다.
     return "\n".join([LEDGER_BEGIN, "", *head, *rows, "", LEDGER_END])
+
+
+KEEPER_HEAD = re.compile(r"^강제자(?:  (.+))?$", re.MULTILINE)
+"""`강제자` 칸의 머리. **같은 줄 뒤가 비어 있어도 잡는다** (D-0304).
+
+빈 채로 두고 다음 줄들을 들여쓰는 꼴을 쓸 수 있는데, 셋 다 그것을 못 읽었다 — 대장은
+행을 버리고 `check_doc_style`은 경로 존재를 안 보고 `check_keepers`는 함수를 안 봤다.
+**네 판이 그 상태로 초록이었다.**
+"""
+
+
+def keeper_text(body: str) -> str | None:
+    """`강제자` 칸의 내용 한 덩어리. 칸이 없으면 `None`이다 (D-0304).
+
+    두 꼴을 다 읽는다 — 한 줄(`강제자  A · B`)과 **머리만 두고 들여쓴 여러 줄**. 시험을
+    아홉 개 적으면 한 줄이 100자를 넘으므로 여러 줄 꼴이 필요하다 (D-0081의 줄 길이).
+
+    **파서를 한 자리에 둔다.** 세 군데가 각자 정규식을 들고 있었고 **셋 다 다르게 틀렸다.**
+    """
+    found = KEEPER_HEAD.search(body)
+    if found is None:
+        return None
+    parts = [found.group(1).strip()] if found.group(1) else []
+    lines = body[found.end() :].splitlines()
+    for line in lines[1:] if lines and not lines[0].strip() else lines:
+        if not line.startswith(("    ", "\t")):
+            break
+        if stripped := line.strip():
+            parts.append(stripped)
+    return " · ".join(parts) if parts else ""
 
 
 def records_with_body(text: str) -> list[tuple[str, str, str]]:
