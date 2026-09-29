@@ -602,3 +602,53 @@ def test_강제자_없음_선언은_안_묻는다():
 def test_지금_대장이_그_규약과_맞다():
     """**강제자다.** D-0270 이후 구멍이 0이라 못을 박을 수 있었다 (D-0134)."""
     assert evidence.check_keepers(tool.scan_records(DECISIONS.read_text(encoding="utf-8"))) == []
+
+
+# ------------------- `자료` 칸은 소급 갱신 대상이다 (GR-0.2 · D-0301)
+
+
+def _confirm(number: int, value: str) -> list[str]:
+    records = tool.scan_records(decisions() + record(number, f"자료  {value}\n"))
+    found: list[str] = evidence.check_evidence(records)
+    return [line for line in found if "자료 칸이 없다" not in line]
+
+
+def test_자료_확인은_뒤_번호만_가리킨다() -> None:
+    """**앞 번호를 적으면 «나중 실측이 확인했다»가 거짓이다** (D-0301).
+
+    `자료`가 고칠 수 있는 칸이 된 순간 조용히 고쳐질 수 있다. 갱신한 판 번호를 칸에
+    적게 하고 그 번호가 자기보다 뒤인지 본다 — **구멍이 0일 때 못 박는다** (D-0134).
+    """
+    assert _confirm(23, "합성 · 실물 1004곡 (D-0299 확인)") == []
+    (problem,) = _confirm(299, "합성 · 실물 1004곡 (D-0023 확인)")
+    assert "앞 번호다" in problem
+    (same,) = _confirm(299, "합성 · 실물 1004곡 (D-0299 확인)")
+    assert "앞 번호다" in same, "자기 자신을 가리키는 것도 확인이 아니다"
+
+
+def test_확인_표식이_없는_값은_그대로_통과한다() -> None:
+    """**대부분의 기록은 갱신된 적이 없다.** 표식을 요구하면 234건이 빨개진다."""
+    assert _confirm(23, "합성") == []
+    assert _confirm(23, "실물 1004곡 검색 실측") == []
+    assert _confirm(23, "해당 없음") == []
+
+
+def test_지금_대장의_확인_표식이_전부_뒤_번호다() -> None:
+    """**강제자다.** 지금 `(D-xxxx 확인)`이 둘이고 둘 다 옳다 (D-0301)."""
+    records = tool.scan_records(DECISIONS.read_text(encoding="utf-8"))
+    assert evidence.check_evidence(records) == []
+    marked = [
+        found.group(1)
+        for record_item in records
+        if (source := evidence.EVIDENCE.search(record_item.body)) is not None
+        for found in evidence.CONFIRMED_BY.finditer(source.group(1))
+    ]
+    assert marked, "확인 표식이 하나도 없다 — D-0301이 고친 둘이 사라졌다"
+
+
+def test_자료_확인_표식이_대장에_실린다() -> None:
+    """**대장은 현재형 표다.** 갱신한 칸이 `docs/MASTER.md`에 그대로 나가야 한다."""
+    ledger = tool.build_ledger(DECISIONS.read_text(encoding="utf-8"))
+    assert "(D-0299 확인)" in ledger
+    master = (DECISIONS.parent / "MASTER.md").read_text(encoding="utf-8")
+    assert "(D-0299 확인)" in master

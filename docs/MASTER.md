@@ -2203,7 +2203,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0020 | 재생시간으로 레코딩 버전을 확정한다 | `core/tests/unit/test_lookup_verdict.py` | 실물 1004곡 |
 | D-0021 | 오디오 디코딩은 ffmpeg 서브프로세스, 정규화는 MERT 특징 추출기에 맡긴다 | `core/tests/unit/test_ffmpeg_audio_decoder.py` | 실물 오디오 파일 |
 | D-0022 | 배치 중복 실행은 flock으로 막고 인덱스는 키 정렬로 유지한다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
-| D-0023 | 검색 평가 하네스를 태그 동치류로 구성한다 (M0/M1/M2) | `core/tests/unit/test_evaluate_retrieval.py` | 합성 |
+| D-0023 | 검색 평가 하네스를 태그 동치류로 구성한다 (M0/M1/M2) | `core/tests/unit/test_evaluate_retrieval.py` | 합성 · 실물 1004곡 검색 실측 (D-0299 확인) |
 | D-0025 | MERT와 MFCC는 상보적이다 | `core/tests/unit/test_npz_feature_store.py` | 실물 1004곡 |
 | D-0028 | 취향 라벨 수집은 무작위 평가 집합을 먼저 확보한다 | `core/tests/unit/test_taste_collection.py` | 해당 없음 |
 | D-0029 | 주기능은 시드곡 퓨전이다 | `core/tests/unit/test_search_similar.py` | 실물 응답 30건 |
@@ -2211,7 +2211,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0033 | 시드 결합 규칙을 실측으로 고른다 | `core/tests/unit/test_evaluate_fusion.py` | 해당 없음 |
 | D-0036 | 가사축은 문자 n-gram 해싱 베이스라인으로 착수한다 | `core/tests/unit/test_lyrics_axis.py` | 해당 없음 |
 | D-0039 | 문서 체계를 3축으로 명시한다 | `tools/check_doc_style.py` | 해당 없음 |
-| D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` | 합성 |
+| D-0040 | M0 분할을 실험 축으로 승격한다 | `core/tests/unit/test_evaluate_retrieval.py` | 합성 · 실물 1004곡 홀짝 분할 실측 (D-0299 확인) |
 | D-0041 | M0에 순위 진단과 해석적 베이스라인을 넣는다 | `core/tests/unit/test_retrieval_metrics.py` | 해당 없음 |
 | D-0042 | 부록 A를 손요약에서 기계 색인으로 바꾸고 문서 검사를 CI에 넣는다 | `tools/check_decisions.py` | 실물 저장소 |
 | D-0043 | `PLAN.md`를 `DESIGN.md`로, GROUND RULES를 `CONTRIBUTING.md`로 | `tools/check_doc_style.py` | 실물 문서 4종 |

@@ -54,8 +54,34 @@ def check_evidence(records: list[Record]) -> list[str]:
             problems.append(f"{record.identifier}의 `자료` 값이 규약 밖이다: {value!r}")
         if value == "불명":
             unknown += 1
+        problems.extend(_confirmation(record, value))
     if unknown > UNKNOWN_EVIDENCE:
         problems.append(f"`자료 불명`이 {unknown}건으로 천장 {UNKNOWN_EVIDENCE}건을 넘는다")
+    return problems
+
+
+CONFIRMED_BY = re.compile(r"\(D-(\d{4}) 확인\)")
+"""`자료` 칸을 **뒤에 온 판이 갱신했다**는 표식 (D-0301).
+
+`자료`는 표기 칸이라 소급 갱신 대상이다 (GR-0.2 *"표기는 소급해 맞추고 내용은 안
+맞춘다"* · D-0081) — D-0265가 264건을 전수로 채운 것이 그 근거다. **그런데 고칠 수
+있게 된 순간 조용히 고쳐질 수 있다.** 갱신한 판의 번호를 칸에 적게 하고, 그 번호가
+자기보다 **뒤**인지 본다. 앞 번호를 적으면 *"나중 실측이 확인했다"*가 거짓이다.
+
+참조가 실존하는지는 `check_decisions`의 참조 무결성이 이미 본다.
+"""
+
+
+def _confirmation(record: Record, value: str) -> list[str]:
+    """`(D-xxxx 확인)`이 **자기보다 뒤 번호**를 가리키는가 (D-0301)."""
+    problems: list[str] = []
+    for mark in CONFIRMED_BY.finditer(value):
+        number = int(mark.group(1))
+        if number <= record.number:
+            problems.append(
+                f"{record.identifier}의 `자료`가 D-{number:04d}로 확인됐다는데 "
+                f"자기보다 앞 번호다. 뒤에 온 판만 앞 판의 자료를 갱신한다"
+            )
     return problems
 
 
