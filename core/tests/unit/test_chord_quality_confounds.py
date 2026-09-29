@@ -190,3 +190,52 @@ def test_시계열이_있는_스템만_고를_수_있다(stem: str) -> None:
     """**D-0106이 조합은 안 뽑기로 했다.** `other+bass`를 고르면 «창이 없다»로 끝난다."""
     assert stem in ("mix", "other", "bass", "vocals")
     assert "+" not in stem
+
+
+# ------------- 선언이 없어도 형제 jsonl이 창 길이를 안다 (D-0305)
+
+
+def _plant_jsonl(root: Path, **settings: object) -> Path:
+    series = root / "keys-20260916T115536Z.series"
+    series.mkdir(parents=True, exist_ok=True)
+    row = {"source_key": "곡.flac", "chroma": [0.0] * DEGREE_COUNT, **settings}
+    (root / "keys-20260916T115536Z.keys.jsonl").write_text(
+        json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return series
+
+
+def test_선언이_없으면_형제_jsonl에서_창_길이를_읽는다(tmp_path: Path) -> None:
+    """**«없는 것»이 아니라 «안 본 것»이었다** (D-0305).
+
+    `artifact_manifest`는 D-0295부터 쓴다. 그 전에 뽑은 시계열에 선언이 없어 첫 실측이
+    `창 ?초`를 찍었는데, `series_seconds`는 D-0073부터 매 행에 적혀 있었다.
+    """
+    series = _plant_jsonl(tmp_path, series_seconds=1.0, chroma_mode="cq")
+    found = series_settings(series)
+    assert found["window_seconds"] == 1.0
+    assert found["chroma_mode"] == "cq"
+    # 12차원 크로마 벡터는 안 건져 온다 — 이름이 겹쳐 조건을 덮는 자리다 (D-0073).
+    assert "chroma" not in found
+
+
+def test_선언이_있으면_선언이_이긴다(tmp_path: Path) -> None:
+    """선언은 뽑을 때 적은 것이고 행은 그 곡의 것이다. **둘이 다르면 선언을 믿는다.**"""
+    series = _plant_jsonl(tmp_path, series_seconds=1.0)
+    (series / f"{series.name}.manifest.json").write_text(
+        json.dumps({"window_seconds": 2.0}), encoding="utf-8"
+    )
+    assert series_settings(series)["window_seconds"] == 2.0
+
+
+def test_형제가_깨졌어도_터지지_않는다(tmp_path: Path) -> None:
+    """**보고가 조건 한 칸 때문에 죽지 않는다.** 끊긴 배치는 마지막 줄이 잘려 있다 (D-0077)."""
+    series = tmp_path / "keys-20260916T115536Z.series"
+    series.mkdir(parents=True)
+    broken = tmp_path / "keys-20260916T115536Z.keys.jsonl"
+    broken.write_text('{"source_key": "곡.flac", "series_s', encoding="utf-8")
+    assert series_settings(series) == {}
+    broken.write_text("", encoding="utf-8")
+    assert series_settings(series) == {}
+    broken.write_text("[1, 2, 3]\n", encoding="utf-8")
+    assert series_settings(series) == {}

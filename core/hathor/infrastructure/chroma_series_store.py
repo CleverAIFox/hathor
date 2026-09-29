@@ -140,17 +140,54 @@ def load_series(root: Path, stem_set: str) -> list[NDArray[np.float64]]:
 
 
 def series_settings(root: Path) -> dict[str, object]:
-    """시계열 폴더의 선언 (창 길이 · 크로마 종류). 없으면 빈 사전이다.
+    """시계열 폴더의 조건 (창 길이 · 크로마 종류). 없으면 빈 사전이다.
 
-    **창 길이가 화면에 없었다** (D-0302 · D-0073 계열). 화음 품질 보고가 *"창 단위"*라고
-    적으면서 그 창이 몇 초인지 안 찍었다 — 같은 표를 다른 창 길이로 두 번 내면 읽는
-    사람이 구분할 수 없다.
+    **창 길이가 화면에 없었다** (D-0302 · D-0073 계열). 같은 표를 다른 창 길이로 두 번
+    내면 읽는 사람이 구분할 수 없다.
+
+    ### 선언이 없어도 형제 `jsonl`이 안다 (D-0305)
+
+    `artifact_manifest`는 D-0295부터 쓰므로 **그 전에 뽑은 시계열에는 선언이 없다.** 첫
+    실측이 그 자리에 `?`를 찍었는데, `series_seconds`는 D-0073부터 **`keys.jsonl`의 매
+    행에 적혀 있었다.** 선언이 없으면 거기서 읽는다 — *"없는 것"*이 아니라 *"안 본 것"*
+    이었다.
+
+    형제 파일 이름은 `ingest_keys`가 `.keys.jsonl` -> `.series`로 만든 짝이다.
     """
     path = root / f"{root.name}{artifact_manifest.SUFFIX}"
+    if path.exists():
+        loaded: object = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            return loaded
+    return _from_rows(root.with_suffix(".keys.jsonl"))
+
+
+SETTING_KEYS = ("series_seconds", "chroma_mode", "aggregate", "profile", "separated")
+"""행에서 건져 올릴 조건. **`chroma`는 12차원 벡터라 뺀다** (D-0073의 이름 겹침)."""
+
+
+def _from_rows(path: Path) -> dict[str, object]:
+    """`keys.jsonl` **첫 행**의 조건. 행마다 같은 값이므로 하나면 된다 (D-0073).
+
+    **파일 전체를 안 읽는다.** 1004행짜리 파일에서 조건 하나를 보려고 전량을 파싱하면
+    보고가 눈에 띄게 느려진다.
+    """
     if not path.exists():
         return {}
-    loaded: object = json.loads(path.read_text(encoding="utf-8"))
-    return loaded if isinstance(loaded, dict) else {}
+    with path.open(encoding="utf-8") as stream:
+        first = stream.readline()
+    if not first.strip():
+        return {}
+    try:
+        row: object = json.loads(first)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(row, dict):
+        return {}
+    found = {key: row[key] for key in SETTING_KEYS if key in row}
+    if "series_seconds" in found:
+        found["window_seconds"] = found["series_seconds"]
+    return found
 
 
 def load_windows(root: Path, stem_set: str) -> tuple[NDArray[np.float64], int]:
