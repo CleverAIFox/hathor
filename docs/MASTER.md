@@ -2284,7 +2284,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
 | D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
 | D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` | 합성 |
-| D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` | 합성 |
+| D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` | 합성 · 실물 1004곡 230096창 크로마 시계열 (D-0305 확인) |
 | D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` | 실물 기기 |
 | D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` | 합성 |
 | D-0108 | 한쪽 기기에서만 초록이었다 | `core/tests/unit/test_evaluate_time_drift.py` | 해당 없음 |
@@ -2454,6 +2454,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0306 | 가짜를 만드는 쌍이 품질마다 다른데 하나로만 확인했다 | `core/tests/unit/test_chord_quality_confounds.py::test_섞임이_만든_품질은_품질마다_뒤집힌다` | 합성 · 실물 섞임 네 쌍 대조 · 판정 대상은 1004곡 230096창 |
 | D-0307 | 재현 불명 11 → 1 | `tools/doc_fsck.py::unknown_reproductions` | 실물 결정 기록 306건 전수 |
 | D-0308 | 갚은 빚이 PLAN에 눌러앉아 있었다 | `core/tests/unit/test_doc_style.py::test_PLAN에_취소선이_남으면_잡는다` | 실물 PLAN 빚 표 14행 전수 |
+| D-0309 | 규율은 옆 표가 아니라 §0 규약 절에 있었다 | `core/tests/unit/test_plan_counts.py::test_합성만으로_선_강제자_수가_대장과_같다` | 실물 PLAN 전수 · 대장 243행 |
 
 <!-- decision-ledger:end -->
 
