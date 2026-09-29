@@ -2427,6 +2427,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0303 | 「커지면 X」에는 귀무 하나로 모자란다 | `core/tests/unit/test_chord_quality_confounds.py::test_스템별_경고가_갈린다` | 합성 |
 | D-0304 | 강제자를 여러 줄로 적었더니 파서 셋이 다 놓쳤다 | `core/tests/unit/test_decision_ledger.py::test_여러_줄_강제자를_읽는다` | 실물 대장 238행 · 기록 303건 |
 | D-0305 | O-64가 닫힌다 | `core/tests/unit/test_chord_quality_confounds.py::test_선언이_없으면_형제_jsonl에서_창_길이를_읽는다` | 실물 1004곡 230096창 (`other` · `mix`) · 검색 부트스트랩 1000회 |
+| D-0306 | 가짜를 만드는 쌍이 품질마다 다른데 하나로만 확인했다 | `core/tests/unit/test_chord_quality_confounds.py::test_섞임이_만든_품질은_품질마다_뒤집힌다` | 합성 · 실물 섞임 네 쌍 대조 · 판정 대상은 1004곡 230096창 |
 
 <!-- decision-ledger:end -->
 

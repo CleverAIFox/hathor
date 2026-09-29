@@ -239,3 +239,75 @@ def test_형제가_깨졌어도_터지지_않는다(tmp_path: Path) -> None:
     assert series_settings(series) == {}
     broken.write_text("[1, 2, 3]\n", encoding="utf-8")
     assert series_settings(series) == {}
+
+
+# --------- 가짜를 만드는 쌍은 품질마다 다르다 (D-0306)
+
+FAKING = {
+    "m7": ((0, "maj"), (9, "min")),
+    "maj7": ((0, "maj"), (4, "min")),
+    "sus4": ((0, "maj"), (7, "maj")),
+    "dom7": ((5, "maj"), (7, "maj")),
+}
+"""그 품질을 **섞임만으로** 만들어 내는 3화음 쌍 (D-0306).
+
+첫 판은 `I <-> vi` 하나만 지었고 그것은 `m7`만 만든다. **실측에서 양수였던 셋이 전부
+흔한 쌍의 섞임으로 만들어진다** — `I+iii`는 `Cmaj7`의 음들이고 `I+V`는 `Gsus4`·`Cmaj7`·
+`Em7`을 전부 담는다. **확인하지 않은 채로 판정했다.**
+
+| 쌍 | 합친 음 | 부분집합으로 맞는 것 |
+|---|---|---|
+| I + vi | 0 4 7 9 | maj · min · **m7** |
+| I + iii | 0 4 7 11 | maj · min · **maj7** |
+| I + V | 0 2 4 7 11 | maj · min · **sus4** · **maj7** · **m7** |
+| IV + V | 0 2 5 7 9 11 | maj · min · **sus4** · **m7** · **dom7** |
+"""
+
+
+def faking(quality: str, *, hold: int, songs: int = 60, seed: int = 8) -> list[np.ndarray]:
+    """그 품질을 전환 번짐으로만 만들어 내는 코퍼스. **화음 자체에는 그 품질이 없다.**"""
+    left, right = FAKING[quality]
+    generator = np.random.default_rng(seed)
+    built: list[np.ndarray] = []
+    for _ in range(songs):
+        key = int(generator.integers(0, DEGREE_COUNT))
+        pair = (
+            _vector((key + left[0]) % DEGREE_COUNT, left[1]),
+            _vector((key + right[0]) % DEGREE_COUNT, right[1]),
+        )
+        windows: list[np.ndarray] = []
+        for current, following in (pair, pair[::-1]) * 6:
+            windows += [current] * (hold - 1) + [(current + following) / 2]
+        built.append(np.asarray(windows) + generator.random((len(windows), DEGREE_COUNT)) * NOISE)
+    return built
+
+
+def _gap(songs: list[np.ndarray], quality: str, **kwargs: object) -> float:
+    found = difference(stack(songs, **kwargs), seed=1)  # type: ignore[arg-type]
+    assert found is not None
+    return found.quality[quality]
+
+
+@pytest.mark.parametrize("quality", ["m7", "maj7"])
+@pytest.mark.parametrize("hold", [2, 4])
+def test_섞임이_만든_품질은_품질마다_뒤집힌다(quality: str, hold: int) -> None:
+    """**쌍 하나로 확인한 자를 셋에 썼다** (D-0306).
+
+    `I <-> vi`만 지었고 그것은 `m7`만 만든다. `maj7`을 만드는 쌍(`I <-> iii`)에서도
+    같은 자가 잡는지는 **판정을 적은 뒤에 확인했다.** 잡는다 — 그래서 판정이 섰다.
+    """
+    songs = faking(quality, hold=hold)
+    assert _gap(songs, quality) > 0.09, "합성이 그 품질을 안 만들면 질문이 안 선다"
+    assert _gap(songs, quality, factor=2) < 0.0
+    assert _gap(songs, quality, floor=SUSTAINED_FLOOR) < 0.0
+
+
+@pytest.mark.parametrize("pair", sorted(FAKING))
+def test_sus4는_섞임으로_양수가_되지_않는다(pair: str) -> None:
+    """**실측 `sus4` +0.0855가 섞임일 수 없다는 근거다** (D-0306).
+
+    `I+V`와 `IV+V`는 `sus4`의 음을 **부분집합으로 담는다.** 그런데 z 적합은 «정확히
+    맞음»을 재므로 섞인 창에는 남는 음이 있어 4음 템플릿이 3음을 이긴다.
+    """
+    for hold in (2, 4):
+        assert _gap(faking(pair, hold=hold), "sus4") < 0.0
