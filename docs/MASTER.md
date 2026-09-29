@@ -2263,10 +2263,10 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0075 | 조성 추출을 이어받게 한다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
 | D-0076 | (결번) 기록이 유실됐다 | `tools/check_decisions.py` | 해당 없음 |
 | D-0077 | 추출을 동시에 못 돌게 한다 | `core/tests/unit/test_ingest_resume.py` | 실물 기기 |
-| D-0079 | O-29 도구를 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0079 | O-29 도구를 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 1004곡 사전 · 8마디 출력 쌍 100 (D-0310 확인) |
 | D-0080 | 결정 기록 자신의 규약을 기계가 검사하게 한다 | `tools/check_decisions.py` | 실물 기록 78건 |
 | D-0081 | 표기는 전수 강제하고 내용만 신규에 건다 | `tools/check_decisions.py` | 실물 문서 4종 |
-| D-0083 | O-31 도구 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 |
+| D-0083 | O-31 도구 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 · 실물 1004곡 사전 · 쌍 승률 71.0% (D-0310 확인) |
 | D-0084 | 귀무선이 질량까지 바꿨다 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 · 실물 1004곡 |
 | D-0085 | O-31을 닫는다 | `core/tests/unit/test_evaluate_degree_restriction.py` | 실물 1004곡 |
 | D-0086 | 귀무선의 0점이 0이 아니었다 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 · 실물 1004곡 |
@@ -2455,6 +2455,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0307 | 재현 불명 11 → 1 | `tools/doc_fsck.py::unknown_reproductions` | 실물 결정 기록 306건 전수 |
 | D-0308 | 갚은 빚이 PLAN에 눌러앉아 있었다 | `core/tests/unit/test_doc_style.py::test_PLAN에_취소선이_남으면_잡는다` | 실물 PLAN 빚 표 14행 전수 |
 | D-0309 | 규율은 옆 표가 아니라 §0 규약 절에 있었다 | `core/tests/unit/test_plan_counts.py::test_합성만으로_선_강제자_수가_대장과_같다` | 실물 PLAN 전수 · 대장 243행 |
+| D-0310 | 없는 명령을 또 줬다 | `core/tests/unit/test_doc_commands.py::test_현재형_문서의_명령이_실재한다` | 실물 1004곡 사전 · 8마디 출력 쌍 100 · 현재형 문서 3개 전수 |
 
 <!-- decision-ledger:end -->
 

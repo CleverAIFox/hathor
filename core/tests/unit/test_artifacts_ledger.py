@@ -11,13 +11,12 @@
 
 from __future__ import annotations
 
-import argparse
 import ast
 import inspect
-import re
 from pathlib import Path
 
 from hathor.shared.config.paths import repo_root
+from tests.conftest import dead_commands
 from tests.conftest import tool_module as _tool
 
 ROOT = repo_root()
@@ -507,37 +506,6 @@ def test_스탬프_접기를_안_깬다(tmp_path: Path) -> None:
 
 # ------------------- 대장이 부르는 재생성 명령이 실재하는가 (D-0292)
 
-CLI_CALL = re.compile(r"(?:hathor\.cli\s+)?\b(\w[\w-]*)(?:\s+(?!-)(\w[\w-]*))?((?:\s+--[\w-]+)*)")
-"""`[... -m hathor.cli] <무리> [<명령>] [--손잡이 ...]`.
-
-**두 꼴을 다 받는다** (D-0296). `regen`은 `cd core && uv run python -m hathor.cli ingest
-onsets`처럼 통째로 적고, `reads`는 `eval retrieval --view lyrics`처럼 **명령만** 적는다.
-`hathor.cli`를 요구하던 첫 판은 `reads`에서 **한 건도 못 봤다.**
-
-**하위 명령은 `-`로 시작하지 않는다.** 그 조건을 빼자 `generate --transitions`의
-`--transitions`가 하위 명령으로 읽혀 «없는 명령»이 됐다 — **실재하는데 거짓 경보였고,
-거짓 경보는 진짜 경보를 죽인다** (`fire-lane` MASTER §18-13).
-
-**대장의 이 칸들은 사람에게 주는 안내다.** `--audit`이 결손마다 `regen`을 찍고 사람은
-그것을 그대로 친다. `reads`는 «이 산출물을 지우면 무엇이 죽나»를 말한다."""
-
-
-def _cli_paths() -> dict[str, argparse.ArgumentParser]:
-    """등재된 명령 경로 → 그 명령의 파서. **글자를 긁지 않고 표를 읽는다** (D-0273)."""
-    from hathor.interfaces.cli.main import build_parser
-
-    found: dict[str, argparse.ArgumentParser] = {}
-
-    def walk(parser: argparse.ArgumentParser, trail: tuple[str, ...]) -> None:
-        found[" ".join(trail)] = parser
-        for action in parser._actions:
-            if isinstance(action, argparse._SubParsersAction):
-                for name, sub in action.choices.items():
-                    walk(sub, (*trail, name))
-
-    walk(build_parser(), ())
-    return found
-
 
 def test_대장의_재생성_명령이_실재한다() -> None:
     """**감사가 없는 명령을 치라고 안내했다** (D-0292).
@@ -553,7 +521,7 @@ def test_대장의_재생성_명령이_실재한다() -> None:
         f"{name}.{field}: {why}"
         for name, entry in LEDGER.load().items()
         for field in CHECKED_FIELDS
-        for why in _dead(entry.get(field))
+        for why in dead_commands(entry.get(field))
     ]
     assert not problems, "대장이 없는 명령을 안내한다:\n" + "\n".join(problems)
 
@@ -565,31 +533,6 @@ D-0292가 `regen`만 봤다. 바로 옆 `reads`에도 **죽은 명령이 둘 있
 `eval retrieval --view lyrics`인데 `--view`는 없는 인자다(실물은 `--features` · `--keys`).
 
 한 칸을 고치면서 같은 꼴을 안 세는 것이 D-0283이 적은 그 실패다. **그 저장소에서 또 했다.**"""
-
-
-def _dead(raw: object) -> list[str]:
-    """이 칸이 적은 CLI 호출 중 **실재하지 않는 것**. 문자열이든 목록이든 받는다."""
-    entries = raw if isinstance(raw, list) else [raw]
-    known = _cli_paths()
-    problems: list[str] = []
-    for one in entries:
-        text = str(one or "")
-        found = CLI_CALL.search(text)
-        if not found:
-            continue
-        group, command, flags = found.group(1), found.group(2), found.group(3) or ""
-        path = " ".join(part for part in (group, command) if part)
-        parser = known.get(path)
-        if parser is None:
-            # **결정 번호·산문은 명령이 아니다.** `reads`에는 `D-0181` 같은 것도 든다.
-            if group in _cli_paths():
-                problems.append(f"`{path}`라는 명령이 없다")
-            continue
-        handles = {option for action in parser._actions for option in action.option_strings}
-        missing = sorted(set(re.findall(r"--[\w-]+", flags)) - handles)
-        if missing:
-            problems.append(f"`{path}`가 {missing}를 안 받는다")
-    return problems
 
 
 # ------------------------ 산출물이 자기를 설명한다 (D-0203 · D-0294)
