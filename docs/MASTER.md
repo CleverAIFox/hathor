@@ -556,6 +556,7 @@ D는 제외한다. 현행 생성 모델 품질로 전문가 요구를 충족할 
 | O-68 | 취향 축의 임베딩이 비상업이다 → **상업 가능한 대체재가 없다.** CLAP 단독은 MERT의 16%(M2)이고, **«최선»이라 적었던 CLAP+MFCC(38%)보다 MFCC 단독(41.9%)이 높다** — 다만 MFCC 단독은 M0 미달이다 (D-0299) | D-0233 · D-0234 · D-0235 · D-0299 |
 | O-69 | `--features` 없이 도는 명령이 없는 폴더를 열었다 → **증상은 기본값이고 원인은 리더가 하나였다.** 읽는 쪽 셋이 `open_feature_source`를 안 지나 묶음을 줘도 못 읽었다 | D-0269 · D-0270 · D-0274 |
 | O-70 | 버려지는 문서 문자열을 아무 관문도 안 봤다 → `deadcheck` 다섯째 프로브. **눈으로 하나, 프로브로 셋** | D-0273 · D-0274 |
+| O-72 | 전이 조건화의 몫이 도수 누설과 안 갈려 있다 → **짝지은 이득으로 갈랐고 누설을 뺀 뒤에도 t 30.93 · 곡승률 100%다.** 음성 대조가 스스로 판정 규칙을 통과하고 있었다 | D-0311 · D-0312 |
 
 <!-- closed-issues:end -->
 
@@ -2278,20 +2279,20 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0095 | 어휘를 넓혔는데 번 몫이 없다 | `core/tests/unit/test_evaluate_harmony_output.py` | 실물 1004곡 |
 | D-0096 | 8마디에서 안 보인다고 없는 것이 아니다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 1004곡 |
 | D-0097 | O-36을 닫는다 | `core/tests/unit/test_arrangement.py` | 실물 1004곡 |
-| D-0098 | 비싼 작업 전에 게이트를 세운다 | `core/tests/unit/test_evaluate_time_drift.py` | 합성 |
+| D-0098 | 비싼 작업 전에 게이트를 세운다 | `core/tests/unit/test_evaluate_time_drift.py` | 합성 · 실물 200곡 표본 게이트 · t 30.93 (D-0312 확인) |
 | D-0099 | 게이트가 통과했는데 못 읽는다 | `core/tests/unit/test_evaluate_time_drift.py` | 실물 표본 200곡 |
 | D-0100 | 이어받기가 조건을 다 보지 않았다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
-| D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 200곡 64마디 순서 판정 (D-0312 확인) |
 | D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
 | D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` | 합성 |
 | D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` | 합성 · 실물 1004곡 230096창 크로마 시계열 (D-0305 확인) |
 | D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` | 실물 기기 |
-| D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` | 합성 |
+| D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` | 합성 · 실물 1004곡 시계열 전이 사전 (D-0312 확인) |
 | D-0108 | 한쪽 기기에서만 초록이었다 | `core/tests/unit/test_evaluate_time_drift.py` | 해당 없음 |
-| D-0109 | 생성기가 배열을 조건화한다 | `core/tests/unit/test_harmony_generator.py` | 합성 |
-| D-0110 | 배열 사전이 생성 경로에 붙었다 | `core/tests/unit/test_harmony_output_cli.py` | 합성 |
+| D-0109 | 생성기가 배열을 조건화한다 | `core/tests/unit/test_harmony_generator.py` | 합성 · 실물 200곡 짝지은 이득 0.3175 (D-0312 확인) |
+| D-0110 | 배열 사전이 생성 경로에 붙었다 | `core/tests/unit/test_harmony_output_cli.py` | 합성 · 실물 200곡 `generate --transitions` (D-0312 확인) |
 | D-0111 | 배열 조건화가 소리에 거의 안 닿고 있었다 | `core/tests/unit/test_arrangement.py` | 실물 기기 |
-| D-0112 | 쌍 거리로는 배열 조건화를 판정할 수 없다 | `core/tests/unit/test_evaluate_order_conditioning.py` | 합성 |
+| D-0112 | 쌍 거리로는 배열 조건화를 판정할 수 없다 | `core/tests/unit/test_evaluate_order_conditioning.py` | 합성 · 실물 200곡 self/other 판정 (D-0312 확인) |
 | D-0115 | 결정 기록 하나가 조각 밖에 있었고 검사가 못 봤다 | `tools/check_decisions.py` | 해당 없음 |
 | D-0116 | 저장소 로더를 CLI에서 인프라로 내린다 | `core/tests/unit/test_chroma_series.py` | 실물 저장소 코드 |
 | D-0117 | 파일 길이에 래칫을 건다 | `tools/check_file_size.py` | 실물 저장소 코드 |
