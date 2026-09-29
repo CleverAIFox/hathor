@@ -141,13 +141,113 @@ def score_consistency(similarity: Matrix) -> ConsistencyScore:
     )
 
 
-def score_retrieval(
+@dataclass(frozen=True, slots=True)
+class PerQuery:
+    """평균을 내기 **전** 단계의 쿼리별 점수 (D-0300).
+
+    `score_retrieval`이 평균만 내주면 표본 흔들림을 잴 길이 없다. D-0284가 *"1인
+    1004곡 규모에서 취향 벡터의 안정성"*을 재야 할 것으로 적었는데, `--split-repeats`는
+    M0 자기일관성만 반복하고 M1/M2는 반복하지 않는다 — 직접 잴 장치가 없었다.
+
+    `rows`를 같이 든다. 실측과 무작위 베이스라인은 **같은 쿼리 집합**에서 나와야
+    하고(건너뛰기 조건이 마스크에만 의존하므로 그래야 맞다), `bootstrap_pair`가
+    그것을 확인한다.
+    """
+
+    rows: tuple[int, ...]
+    precision: tuple[float, ...]
+    average_precision: tuple[float, ...]
+
+    def mean(self) -> RetrievalScore:
+        if not self.precision:
+            return RetrievalScore(queries=0, precision_at_k=0.0, map_at_k=0.0)
+        return RetrievalScore(
+            queries=len(self.precision),
+            precision_at_k=float(np.mean(self.precision)),
+            map_at_k=float(np.mean(self.average_precision)),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Interval:
+    """부트스트랩 구간. **표본평균의 정밀도이며 다른 사람 서고로의 일반화가 아니다.**
+
+    쿼리를 복원추출로 다시 뽑아 평균을 `repeats`번 다시 낸다. 나오는 것은 *"이 1004곡에서
+    이 평균이 얼마나 흔들리는가"*다. *"다른 사람 서고에서도 이 수가 나오는가"*는 서고가
+    하나뿐이라 이 장치로 답이 안 나온다 — 그 구분을 지우면 D-0284가 경계한 과대해석이 된다.
+    """
+
+    mean: float
+    std: float
+    low: float
+    high: float
+    repeats: int
+
+    def as_record(self) -> dict[str, object]:
+        return {
+            "mean": round(self.mean, 6),
+            "std": round(self.std, 6),
+            "low": round(self.low, 6),
+            "high": round(self.high, 6),
+            "repeats": self.repeats,
+        }
+
+
+BOOTSTRAP_FLOOR = 2
+"""부트스트랩에 필요한 최소 쿼리 수. 하나면 어떻게 뽑아도 같은 값이라 표준편차가 0이다."""
+
+BOOTSTRAP_PERCENTILES = (2.5, 97.5)
+"""백분위 구간. 95%이며 **정규 가정을 쓰지 않는다** — P@k는 0과 1에서 잘린 분포다."""
+
+
+def bootstrap_pair(
+    measured: PerQuery, baseline: PerQuery, *, repeats: int, seed: int
+) -> tuple[tuple[Interval, Interval], tuple[Interval, Interval]] | None:
+    """실측과 베이스라인을 **같은 추출로** 부트스트랩한다.
+
+    같은 쿼리 색인을 둘 다에 쓴다. 따로 뽑으면 둘의 차가 추출 잡음까지 타서
+    "실측이 베이스라인보다 높다"의 구간이 실제보다 넓어진다.
+
+    쿼리가 `BOOTSTRAP_FLOOR` 미만이거나 `repeats`가 0이면 `None`을 낸다 —
+    **표준편차 0.0을 내지 않는다.** 0.0은 "흔들리지 않는다"로 읽히고 그것이 거짓이다.
+    """
+    if measured.rows != baseline.rows:
+        raise ValueError("실측과 베이스라인의 쿼리 집합이 다르다")
+    size = len(measured.rows)
+    if repeats <= 0 or size < BOOTSTRAP_FLOOR:
+        return None
+    generator = np.random.default_rng(seed)
+    draws = generator.integers(0, size, size=(repeats, size))
+    return (
+        _interval(measured.precision, draws, repeats),
+        _interval(measured.average_precision, draws, repeats),
+    ), (
+        _interval(baseline.precision, draws, repeats),
+        _interval(baseline.average_precision, draws, repeats),
+    )
+
+
+def _interval(
+    values: tuple[float, ...], draws: np.ndarray[tuple[int, int], np.dtype[np.int64]], repeats: int
+) -> Interval:
+    sample = np.asarray(values, dtype=np.float64)[draws].mean(axis=1)
+    low, high = np.percentile(sample, BOOTSTRAP_PERCENTILES)
+    return Interval(
+        mean=float(sample.mean()),
+        std=float(sample.std(ddof=1)),
+        low=float(low),
+        high=float(high),
+        repeats=repeats,
+    )
+
+
+def score_per_query(
     similarity: Matrix,
     relevant: BoolMatrix,
     excluded: BoolMatrix,
     k: int,
-) -> RetrievalScore:
-    """P@k와 MAP@k를 잰다.
+) -> PerQuery:
+    """P@k와 MAP@k를 **쿼리별로** 낸다. `score_retrieval`이 이것의 평균이다.
 
     `excluded`가 True인 후보는 순위에서 아예 빠진다. 점수를 -inf로 낮추는
     방식이 아니라 실제로 제외한다. 유효 후보가 k개보다 적을 때 제외 대상이
@@ -160,6 +260,7 @@ def score_retrieval(
     if k <= 0:
         raise ValueError("k는 1 이상이어야 한다")
 
+    rows: list[int] = []
     precisions: list[float] = []
     average_precisions: list[float] = []
     for row in range(similarity.shape[0]):
@@ -172,6 +273,7 @@ def score_retrieval(
 
         order = valid[np.argsort(-similarity[row][valid], kind="stable")][:k]
         hits = relevant[row][order]
+        rows.append(row)
         precisions.append(float(np.count_nonzero(hits)) / float(k))
 
         running = np.cumsum(hits)
@@ -179,13 +281,21 @@ def score_retrieval(
         gained = (running / ranks) * hits
         average_precisions.append(float(gained.sum()) / float(min(hits_available, k)))
 
-    if not precisions:
-        return RetrievalScore(queries=0, precision_at_k=0.0, map_at_k=0.0)
-    return RetrievalScore(
-        queries=len(precisions),
-        precision_at_k=float(np.mean(precisions)),
-        map_at_k=float(np.mean(average_precisions)),
+    return PerQuery(
+        rows=tuple(rows),
+        precision=tuple(precisions),
+        average_precision=tuple(average_precisions),
     )
+
+
+def score_retrieval(
+    similarity: Matrix,
+    relevant: BoolMatrix,
+    excluded: BoolMatrix,
+    k: int,
+) -> RetrievalScore:
+    """P@k와 MAP@k의 쿼리 평균. 쿼리별 값이 필요하면 `score_per_query`를 쓴다."""
+    return score_per_query(similarity, relevant, excluded, k).mean()
 
 
 def expected_random_precision(relevant: BoolMatrix, excluded: BoolMatrix) -> float:

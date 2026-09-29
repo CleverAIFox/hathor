@@ -551,3 +551,47 @@ def test_배수는_표준이_아니라고_같이_적는다() -> None:
     block = _printed()
     assert "배" in block, "배수를 아예 안 찍는다 — 옛 기록과 이을 수 없다"
     assert "표준이 아니다" in block, "배수를 표식 없이 찍는다"
+
+
+def test_구간은_실측과_무작위를_같이_찍는다() -> None:
+    """**실측 구간만 찍으면 겹치는지 알 수 없다** (D-0300 · O-25).
+
+    `_spread_line`이 둘을 한 줄에 넣는다. 한쪽만 찍는 상태로 돌아가면 여기가 깨진다.
+    """
+    source = SUMMARY.read_text(encoding="utf-8")
+    start = source.index("def _spread_line(")
+    block = source[start : source.index("def load_search_tracks(", start)]
+    assert "metric.spread" in block
+    assert "metric.random_spread" in block
+    assert "무작위" in block
+    # 옮겨 적는 사람이 «다른 서고에서도 이 범위»로 읽지 않게 화면에 적어 둔다.
+    assert "서고 간 일반화가 아니다" in block
+
+
+def test_부트스트랩_횟수가_설정과_산출에_남는다() -> None:
+    """어떤 조건의 구간인지 JSON만 보고 알아야 한다 (D-0073 계열)."""
+    config = EvaluationConfig(bootstrap=64)
+    assert config.as_record()["bootstrap"] == 64
+    assert EvaluationConfig().bootstrap == 0
+
+
+def test_구간은_켜야_나온다() -> None:
+    """기본은 꺼짐이다. **쿼리가 모자라면 켜도 `None`이다** — 0.0을 내지 않는다."""
+    tracks = build_corpus()
+    off = EvaluateRetrieval(EvaluationConfig(view=ViewSpec(keys=("mixture",)), k=3)).run(tracks)
+    assert all(metric.spread is None for metric in off.metrics)
+    on = EvaluateRetrieval(
+        EvaluationConfig(view=ViewSpec(keys=("mixture",)), k=3, bootstrap=128)
+    ).run(tracks)
+    assert on.metrics, "지표가 없으면 이 시험이 아무것도 안 본다"
+    for metric in on.metrics:
+        if metric.spread is None:
+            continue
+        precision, average = metric.spread
+        assert precision.repeats == 128
+        assert precision.low <= precision.mean <= precision.high
+        assert average.std >= 0.0
+        assert metric.random_spread is not None
+        record = metric.as_record()["spread"]
+        assert isinstance(record, dict)
+        assert set(record) == {"precision_at_k", "map_at_k"}

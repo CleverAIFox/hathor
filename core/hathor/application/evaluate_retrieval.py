@@ -37,11 +37,13 @@ from hathor.domain.services.isotropy import anisotropy, center, mean_direction
 from hathor.domain.services.retrieval_metrics import (
     BoolMatrix,
     ConsistencyScore,
+    Interval,
     RetrievalScore,
+    bootstrap_pair,
     cosine_similarity,
     expected_random_precision,
     score_consistency,
-    score_retrieval,
+    score_per_query,
 )
 
 MIXTURE_KEY = "mixture"
@@ -172,6 +174,13 @@ class EvaluationConfig:
     이제 근접 실패는 표식을 달고 계산되므로, 이 깃발이 뚫는 것은 **붕괴**뿐이다.
     """
 
+    bootstrap: int = 0
+    """쿼리 복원추출 횟수. 0이면 구간을 내지 않는다 (D-0300).
+
+    **재는 것은 표본평균의 정밀도다.** 다른 사람 서고로의 일반화가 아니다 —
+    `Interval`의 규약이 그것이고, 서고가 하나뿐이라 후자는 이 장치로 답이 안 나온다.
+    """
+
     label: str = "unnamed"
     """실험 이름. 여러 조건의 산출 JSON을 나중에 구분하기 위한 것뿐이다."""
 
@@ -184,6 +193,7 @@ class EvaluationConfig:
             "seed": self.seed,
             "gate": self.gate,
             "force": self.force,
+            "bootstrap": self.bootstrap,
         }
 
 
@@ -207,6 +217,11 @@ class LabeledMetric:
     measured: RetrievalScore
     random: RetrievalScore
     expected_random_precision: float
+    spread: tuple[Interval, Interval] | None = None
+    """실측 `(P@k, MAP@k)`의 부트스트랩 구간. 껐거나 쿼리가 모자라면 `None`이다."""
+
+    random_spread: tuple[Interval, Interval] | None = None
+    """같은 추출로 낸 베이스라인의 구간. **실측 구간만 내면 차를 판정할 수 없다** (O-25)."""
 
     @property
     def precision_lift(self) -> float:
@@ -228,6 +243,8 @@ class LabeledMetric:
             "expected_random_precision": round(self.expected_random_precision, 6),
             "precision_lift": round(self.precision_lift, 3),
             "map_lift": round(self.map_lift, 3),
+            "spread": _spread_record(self.spread),
+            "random_spread": _spread_record(self.random_spread),
         }
 
 
@@ -519,12 +536,26 @@ class EvaluateRetrieval:
         masked_relevant = np.asarray(relevant & ~excluded, dtype=np.bool_)
         generator = np.random.default_rng(self._config.seed)
         noise = np.asarray(generator.random(similarity.shape), dtype=np.float32)
+        measured = score_per_query(similarity, masked_relevant, excluded, self._config.k)
+        baseline = score_per_query(noise, masked_relevant, excluded, self._config.k)
+        drawn = bootstrap_pair(
+            measured, baseline, repeats=self._config.bootstrap, seed=self._config.seed
+        )
         return LabeledMetric(
             name=name,
-            measured=score_retrieval(similarity, masked_relevant, excluded, self._config.k),
-            random=score_retrieval(noise, masked_relevant, excluded, self._config.k),
+            measured=measured.mean(),
+            random=baseline.mean(),
             expected_random_precision=expected_random_precision(masked_relevant, excluded),
+            spread=None if drawn is None else drawn[0],
+            random_spread=None if drawn is None else drawn[1],
         )
+
+
+def _spread_record(spread: tuple[Interval, Interval] | None) -> dict[str, object] | None:
+    if spread is None:
+        return None
+    precision, average = spread
+    return {"precision_at_k": precision.as_record(), "map_at_k": average.as_record()}
 
 
 def _same_label(labels: Sequence[str | None]) -> BoolMatrix:

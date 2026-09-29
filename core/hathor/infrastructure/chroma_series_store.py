@@ -13,11 +13,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from hathor.domain.services.chord_rhythm import hold_probability
+from hathor.domain.services.harmony_quality import DEGREE_COUNT
 from hathor.domain.services.transition_prior import is_empty, transition_prior
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
+
+    from numpy.typing import NDArray
 
 
 def series_path(root: Path, source_key: str, stem: str) -> Path:
@@ -115,3 +118,27 @@ def load_hold_probabilities(
             series = np.asarray(bundle["series"], dtype=np.float64)
         found[source_key] = hold_probability(series)
     return found
+
+
+def load_windows(root: Path, stem_set: str) -> tuple[NDArray[np.float64], int]:
+    """시계열 폴더의 **모든 창을 한 행렬로** 쌓는다 (O-64 · D-0300).
+
+    화음 품질 어휘는 곡 단위 질문이 아니라 창 단위 질문이다 — 한 곡에서도 마디마다
+    화음이 다르다. 그래서 곡 경계를 지우고 쌓는다. 곡 수를 함께 내므로 *"몇 곡에서
+    나온 몇 창인가"*를 화면에 적을 수 있다.
+
+    **빈 파일과 꼴이 다른 파일은 건너뛴다.** 12열이 아닌 것이 섞이면 `vstack`이
+    터지고, 그 예외가 곡 하나 때문에 전체 보고를 죽인다.
+    """
+    stacked: list[NDArray[np.float64]] = []
+    tracks = 0
+    for path in sorted(root.glob(f"*-{stem_set}.npz")):
+        with np.load(path, allow_pickle=False) as bundle:
+            series = np.asarray(bundle["series"], dtype=np.float64)
+        if series.ndim != 2 or series.shape[0] == 0 or series.shape[1] != DEGREE_COUNT:
+            continue
+        stacked.append(series)
+        tracks += 1
+    if not stacked:
+        return np.zeros((0, DEGREE_COUNT), dtype=np.float64), 0
+    return np.vstack(stacked), tracks

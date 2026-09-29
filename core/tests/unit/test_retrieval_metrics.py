@@ -7,10 +7,13 @@ import numpy as np
 import pytest
 
 from hathor.domain.services.retrieval_metrics import (
+    PerQuery,
+    bootstrap_pair,
     cosine_similarity,
     diagonal_ranks,
     expected_random_precision,
     score_consistency,
+    score_per_query,
     score_retrieval,
     top1_accuracy,
 )
@@ -181,3 +184,86 @@ def test_score_consistency_record_is_serializable():
 def test_diagonal_ranks_rejects_non_square():
     with pytest.raises(ValueError):
         diagonal_ranks(np.zeros((2, 3), dtype=np.float32))
+
+
+def test_쿼리별_점수의_평균이_전체_점수다() -> None:
+    """`score_retrieval`이 `score_per_query().mean()`이다. **두 길이 갈리면 안 된다.**"""
+    similarity = np.asarray(
+        [[1.0, 0.9, 0.1, 0.2], [0.9, 1.0, 0.3, 0.1], [0.1, 0.3, 1.0, 0.8], [0.2, 0.1, 0.8, 1.0]],
+        dtype=np.float32,
+    )
+    relevant = bool_matrix([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]])
+    excluded = bool_matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+    per_query = score_per_query(similarity, relevant, excluded, 2)
+    assert per_query.rows == (0, 1, 2, 3)
+    assert per_query.mean() == score_retrieval(similarity, relevant, excluded, 2)
+
+
+def test_정답_없는_쿼리는_쿼리별_목록에서도_빠진다() -> None:
+    """`rows`가 어느 쿼리가 평균에 들었는지 말한다 — 베이스라인 짝맞춤이 여기 걸린다."""
+    similarity = np.asarray([[1.0, 0.5], [0.5, 1.0]], dtype=np.float32)
+    relevant = bool_matrix([[0, 1], [0, 0]])
+    excluded = bool_matrix([[1, 0], [0, 1]])
+    per_query = score_per_query(similarity, relevant, excluded, 1)
+    assert per_query.rows == (0,)
+    assert len(per_query.precision) == 1
+
+
+def _paired(count: int) -> tuple[PerQuery, PerQuery]:
+    rows = tuple(range(count))
+    high = tuple(float(index % 3) / 2.0 for index in range(count))
+    low = tuple(0.1 for _ in range(count))
+    return (
+        PerQuery(rows=rows, precision=high, average_precision=high),
+        PerQuery(rows=rows, precision=low, average_precision=low),
+    )
+
+
+def test_부트스트랩은_실측과_베이스라인에_같은_추출을_쓴다() -> None:
+    """따로 뽑으면 둘의 **차**가 추출 잡음까지 타서 구간이 실제보다 넓어진다.
+
+    같은 색인을 쓰면 상수 베이스라인의 구간은 폭이 0이다 — 그 점이 짝맞춤의 증거다.
+    """
+    measured, baseline = _paired(200)
+    drawn = bootstrap_pair(measured, baseline, repeats=300, seed=17)
+    assert drawn is not None
+    (precision, average), (random_precision, _) = drawn
+    assert precision == average
+    assert random_precision.std == pytest.approx(0.0, abs=1e-12)
+    assert random_precision.low == pytest.approx(0.1)
+    assert precision.low < precision.mean < precision.high
+    assert precision.repeats == 300
+
+
+def test_부트스트랩_평균은_표본평균_근처다() -> None:
+    measured, baseline = _paired(400)
+    drawn = bootstrap_pair(measured, baseline, repeats=500, seed=23)
+    assert drawn is not None
+    (precision, _), _ = drawn
+    assert precision.mean == pytest.approx(measured.mean().precision_at_k, abs=0.01)
+
+
+def test_시드가_같으면_같은_구간이_나온다() -> None:
+    measured, baseline = _paired(120)
+    first = bootstrap_pair(measured, baseline, repeats=200, seed=5)
+    second = bootstrap_pair(measured, baseline, repeats=200, seed=5)
+    assert first == second
+
+
+def test_쿼리가_모자라면_구간을_내지_않는다() -> None:
+    """**표준편차 0.0을 내지 않는다.** 0.0은 «흔들리지 않는다»로 읽히고 그것이 거짓이다."""
+    single = PerQuery(rows=(0,), precision=(0.5,), average_precision=(0.5,))
+    assert bootstrap_pair(single, single, repeats=100, seed=1) is None
+    measured, baseline = _paired(50)
+    assert bootstrap_pair(measured, baseline, repeats=0, seed=1) is None
+
+
+def test_쿼리_집합이_다르면_거부한다() -> None:
+    measured, _ = _paired(10)
+    other = PerQuery(
+        rows=tuple(range(1, 11)),
+        precision=measured.precision,
+        average_precision=measured.precision,
+    )
+    with pytest.raises(ValueError, match="쿼리 집합이 다르다"):
+        bootstrap_pair(measured, other, repeats=10, seed=1)

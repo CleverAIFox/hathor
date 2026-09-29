@@ -18,6 +18,7 @@ from hathor.application.evaluate_retrieval import (
     EvaluateRetrieval,
     EvaluationConfig,
     EvaluationReport,
+    LabeledMetric,
     SplitMode,
     SplitSpec,
     TrackRecord,
@@ -95,6 +96,7 @@ def run_eval_retrieval(args: argparse.Namespace) -> int:
         seed=args.seed,
         gate=args.gate,
         force=args.force,
+        bootstrap=args.bootstrap,
         label=label,
     )
 
@@ -246,6 +248,10 @@ def _print_report(report: EvaluationReport) -> None:
             f"(무작위 {metric.random.map_at_k:.4f})  "
             f"쿼리 {metric.measured.queries:>4}"
         )
+        # **구간은 실측과 무작위를 같이 낸다** (D-0300). 실측 구간만 찍으면 겹치는지
+        # 알 수 없고, 겹치는 구간을 "높다"로 읽는 것이 O-25가 일곱 번 겪은 부류다.
+        if metric.spread is not None and metric.random_spread is not None:
+            print(f"  {'':<10} {_spread_line(report.config.k, metric)}")
         # **배수는 따로 둔다** (D-0284 · D-0297). MIR 표준이 아니고, 실측에서 **순위를
         # 뒤집었다** — `layer00`이 배수로는 M1 20.4 > M2 14.3인데 절대 `P@10`으로는
         # M2 0.2503 » M1 0.0699이다. 지우지는 않는다. 옛 기록이 그 수로 적혀 있다.
@@ -259,6 +265,24 @@ def _print_report(report: EvaluationReport) -> None:
     elif not report.citable:
         # 표를 옮겨 적는 사람이 이 줄을 같이 가져가게 **지표 바로 옆에** 둔다.
         print("  ↑ **식별 미달이라 비교용이다.** 정본 지표로 인용하지 않는다 (D-0234).")
+
+
+def _spread_line(k: int, metric: LabeledMetric) -> str:
+    """부트스트랩 구간 한 줄. **표본평균의 정밀도라고 화면에 적는다** (D-0300).
+
+    적어 두지 않으면 옮겨 적는 사람이 *"다른 서고에서도 이 범위다"*로 읽는다. 서고가
+    하나뿐이라 그 물음은 이 장치로 답이 안 나온다.
+    """
+    assert metric.spread is not None and metric.random_spread is not None
+    precision, average = metric.spread
+    random_precision, random_average = metric.random_spread
+    return (
+        f"구간 P@{k} ±{precision.std:.4f} [{precision.low:.4f}, {precision.high:.4f}] "
+        f"(무작위 [{random_precision.low:.4f}, {random_precision.high:.4f}])  "
+        f"MAP@{k} ±{average.std:.4f} [{average.low:.4f}, {average.high:.4f}] "
+        f"(무작위 [{random_average.low:.4f}, {random_average.high:.4f}])  "
+        f"뽑기 {precision.repeats}회 · **표본평균의 정밀도이며 서고 간 일반화가 아니다**"
+    )
 
 
 def load_search_tracks(args: argparse.Namespace, keys: tuple[str, ...]) -> list[SearchTrack]:
@@ -359,6 +383,12 @@ def _build_retrieval(parser: argparse.ArgumentParser) -> None:
         "--force",
         action="store_true",
         help="붕괴 판정에도 M1/M2를 계산한다. 조사용이며 그 수치를 인용하면 안 된다",
+    )
+    parser.add_argument(
+        "--bootstrap",
+        type=int,
+        default=0,
+        help="쿼리 복원추출 횟수. P@k·MAP@k의 95%% 구간을 낸다 (0이면 안 낸다, D-0300)",
     )
     parser.add_argument("--label", default=None, help="실험 이름 (미지정 시 뷰에서 생성)")
     parser.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")

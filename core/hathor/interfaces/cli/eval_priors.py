@@ -1,4 +1,4 @@
-"""`eval harmony-prior` · `eval time-drift` · `eval fusion` (D-0260).
+"""`eval harmony-prior` · `eval time-drift` · `eval fusion` · `eval chord-quality` (D-0260).
 
 **`main.py`에 있었다.** 셋 다 이미 뽑아 둔 산출물을 읽어 판정만 하는 보고다 —
 오디오를 다시 안 열고, 그래서 GPU 없이 돈다.
@@ -11,9 +11,17 @@ import json
 import sys
 
 from hathor.application.evaluate_fusion import EvaluateFusion
+from hathor.domain.services.harmony_quality import (
+    QUALITIES,
+    null_windows,
+    quality_share,
+    seventh_share,
+    verdicts,
+)
 from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import STEM_SETS, stems_overlap
+from hathor.infrastructure.chroma_series_store import find_series_root, load_windows
 from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
 from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_drift_observations
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
@@ -280,6 +288,83 @@ def run_eval_time_drift(args: argparse.Namespace) -> int:
 # ------------------------------------------ 명령 등재 (D-0273)
 
 
+def run_eval_chord_quality(args: argparse.Namespace) -> int:
+    """창별 화음 품질 어휘를 실측한다 (O-64 · D-0300).
+
+    **O-64가 적은 측정이 아니다.** 원문은 *"7음 성분이 3화음 대비 얼마나 실리는지"*를
+    재려 했는데, 다이어토닉에서 7음으로만 나오는 음정이 하나도 없어 평균 크로마로는
+    원리적으로 못 가른다 (`harmony_quality` 표제가 그것을 고정한다). 창 하나를 화음
+    하나로 보고 72개 템플릿에 맞춰 보는 것으로 갈아탄다.
+
+    **판정은 코퍼스 자기 순열 귀무와의 차로만 한다.** 절대 비율에는 자의 편향이
+    0.5440만큼 남아 있다.
+    """
+    from hathor.shared.config.paths import repo_root
+
+    root = args.series
+    if root is None:
+        root = find_series_root(repo_root(), args.stem)
+    if root is None or not root.is_dir():
+        print(
+            "크로마 시계열이 없다. `hathor ingest keys --series 2 --separate`를 먼저 돌린다",
+            file=sys.stderr,
+        )
+        return 2
+    windows, tracks = load_windows(root, args.stem)
+    if windows.shape[0] == 0:
+        print(f"창이 없다: {root} (스템 {args.stem})", file=sys.stderr)
+        return 2
+
+    measured = verdicts(windows)
+    baseline = verdicts(null_windows(windows, seed=args.seed))
+    print(f"── 화음 품질 어휘 · {root.name} · 스템 {args.stem} · {tracks}곡 {len(measured)}창")
+    share = quality_share(measured)
+    null_share = quality_share(baseline)
+    rows = [
+        (
+            name,
+            share.get(name, 0.0),
+            null_share.get(name, 0.0),
+            share.get(name, 0.0) - null_share.get(name, 0.0),
+        )
+        for name in QUALITIES
+    ]
+    for line in render_table(
+        (("품질", "<6"), ("실측", ">8.4f"), ("순열귀무", ">10.4f"), ("차", ">+9.4f")), rows
+    ):
+        print(f"  {line}")
+    gap = seventh_share(measured) - seventh_share(baseline)
+    print(
+        f"  4음 비율 실측 {seventh_share(measured):.4f} · 귀무 {seventh_share(baseline):.4f} · "
+        f"차 {gap:+.4f}"
+    )
+    print("  **차로만 읽는다.** 절대 비율에는 자의 4음 편향 0.5440이 섞여 있다 (D-0300).")
+    JsonEvaluationStore(args.out).write(
+        {
+            "series_root": root.name,
+            "stem_set": args.stem,
+            "tracks": tracks,
+            "windows": len(measured),
+            "seed": args.seed,
+            "measured": {name: round(value, 6) for name, value in share.items()},
+            "permuted_null": {name: round(value, 6) for name, value in null_share.items()},
+            "seventh_gap": round(gap, 6),
+        },
+        "chord-quality",
+    )
+    return 0
+
+
+def _build_chord_quality(parser: argparse.ArgumentParser) -> None:
+    """`hathor eval chord-quality` 인자."""
+    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
+    parser.add_argument(
+        "--series", type=resolve_path, default=None, help="`keys-*.series` 폴더 (미지정 시 최신)"
+    )
+    parser.add_argument("--stem", default="other", choices=sorted(STEM_SETS), help="스템 집합")
+    parser.add_argument("--seed", type=int, default=20260929, help="빈 순열 귀무 시드")
+
+
 def _build_fusion(parser: argparse.ArgumentParser) -> None:
     """`hathor eval fusion` 인자."""
     parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
@@ -352,6 +437,12 @@ COMMANDS: tuple[Command, ...] = (
         "곡마다 다른 시간 변화가 실재하는가 (O-32 게이트 · D-0098)",
         _build_time_drift,
         run_eval_time_drift,
+    ),
+    Command(
+        "chord-quality",
+        "창별 화음 품질 어휘를 순열 귀무와 대조한다 (O-64 · D-0300)",
+        _build_chord_quality,
+        run_eval_chord_quality,
     ),
 )
 """`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""
