@@ -16,6 +16,7 @@ from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import STEM_SETS, stems_overlap
 from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
 from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_drift_observations
+from hathor.interfaces.cli.eval_onsets import ONSETS
 from hathor.interfaces.cli.eval_quality import CHORD_QUALITY
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
 from hathor.interfaces.cli.registry import Command
@@ -355,5 +356,6 @@ COMMANDS: tuple[Command, ...] = (
         run_eval_time_drift,
     ),
     CHORD_QUALITY,
+    ONSETS,
 )
 """`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""

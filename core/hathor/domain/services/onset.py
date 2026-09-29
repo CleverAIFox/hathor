@@ -260,6 +260,18 @@ class Beat:
     나란한 장·단조를 1등만 남겨 지우지 않기로 한 것과 같은 자리다 (D-0054).
     """
 
+    peak_ratio: float = 0.0
+    """자기상관 봉우리가 **평균보다 몇 배 높은가** (D-0314).
+
+    **두 여유는 「어느 주기를 골랐나」를 말하고 이것이 「박이 있는가」를 말한다.** 둘을
+    섞으면 안 된다 — 진짜 주기는 배수 지연에서도 봉우리가 서므로 `margin`이 **오히려
+    작아진다.** 실측에서 120BPM 클릭 트랙의 `margin`이 섞은 잡음보다 낮았다.
+
+    `max / |평균|`이다. 포락선이 평균 제거돼 있어 자기상관이 음수를 오가므로 절댓값으로
+    나눈다. 합성에서 박 있음 7.7~8.1 · 섞음 2.1~3.3 · **박 없음 3.0 대 3.9**로
+    이득이 음수가 된다 — **질 수 있는 지표다** (O-25 (2)).
+    """
+
     @property
     def tempo_bpm(self) -> float:
         return 60.0 / self.period_seconds
@@ -294,10 +306,12 @@ def beat_period(envelope: Sequence[float] | Envelope, hop_seconds: float) -> Bea
         (float(scores[index - low]) for index in (lag // 2, lag * 2) if low <= index <= high),
         default=0.0,
     )
+    spread = float(np.abs(scores).mean())
     return Beat(
         period_seconds=(lag + _peak_offset(scores, best)) * hop_seconds,
         margin=margin,
         octave_margin=(top - rival) / top if top > 0.0 else 0.0,
+        peak_ratio=top / spread if spread > 0.0 else 0.0,
     )
 
 

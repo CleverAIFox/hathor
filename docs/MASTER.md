@@ -2459,6 +2459,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0310 | 없는 명령을 또 줬다 | `core/tests/unit/test_doc_commands.py::test_현재형_문서의_명령이_실재한다` | 실물 1004곡 사전 · 8마디 출력 쌍 100 · 현재형 문서 3개 전수 |
 | D-0311 | 음성 대조가 스스로 판정 규칙을 통과했다 | `core/tests/unit/test_evaluate_order_conditioning.py::test_음성_대조가_스스로_판정_규칙을_통과할_수_있다` | 실물 200곡 64마디 · 전이 있음/없음 두 선 |
 | D-0313 | 「갚는 법」이 없는 도구를 가리키고 있었다 | `core/tests/unit/test_doc_commands.py::test_현재형_문서의_명령이_실재한다` | 실물 등재 명령 28개 전수 · 대장 246행 |
+| D-0314 | 온셋 판정 도구를 지었다 | `core/tests/unit/test_evaluate_onsets.py::test_박이_있으면_판정이_참이다` | 합성 |
 
 <!-- decision-ledger:end -->
 
