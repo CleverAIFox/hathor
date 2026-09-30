@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from typing import TYPE_CHECKING, cast
 
 from hathor.domain.services.chroma_drift import DriftObservation, drift_vector
@@ -85,24 +86,57 @@ def _rotate(vector: Sequence[float], tonic: int) -> tuple[float, ...]:
     return tuple(float(value) for value in merged)
 
 
+def keys_candidates(root: Path, stem_set: str) -> list[tuple[Path, int]]:
+    """그 스템을 담은 산출물과 **각각의 곡 수** — 새 것부터 (D-0325).
+
+    줄을 센다. 행마다 곡 하나이며 파싱하지 않는다 — 후보가 여럿일 때 1004행을 전부
+    풀면 보고가 눈에 띄게 느려진다.
+    """
+    ingest = root / "var" / "ingest"
+    if not ingest.is_dir():
+        return []
+    found: list[tuple[Path, int]] = []
+    for path in sorted(ingest.glob("*.keys.jsonl"), reverse=True):
+        try:
+            first = next(iter_rows(path), None)
+            if first is None or "full" not in _stem_bundle(first, stem_set):
+                continue
+            with path.open(encoding="utf-8") as stream:
+                found.append((path, sum(1 for line in stream if line.strip())))
+        except OSError:
+            continue
+    return found
+
+
 def find_keys_store(root: Path, stem_set: str) -> Path | None:
     """그 스템 조합이 담긴 가장 최근 산출물을 찾는다 (D-0074).
 
     **생성할 때 Demucs를 돌리지 않기 위한 것이다.** 돌리면 GPU 없는 기기에서 생성이
     안 된다. 참조곡은 코퍼스에서 고르므로 미리 뽑아 두면 조회로 끝나고, 디코딩조차
     사라져 지금보다 빨라진다.
+
+    ### 더 큰 것이 있으면 신고한다 (D-0325)
+
+    **실험용 40곡이 정본 1004곡을 가렸다.** `--limit 40`으로 뽑은 산출물이 더 최근이라
+    `eval chromatic-origin`과 `eval harmony-output`이 **4% 표본으로 판정을 냈고**, 화면에
+    「곡 40개」가 찍혔는데 1004를 기대한 사람은 그 줄을 안 읽는다.
+
+    **그래도 가장 큰 것으로 바꾸지 않는다.** 「최근」은 D-0074가 정한 계약이고, 「가장
+    크다」도 짐작이다 — 설정이 틀린 1004곡 산출물이 이기면 더 나쁘다. **고르는 규칙은
+    그대로 두고 신고만 한다** — 작은 것을 일부러 쓰려면 `--priors`로 준다.
     """
-    ingest = root / "var" / "ingest"
-    if not ingest.is_dir():
+    found = keys_candidates(root, stem_set)
+    if not found:
         return None
-    for path in sorted(ingest.glob("*.keys.jsonl"), reverse=True):
-        try:
-            first = next(iter_rows(path), None)
-        except OSError:
-            continue
-        if first is not None and "full" in _stem_bundle(first, stem_set):
-            return path
-    return None
+    path, count = found[0]
+    biggest, most = max(found, key=lambda entry: entry[1])
+    if most > count:
+        print(
+            f"⚠ 가장 최근 사전이 {count}곡인데 `{biggest.name}`은 {most}곡이다 (D-0325).\n"
+            f"  {path.name}을 쓴다 — 큰 쪽을 쓰려면 `--priors`로 준다.",
+            file=sys.stderr,
+        )
+    return path
 
 
 def load_stem_priors(path: Path, stem_set: str) -> dict[str, tuple[tuple[float, ...], int]]:

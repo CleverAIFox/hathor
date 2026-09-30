@@ -296,3 +296,46 @@ def test_으뜸음이_다르면_도수_공간에서_합친다(tmp_path):
     merged = merge_degree_priors(list(table.values()))
     assert float(merged[0]) == pytest.approx(0.6, abs=1e-6)
     assert float(merged[7]) == pytest.approx(0.4, abs=1e-6)
+
+
+# ------------------------------------- 작은 산출물이 정본을 가린다 (D-0325)
+
+
+def test_더_큰_사전이_있으면_신고한다(tmp_path, capsys):
+    """**실험용 40곡이 정본 1004곡을 가렸다** (D-0325).
+
+    `--limit 40`으로 뽑은 것이 더 최근이라 두 판정이 4% 표본으로 났다. 화면에
+    「곡 40개」가 찍혔지만 **1004를 기대한 사람은 그 줄을 안 읽는다.**
+    """
+    from hathor.infrastructure.keys_jsonl_store import keys_candidates
+
+    ingest = tmp_path / "var" / "ingest"
+    write_keys(ingest / "keys-20260101T000000Z.keys.jsonl", prior_rows(20))
+    write_keys(ingest / "keys-20260901T000000Z.keys.jsonl", prior_rows(3))
+
+    assert [count for _, count in keys_candidates(tmp_path, "other")] == [3, 20]
+    found = find_keys_store(tmp_path, "other")
+    assert found is not None
+    assert found.name == "keys-20260901T000000Z.keys.jsonl", "고르는 규칙은 안 바꾼다 (D-0074)"
+
+    said = capsys.readouterr().err
+    assert "3곡인데" in said and "20곡이다" in said
+    assert "--priors" in said, "큰 쪽을 쓰는 법을 적어야 한다"
+
+
+def test_가장_큰_것을_골랐으면_조용하다(tmp_path, capsys):
+    """**거짓 경보는 진짜 경보를 죽인다.** 가릴 것이 없으면 아무 말도 안 한다."""
+    ingest = tmp_path / "var" / "ingest"
+    write_keys(ingest / "keys-20260101T000000Z.keys.jsonl", prior_rows(3))
+    write_keys(ingest / "keys-20260901T000000Z.keys.jsonl", prior_rows(20))
+
+    assert find_keys_store(tmp_path, "other") is not None
+    assert capsys.readouterr().err == ""
+
+
+def test_후보가_없으면_없음이다(tmp_path, capsys):
+    from hathor.infrastructure.keys_jsonl_store import keys_candidates
+
+    assert keys_candidates(tmp_path, "other") == []
+    assert find_keys_store(tmp_path, "other") is None
+    assert capsys.readouterr().err == ""

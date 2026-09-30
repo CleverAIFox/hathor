@@ -2470,6 +2470,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0322 | D-0104의 전제가 실물에서 깨졌다 | `core/tests/unit/test_chroma_series.py::test_창마다_바뀌면_전제가_깨진다` | 합성 · 실물 40곡 스템 넷 |
 | D-0323 | 「아니다」로만 찬 명단은 아무도 안 읽는다 | `core/tests/unit/test_decision_ledger.py::test_승격_아님을_적으면_명단에서_나간다` | 해당 없음 |
 | D-0324 | 빚을 부류로 묶으면 묶임이 주장을 가린다 | `core/tests/unit/test_decision_ledger.py::test_빚_표가_기록마다_한_줄이다` | 해당 없음 |
+| D-0325 | 실험용 40곡이 정본 1004곡을 가렸다 | `core/tests/unit/test_harmony_prior_cli.py::test_더_큰_사전이_있으면_신고한다` | 합성 · 실물 40곡 대 1004곡 산출물 |
 
 <!-- decision-ledger:end -->
 
