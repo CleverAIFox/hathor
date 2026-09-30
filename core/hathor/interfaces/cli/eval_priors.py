@@ -19,6 +19,7 @@ from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_drift_o
 from hathor.interfaces.cli.eval_onsets import ONSETS
 from hathor.interfaces.cli.eval_quality import CHORD_QUALITY
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
+from hathor.interfaces.cli.eval_window import WINDOW_LENGTH
 from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import (
     DEFAULT_FEATURE_DIRNAME,
@@ -357,5 +358,6 @@ COMMANDS: tuple[Command, ...] = (
     ),
     CHORD_QUALITY,
     ONSETS,
+    WINDOW_LENGTH,
 )
 """`eval` 표에 실리는 것 (D-0273). **등재와 배선이 한 줄에 선다.**"""
