@@ -69,6 +69,31 @@ def test_늘임은_진행을_안_바꾼다() -> None:
     assert np.array_equal(transition_prior(song), transition_prior(longer))
 
 
+def test_자기_전이_몫은_정본을_부른다() -> None:
+    """**베끼지 않는다** (D-0123 · D-0317).
+
+    D-0316이 이 식을 여기 다시 썼고 **같은 저장소에 이미 있었다.** 두 벌이 되면 한쪽을
+    고쳤을 때 갈린다 — 그리고 **정본에 붙은 한계 경고가 사본에는 안 붙는다.**
+    """
+    from hathor.domain.services import chord_rhythm
+
+    song = walking(windows=40, seed=13)
+    assert self_share(song) == chord_rhythm.self_transition_rate(song)
+
+
+def test_정본은_창_하나에서_0을_내고_여기서는_None이다() -> None:
+    """**둘 다 옳고 자리가 다르다** (GR-0.5 · D-0317).
+
+    정본은 판정에 안 쓰는 진단값이라 `0.0`으로 충분하지만, **표에 찍으면 «자기 전이가
+    없다»로 읽힌다.** 그래서 부르기 전에 걸러낸다.
+    """
+    from hathor.domain.services import chord_rhythm
+
+    single = np.ones((1, DEGREES))
+    assert chord_rhythm.self_transition_rate(single) == 0.0
+    assert self_share(single) is None
+
+
 def test_자기_전이_몫이_버린_것의_크기다() -> None:
     """**D-0103이 버린 것을 처음 잰다.** 끄는 곡이 높고 매 창 바뀌는 곡이 0이다."""
     moving = np.zeros((60, DEGREES))

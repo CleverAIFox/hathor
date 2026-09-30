@@ -21,10 +21,19 @@ D-0114를 재확인할 뿐 D-0103은 안 닫힌다 — 훑기는 «자기 전이
 **둘 다 봐야 비교다** (O-25 (1)). 버린 쪽만 보면 «0이 나왔다»가 자의 성질인지 자료의
 성질인지 모른다 — 늘 0을 내는 자도 0을 낸다 (D-0071).
 
-### 자기 전이 몫은 **버린 것의 크기**다
+### 자기 전이 몫은 **이 창 길이에서 버려지는 전이의 몫**이다
 
 D-0103이 *"화성 리듬을 통째로 버린다"*고 적었고 **얼마나 버렸는지는 안 쟀다.** 창
-경계에서 도수가 안 바뀌는 비율이 그 크기이며, 여기서 처음 실물로 낸다.
+경계에서 도수가 안 바뀌는 비율이 그 몫이며, 여기서 처음 실물로 낸다.
+
+**화성 리듬의 눈금이 아니다** (D-0317). 정본 `chord_rhythm.self_transition_rate`가
+*"창 길이가 이 값을 정하므로 곡의 성질이 아니다"*라고 적어 두었고 **참 화음 길이가
+같은데도 8창 0.317이 16창 0.305로 내려갔다.** D-0316이 이 수를 «버린 것의 크기»라고만
+적어 그 한계를 화면에서 떨어뜨렸다 — 고쳤다.
+
+**그래도 쓸 수 있는 수다.** 「1초 창에서 관측된 전이 가운데 몇 할이 버려지는가」는 이
+창 길이의 성질이고, **D-0103의 선택이 무엇을 대가로 냈는지가 그것이다.** 곡을 줄
+세우는 데 쓰면 안 된다 (D-0083의 순위상관과 같은 지위다).
 """
 
 from __future__ import annotations
@@ -34,6 +43,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from hathor.domain.services import chord_rhythm
 from hathor.domain.services.transition_prior import transition_prior
 
 if TYPE_CHECKING:
@@ -100,11 +110,20 @@ def stretched(series: NDArray[np.float64], factor: int) -> NDArray[np.float64]:
 
 
 def self_share(series: NDArray[np.float64]) -> float | None:
-    """창 경계에서 도수가 **안 바뀌는** 비율. 전이가 없으면 `None`이다 (GR-0.5)."""
-    picked = np.argmax(np.asarray(series, dtype=np.float64), axis=1)
-    if picked.size < 2:
+    """창 경계에서 도수가 **안 바뀌는** 비율. 전이가 없으면 `None`이다 (GR-0.5).
+
+    **정본은 `chord_rhythm.self_transition_rate`다** (D-0317). D-0316이 이 식을 여기
+    다시 썼고 **같은 저장소에 이미 있었다** — `event_scale`의 문서 문자열이 바로 위에서
+    *"정본은 `chord_rhythm` 하나이고 여기서 베끼지 않는다"*고 적어 둔 그 자리다.
+
+    여기 남은 것은 **`None` 처리뿐이다.** 정본은 창이 둘 미만이면 `0.0`을 내고 그것은
+    «자기 전이가 없다»로 읽힌다 — 판정에 안 쓰는 진단값이라 정본에서는 문제가 아니지만,
+    **표에 찍으면 거짓이 된다** (GR-0.5). 그래서 **부르기 전에 걸러낸다.**
+    """
+    stacked = np.asarray(series, dtype=np.float64)
+    if stacked.ndim != 2 or stacked.shape[0] < 2:
         return None
-    return float(np.mean(picked[:-1] == picked[1:]))
+    return chord_rhythm.self_transition_rate(stacked)
 
 
 def line(songs: Sequence[NDArray[np.float64]], factor: int) -> StretchLine:

@@ -231,3 +231,58 @@ def _bare_files(record: Record) -> list[str]:
         for path_text, node in BARE.findall(found)
         if path_text.startswith(TEST_TREE) and not node
     ]
+
+
+UPDATED_BY = re.compile(r"갱신됨 — D-(\d{4})")
+"""«갱신됨 — D-XXXX» 머리. **본문 맨 위 인용 블록에만 쓰인다** (D-0043의 서술 규약)."""
+
+
+def payable(records: list[Record]) -> list[str]:
+    """**빚이 이미 갚였을지 모르는 기록**을 센다 (D-0317).
+
+    ### 왜 이것이 필요했나
+
+    D-0313이 합성 강제자 넷을 *"도구는 섰고 실측만 남았다"*로 묶었다. **둘은 그 도구가
+    재는 것이 아니었고**(D-0169 · D-0170은 대역과 사건 길이이며 `eval onsets`는 포락선
+    자기상관만 본다) **그 둘은 이미 D-0171이 실물 39곡으로 확인해 놓은 상태였다.**
+    146개 기록이 지나도록 아무도 `자료` 칸을 안 옮겼다.
+
+    D-0301이 `(D-xxxx 확인)` 규약을 세운 것이 바로 그 자리인데 **소급 적용을 안 했다.**
+
+    ### 경보가 아니라 **명단**이다 (GR-0.8)
+
+    **전부가 갚을 것은 아니다.** 승격 조건은 *"뒤 판이 실물로 쟀다"*가 아니라 **"뒤 판이
+    그 주장을 확인했다"*이고, 둘은 다르다.
+
+    | 걸린 것 | 갱신한 판이 한 일 | 승격 |
+    |---|---|---|
+    | D-0094 | 어휘가 손잡이에 안 닿았다 (D-0095) | **아니다** — 결함을 찾았다 |
+    | D-0143 | 절반은 섰고 위상은 아직이다 | **절반** |
+    | D-0167 | 원인을 절반만 짚었다 (D-0170) | **아니다** |
+    | D-0197 | 바닥을 안 붙였다 (D-0201) | **아니다** |
+    | D-0303 | 다른 것을 쟀다 (D-0304) | **아니다** |
+    | D-0314 | 판정이 뒤집혔다 (D-0315) | **아니다** |
+
+    **판정이 뒤집힌 판은 승격 대상이 아니다** — 그것이 이 표의 규칙이다. 그래서 **못을
+    안 박는다.** 0으로 박으면 「아니다」를 적을 칸이 없어지고, 그러면 거짓 경보가 되고
+    **거짓 경보는 진짜 경보를 죽인다** (`fire-lane` MASTER §18-13).
+
+    `make ship`이 이 수를 찍는다 — 보는 자리에 두는 것이 이 함수의 전부다.
+    """
+    source = {
+        record.identifier: hit.group(1).strip()
+        for record in records
+        if (hit := EVIDENCE.search(record.body))
+    }
+    rows: list[str] = []
+    for record in records:
+        if source.get(record.identifier) != "합성":
+            continue
+        later = [
+            f"D-{number}"
+            for number in sorted(set(UPDATED_BY.findall(record.body)))
+            if "실물" in source.get(f"D-{number}", "")
+        ]
+        if later:
+            rows.append(f"{record.identifier} ← {' · '.join(later)}")
+    return rows

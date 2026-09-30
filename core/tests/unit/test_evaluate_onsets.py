@@ -279,3 +279,95 @@ def test_폴더를_읽어_세_선을_낸다(tmp_path: Path) -> None:
     measured, control, turned = load_lines(folder)
     assert len(measured.ratios) == len(control.ratios) == len(turned.ratios) == 5
     assert measured.mean_ratio > control.mean_ratio
+
+
+# ------------------------------------ 배수 격차와 위상 (D-0154가 떨어뜨린 두 축 · D-0317)
+
+
+def test_배수_격차를_버리지_않는다() -> None:
+    """**`measure`가 줄곧 내고 있었고 D-0314가 버렸다** (D-0317).
+
+    D-0154가 실물 20곡에서 격차 `< 0.10`이 12곡이고 중앙 0.02라고 적었다 — 그 수를
+    1004곡에서 다시 낼 수 있으려면 선이 이 값을 들고 있어야 한다.
+    """
+    found = line("실측", beating())
+    assert len(found.margins) == found.decided
+    assert found.median_margin is not None
+    assert found.ambiguous_rate is not None
+    assert 0.0 <= found.ambiguous_rate <= 1.0
+
+
+def test_박을_못_고르면_격차가_없다() -> None:
+    """**없는 것을 0이라고 말하지 않는다** (GR-0.5)."""
+    flat = line("실측", [(np.zeros(FRAMES), HOP)])
+    assert flat.decided == 0
+    assert flat.margins == ()
+    assert flat.median_margin is None
+    assert flat.ambiguous_rate is None
+
+
+def test_위상은_짝지어_판정한다() -> None:
+    """**절대 분포로 판정하지 않는다** (D-0311과 같은 구조 · D-0317).
+
+    봉우리를 성기게 고르는 것만으로 분포가 뾰족해질 수 있다.
+    """
+    from hathor.application.evaluate_onsets import phase_line, phase_mean, phase_spread
+
+    songs = beating(10)
+    gain = BeatGain(
+        measured=phase_line("실측", songs),
+        control=phase_line("섞음", songs, transform="shuffled"),
+    )
+    assert gain.aligned
+    assert gain.carries_beat, "클릭 트랙의 위상은 한 칸에 몰린다"
+    assert phase_spread(*songs[0]) is not None
+    found = phase_mean(songs)
+    assert found is not None
+    assert sum(found) == pytest.approx(1.0)
+    assert max(found) > 0.4, "정박만 있는 자료는 한 칸이 무겁다"
+
+
+def test_박이_없으면_위상도_균등에_머문다() -> None:
+    """**질 수 있는 축이다** (O-25 (2)). 균등 잡음에서 문턱을 못 넘는다."""
+    from hathor.application.evaluate_onsets import phase_line
+
+    songs = noiseless()
+    gain = BeatGain(
+        measured=phase_line("실측", songs),
+        control=phase_line("섞음", songs, transform="shuffled"),
+    )
+    assert not gain.carries_beat
+
+
+def test_위상을_안_재면_안_쟀다고_적는다() -> None:
+    """**«박을 담는다»가 둘 다를 말하는 것으로 읽히면 안 된다** (GR-0.5 · D-0317)."""
+    from hathor.interfaces.cli.eval_onsets import margin_lines, phase_notice
+
+    said = "\n".join(phase_notice())
+    assert "안 쟀다" in said
+    assert "--phase" in said
+    assert "D-0154" in said and "0.257" in said
+    assert "절반" in said, "이 판정이 D-0143의 절반만 말한다고 적어야 한다"
+
+    empty = margin_lines(BeatLine(label="실측", ratios=(0.0,), decided=0))
+    assert "—" in empty[0], "격차를 못 재면 0을 찍지 않는다"
+
+
+def test_위상_보고가_두_선과_판정을_찍는다(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = tmp_path / "keys-000003.onsets"
+    for index, (envelope, hop) in enumerate(beating(6)):
+        write_envelope(folder, f"곡{index}.flac", envelope, hop_seconds=hop)
+    out = tmp_path / "산출"
+    code = main(["eval", "onsets", "--out", str(out), "--envelopes", str(folder), "--phase"])
+    assert code == 0
+    printed = capsys.readouterr().out
+    assert "박 안 위상" in printed
+    assert "D-0154 실물 20곡" in printed, "떨어뜨린 수를 옆에 둬야 읽을 수 있다"
+    assert "배수 격차" in printed
+    assert "안 쟀다" not in printed
+
+    record = json.loads(next((out / "eval").glob("*-onsets.eval.json")).read_text("utf-8"))
+    assert record["phase"] is not None
+    assert record["median_margin"] is not None

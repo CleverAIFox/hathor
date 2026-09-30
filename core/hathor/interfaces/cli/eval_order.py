@@ -266,6 +266,8 @@ def _report_stretch_sweep(series_root: Path, stem_set: str, factors: Sequence[in
         )
         print("**이것이 D-0103이 버린 것의 크기다** — 창 경계에서 도수가 안 바뀌는 비율이며")
         print("화성 리듬이 거기 실려 있다. 되살리려면 절대 눈금이 있어야 한다 (O-26).")
+        print("**화성 리듬의 눈금은 아니다** (D-0317) — 창 길이가 이 값을 정한다. 참 화음")
+        print("길이가 같은데도 8창 0.317이 16창 0.305로 내려갔다. **곡을 줄 세우지 않는다.**")
     kept = all(one.invariant for one in lines)
     passed = "구간 길이가 사전을 안 흔든다" if kept else "**흔든다 — D-0103이 실물에서 깨졌다**"
     print(f"\n판정: **{passed}**  (대각선 버림 최대 거리 · D-0316)\n")

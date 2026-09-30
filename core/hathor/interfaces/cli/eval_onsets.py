@@ -10,7 +10,19 @@ import argparse
 import sys
 from typing import TYPE_CHECKING
 
-from hathor.application.evaluate_onsets import BEAT_FLOOR, BeatGain, load_lines
+from hathor.application.evaluate_onsets import (
+    AMBIGUOUS_FLOOR,
+    BEAT_FLOOR,
+    D0154_AMBIGUOUS,
+    D0154_MARGIN,
+    D0154_PHASE,
+    BeatGain,
+    BeatLine,
+    load_envelopes,
+    load_lines,
+    phase_line,
+    phase_mean,
+)
 from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
 from hathor.infrastructure.onset_store import find_envelope_root
 from hathor.interfaces.cli.registry import Command
@@ -37,6 +49,43 @@ def warnings(gain: BeatGain) -> list[str]:
     ]
 
 
+MISSING = "—"
+"""안 쟀거나 잴 것이 없는 칸. **`0`을 찍지 않는다** (GR-0.5 · D-0302와 같은 규약)."""
+
+
+def margin_lines(measured: BeatLine) -> list[str]:
+    """배수 격차를 **D-0154의 실물 20곡과 나란히** 찍는다 (D-0317).
+
+    `measure`가 줄곧 이 값을 내고 있었고 **D-0314가 버리고 있었다.** D-0154는 격차
+    `< 0.10`이 12 / 20이고 중앙이 0.02라서 *"과반이 배수 모호"*라고 적었다 — 그 수를
+    1004곡에서 다시 낸다.
+    """
+    middle, rate = measured.median_margin, measured.ambiguous_rate
+    if middle is None or rate is None:
+        return [f"배수 격차 — {MISSING} (박을 고른 곡이 없다)"]
+    return [
+        f"배수 격차 — 중앙 {middle:.4f} · `< {AMBIGUOUS_FLOOR:.2f}`가 {rate:.1%}"
+        f"  (D-0154 실물 20곡: 중앙 {D0154_MARGIN:.2f} · {D0154_AMBIGUOUS:.0%})",
+        "**배수 모호는 결함이 아니라 성질이다** (D-0054와 같은 근거) — 사람도 120을 60으로",
+        "짚는다. **다만 과반이 모호하면 위상을 곡 전체로 나눠 읽을 수 없다** (D-0154).",
+    ]
+
+
+def phase_notice() -> list[str]:
+    """위상을 **안 쟀다고 적는다** (GR-0.5 · D-0317).
+
+    D-0143의 주장은 둘이다 — 박 주기와 **박 안 위상**. 위상은 D-0154가 실물 20곡에서
+    완전 균등으로 떨어뜨렸고 D-0156이 고친 뒤 **다시 안 쟀다.** 안 쟀다는 것을 화면에
+    안 적으면 «박을 담는다»가 둘 다를 말하는 것으로 읽힌다.
+    """
+    return [
+        f"위상 — {MISSING} 안 쟀다. `--phase`로 잰다 (곡당 0.3초쯤 더 걸린다).",
+        f"**D-0154가 실물 20곡에서 `{' · '.join(f'{v:.3f}' for v in D0154_PHASE)}`를 봤다** —",
+        "완전 균등이고 그것이 실패였다. D-0156이 `peaks(apart=...)`로 고친 뒤 **실물에서",
+        "다시 안 쟀다.** 그래서 이 판정은 **박 주기까지만** 말한다 (D-0143의 절반).",
+    ]
+
+
 def verdict(gain: BeatGain) -> str:
     """판정 한 줄. **셋이다** — 담는다 · 말할 수 없다 · 고장 (D-0315)."""
     if gain.ruler_broken:
@@ -58,6 +107,46 @@ def _resolve(args: argparse.Namespace) -> Path | None:
         return None
     resolved: Path = root
     return resolved
+
+
+def _report_phase(folder: Path, args: argparse.Namespace) -> BeatGain | None:
+    """박 안 위상을 **짝지어** 잰다 (D-0143의 나머지 절반 · D-0317).
+
+    **절대 분포로 판정하지 않는다.** 봉우리를 성기게 고르는 것만으로 분포가 뾰족해질 수
+    있으므로, 섞은 포락선에서도 같은 값을 내고 **곡별로 뺀다** (D-0311과 같은 구조).
+    """
+    envelopes = load_envelopes(folder, limit=args.limit)
+    if not envelopes:
+        return None
+    gain = BeatGain(
+        measured=phase_line("실측", envelopes, seed=args.seed),
+        control=phase_line("섞음", envelopes, transform="shuffled", seed=args.seed),
+    )
+    found = phase_mean(envelopes)
+    print("--- 박 안 위상 (D-0143의 나머지 절반 · D-0154가 떨어뜨린 축) ---")
+    if found is None:
+        print(f"위상 — {MISSING} (박을 고른 곡이 없다)")
+        return gain
+    print(f"평균 분포 — {' · '.join(f'{value:.3f}' for value in found)}")
+    print(f"D-0154 실물 20곡 — {' · '.join(f'{value:.3f}' for value in D0154_PHASE)}  (완전 균등)")
+    for text in render_table(
+        (
+            ("짝지은이득", "<12"),
+            ("이득", ">9.4f"),
+            ("표준오차", ">10.4f"),
+            ("t", ">8.2f"),
+            ("곡승률", ">9.1%"),
+        ),
+        [("실측-섞음", gain.gain, gain.standard_error, gain.t_statistic, gain.win_rate)],
+    ):
+        print(f"  {text}")
+    for notice in warnings(gain):
+        print(notice)
+    reading = "위상이 한 칸에 몰린다" if gain.carries_beat else "균등과 다르다고 말할 수 없다"
+    print(f"판정: **{reading}**  (짝지은 이득 · 문턱 |t| > {BEAT_FLOOR:.0f})")
+    print("**균등이 실패 신호다** — 연속 에너지가 모든 위상에 고르게 깔리면 그렇게 된다")
+    print("(D-0155). D-0156이 `peaks(apart=...)`로 고쳤고 **이것이 그 첫 실물 재측정이다.**")
+    return gain
 
 
 def run_eval_onsets(args: argparse.Namespace) -> int:
@@ -95,6 +184,15 @@ def run_eval_onsets(args: argparse.Namespace) -> int:
         print(f"  {text}")
     for notice in warnings(gain):
         print(notice)
+    print()
+    for text in margin_lines(measured):
+        print(text)
+
+    print()
+    phase = _report_phase(folder, args) if args.phase else None
+    if phase is None:
+        for text in phase_notice():
+            print(text)
     print(f"\n판정: **{verdict(gain)}**  (짝지은 이득 · 문턱 |t| > {BEAT_FLOOR:.0f} · D-0315)\n")
 
     print("--- 읽는 법 ---")
@@ -124,6 +222,9 @@ def run_eval_onsets(args: argparse.Namespace) -> int:
                 for one in (measured, control, rolled_line)
             },
             "paired": gain.as_record(),
+            "median_margin": measured.median_margin,
+            "ambiguous_rate": measured.ambiguous_rate,
+            "phase": None if phase is None else phase.as_record(),
         },
         "onsets",
     )
@@ -138,6 +239,12 @@ def _build_onsets(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--limit", type=int, default=None, help="곡 수 상한 (시험용)")
     parser.add_argument("--seed", type=int, default=20260930, help="섞음·돌림 시드")
+    parser.add_argument(
+        "--phase",
+        action="store_true",
+        help="박 안 위상까지 잰다 (D-0143의 나머지 절반 · D-0154가 떨어뜨린 축)."
+        " **곡당 0.3초쯤 더 걸린다**",
+    )
 
 
 ONSETS = Command(
@@ -149,4 +256,4 @@ ONSETS = Command(
 """`eval` 표에 실리는 것. **등재는 `eval_priors.COMMANDS`가 든다** — `main.py`가 못에
 박혀 있어 묶음 자리가 없다 (D-0302와 같은 자리)."""
 
-__all__ = ["ONSETS", "run_eval_onsets", "verdict", "warnings"]
+__all__ = ["ONSETS", "margin_lines", "phase_notice", "run_eval_onsets", "verdict", "warnings"]

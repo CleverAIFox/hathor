@@ -219,6 +219,33 @@ def last_decision() -> str:
     return f"{found[-1]} · 총 {len(found)}건" if found else "(없다)"
 
 
+def payable_debts() -> list[str]:
+    """**이미 갚였을지 모르는 빚**을 센다 (D-0317).
+
+    `자료 합성`인데 **나중에 실물로 잰 판이 갱신한** 기록이다. D-0169·D-0170이 그랬다 —
+    D-0171이 실물 39곡으로 사전 등록 예측을 통과시켜 놓고 **146개 기록이 지나도록
+    `자료` 칸이 안 옮겨졌다.** D-0301이 세운 `(D-xxxx 확인)` 규약을 소급 적용만 하면
+    되는 것이었는데 아무도 안 봤다.
+
+    **경보가 아니라 명단이다** (GR-0.8). 전부가 갚을 것은 아니다 — 갱신한 판이 판정을
+    **뒤집었으면** 승격 대상이 아니다. 그래서 세기만 하고 **막지 않는다.**
+    """
+    import decision_evidence
+    from decision_ledger import scan_records
+
+    text = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    rows = decision_evidence.payable(scan_records(text))
+    if not rows:
+        return ["갚을 수 있는 빚  없다"]
+    # **한 줄에 하나씩 찍는다.** `·`를 사이와 안쪽에 함께 쓰면 어디까지가 한 건인지
+    # 안 보인다 — 짓자마자 그 꼴로 나왔다.
+    return [
+        f"갚을 수 있을지 모르는 빚  {len(rows)}건 — `자료 합성`인데 뒤 판이 실물로 쟀다",
+        *(f"  {row}" for row in rows),
+        "  갱신한 판이 확인인지 뒤집음인지 읽고 정한다 (D-0301 · D-0317)",
+    ]
+
+
 def count_leftovers() -> list[str]:
     """찌꺼기를 **센다. 지우지 않는다.**"""
     found: list[str] = []
@@ -354,6 +381,8 @@ def main() -> int:
 
     print(f"{DIM}── 기록{OFF}")
     print(f"   마지막 결정  {last_decision()}")
+    for line in payable_debts():
+        print(f"{DIM}   {line}{OFF}")
 
     print(f"{DIM}── CI (직전 커밋){OFF}")
     for line in ci_verdict():

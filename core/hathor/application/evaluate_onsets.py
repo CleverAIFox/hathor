@@ -47,7 +47,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from hathor.domain.services.onset import TEMPO_RANGE, beat_period, beat_strength, event_scale
+from hathor.domain.services.onset import (
+    TEMPO_RANGE,
+    beat_period,
+    beat_strength,
+    event_scale,
+    phase_profile,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -58,6 +64,23 @@ if TYPE_CHECKING:
 BEAT_FLOOR = 3.0
 """짝지은 `t`의 승인 문턱. **D-0098이 세운 값을 그대로 쓴다** — 축마다 다른 문턱을
 고르면 그 고름이 결과를 만든다."""
+
+AMBIGUOUS_FLOOR = 0.10
+"""배수 모호의 선. **D-0154가 실물 20곡에서 쓴 값을 그대로 쓴다** — 새로 고르면
+그 고름이 «나아졌다»를 만든다 (D-0058)."""
+
+D0154_AMBIGUOUS = 0.60
+"""D-0154의 실물 20곡: 격차 `< 0.10`이 **12 / 20**이었다."""
+
+D0154_MARGIN = 0.02
+"""D-0154의 실물 20곡: 격차 **중앙 0.02**였다."""
+
+D0154_PHASE = (0.257, 0.247, 0.247, 0.250)
+"""D-0154의 실물 20곡 박 안 위상 — **완전 균등이었고 그것이 실패였다.**
+
+D-0155가 원인을 찾고(연속 에너지) D-0156이 `peaks(apart=...)`로 고쳤다. **고친 뒤
+아무도 다시 안 쟀다** (D-0317).
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +123,13 @@ class BeatLine:
     decided: int
     """박을 고른 곡 수. **`ratios`의 길이와 다를 수 있다** — 못 고른 곡은 0.0이 든다."""
 
+    margins: tuple[float, ...] = ()
+    """곡별 **배수 격차** (`Beat.octave_margin`).
+
+    **D-0154가 실물 20곡에서 떨어뜨린 수다** — 격차 `< 0.10`이 12곡(60%)이고 중앙이
+    0.02였다. `measure`가 줄곧 이 값을 내고 있었고 **D-0314가 버리고 있었다** (D-0317).
+    """
+
     @property
     def mean_ratio(self) -> float:
         return float(np.mean(self.ratios)) if self.ratios else 0.0
@@ -107,6 +137,18 @@ class BeatLine:
     @property
     def decision_rate(self) -> float:
         return self.decided / len(self.ratios) if self.ratios else 0.0
+
+    @property
+    def median_margin(self) -> float | None:
+        """배수 격차 중앙. **안 쟀으면 `None`이다** (GR-0.5)."""
+        return float(np.median(self.margins)) if self.margins else None
+
+    @property
+    def ambiguous_rate(self) -> float | None:
+        """격차가 `AMBIGUOUS_FLOOR` 아래인 곡의 비율. **D-0154의 60%와 견주는 수다.**"""
+        if not self.margins:
+            return None
+        return float(np.mean(np.asarray(self.margins) < AMBIGUOUS_FLOOR))
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +269,14 @@ def measure(
     return strength, True, beat.octave_margin, scale
 
 
+def _taken(envelope: NDArray[np.float64], *, transform: str, seed: int) -> NDArray[np.float64]:
+    if transform == "shuffled":
+        return shuffled(envelope, seed=seed)
+    if transform == "rolled":
+        return rolled(envelope, seed=seed)
+    return envelope
+
+
 def line(
     label: str,
     envelopes: Sequence[tuple[NDArray[np.float64], float]],
@@ -236,27 +286,79 @@ def line(
 ) -> BeatLine:
     """한 선 전체. `transform`은 `none` · `shuffled` · `rolled`."""
     ratios: list[float] = []
+    margins: list[float] = []
     decided = 0
     for index, (envelope, hop) in enumerate(envelopes):
-        taken = envelope
-        if transform == "shuffled":
-            taken = shuffled(envelope, seed=seed + index)
-        elif transform == "rolled":
-            taken = rolled(envelope, seed=seed + index)
-        ratio, chosen, _, _ = measure(taken, hop, None)
+        ratio, chosen, margin, _ = measure(
+            _taken(envelope, transform=transform, seed=seed + index), hop, None
+        )
         ratios.append(ratio)
         decided += int(chosen)
-    return BeatLine(label=label, ratios=tuple(ratios), decided=decided)
+        if chosen:
+            margins.append(margin)
+    return BeatLine(label=label, ratios=tuple(ratios), decided=decided, margins=tuple(margins))
 
 
-def load_lines(
-    folder: Path, *, limit: int | None = None, seed: int = 20260930
-) -> tuple[BeatLine, BeatLine, BeatLine]:
-    """포락선 폴더에서 세 선을 낸다 — `(실측, 시간 섞음, 위상 돌림)`.
+def phase_spread(envelope: NDArray[np.float64], hop_seconds: float) -> float | None:
+    """**박 안 위상이 균등에서 얼마나 떨어졌나.** 못 재면 `None`이다 (GR-0.5).
 
-    **곡 순서를 파일 이름으로 고정한다.** 세 선이 같은 곡을 같은 자리에서 들어야
-    짝지어 뺄 수 있다 (D-0311).
+    전변동 거리다 — `0`이면 완전 균등이고 클수록 한 칸에 몰린다. **D-0154가 실물 20곡에서
+    `0.257 · 0.247 · 0.247 · 0.250`을 봤고 그것이 실패였다.**
+
+    D-0155가 원인을 찾았다 — 표류가 아니라 **연속 에너지가 모든 위상에 고르게 깔린
+    것**이었고 D-0156이 `peaks(apart=...)`로 고쳤다. **고친 뒤 실물에서 다시 안 쟀다.**
+
+    **절대값으로 판정하지 않는다.** 봉우리를 성기게 고르는 것만으로도 분포가 뾰족해질
+    수 있으므로 **섞은 포락선에서도 같은 값을 내 짝지어 뺀다** (D-0311과 같은 구조).
     """
+    beat = beat_period(envelope, hop_seconds)
+    if beat is None:
+        return None
+    found = phase_profile(envelope, beat.period_seconds, hop_seconds)
+    flat = 1.0 / len(found)
+    return float(sum(abs(value - flat) for value in found) / 2.0)
+
+
+def phase_line(
+    label: str,
+    envelopes: Sequence[tuple[NDArray[np.float64], float]],
+    *,
+    transform: str = "none",
+    seed: int = 20260930,
+) -> BeatLine:
+    """위상 축의 한 선. **`BeatLine`을 그대로 쓴다** — 짝지은 셈이 같으므로 베끼지
+    않는다 (D-0317이 겪은 자리다).
+
+    `ratios`에 드는 것이 뾰족함이 아니라 **위상 편차**이며 `margins`는 비어 있다.
+    """
+    spreads: list[float] = []
+    decided = 0
+    for index, (envelope, hop) in enumerate(envelopes):
+        found = phase_spread(_taken(envelope, transform=transform, seed=seed + index), hop)
+        spreads.append(0.0 if found is None else found)
+        decided += int(found is not None)
+    return BeatLine(label=label, ratios=tuple(spreads), decided=decided)
+
+
+def phase_mean(
+    envelopes: Sequence[tuple[NDArray[np.float64], float]],
+) -> tuple[float, ...] | None:
+    """곡별 위상 분포의 평균. **D-0154의 네 수와 눈으로 견주는 줄이다.**"""
+    found = [
+        phase_profile(envelope, beat.period_seconds, hop)
+        for envelope, hop in envelopes
+        if (beat := beat_period(envelope, hop)) is not None
+    ]
+    if not found:
+        return None
+    return tuple(float(value) for value in np.asarray(found, dtype=np.float64).mean(axis=0))
+
+
+def load_envelopes(
+    folder: Path, *, limit: int | None = None
+) -> list[tuple[NDArray[np.float64], float]]:
+    """포락선 폴더를 읽는다. **곡 순서를 파일 이름으로 고정한다** — 세 선이 같은 곡을
+    같은 자리에서 들어야 짝지어 뺄 수 있다 (D-0311)."""
     envelopes: list[tuple[NDArray[np.float64], float]] = []
     for path in sorted(folder.glob("*.npz"))[:limit]:
         with np.load(path, allow_pickle=False) as bundle:
@@ -265,6 +367,14 @@ def load_lines(
         if values.ndim != 1 or values.size < 4 or hop <= 0.0:
             continue
         envelopes.append((values, hop))
+    return envelopes
+
+
+def load_lines(
+    folder: Path, *, limit: int | None = None, seed: int = 20260930
+) -> tuple[BeatLine, BeatLine, BeatLine]:
+    """포락선 폴더에서 세 선을 낸다 — `(실측, 시간 섞음, 위상 돌림)`."""
+    envelopes = load_envelopes(folder, limit=limit)
     return (
         line("실측", envelopes, seed=seed),
         line("시간 섞음", envelopes, transform="shuffled", seed=seed),

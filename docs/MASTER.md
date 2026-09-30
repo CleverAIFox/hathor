@@ -2283,7 +2283,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0099 | 게이트가 통과했는데 못 읽는다 | `core/tests/unit/test_evaluate_time_drift.py` | 실물 표본 200곡 |
 | D-0100 | 이어받기가 조건을 다 보지 않았다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
 | D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 200곡 64마디 순서 판정 (D-0312 확인) |
-| D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 1004곡 크로마 시계열 (D-0317 확인) |
 | D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` | 합성 |
 | D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` | 합성 · 실물 1004곡 230096창 크로마 시계열 (D-0305 확인) |
 | D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` | 실물 기기 |
@@ -2320,7 +2320,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0141 | 가락을 붙인다 | `core/tests/unit/test_melody.py` | 실물 생성 출력 |
 | D-0142 | 두 번째로 들었다 | `core/tests/unit/test_melody.py` | 실물 생성 출력 |
 | D-0143 | 박과 온셋 | `core/tests/unit/test_onset.py` | 합성 |
-| D-0144 | 온셋 포락선 | `core/tests/unit/test_onset.py` | 합성 |
+| D-0144 | 온셋 포락선 | `core/tests/unit/test_onset.py` | 합성 · 실물 1004곡 온셋 포락선 (D-0317 확인) |
 | D-0145 | 온셋 배선을 끝낸다 | `core/tests/unit/test_extract_onsets.py` | 실물 저장소 문서 |
 | D-0146 | 검사마다 빼 둔 나무를 전수로 훑는다 | `tools/check_egress.py` | 실물 저장소 코드 |
 | D-0147 | 파이프라인이 없었다 | `core/tests/unit/test_ship.py` | 해당 없음 |
@@ -2334,8 +2334,8 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0161 | 스무 곡이 전부 한 아티스트였다 | `core/tests/unit/test_extract_onsets.py` | 실물 20곡 |
 | D-0164 | 예측은 맞았으나 짝지은 비교가 아니었다 | `core/tests/unit/test_extract_onsets.py` | 실물 39곡 |
 | D-0168 | 세션을 닫는다 | `tools/check_doc_style.py` | 실물 문서 4종 |
-| D-0169 | 창을 홉에서 떼어낸다 | `core/tests/unit/test_onset.py` | 합성 |
-| D-0170 | 반감점이 옮겨왔다 | `core/tests/unit/test_onset.py` | 합성 |
+| D-0169 | 창을 홉에서 떼어낸다 | `core/tests/unit/test_onset.py` | 합성 · 실물 39곡 (D-0171 확인) |
+| D-0170 | 반감점이 옮겨왔다 | `core/tests/unit/test_onset.py` | 합성 · 실물 39곡 (D-0171 확인) |
 | D-0171 | 예측 둘이 통과했다 | `core/tests/unit/test_onset.py` | 합성 · 실물 39곡 |
 | D-0174 | 귀가 처음으로 무언가를 지적했다 | `core/tests/unit/test_arrangement.py` | 실물 청취 |
 | D-0176 | 귀 아픈 것은 음역이 아니라 밀도였다 | `core/tests/unit/test_arrangement.py` | 실물 생성 출력 |
@@ -2462,6 +2462,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0314 | 온셋 판정 도구를 지었다 | `core/tests/unit/test_evaluate_onsets.py::test_박이_있으면_판정이_참이다` | 합성 |
 | D-0315 | 자가 실물에서 고장났다 | `core/tests/unit/test_evaluate_onsets.py::test_차분을_빼면_자가_뒤집힌다` | 합성 · 실물 1004곡 온셋 포락선 |
 | D-0316 | 빚 표가 틀린 명령을 가리키고 있었다 | `core/tests/unit/test_segment_invariance.py::test_늘여도_대각선을_버린_사전은_안_움직인다` | 합성 · 실물 200곡 64마디 유지 판정 · 자기 전이 훑기 12칸 |
+| D-0317 | 빚 넷을 갚았다 | `core/tests/unit/test_evaluate_onsets.py::test_배수_격차를_버리지_않는다` | 합성 · 실물 1004곡 온셋 포락선 · 1004곡 크로마 시계열 |
 
 <!-- decision-ledger:end -->
 
