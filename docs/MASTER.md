@@ -2302,7 +2302,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0121 | 검사를 만들어 놓고 안 불렀다 | `core/tests/unit/test_check_decisions.py` | 실물 저장소 |
 | D-0122 | 광인사가 사라졌다 | `tools/check_forbidden.py — copy2 금지분만` | 실물 기기 |
 | D-0123 | 화성 리듬은 손잡이가 아니다 | `core/tests/unit/test_chord_rhythm.py` | 합성 · 실물 1002곡 |
-| D-0124 | 유지 확률을 곡에서 뽑아 판정에 건다 | `core/tests/unit/test_evaluate_order_conditioning.py ·` | 합성 |
+| D-0124 | 유지 확률을 곡에서 뽑아 판정에 건다 | `core/tests/unit/test_evaluate_order_conditioning.py ·` | 합성 · 실물 200곡 64마디 유지 판정 (D-0316 확인) |
 | D-0126 | 닫힌 질문을 코드가 열린 것처럼 적는다 | `tools/check_issue_mentions.py` | 실물 저장소 문서 |
 | D-0127 | `main.py`를 쪼개 래칫을 되돌린다 | `tools/check_file_size.py` | 실물 저장소 코드 |
 | D-0128 | 규약이 "검사가 돈다"고 적었는데 그 검사가 없었다 | `tools/check_secrets.py` | 실물 저장소 코드 |
@@ -2461,6 +2461,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0313 | 「갚는 법」이 없는 도구를 가리키고 있었다 | `core/tests/unit/test_doc_commands.py::test_현재형_문서의_명령이_실재한다` | 실물 등재 명령 28개 전수 · 대장 246행 |
 | D-0314 | 온셋 판정 도구를 지었다 | `core/tests/unit/test_evaluate_onsets.py::test_박이_있으면_판정이_참이다` | 합성 |
 | D-0315 | 자가 실물에서 고장났다 | `core/tests/unit/test_evaluate_onsets.py::test_차분을_빼면_자가_뒤집힌다` | 합성 · 실물 1004곡 온셋 포락선 |
+| D-0316 | 빚 표가 틀린 명령을 가리키고 있었다 | `core/tests/unit/test_segment_invariance.py::test_늘여도_대각선을_버린_사전은_안_움직인다` | 합성 · 실물 200곡 64마디 유지 판정 · 자기 전이 훑기 12칸 |
 
 <!-- decision-ledger:end -->
 

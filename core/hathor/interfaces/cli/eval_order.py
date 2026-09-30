@@ -27,6 +27,7 @@ from hathor.shared.config.paths import resolve_path
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Sequence
+    from pathlib import Path
 
     from hathor.application.evaluate_order_conditioning import OrderReference, OrderReport
 
@@ -147,6 +148,9 @@ def run_eval_harmony_order(args: argparse.Namespace) -> int:
         _report_self_transition_sweep(
             args, sweep_self_transition(references, probabilities, bars, condition)
         )
+    if args.stretch_sweep is not None:
+        factors = tuple(int(token) for token in args.stretch_sweep.split(",") if token.strip())
+        _report_stretch_sweep(series_root, args.stem_set, factors)
     print("--- 읽는 법 ---")
     print("**쌍 거리로는 안 된다.** 전이 사전을 주기만 하면 두 출력이 순서에서 달라진다 —")
     print('곡 짝을 뒤섞은 사전을 줘도 그렇다. **"쓰이고 있다"와 "맞는 것을 쓴다"는 다르다**')
@@ -224,6 +228,49 @@ def _report_hold(
     print()
 
 
+def _report_stretch_sweep(series_root: Path, stem_set: str, factors: Sequence[int]) -> None:
+    """**같은 진행을 길게 끌면 사전이 바뀌는가** (D-0103 · D-0316).
+
+    **자기 전이 훑기와 다른 물음이다.** 저쪽은 «자기 전이를 올리면 판정이 어떻게 되나»
+    이고 D-0114가 이미 실물로 닫았다. 이쪽은 «구간 길이가 사전을 흔드나»이며 D-0103이
+    **합성으로만** 답한 자리다.
+    """
+    from statistics import median
+
+    from hathor.application.evaluate_segment_invariance import shares, sweep
+    from hathor.infrastructure.chroma_series_store import load_series
+
+    songs = load_series(series_root, stem_set)
+    if not songs:
+        print(f"--- 구간 길이 불변 ---\n시계열이 없다: {series_root} (스템 {stem_set})\n")
+        return
+    lines = sweep(songs, factors)
+    print(f"--- 구간 길이 불변 (D-0103 · 실물 {len(songs)}곡) ---")
+    print("**창마다 되풀이해 늘인다** — 화음 진행은 한 칸도 안 바뀌고 끄는 길이만 배가 된다.")
+    for text in render_table(
+        (
+            ("늘임", ">5d"),
+            ("곡", ">5d"),
+            ("대각선버림", ">12.2e"),
+            ("대각선포함", ">12.4f"),
+            ("포함최대", ">10.4f"),
+        ),
+        [(one.factor, one.songs, one.dropped_max, one.kept_mean, one.kept_max) for one in lines],
+    ):
+        print(text)
+    held = shares(songs)
+    if held:
+        print(
+            f"\n자기 전이 몫 — 중앙 {median(held):.4f} · 최소 {min(held):.4f}"
+            f" · 최대 {max(held):.4f} ({len(held)}곡)"
+        )
+        print("**이것이 D-0103이 버린 것의 크기다** — 창 경계에서 도수가 안 바뀌는 비율이며")
+        print("화성 리듬이 거기 실려 있다. 되살리려면 절대 눈금이 있어야 한다 (O-26).")
+    kept = all(one.invariant for one in lines)
+    passed = "구간 길이가 사전을 안 흔든다" if kept else "**흔든다 — D-0103이 실물에서 깨졌다**"
+    print(f"\n판정: **{passed}**  (대각선 버림 최대 거리 · D-0316)\n")
+
+
 def _report_self_transition_sweep(
     args: argparse.Namespace, rows: Sequence[tuple[float, int, float, float, float]]
 ) -> None:
@@ -248,6 +295,9 @@ def _report_self_transition_sweep(
     print("**짐작**: 매 마디 바꾸는 제약이 짧은 구간에서 관측 거리를 누른다 (D-0109).")
     print("참이면 짧은 마디에서 `자기전이`가 오를수록 `other-self`가 **오른다.**")
     print("**D-0114가 이 표로 짐작을 기각했다.** 표본 부족이며 재현용으로 남긴다.")
+    print("**D-0114의 수는 D-0213 이전 것이다** (D-0316) — 64마디 `p=0.00`에 0.4983,")
+    print("8마디에 0.3467이었고 지금은 **표 전체가 0.07~0.09 아래다.** 으뜸음 회전을")
+    print("바로잡자 곡별 사전이 서로 닮아져 `other`가 더 내려갔다. **모양은 그대로다.**")
     print(f"귀무 대조: 같은 훑기를 `--stem-set {args.stem_set}`에서 전이 없이 돌린다.")
 
 
@@ -280,6 +330,13 @@ def _build_harmony_order(parser: argparse.ArgumentParser) -> None:
         default="8,16,64",
         metavar="8,16,64",
         help="자기 전이 훑기에서 함께 볼 마디 수. 짧은 구간과 64마디를 나란히 본다",
+    )
+    parser.add_argument(
+        "--stretch-sweep",
+        default=None,
+        metavar="1,2,3,4",
+        help="시계열을 늘여 **구간 길이 불변**을 잰다 (D-0103 · D-0316)."
+        " 자기 전이 훑기와 **다른 물음이다**",
     )
 
 
