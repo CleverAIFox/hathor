@@ -2469,6 +2469,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0321 | 복사해 붙일 수 없는 명령은 안내가 아니다 | `core/tests/unit/test_window_length.py::test_폴더를_스스로_고른다` | 해당 없음 |
 | D-0322 | D-0104의 전제가 실물에서 깨졌다 | `core/tests/unit/test_chroma_series.py::test_창마다_바뀌면_전제가_깨진다` | 합성 · 실물 40곡 스템 넷 |
 | D-0323 | 「아니다」로만 찬 명단은 아무도 안 읽는다 | `core/tests/unit/test_decision_ledger.py::test_승격_아님을_적으면_명단에서_나간다` | 해당 없음 |
+| D-0324 | 빚을 부류로 묶으면 묶임이 주장을 가린다 | `core/tests/unit/test_decision_ledger.py::test_빚_표가_기록마다_한_줄이다` | 해당 없음 |
 
 <!-- decision-ledger:end -->
 

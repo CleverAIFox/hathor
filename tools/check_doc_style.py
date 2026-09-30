@@ -468,6 +468,51 @@ def check_plan_leftovers() -> list[str]:
     ]
 
 
+DEBT_TABLE = "### 3.1 합성으로만 선 판단"
+"""한 줄에 한 기록을 적는 빚 표 (D-0324). **여기서만 본다.**"""
+
+NO_TOOL = ("도구 없음", "승격 아님")
+"""갚는 법이 **명령이 아닐 때** 쓰는 말. 빈칸과 다르다 — 빈칸은 「안 봤다」와
+「볼 것이 없다」를 못 가른다."""
+
+
+def check_debt_rows() -> list[str]:
+    """빚 표의 **갚는 법 칸이 비어 있는가** (D-0324).
+
+    ### 왜 행 단위여야 했나
+
+    D-0320이 같은 검사를 **부류 단위**로 지었고 **원인이 된 자리를 못 잡았다** — 빚 표가
+    한 줄이라 옆 절의 `eval`이 이 절을 덮었다. 표를 **한 줄에 한 기록**으로 바꾸자
+    같은 규칙이 정확해졌다. **그물이 안 걸리면 그물을 고치기 전에 자료 모양을 본다.**
+
+    ### 세 판 연속 같은 자리에서 틀렸다
+
+    D-0313이 넷을 「온셋·박」으로 묶었고 둘은 그 명령이 재는 것이 아니었다 (D-0317).
+    그 뒤 「화음 사전 4건」이 서로 다른 네 모듈이었고 **둘은 이미 돌 수 있었다** (D-0324).
+    **번호를 나열하면 묶임이 주장을 가린다.**
+    """
+    body = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    if DEBT_TABLE not in body:
+        return ["docs/PLAN.md에 빚 표(§3.1)가 없다. 없애려면 결정 기록이 필요하다 (D-0324)"]
+    rest = body[body.index(DEBT_TABLE) :]
+    end = rest.find("\n## ", 1)
+    rows = [
+        line
+        for line in rest[: end if end > 0 else len(rest)].splitlines()
+        if line.startswith("| D-")
+    ]
+    found = [
+        f"docs/PLAN.md 빚 행에 갚는 법이 없다: {line.split('|')[1].strip()}. "
+        f"명령을 백틱으로 적거나 {NO_TOOL[0]}·{NO_TOOL[1]}이라고 적는다 (D-0324)"
+        for line in rows
+        if "`" not in line.rsplit("|", 2)[1] and not any(word in line for word in NO_TOOL)
+    ]
+    if not rows:
+        # **그물이 비면 «전부 맞다»가 거짓으로 참이 된다** (D-0230).
+        found.append("docs/PLAN.md 빚 표가 비었다. 기록마다 한 줄을 적는다 (D-0324)")
+    return found
+
+
 def check_duplicates() -> list[str]:
     """문서 둘이 **같은 세 줄**을 들고 있는가 (D-0043 · D-0262).
 
@@ -492,7 +537,12 @@ def check_duplicates() -> list[str]:
 
 
 def check() -> list[str]:
-    problems: list[str] = list(check_sixth_document()) + check_duplicates() + check_plan_leftovers()
+    problems: list[str] = (
+        list(check_sixth_document())
+        + check_duplicates()
+        + check_plan_leftovers()
+        + check_debt_rows()
+    )
     for path in targets():
         name = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")

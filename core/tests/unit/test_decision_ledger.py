@@ -155,3 +155,49 @@ def test_지금_명단이_비어_있다() -> None:
     """
     rows = ledger.scan_records(DECISIONS.read_text(encoding="utf-8"))
     assert evidence.payable(rows) == []
+
+
+# ------------------------------------------- 빚 표는 한 줄에 하나 (D-0324)
+
+
+def test_빚_표가_기록마다_한_줄이다() -> None:
+    """**부류로 묶으면 묶임이 주장을 가린다** (D-0324).
+
+    D-0313이 넷을 「온셋·박」으로 묶어 한 명령에 걸었고 둘은 그 명령이 재는 것이
+    아니었다. 그 뒤 「화음 사전 4건」에서 같은 일이 또 났다.
+    """
+    body = (repo_root() / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    assert style.DEBT_TABLE in body
+    rest = body[body.index(style.DEBT_TABLE) :]
+    rows = [line for line in rest.splitlines() if line.startswith("| D-")]
+    assert len(rows) >= 5, f"빚 표가 {len(rows)}행이다. 그물이 비면 늘 통과한다 (D-0230)"
+    assert len({line.split("|")[1].strip() for line in rows}) == len(rows), "같은 기록이 두 줄이다"
+
+
+def test_갚는_법이_빈_행을_잡는다() -> None:
+    """**빈칸은 「안 봤다」와 「볼 것이 없다」를 못 가른다** (D-0324).
+
+    D-0320이 같은 검사를 **부류 단위**로 지었고 원인이 된 자리를 못 잡았다 — 표를
+    한 줄에 한 기록으로 바꾸자 같은 규칙이 정확해졌다.
+    """
+    assert style.check_debt_rows() == []
+    assert "도구 없음" in style.NO_TOOL
+    assert "승격 아님" in style.NO_TOOL
+
+
+def test_지금_표가_대장의_합성과_같다() -> None:
+    """**표와 세는 것이 갈리면 표가 낡는다** (D-0263과 같은 자리)."""
+    import doc_fsck
+
+    body = (repo_root() / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    rest = body[body.index(style.DEBT_TABLE) :]
+    listed = {line.split("|")[1].strip() for line in rest.splitlines() if line.startswith("| D-")}
+    rows = ledger.scan_records(DECISIONS.read_text(encoding="utf-8"))
+    synthetic = {
+        record.identifier
+        for record in rows
+        if (found := ledger.EVIDENCE.search(record.body))
+        and ledger.evidence_base(found.group(1)) == "합성"
+    }
+    assert listed == synthetic, f"표에만 {listed - synthetic} · 기록에만 {synthetic - listed}"
+    assert doc_fsck.synthetic_rows() <= len(synthetic)
