@@ -13,11 +13,11 @@ import numpy as np
 import pytest
 
 from hathor.application import evaluate_harmony_output as module
+from hathor.application.compare_output import SourceComparison
 from hathor.application.evaluate_harmony_output import (
     EvaluateHarmonyOutput,
     OutputCondition,
     ReferencePrior,
-    SourceComparison,
     degree_histogram,
     sweep_bar_counts,
     total_variation,

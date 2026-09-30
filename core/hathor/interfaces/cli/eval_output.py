@@ -110,12 +110,12 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
 
     저장된 크로마만 읽으므로 **음원도 GPU도 필요 없다.**
     """
+    from hathor.application.compare_output import PAIRED_T_FLOOR, SourceComparison
     from hathor.application.evaluate_harmony_output import (
         EvaluateHarmonyOutput,
         OutputCondition,
         OutputReport,
         ReferencePrior,
-        SourceComparison,
         sweep_bar_counts,
     )
     from hathor.engines.compose.harmony_generator import vocabulary_roots
@@ -208,15 +208,18 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
         moved = comparison.gain * condition.bar_count
         print(
             f"짝지은 비교 ({baseline} → {target})\n"
-            f"  출력 차이 이득 {comparison.gain:+.4f}  (마디 환산 {moved:+.2f})\n"
+            f"  출력 차이 이득 {comparison.gain:+.4f} ± {comparison.standard_error:.4f}"
+            f"  (마디 환산 {moved:+.2f})\n"
             f"  사전 극한 이득 {comparison.limit_gain:+.4f}\n"
-            f"  쌍 단위 승률  {comparison.win_rate:.1%}\n"
+            f"  쌍 단위 승률  {comparison.win_rate:.1%}  (진단이다 · D-0327)\n"
+            f"  t = {comparison.t:+.2f}  (문턱 {PAIRED_T_FLOOR:.1f})\n"
             f"  전달: **{'그렇다' if comparison.transmits_prior_contrast else '아니다'}**\n"
         )
 
     if args.compare_vocabulary:
         from dataclasses import replace
 
+        from hathor.application.compare_output import VocabularyComparison
         from hathor.application.evaluate_harmony_output import OutputLine
 
         print("어휘 비교 (같은 쌍·같은 시드) — O-36 · D-0094")
@@ -245,22 +248,16 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
             )
         for text in render_table(columns, rows):
             print(text)
-        mixture_line = measured["mixture"].line("paired")
-        control_line = measured["control"].line("paired")
-        gain = mixture_line.mean_distance - control_line.mean_distance
-        wins = sum(
-            1
-            for left, right in zip(mixture_line.distances, control_line.distances, strict=True)
-            if left > right
+        compared = VocabularyComparison(
+            base=measured["base"], control=measured["control"], mixture=measured["mixture"]
         )
-        share = wins / max(len(mixture_line.distances), 1)
-        free = control_line.mean_distance - measured["base"].line("paired").mean_distance
-        beats = gain > 0 and share > 0.5
-        verdict = "차용 어휘가 출력을 더 가른다" if beats else "대조군을 못 넘는다"
+        verdict = "차용 어휘가 출력을 더 가른다" if compared.beats_control else "대조군을 못 넘는다"
         print(
-            f"\n칸이 늘어 공짜로 오른 몫 (control - base) = {free:+.4f}\n"
-            f"차용이 번 몫 (mixture - control) = {gain:+.4f}"
-            f" · 쌍 단위 승률 {share:.1%}\n"
+            f"\n칸이 늘어 공짜로 오른 몫 (control - base) = {compared.free_gain:+.4f}\n"
+            f"차용이 번 몫 (mixture - control) = {compared.gain:+.4f}"
+            f" ± {compared.standard_error:.4f} · t = {compared.t:+.2f}"
+            f" (문턱 {PAIRED_T_FLOOR:.1f})\n"
+            f"쌍 단위 승률 {compared.win_rate:.1%} — **진단이다** (D-0327)\n"
             f"판정: **{verdict}**\n"
         )
         from hathor.application.evaluate_harmony_output import cell_spread

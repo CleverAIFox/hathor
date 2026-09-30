@@ -367,56 +367,6 @@ class OutputReport:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class SourceComparison:
-    """두 사전 출처를 **같은 쌍·같은 시드로** 견준다. O-29의 본문이다 (닫힘 D-0082)."""
-
-    baseline: OutputReport
-    target: OutputReport
-
-    def __post_init__(self) -> None:
-        # **같은 쌍·같은 시드가 아니면 짝지은 비교가 아니다.** 곡 목록이 다르면
-        # 쌍 추첨이 서로 다른 곡을 가리키고, 그러면 출처 차이인지 쌍 차이인지
-        # 갈리지 않는다 — D-0033이 "쌍을 한 번 뽑아 모든 모드에 쓴다"고 정한 자리다.
-        if self.baseline.reference_count != self.target.reference_count:
-            raise ValueError(
-                "두 출처의 참조곡 수가 다르다: "
-                f"{self.baseline.reference_count} vs {self.target.reference_count}. "
-                "같은 곡 집합으로 맞춰야 짝지은 비교가 성립한다"
-            )
-        if self.baseline.condition != self.target.condition:
-            raise ValueError("두 출처의 조건이 다르다. 같은 조건 객체를 써야 한다")
-
-    @property
-    def gain(self) -> float:
-        return self.target.line("paired").mean_distance - self.baseline.line("paired").mean_distance
-
-    @property
-    def limit_gain(self) -> float:
-        return self.target.line("paired").mean_limit - self.baseline.line("paired").mean_limit
-
-    @property
-    def win_rate(self) -> float:
-        """쌍마다 목표 출처가 더 갈렸는가. **짝지은 비교라 검정력이 높다.**"""
-        target = np.asarray(self.target.line("paired").distances)
-        baseline = np.asarray(self.baseline.line("paired").distances)
-        if target.size == 0 or target.size != baseline.size:
-            return 0.0
-        return float(np.mean(target > baseline))
-
-    @property
-    def transmits_prior_contrast(self) -> bool:
-        """**사전 등록한 판정 규칙이다.** 사전 대비가 커지면 출력 차이도 커지는가.
-
-        1. 목표 출처의 `paired` 거리가 기준선보다 크다.
-        2. **쌍 과반에서** 그렇다 — 같은 쌍·같은 시드로 짝지어 센다.
-
-        둘 다 넘지 못하면 **문턱 추출이 사전 대비를 삼킨 것이며**, 사전을 더
-        뾰족하게 만드는 축(O-27 · D-0074)은 출력에 닿지 않는다.
-        """
-        return self.gain > 0.0 and self.win_rate > 0.5
-
-
 class EvaluateHarmonyOutput:
     """참조곡을 바꿨을 때 출력이 얼마나 갈리는지 잰다.
 

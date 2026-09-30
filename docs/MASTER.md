@@ -2273,7 +2273,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0086 | 귀무선의 0점이 0이 아니었다 | `core/tests/unit/test_evaluate_degree_restriction.py` | 합성 · 실물 1004곡 |
 | D-0087 | 선을 하나 더했더니 다른 선의 수가 바뀌었다 | `core/tests/unit/test_evaluate_harmony_output.py` | 실물 코퍼스 |
 | D-0089 | O-33 도구 | `core/tests/unit/test_evaluate_chromatic_origin.py` | 합성 · 실물 코퍼스 |
-| D-0091 | 차용은 뭉치고 누설은 고르게 번진다 | `core/tests/unit/test_evaluate_chromatic_origin.py` | 합성 |
+| D-0091 | 차용은 뭉치고 누설은 고르게 번진다 | `core/tests/unit/test_evaluate_chromatic_origin.py` | 합성 · 실물 1004곡 (D-0327 확인) |
 | D-0092 | 머리글과 값을 따로 쓰다가 이름표가 밀렸다 | `core/tests/unit/test_harmony_output_cli.py` | 실물 산출물 |
 | D-0094 | 어휘를 넓힌다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 (D-0095 승격 아님) |
 | D-0095 | 어휘를 넓혔는데 번 몫이 없다 | `core/tests/unit/test_evaluate_harmony_output.py` | 실물 1004곡 |
@@ -2472,6 +2472,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0324 | 빚을 부류로 묶으면 묶임이 주장을 가린다 | `core/tests/unit/test_decision_ledger.py::test_빚_표가_기록마다_한_줄이다` | 해당 없음 |
 | D-0325 | 실험용 40곡이 정본 1004곡을 가렸다 | `core/tests/unit/test_harmony_prior_cli.py::test_더_큰_사전이_있으면_신고한다` | 합성 · 실물 40곡 대 1004곡 산출물 |
 | D-0326 | 이미 `--priors`를 준 사람에게 「`--priors`로 경로를 준다」고 했다 | `core/tests/unit/test_cli_roots.py::test_상대_경로는_저장소_루트_기준이다` | 해당 없음 |
+| D-0327 | 판정 규칙이 동전이었다 | `core/tests/unit/test_compare_output.py::test_참_차이가_0이면_거의_다_떨어진다` | 합성 · 실물 1004곡 |
 
 <!-- decision-ledger:end -->
 
