@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 from hathor.domain.services.chroma_drift import DriftObservation, drift_vector
 from hathor.domain.services.harmony_prior import merge_degree_priors
-from hathor.domain.services.stem_sets import MIX_SOURCE
+from hathor.domain.services.stem_sets import DEFAULT_STEM_SET, MIX_SOURCE
 from hathor.domain.value_objects.key import PITCH_CLASSES
 
 if TYPE_CHECKING:
@@ -106,6 +106,19 @@ def keys_candidates(root: Path, stem_set: str) -> list[tuple[Path, int]]:
         except OSError:
             continue
     return found
+
+
+def priors_stem_set(name: str) -> str:
+    """사전을 **어떤 스템 이름으로 찾을까** (D-0326).
+
+    `mix`로 판정하는 명령 셋이 사전은 `other`에서 찾는다 — 전체 믹스에는 분리 산출물이
+    없고 화성 사전은 분리된 쪽에만 쌓이기 때문이다. **이 한 줄이 셋에 복사돼 있었다.**
+
+    `eval time-drift`는 이 바꿔치기를 **안 한다.** 거기서 `--left mix`는 «믹스 관측»이고
+    `other` 사전으로 바꾸면 다른 것을 잰다. 그래서 기본값으로 숨기지 않고, 부르는 쪽이
+    이 함수를 부를지 말지로 말한다.
+    """
+    return DEFAULT_STEM_SET if name == MIX_SOURCE else name
 
 
 def find_keys_store(root: Path, stem_set: str) -> Path | None:

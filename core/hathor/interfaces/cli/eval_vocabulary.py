@@ -12,14 +12,14 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from hathor.domain.services.stem_sets import DEFAULT_STEM_SET, MIX_SOURCE
+from hathor.domain.services.stem_sets import DEFAULT_STEM_SET
 from hathor.infrastructure.keys_jsonl_store import (
-    find_keys_store,
     load_degree_priors,
     load_key_margins,
+    priors_stem_set,
 )
 from hathor.interfaces.cli.registry import Command
-from hathor.interfaces.cli.roots import DEFAULT_OUTPUT_PAIRS
+from hathor.interfaces.cli.roots import DEFAULT_OUTPUT_PAIRS, resolve_priors
 from hathor.interfaces.cli.tables import parse_key, render_table
 from hathor.shared.config.paths import resolve_path
 
@@ -40,14 +40,10 @@ def run_eval_chromatic_origin(args: argparse.Namespace) -> int:
         OriginReport,
     )
     from hathor.application.evaluate_harmony_output import ReferencePrior
-    from hathor.shared.config.paths import repo_root as _root
 
     source = args.stem_set
-    store = args.priors
+    store = resolve_priors(args.priors, priors_stem_set(source))
     if store is None:
-        store = find_keys_store(_root(), source if source != MIX_SOURCE else "other")
-    if store is None or not store.exists():
-        print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
         return 1
 
     table = load_degree_priors(store, source)
@@ -153,18 +149,10 @@ def run_eval_degree_restriction(args: argparse.Namespace) -> int:
         scale_but_discarded,
     )
     from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
-    from hathor.shared.config.paths import repo_root as _root
 
     source = args.stem_set
-    store = args.priors
+    store = resolve_priors(args.priors, priors_stem_set(source))
     if store is None:
-        store = find_keys_store(_root(), source if source != MIX_SOURCE else "other")
-    if store is None or not store.exists():
-        print(
-            "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "
-            "--priors로 경로를 준다.",
-            file=sys.stderr,
-        )
         return 1
 
     table = load_degree_priors(store, source)

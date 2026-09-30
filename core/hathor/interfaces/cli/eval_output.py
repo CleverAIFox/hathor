@@ -10,16 +10,17 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, cast
 
-from hathor.domain.services.stem_sets import DEFAULT_STEM_SET, MIX_SOURCE
+from hathor.domain.services.stem_sets import DEFAULT_STEM_SET
 from hathor.infrastructure.keys_jsonl_store import (
-    find_keys_store,
     load_degree_priors,
+    priors_stem_set,
 )
 from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import (
     DEFAULT_OUTPUT_BARS,
     DEFAULT_OUTPUT_PAIRS,
     DEFAULT_OUTPUT_SEEDS,
+    resolve_priors,
 )
 from hathor.interfaces.cli.tables import parse_key, render_table
 from hathor.shared.config.paths import resolve_path
@@ -118,19 +119,11 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
         sweep_bar_counts,
     )
     from hathor.engines.compose.harmony_generator import vocabulary_roots
-    from hathor.shared.config.paths import repo_root as _root
 
     target = args.stem_set
     baseline = None if args.against.lower() == "none" else args.against
-    store = args.priors
+    store = resolve_priors(args.priors, priors_stem_set(target))
     if store is None:
-        store = find_keys_store(_root(), target if target != MIX_SOURCE else "other")
-    if store is None or not store.exists():
-        print(
-            "사전 산출물을 찾지 못했다. `ingest keys --separate`로 먼저 뽑거나 "
-            "--priors로 경로를 준다.",
-            file=sys.stderr,
-        )
         return 1
 
     tables = {name: load_degree_priors(store, name) for name in {target, baseline} if name}

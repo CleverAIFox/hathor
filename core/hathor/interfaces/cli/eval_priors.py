@@ -15,7 +15,7 @@ from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import STEM_SETS, stems_overlap
 from hathor.infrastructure.json_evaluation_store import JsonEvaluationStore
-from hathor.infrastructure.keys_jsonl_store import find_keys_store, load_drift_observations
+from hathor.infrastructure.keys_jsonl_store import load_drift_observations
 from hathor.interfaces.cli.eval_onsets import ONSETS
 from hathor.interfaces.cli.eval_quality import CHORD_QUALITY
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
@@ -25,6 +25,7 @@ from hathor.interfaces.cli.roots import (
     DEFAULT_FEATURE_DIRNAME,
     DEFAULT_OUTPUT_ROOT,
     DEFAULT_SEARCH_KEY,
+    resolve_priors,
 )
 from hathor.interfaces.cli.tables import render_table
 from hathor.shared.config.paths import resolve_path
@@ -209,7 +210,6 @@ def run_eval_time_drift(args: argparse.Namespace) -> int:
     다시 도는 작업이며, 게이트 없이 그것을 하는 것은 D-0058 계열의 형태다.
     """
     from hathor.application.evaluate_time_drift import GATE_T, EvaluateTimeDrift
-    from hathor.shared.config.paths import repo_root as _root
 
     if stems_overlap(args.left, args.right):
         print(
@@ -219,11 +219,8 @@ def run_eval_time_drift(args: argparse.Namespace) -> int:
         )
         return 2
 
-    store = args.priors
+    store = resolve_priors(args.priors, args.left)
     if store is None:
-        store = find_keys_store(_root(), args.left)
-    if store is None or not store.exists():
-        print("사전 산출물을 찾지 못했다. --priors로 경로를 준다.", file=sys.stderr)
         return 1
 
     observations = load_drift_observations(store, args.left, args.right)

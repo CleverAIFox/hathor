@@ -147,7 +147,7 @@ def test_없는_출처를_주면_비정상_종료한다(tmp_path, capsys):
 
 def test_사전_파일이_없으면_비정상_종료한다(tmp_path, capsys):
     assert main(["eval", "harmony-output", "--priors", str(tmp_path / "없다.jsonl"), *FAST]) == 1
-    assert "찾지 못했다" in capsys.readouterr().err
+    assert "저장소 루트 기준" in capsys.readouterr().err  # D-0326
 
 
 # ------------------------------------------------------------------ 로더
@@ -221,7 +221,7 @@ def test_선법을_바꾸면_버리는_칸이_달라진다(tmp_path, capsys):
 
 def test_제한_손실도_사전_파일이_없으면_비정상_종료한다(tmp_path, capsys):
     assert main(["eval", "degree-restriction", "--priors", str(tmp_path / "없다.jsonl")]) == 1
-    assert "찾지 못했다" in capsys.readouterr().err
+    assert "저장소 루트 기준" in capsys.readouterr().err  # D-0326
 
 
 # ------------------------------------------------------------------ O-33·D-0090 배선
@@ -256,7 +256,7 @@ def test_선법을_바꾸면_치환_짝이_달라진다(tmp_path, capsys):
 
 def test_반음계_정체도_사전이_없으면_비정상_종료한다(tmp_path, capsys):
     assert main(["eval", "chromatic-origin", "--priors", str(tmp_path / "없다.jsonl")]) == 1
-    assert "찾지 못했다" in capsys.readouterr().err
+    assert "저장소 루트 기준" in capsys.readouterr().err  # D-0326
 
 
 def test_신뢰도를_읽는다(tmp_path):

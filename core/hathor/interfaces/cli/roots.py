@@ -83,3 +83,44 @@ def resolve_root(raw: Path | None) -> Path:
     if not value:
         raise SystemExit(f"--root를 지정하거나 {DEFAULT_LIBRARY_ROOT_ENV} 환경변수를 설정해야 한다")
     return Path(value)
+
+
+def resolve_priors(given: Path | None, stem_set: str) -> Path | None:
+    """`--priors`를 풀고 **못 찾으면 왜 못 찾았는지 적는다** (D-0326).
+
+    ### 같은 블록이 넷이었다
+
+    `eval harmony-prior` · `eval time-drift` · `eval chromatic-origin` ·
+    `eval harmony-output`이 **네 번 복사된 다섯 줄**을 들고 있었고, 넷 다 «찾지 못했다»만
+    찍었다. 하나로 모은다 — 넷이면 한 곳만 고쳐지는 날이 온다 (D-0317 · D-0323 · D-0325).
+
+    ### 준 경로가 없으면 **푼 경로**를 찍는다
+
+    `resolve_path`는 상대 경로를 **저장소 루트 기준**으로 푼다 (cwd 아님). `cd core`에서
+    `--priors ../var/ingest/...`를 주면 **저장소 밖**을 가리키고, 예전 메시지는 *"--priors로
+    경로를 준다"*였다 — **이미 준 사람에게 주라고 했다.**
+
+    실제로 그렇게 났다 (D-0326). 화면에 푼 절대 경로가 있었으면 한눈에 보였다.
+    """
+    import sys
+
+    from hathor.infrastructure.keys_jsonl_store import find_keys_store
+    from hathor.shared.config.paths import repo_root
+
+    if given is not None:
+        if given.exists():
+            return given
+        print(
+            f"준 사전 경로에 파일이 없다: {given}\n"
+            "  **상대 경로는 저장소 루트 기준이다** (cwd 아님) —"
+            f" 지금 루트는 {repo_root()}이다.",
+            file=sys.stderr,
+        )
+        return None
+    found = find_keys_store(repo_root(), stem_set)
+    if found is None:
+        print(
+            "사전 산출물이 없다. `ingest keys --separate`로 먼저 뽑거나 --priors로 경로를 준다.",
+            file=sys.stderr,
+        )
+    return found
