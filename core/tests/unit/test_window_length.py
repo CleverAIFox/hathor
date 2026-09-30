@@ -172,3 +172,110 @@ def test_보고가_표와_판정을_찍는다(tmp_path: Path, capsys: pytest.Cap
     assert record["songs"] == 3
     assert record["factor"] == 2
     assert record["stems"][0]["holds"] is True
+
+
+# ------------------------------------------- 폴더를 스스로 고른다 (D-0321)
+
+
+def _folder(root: Path, stamp: str, *, seconds: float, stem: str, names: list[str]) -> Path:
+    """`var/ingest/keys-<stamp>.series`를 깔고 선언까지 쓴다."""
+    from hathor.infrastructure import artifact_manifest
+
+    folder = root / "var" / "ingest" / f"keys-{stamp}.series"
+    plant(folder, names, stem=stem, windows=8, seed=1)
+    artifact_manifest.write(
+        folder,
+        folder.name,
+        {"what": "시험용", "window_seconds": seconds, "stems": [stem]},
+    )
+    return folder
+
+
+def test_폴더를_스스로_고른다(tmp_path: Path) -> None:
+    """**복사해 붙일 수 없는 명령은 안내가 아니다** (D-0321).
+
+    폴더 이름이 실행 시각이라 미리 알 수 없다 — D-0320이 안내에 빈칸을 남겼다.
+    """
+    from hathor.interfaces.cli.eval_window import pick_pair
+
+    names = ["가.flac", "나.flac"]
+    short = _folder(tmp_path, "20260101T000000Z", seconds=1.0, stem="other", names=names)
+    long = _folder(tmp_path, "20260102T000000Z", seconds=2.0, stem="other", names=names)
+    picked = pick_pair(tmp_path)
+    assert picked is not None
+    assert picked == (short, long, 2)
+
+
+def test_스템이_안_겹치면_안_고른다(tmp_path: Path) -> None:
+    """**분리 여부가 다르면 짝이 0이다** (D-0320). 고르고 나서 0을 내면 안 된다."""
+    from hathor.interfaces.cli.eval_window import pick_pair
+
+    _folder(tmp_path, "20260101T000000Z", seconds=1.0, stem="other", names=["가.flac"])
+    _folder(tmp_path, "20260102T000000Z", seconds=2.0, stem="mix", names=["가.flac"])
+    assert pick_pair(tmp_path) is None
+
+
+def test_정수배가_아니면_안_고른다(tmp_path: Path) -> None:
+    """`group_series`가 정수배만 만든다. **1.5배를 2로 반올림하면 다른 것을 잰다.**"""
+    from hathor.interfaces.cli.eval_window import pick_pair
+
+    _folder(tmp_path, "20260101T000000Z", seconds=1.0, stem="other", names=["가.flac"])
+    _folder(tmp_path, "20260102T000000Z", seconds=1.5, stem="other", names=["가.flac"])
+    assert pick_pair(tmp_path) is None
+
+
+def test_못_고르면_폴더_목록을_낸다(tmp_path: Path) -> None:
+    """**«없다»만 찍으면 사람이 자기가 뭘 잘못했는지 찾기 시작한다** (D-0292)."""
+    from hathor.interfaces.cli.eval_window import folder_lines
+
+    assert "`keys-*.series`가 없다" in "\n".join(folder_lines(tmp_path))
+    _folder(tmp_path, "20260101T000000Z", seconds=1.0, stem="other", names=["가.flac"])
+    said = "\n".join(folder_lines(tmp_path))
+    assert "keys-20260101T000000Z.series" in said
+    assert "1초" in said and "other" in said
+    assert "--separate" in said
+
+
+def test_형제_jsonl의_이름도_읽는다(tmp_path: Path) -> None:
+    """**선언 파일은 `window_seconds`, 형제 `jsonl`은 `series_seconds`다** (D-0073 · D-0305).
+
+    하나만 보면 D-0295 이전에 뽑은 폴더가 전부 «선언 없음»이 된다.
+    """
+    from hathor.interfaces.cli.eval_window import window_seconds
+
+    folder = tmp_path / "var" / "ingest" / "keys-20260101T000000Z.series"
+    plant(folder, ["가.flac"], stem="other", windows=4, seed=1)
+    sibling = folder.with_suffix(".keys.jsonl")
+    sibling.write_text(json.dumps({"series_seconds": 1.0}) + "\n", encoding="utf-8")
+    assert window_seconds(folder) == 1.0
+
+
+def test_인자를_안_줘도_돌아간다(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """**이것이 D-0321의 요점이다.** 이름을 몰라도 돌아간다."""
+    import hathor.shared.config.paths as paths
+
+    names = ["가.flac", "나.flac", "다.flac"]
+    short = _folder(tmp_path, "20260101T000000Z", seconds=1.0, stem="other", names=names)
+    long = tmp_path / "var" / "ingest" / "keys-20260102T000000Z.series"
+    from hathor.domain.services.key_estimation import group_series
+    from hathor.infrastructure import artifact_manifest
+    from hathor.infrastructure.chroma_series_store import series_path, write_series
+
+    for name in names:
+        with np.load(series_path(short, name, "other"), allow_pickle=False) as bundle:
+            frame = np.asarray(bundle["series"], dtype=np.float32)
+        write_series(long, name, "other", group_series(frame, 2))
+    artifact_manifest.write(
+        long, long.name, {"what": "시험용", "window_seconds": 2.0, "stems": ["other"]}
+    )
+
+    original = paths.repo_root
+    paths.repo_root = lambda: tmp_path  # type: ignore[assignment]
+    try:
+        code = main(["eval", "window-length", "--out", str(tmp_path / "산출")])
+    finally:
+        paths.repo_root = original  # type: ignore[assignment]
+    assert code == 0
+    printed = capsys.readouterr().out
+    assert "골랐다" in printed
+    assert "창 길이는 분석 인자다" in printed

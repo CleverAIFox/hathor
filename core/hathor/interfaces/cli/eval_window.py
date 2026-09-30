@@ -32,6 +32,10 @@ if TYPE_CHECKING:
 MISSING = "—"
 """못 잰 칸. **`0`을 찍지 않는다** (GR-0.5)."""
 
+SECONDS_KEYS = ("window_seconds", "series_seconds")
+"""창 길이가 적힌 이름 **둘**. 선언 파일은 `window_seconds`, 형제 `jsonl`은
+`series_seconds`다 (D-0073 · D-0305). **하나만 보면 옛 폴더가 «선언 없음»이 된다.**"""
+
 
 def window_seconds(root: Path) -> float | None:
     """폴더가 선언한 창 길이. **없으면 `None`이다** — 배수를 짐작하지 않는다.
@@ -39,16 +43,78 @@ def window_seconds(root: Path) -> float | None:
     **여기 있는 이유는 계층이다** — 선언을 읽는 것은 `infrastructure`의 일이고
     `application`은 그것을 모른다 (`애플리케이션은 구현체를 모른다` 계약).
     """
-    found = series_settings(root).get("window_seconds")
-    if isinstance(found, int | float) and float(found) > 0.0:
-        return float(found)
-    if isinstance(found, str):
-        try:
-            value = float(found)
-        except ValueError:
-            return None
-        return value if value > 0.0 else None
+    settings = series_settings(root)
+    for key in SECONDS_KEYS:
+        found = settings.get(key)
+        if isinstance(found, bool):
+            continue
+        if isinstance(found, int | float) and float(found) > 0.0:
+            return float(found)
+        if isinstance(found, str):
+            try:
+                value = float(found)
+            except ValueError:
+                continue
+            if value > 0.0:
+                return value
     return None
+
+
+def series_folders(root: Path) -> list[Path]:
+    """`var/ingest`의 시계열 폴더 — **새 것부터**. 이름이 타임스탬프라 이름 순이 시간 순이다."""
+    ingest = root / "var" / "ingest"
+    return sorted(ingest.glob("keys-*.series"), reverse=True) if ingest.is_dir() else []
+
+
+def pick_pair(root: Path) -> tuple[Path, Path, int] | None:
+    """맞댈 두 폴더를 스스로 고른다 (D-0321).
+
+    **이름을 사람이 채우게 두지 않는다.** 폴더 이름이 실행 시각이라 미리 알 수 없고,
+    D-0320이 안내에 `<새로 생긴 2초 폴더>`라는 빈칸을 남겼다 — **복사해 붙일 수 없는
+    명령은 안내가 아니다.**
+
+    조건 셋을 다 만족하는 가장 **최근** 쌍을 고른다.
+
+    1. 창 길이가 정수배다 (`group_series`가 정수배만 만든다).
+    2. 스템이 하나라도 겹친다 (분리 여부가 다르면 안 겹친다).
+    3. 둘 다 창 길이를 선언한다.
+
+    **못 고르면 `None`이고 화면이 폴더 목록을 낸다** — 「없다」만 찍으면 읽는 사람이
+    자기가 뭘 잘못했는지 찾기 시작한다 (D-0292와 같은 자리).
+    """
+    known = [
+        (folder, seconds, set(stems(folder)))
+        for folder in series_folders(root)
+        if (seconds := window_seconds(folder)) is not None
+    ]
+    for long_root, long_seconds, long_stems in known:
+        for short_root, short_seconds, short_stems in known:
+            if short_seconds >= long_seconds or not (short_stems & long_stems):
+                continue
+            ratio = long_seconds / short_seconds
+            factor = round(ratio)
+            if factor >= 2 and abs(ratio - factor) < 1e-6:
+                return short_root, long_root, factor
+    return None
+
+
+def folder_lines(root: Path) -> list[str]:
+    """있는 폴더와 그 조건. **못 골랐을 때 눈으로 보고 정하는 표다.**"""
+    found = series_folders(root)
+    if not found:
+        return ["`var/ingest`에 `keys-*.series`가 없다. `ingest keys --series <초>`를 먼저 돌린다"]
+    lines = ["있는 시계열 폴더 (새 것부터):"]
+    for folder in found:
+        seconds = window_seconds(folder)
+        lines.append(
+            f"  {folder.name}  창 {MISSING if seconds is None else f'{seconds:g}초'}"
+            f"  스템 {list(stems(folder)) or MISSING}"
+        )
+    lines.append(
+        "**창 길이가 정수배이고 스템이 겹치는 두 폴더**가 있어야 한다 —"
+        " 분리 여부가 다르면 스템이 안 겹치므로 `--separate`를 같게 주고 다시 뽑는다."
+    )
+    return lines
 
 
 def factor_of(short_root: Path, long_root: Path, given: int | None) -> int | None:
@@ -102,7 +168,18 @@ def _row(match: WindowMatch) -> tuple[object, ...]:
 
 def run_eval_window_length(args: argparse.Namespace) -> int:
     """짧은 창을 묶은 것과 긴 창을 직접 뽑은 것의 거리를 실물에서 낸다 (D-0104)."""
+    from hathor.shared.config.paths import repo_root
+
     short_root, long_root = args.short, args.long
+    if short_root is None or long_root is None:
+        picked = pick_pair(repo_root())
+        if picked is None:
+            print("맞댈 두 폴더를 못 골랐다.", file=sys.stderr)
+            for text in folder_lines(repo_root()):
+                print(f"  {text}", file=sys.stderr)
+            return 2
+        short_root, long_root, _ = picked
+        print(f"골랐다 — 짧은 창 {short_root.name} · 긴 창 {long_root.name}")
     for root in (short_root, long_root):
         if not root.is_dir():
             print(f"시계열 폴더가 없다: {root}", file=sys.stderr)
@@ -163,8 +240,18 @@ def run_eval_window_length(args: argparse.Namespace) -> int:
 def _build_window_length(parser: argparse.ArgumentParser) -> None:
     """`hathor eval window-length` 인자."""
     parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
-    parser.add_argument("--short", type=resolve_path, required=True, help="짧은 창 `keys-*.series`")
-    parser.add_argument("--long", type=resolve_path, required=True, help="긴 창 `keys-*.series`")
+    parser.add_argument(
+        "--short",
+        type=resolve_path,
+        default=None,
+        help="짧은 창 `keys-*.series`. **안 주면 스스로 고른다** (D-0321)",
+    )
+    parser.add_argument(
+        "--long",
+        type=resolve_path,
+        default=None,
+        help="긴 창 `keys-*.series`. **안 주면 스스로 고른다**",
+    )
     parser.add_argument(
         "--factor",
         type=int,
@@ -181,4 +268,13 @@ WINDOW_LENGTH = Command(
 )
 """`eval` 표에 실리는 것. **등재는 `eval_priors.COMMANDS`가 든다** (D-0302와 같은 자리)."""
 
-__all__ = ["WINDOW_LENGTH", "empty_notice", "factor_of", "run_eval_window_length"]
+__all__ = [
+    "WINDOW_LENGTH",
+    "empty_notice",
+    "factor_of",
+    "folder_lines",
+    "pick_pair",
+    "run_eval_window_length",
+    "series_folders",
+    "window_seconds",
+]
