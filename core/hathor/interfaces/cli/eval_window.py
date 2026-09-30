@@ -162,7 +162,7 @@ def _row(match: WindowMatch) -> tuple[object, ...]:
         match.songs,
         MISSING if middle is None else f"{middle:.4f}",
         MISSING if top is None else f"{top:.4f}",
-        MISSING if holds is None else ("선다" if holds else "**흔들린다**"),
+        MISSING if holds is None else ("선다" if holds else "흔들린다"),
     )
 
 
@@ -207,12 +207,14 @@ def run_eval_window_length(args: argparse.Namespace) -> int:
 
     for text in render_table(
         (("스템", "<8"), ("곡", ">5d"), ("중앙거리", ">10"), ("최대거리", ">10"), ("전제", ">10")),
+        # **굵게를 칸에 넣지 않는다** (D-0322). `**흔들린다**`는 12자라 폭 10을 넘어
+        # 옆 칸에 붙고, 판정 줄에서는 f-string의 `**`와 겹쳐 별표가 네 개로 찍혔다.
         [_row(match) for match in found if match.songs],
     ):
         print(f"  {text}")
 
     holds = [match.holds for match in found if match.holds is not None]
-    passed = "창 길이는 분석 인자다" if holds and all(holds) else "**전제가 흔들린다**"
+    passed = "창 길이는 분석 인자다" if holds and all(holds) else "전제가 흔들린다"
     print(f"\n판정: **{passed}**  (최대 거리 < {PRODUCTION_CEILING} · D-0104 · D-0320)\n")
 
     print("--- 읽는 법 ---")

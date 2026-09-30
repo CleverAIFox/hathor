@@ -17,9 +17,13 @@
 
 **x4에서 0.0002와 0.0062는 30배 차이다.** 순음은 안심시키는 쪽으로 틀렸다 (O-25 (5)).
 
-**결론은 전제가 선다는 것이다** — 제품이 쓰는 배수는 `GROUPS = (1, 2, 4)`이고 거기서는
-감산을 켜도 0.008 이하다. 지표 규모 0.2~0.6에 비해 무시할 수준이다. **x8은 아무도 안
-쓴다.** 그래서 **쓰는 배수는 제품 설정으로 조이고, 안 쓰는 배수는 따로 적는다.**
+**그 결론도 틀렸다 (D-0322).** 실물 40곡에서 중앙 0.166~0.355 · 최대 0.585가 나왔다 —
+**30~60배다.** 이 파형은 화음이 4초마다 바뀌어 **한 2초 창 안의 두 1초 창이 거의 같았고**
+세기도 같았다. 실물은 창마다 내용과 세기가 바뀐다 — **실측 구조를 못 담은 자료였다**
+(O-25 (5)).
+
+창마다 바뀌는 파형을 더했다. **그것으로 재면 0.3이 나오므로 예측이 처음부터 달랐다.**
+전제가 깨진 것과 그 원인 셋은 D-0322가 든다.
 """
 
 from __future__ import annotations
@@ -110,15 +114,66 @@ def _gaps(wave: Waveform, factor: int, *, harmonic: float | None = None) -> floa
     return max(0.5 * float(np.abs(grouped[i] - direct[i]).sum()) for i in range(count))
 
 
+def _shifting(seconds: float, roots: tuple[float, ...], seed: int = 3) -> Waveform:
+    """**창마다 화음과 세기가 바뀌는 파형** (D-0322).
+
+    `_chord`·`_rich`는 화음이 `seconds`마다 바뀐다 — `seconds=4.0`이면 한 2초 창 안의 두
+    1초 창이 **거의 같다.** 실물은 그렇지 않고, 그 차이가 전제를 깼다.
+
+    창 하나마다 화음을 바꾸고 **세기를 열 배 오르내린다.** 낮은 쪽이 0.1이다.
+    """
+    generator = np.random.default_rng(seed)
+    parts = []
+    for index, root in enumerate(roots):
+        for step, level in ((0, 1.0), (3, 0.1)):
+            pitch = roots[(index + step) % len(roots)] if step else root
+            count = int(SR)
+            time = np.arange(count) / SR
+            wave = np.zeros(count)
+            for tone in (0, 4, 7):
+                base = pitch * 2 ** (tone / 12)
+                for overtone, weight in ((1, 1.0), (2, 0.5), (3, 0.3), (4, 0.2)):
+                    wave += weight * np.sin(
+                        2 * np.pi * base * overtone * time + generator.uniform(0.0, 2 * np.pi)
+                    )
+            wave = wave / np.abs(wave).max() * level
+            noise = generator.standard_normal(count).astype(np.float32) * 0.02 * level
+            parts.append((wave + noise).astype(np.float32))
+    del seconds
+    return np.asarray(np.concatenate(parts), dtype=np.float32)
+
+
+SHIFTING_FLOOR = 0.2
+"""창마다 바뀌는 파형에서의 **바닥** (D-0322).
+
+실측 중앙이 0.166~0.355였고 이 합성이 0.3 규모를 낸다. **바닥으로 두는 이유는 이것이
+「작아야 한다」가 아니라 「커야 한다」이기 때문이다** — 작아지면 이 자료가 실물 구조를
+다시 못 담게 된 것이고, 그때 전제가 선다고 읽으면 D-0319를 되풀이한다.
+"""
+
+
+def test_창마다_바뀌면_전제가_깨진다():
+    """**D-0319의 합성이 안심시킨 이유가 여기 있다** (D-0322 · O-25 (5)).
+
+    화음이 4초마다 바뀌는 파형에서는 한 2초 창 안의 두 1초 창이 거의 같아 **묶기가
+    거의 정확하다.** 실물은 창마다 바뀌고, 그것을 넣으면 거리가 30배 커진다.
+    """
+    shifting = _gaps(_shifting(1.0, ROOTS), 2)
+    steady = _gaps(_rich(4.0, ROOTS), 2)
+    assert shifting > SHIFTING_FLOOR, f"실물 구조를 못 담았다: {shifting:.4f}"
+    assert shifting > steady * 10.0, "창마다 바뀌는 것이 원인이라는 것을 이 줄이 든다"
+
+
 @pytest.mark.parametrize("factor", [2, 4])
 @pytest.mark.parametrize("maker", [_chord, _rich], ids=["순음", "배음강약"])
-def test_제품_설정에서_묶은_것과_직접_뽑은_것이_같다(factor, maker):
-    """**D-0104의 전제다.** 다르면 "짧게 뽑아 두고 묶는다"가 무너진다 (D-0319).
+def test_창_안이_같으면_묶기가_거의_정확하다(factor, maker):
+    """**창 안의 두 창이 같을 때만 그렇다** (D-0319 · D-0322).
 
     **배음 감산을 켠 채로 잰다** — 제품이 그렇게 돈다. 끄고 재면 감산이 묶기와
     교환되는지를 안 보게 되고, 그것이 첫 판이 놓친 자리다.
 
-    정확히 0은 아니다 — `cq_chroma`가 대역마다 다른 창을 쓰고 프레임 수로 나눈다.
+    **이 수를 D-0104의 전제로 읽으면 안 된다.** 화음이 4초마다 바뀌는 파형이라 한 2초
+    창 안의 두 1초 창이 거의 같다 — 실물은 그렇지 않고 거리가 0.3까지 간다 (D-0322).
     """
     found = _gaps(maker(4.0, ROOTS), factor, harmonic=None)
     assert found < PRODUCTION_CEILING, f"묶기가 어긋난다: {found:.4f}"

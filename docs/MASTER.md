@@ -2284,7 +2284,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0100 | 이어받기가 조건을 다 보지 않았다 | `core/tests/unit/test_ingest_resume.py` | 실물 1004곡 |
 | D-0102 | 순서 지표를 먼저 만든다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 200곡 64마디 순서 판정 (D-0312 확인) |
 | D-0103 | 자기 전이를 빼면 구간 길이가 사라진다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 1004곡 크로마 시계열 (D-0317 확인) |
-| D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` | 합성 |
+| D-0104 | 창 길이를 안 고른다 | `core/tests/unit/test_gate_docs_and_compose.py` | 합성 · 실물 40곡 스템 넷 (D-0322 확인) |
 | D-0105 | 크로마 시계열 추출기 | `core/tests/unit/test_chroma_series.py` | 합성 · 실물 1004곡 230096창 크로마 시계열 (D-0305 확인) |
 | D-0106 | 시계열을 조합마다 뽑고 있었다 | `core/tests/unit/test_chroma_series.py` | 실물 기기 |
 | D-0107 | 전이 사전 | `core/tests/unit/test_transition_prior.py` | 합성 · 실물 1004곡 시계열 전이 사전 (D-0312 확인) |
@@ -2464,9 +2464,10 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0316 | 빚 표가 틀린 명령을 가리키고 있었다 | `core/tests/unit/test_segment_invariance.py::test_늘여도_대각선을_버린_사전은_안_움직인다` | 합성 · 실물 200곡 64마디 유지 판정 · 자기 전이 훑기 12칸 |
 | D-0317 | 빚 넷을 갚았다 | `core/tests/unit/test_evaluate_onsets.py::test_배수_격차를_버리지_않는다` | 합성 · 실물 1004곡 온셋 포락선 · 1004곡 크로마 시계열 |
 | D-0318 | 집계 수준이 판정을 뒤집는다 | `core/tests/unit/test_evaluate_onsets.py::test_곡_평균_위상은_원점이_다르면_균등해진다` | 합성 · 실물 1004곡 온셋 포락선 |
-| D-0319 | 전제를 지키는 검사가 제품이 안 쓰는 설정으로 돌고 있었다 | `core/tests/unit/test_chroma_series.py::test_제품_설정에서_묶은_것과_직접_뽑은_것이_같다` | 합성 |
+| D-0319 | 전제를 지키는 검사가 제품이 안 쓰는 설정으로 돌고 있었다 | `core/tests/unit/test_chroma_series.py::test_창_안이_같으면_묶기가_거의_정확하다` | 합성 |
 | D-0320 | 뽑기 명령을 「닫힌다」의 자리에 적었다 | `core/tests/unit/test_window_length.py::test_묶어서_만든_긴_창은_거리가_0이다` | 합성 |
 | D-0321 | 복사해 붙일 수 없는 명령은 안내가 아니다 | `core/tests/unit/test_window_length.py::test_폴더를_스스로_고른다` | 해당 없음 |
+| D-0322 | D-0104의 전제가 실물에서 깨졌다 | `core/tests/unit/test_chroma_series.py::test_창마다_바뀌면_전제가_깨진다` | 합성 · 실물 40곡 스템 넷 |
 
 <!-- decision-ledger:end -->
 
