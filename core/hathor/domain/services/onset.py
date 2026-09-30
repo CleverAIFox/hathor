@@ -260,25 +260,19 @@ class Beat:
     나란한 장·단조를 1등만 남겨 지우지 않기로 한 것과 같은 자리다 (D-0054).
     """
 
-    peak_ratio: float = 0.0
-    """자기상관 봉우리가 **평균보다 몇 배 높은가** (D-0314).
-
-    **두 여유는 「어느 주기를 골랐나」를 말하고 이것이 「박이 있는가」를 말한다.** 둘을
-    섞으면 안 된다 — 진짜 주기는 배수 지연에서도 봉우리가 서므로 `margin`이 **오히려
-    작아진다.** 실측에서 120BPM 클릭 트랙의 `margin`이 섞은 잡음보다 낮았다.
-
-    `max / |평균|`이다. 포락선이 평균 제거돼 있어 자기상관이 음수를 오가므로 절댓값으로
-    나눈다. 합성에서 박 있음 7.7~8.1 · 섞음 2.1~3.3 · **박 없음 3.0 대 3.9**로
-    이득이 음수가 된다 — **질 수 있는 지표다** (O-25 (2)).
-    """
-
     @property
     def tempo_bpm(self) -> float:
         return 60.0 / self.period_seconds
 
 
-def beat_period(envelope: Sequence[float] | Envelope, hop_seconds: float) -> Beat | None:
-    """박 추정. **못 고르면 `None`이다.**"""
+def _lag_scores(
+    envelope: Sequence[float] | Envelope, hop_seconds: float
+) -> tuple[Envelope, int] | None:
+    """빠르기 범위 안 지연들의 자기상관과 첫 지연. **못 재면 `None`이다.**
+
+    **길이로 나누지 않는다.** 나누면 긴 지연이 밀려 올라가 배수 오류가 난다 —
+    120BPM·잡음 0.1에서 60BPM을 골랐고 안 나누니 회복됐다 (D-0143 실측).
+    """
     if hop_seconds <= 0.0:
         raise ValueError("홉 길이는 양수여야 한다")
     values = _normalise(envelope)
@@ -290,11 +284,67 @@ def beat_period(envelope: Sequence[float] | Envelope, hop_seconds: float) -> Bea
     if high <= low:
         return None
 
-    # **길이로 나누지 않는다.** 나누면 긴 지연이 밀려 올라가 배수 오류가 난다 —
-    # 120BPM·잡음 0.1에서 60BPM을 골랐고 안 나누니 회복됐다 (D-0143 실측).
     scores = np.array([float(np.dot(values[:-lag], values[lag:])) for lag in range(low, high + 1)])
     if not np.any(scores > 0.0):
         return None
+    return scores, low
+
+
+def beat_strength(envelope: Sequence[float] | Envelope, hop_seconds: float) -> float | None:
+    """**박이 있는가.** 자기상관 봉우리가 평균의 몇 배인가이며 못 재면 `None`이다.
+
+    ### 이것과 `Beat`의 두 여유는 다른 것을 묻는다
+
+    `margin`·`octave_margin`은 **「어느 주기를 골랐나」**이고 이것이 **「박이 있는가」**다.
+    섞으면 거꾸로 간다 — 진짜 주기는 배수 지연에서도 봉우리가 서므로 `margin`이 **오히려
+    작아진다.** 120BPM 클릭 트랙의 `margin` 0.0262가 섞은 잡음의 0.1729보다 낮았다 (D-0314).
+
+    ### 수준이 아니라 **변화**에서 잰다 (D-0315)
+
+    **포락선을 1차 차분한 뒤 잰다.** 안 하면 곡의 느린 강약(절·후렴·페이드)이 지연 전체에
+    넓은 언덕을 만들어 **분모를 부풀리고**, 그러면 박이 있는 곡이 섞은 것보다 낮게 나온다.
+
+    D-0314가 이 값을 차분 없이 쓴 채 실물 1004곡에 걸었고 **실측 2.782 · 섞음 3.137 ·
+    짝지은 이득 -0.354 (t = -6.92)**가 나왔다. 클릭 트랙에 20초 주기 강약을 입히자
+    합성에서 그대로 재현됐다 — 이득이 +22.1에서 **-0.74**로 뒤집힌다.
+
+    | 합성 40곡 | 차분 없음 | **차분** |
+    |---|---|---|
+    | 클릭 · 강약 없음 | +22.13 | +21.24 |
+    | 클릭 · 20초 강약 | **-1.38** | +18.54 |
+    | 클릭 · 15초 계단 | **-0.90** | +19.27 |
+    | 잡음 · 강약 없음 | -0.16 | -0.19 |
+    | 잡음 · 20초 강약 | **-2.20** | -0.15 |
+
+    **차분은 손잡이가 아니다.** 「박은 수준이 아니라 변화다」이고 폭·차수에 고를 값이 없다.
+
+    ### 이 자가 무엇을 못 가르는가
+
+    **빠르기 범위 아래의 주기적 강약은 배음으로 걸린다.** 박 없는 잡음에 1.5초(40BPM)
+    주기 강약을 넣으면 이득 +1.56 (t = 9.59)으로 문턱을 넘는다 — 0.75초·0.5초가 범위
+    안이라서다. **그것은 오검출이 아니라 「주기가 있다」이며 「박이 있다」보다 넓다.**
+    3초 주기에서 t = 5.51, 20초에서 t = -0.15로 **범위에서 멀어질수록 사라진다.**
+    """
+    values = np.asarray(envelope, dtype=np.float64)
+    if values.ndim != 1:
+        raise ValueError("온셋 포락선은 1차원이어야 한다")
+    found = _lag_scores(np.diff(values), hop_seconds)
+    if found is None:
+        return None
+    scores, _ = found
+    spread = float(np.abs(scores).mean())
+    return float(scores.max() / spread) if spread > 0.0 else None
+
+
+def beat_period(envelope: Sequence[float] | Envelope, hop_seconds: float) -> Beat | None:
+    """박 추정. **못 고르면 `None`이다.**
+
+    **「박이 있는가」는 여기서 안 낸다** — `beat_strength`가 낸다 (D-0314 · D-0315).
+    """
+    found = _lag_scores(envelope, hop_seconds)
+    if found is None:
+        return None
+    scores, low = found
 
     best = int(np.argmax(scores))
     ranked = np.sort(scores)[::-1]
@@ -302,16 +352,15 @@ def beat_period(envelope: Sequence[float] | Envelope, hop_seconds: float) -> Bea
     top = float(ranked[0])
     margin = (top - second) / top if top > 0.0 else 0.0
     lag = low + best
+    high = low + scores.size - 1
     rival = max(
         (float(scores[index - low]) for index in (lag // 2, lag * 2) if low <= index <= high),
         default=0.0,
     )
-    spread = float(np.abs(scores).mean())
     return Beat(
         period_seconds=(lag + _peak_offset(scores, best)) * hop_seconds,
         margin=margin,
         octave_margin=(top - rival) / top if top > 0.0 else 0.0,
-        peak_ratio=top / spread if spread > 0.0 else 0.0,
     )
 
 

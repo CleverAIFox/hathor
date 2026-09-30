@@ -29,6 +29,15 @@ D-0300이 화음 품질에서 순환 **회전**을 같은 이유로 버렸다. *
 D-0311에서 **음성 대조가 스스로 판정 규칙을 통과했다.** 같은 일이 여기서도 날 수 있으므로
 처음부터 곡별로 뺀다 — 같은 곡의 `실측` 봉우리에서 `시간 섞음` 봉우리를 뺀 값의 평균과
 `t`, 그리고 곡승률.
+
+### 음성 대조가 실측을 **이기면** 그것은 결과가 아니라 고장 신호다 (D-0315)
+
+**구조를 지운 자료가 구조를 가진 자료를 이길 수는 없다.** 이기면 자가 구조 아닌 것을
+재고 있는 것이다. 그래서 판정이 셋이다 — 담는다 · 말할 수 없다 · **자가 고장났다.**
+
+첫 실물 1004곡이 정확히 그것이었다: 실측 2.782 · 섞음 3.137 · 이득 **-0.354** (t = -6.92).
+원인은 곡의 **느린 강약**이 분모를 부풀린 것이고, `beat_strength`가 포락선을 차분해
+고쳤다. **그때 「박이 없다」로 읽었으면 뽑기 경로 넷을 버릴 뻔했다.**
 """
 
 from __future__ import annotations
@@ -38,7 +47,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from hathor.domain.services.onset import TEMPO_RANGE, beat_period, event_scale
+from hathor.domain.services.onset import TEMPO_RANGE, beat_period, beat_strength, event_scale
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -76,11 +85,14 @@ class TrackBeat:
 
 @dataclass(frozen=True, slots=True)
 class BeatLine:
-    """한 선의 곡별 **봉우리 뾰족함** (`Beat.peak_ratio`).
+    """한 선의 곡별 **봉우리 뾰족함** (`onset.beat_strength`).
 
     **`margin`을 쓰면 거꾸로 간다** (D-0314). 진짜 주기는 배수 지연에서도 봉우리가 서므로
     1등과 2등의 차가 **작아진다** — 120BPM 클릭 트랙에서 `margin` 0.0262가 섞은 잡음의
     0.1729보다 낮았다. 두 여유는 «어느 주기를 골랐나»이고 뾰족함이 «박이 있는가»다.
+
+    **뾰족함은 포락선의 차분에서 잰다** (D-0315). 수준에서 재면 곡의 느린 강약이 분모를
+    부풀려 실물에서 뒤집힌다 — 근거와 합성 표는 `beat_strength`가 든다.
     """
 
     label: str
@@ -149,8 +161,22 @@ class BeatGain:
         """
         return self.gain > 0.0 and self.t_statistic > BEAT_FLOOR and self.win_rate > 0.5
 
+    @property
+    def ruler_broken(self) -> bool:
+        """**음성 대조가 실측을 이겼다** — 결과가 아니라 고장 신호다 (D-0315).
+
+        `시간 섞음`은 박 구조를 지운 자료다. 구조가 없는 쪽이 있는 쪽보다 **뾰족할
+        이유가 없다.** 그런데도 문턱을 넘겨 이기면 자가 재는 것이 박이 아니다.
+
+        «담는다고 말할 수 없다»와 **갈라 찍어야 한다.** 첫 실물 1004곡에서 이득이
+        -0.354 (t = -6.92)였고 그것을 «박이 없다»로 읽으면 **뽑기 경로 넷을 버린다.**
+        실제 원인은 곡의 느린 강약이었고 자를 고치니 회복됐다.
+        """
+        return self.aligned and self.gain < 0.0 and self.t_statistic < -BEAT_FLOOR
+
     def as_record(self) -> dict[str, object]:
         return {
+            "ruler_broken": self.ruler_broken,
             "gain": round(self.gain, 6),
             "standard_error": round(self.standard_error, 6),
             "t_statistic": round(self.t_statistic, 4),
@@ -189,12 +215,16 @@ def measure(
 
     **못 고르면 세기가 0.0이다.** 선끼리 곡을 짝지어 빼야 하므로 길이를 맞춘다 —
     빼는 쪽에서 곡을 버리면 두 선의 곡 집합이 갈린다.
+
+    **뾰족함과 주기를 다른 함수에서 받는다** (D-0315). 뾰족함은 차분에서 재고 주기는
+    포락선 그대로에서 잰다 — D-0143이 검증한 주기 추정을 건드리지 않기 위해서다.
     """
+    strength = beat_strength(envelope, hop_seconds)
     beat = beat_period(envelope, hop_seconds)
     scale = event_scale(bands, hop_seconds) if bands is not None else None
-    if beat is None:
+    if strength is None or beat is None:
         return 0.0, False, 0.0, scale
-    return beat.peak_ratio, True, beat.octave_margin, scale
+    return strength, True, beat.octave_margin, scale
 
 
 def line(

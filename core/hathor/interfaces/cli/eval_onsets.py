@@ -22,6 +22,28 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def warnings(gain: BeatGain) -> list[str]:
+    """자가 고장났다고 신고할 것이 있는가 (D-0315).
+
+    **`eval chord-quality`의 `warnings(stem)`과 같은 자리다** — 표시 계층이 계산하지
+    않으므로 판정은 `BeatGain`이 들고, 여기서는 **무엇을 화면에 적을지**만 정한다.
+    """
+    if not gain.ruler_broken:
+        return []
+    return [
+        "  ⚠ **음성 대조가 실측을 이겼다.** 박 구조를 지운 자료가 더 뾰족할 수는\n"
+        "    없으므로 이것은 «박이 없다»가 아니라 **자가 박이 아닌 것을 재고 있다**는\n"
+        "    뜻이다 (D-0315). 첫 실물 1004곡이 그랬고 원인은 곡의 느린 강약이었다."
+    ]
+
+
+def verdict(gain: BeatGain) -> str:
+    """판정 한 줄. **셋이다** — 담는다 · 말할 수 없다 · 고장 (D-0315)."""
+    if gain.ruler_broken:
+        return "자가 고장났다 — 음성 대조가 이겼다"
+    return "포락선이 박을 담는다" if gain.carries_beat else "담는다고 말할 수 없다"
+
+
 def _resolve(args: argparse.Namespace) -> Path | None:
     from hathor.shared.config.paths import repo_root
 
@@ -71,13 +93,18 @@ def run_eval_onsets(args: argparse.Namespace) -> int:
         [("실측-섞음", gain.gain, gain.standard_error, gain.t_statistic, gain.win_rate)],
     ):
         print(f"  {text}")
-    passed = "포락선이 박을 담는다" if gain.carries_beat else "담는다고 말할 수 없다"
-    print(f"\n판정: **{passed}**  (짝지은 이득 · 문턱 t > {BEAT_FLOOR:.0f} · D-0314)\n")
+    for notice in warnings(gain):
+        print(notice)
+    print(f"\n판정: **{verdict(gain)}**  (짝지은 이득 · 문턱 |t| > {BEAT_FLOOR:.0f} · D-0315)\n")
 
     print("--- 읽는 법 ---")
     print("**뾰족함이 지표다** — 자기상관 봉우리가 평균보다 몇 배 높은가. `margin`을 쓰면")
     print("**거꾸로 간다**: 진짜 주기는 배수 지연에서도 봉우리가 서므로 1등과 2등의 차가")
     print("작아진다. 120BPM 클릭 트랙에서 `margin`이 섞은 잡음보다 낮았다 (D-0314).")
+    print("**포락선을 차분한 뒤 잰다** (D-0315) — 안 하면 곡의 느린 강약이 지연 전체에")
+    print("넓은 언덕을 만들어 분모를 부풀린다. 차분 없이 잰 첫 실물에서 실측 2.782가")
+    print("섞음 3.137보다 **낮았다.** 클릭 트랙에 20초 강약을 입히니 합성에서 재현됐다.")
+    print("**음성 대조가 실측을 이기면 고장이다** — 구조를 지운 쪽이 이길 수는 없다.")
     print("**`시간 섞음`이 음성 대조다** — 프레임 순서만 섞어 박 구조를 없애고 값 분포는")
     print("남긴다. **`위상 돌림`은 귀무가 아니다**: 자기상관이 순환 이동에 거의 불변이라")
     print("실측과 같은 값이 나온다. 표에 두는 것은 **그것을 확인하라고**이며 판정은 안 든다.")
@@ -122,4 +149,4 @@ ONSETS = Command(
 """`eval` 표에 실리는 것. **등재는 `eval_priors.COMMANDS`가 든다** — `main.py`가 못에
 박혀 있어 묶음 자리가 없다 (D-0302와 같은 자리)."""
 
-__all__ = ["ONSETS", "run_eval_onsets"]
+__all__ = ["ONSETS", "run_eval_onsets", "verdict", "warnings"]
