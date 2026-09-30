@@ -47,6 +47,8 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from decision_ledger import evidence_base
+
 ROOT = Path(__file__).resolve().parents[1]
 
 LIVING = ("README.md", "docs/MASTER.md", "docs/PLAN.md")
@@ -238,8 +240,12 @@ def ledger_rows() -> int:
 
 
 def synthetic_rows() -> int:
-    """대장에서 **`자료 합성`으로만 선 판단**의 수 (D-0265). PLAN §3이 이 수를 든다."""
-    return sum(1 for source in _ledger() if source == "합성")
+    """대장에서 **`자료 합성`으로만 선 판단**의 수 (D-0265). PLAN §3이 이 수를 든다.
+
+    **`(D-xxxx 승격 아님)` 꼬리표가 붙어도 여전히 합성이다** (D-0323). 그 꼬리표는
+    「뒤 판이 안 올린다」는 판단이지 **자료가 실물이 됐다는 뜻이 아니다** — 떼고 센다.
+    """
+    return sum(1 for source in _ledger() if evidence_base(source) == "합성")
 
 
 def unknown_reproductions() -> int:

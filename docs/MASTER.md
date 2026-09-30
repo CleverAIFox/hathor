@@ -2275,7 +2275,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0089 | O-33 도구 | `core/tests/unit/test_evaluate_chromatic_origin.py` | 합성 · 실물 코퍼스 |
 | D-0091 | 차용은 뭉치고 누설은 고르게 번진다 | `core/tests/unit/test_evaluate_chromatic_origin.py` | 합성 |
 | D-0092 | 머리글과 값을 따로 쓰다가 이름표가 밀렸다 | `core/tests/unit/test_harmony_output_cli.py` | 실물 산출물 |
-| D-0094 | 어휘를 넓힌다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 |
+| D-0094 | 어휘를 넓힌다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 (D-0095 승격 아님) |
 | D-0095 | 어휘를 넓혔는데 번 몫이 없다 | `core/tests/unit/test_evaluate_harmony_output.py` | 실물 1004곡 |
 | D-0096 | 8마디에서 안 보인다고 없는 것이 아니다 | `core/tests/unit/test_evaluate_harmony_output.py` | 합성 · 실물 1004곡 |
 | D-0097 | O-36을 닫는다 | `core/tests/unit/test_arrangement.py` | 실물 1004곡 |
@@ -2351,7 +2351,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0192 | 강제자를 적고 안 지켰다 | `core/tests/unit/test_tables.py` | 실물 저장소 |
 | D-0193 | 결정 대장이 낡아 있었다 | `core/tests/unit/test_check_decisions.py::test_색인을_만들지_않는다` | 실물 저장소 |
 | D-0196 | `make apply`가 넉 달째 죽어 있었다 | `core/tests/unit/test_doc_fsck.py::test_배선이_없는_스크립트를_부르면_잡는다` | 실물 저장소 |
-| D-0197 | 선법별 지표에는 선법별 바닥을 댄다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_선법별_바닥이_전체_바닥과_다르다` | 합성 |
+| D-0197 | 선법별 지표에는 선법별 바닥을 댄다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_선법별_바닥이_전체_바닥과_다르다` | 합성 (D-0201 승격 아님) |
 | D-0198 | `--check`가 검사를 안 하고 썼다 | `core/tests/unit/test_check_decisions.py::test_check가_대장을_쓰지_않는다` | 실물 저장소 |
 | D-0199 | `.env`를 읽는 파서가 둘이었다 | `core/tests/unit/test_paths.py::test_셸이_env를_따로_가르지_않는다` | 합성 |
 | D-0200 | 죽은 손잡이 하나와, 모든 표가 어긋나 있었다 | `core/tests/unit/test_tables.py::test_한글_머리글이_값과_어긋나지_않는다` | 실물 저장소 |
@@ -2449,7 +2449,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0300 | O-64가 적은 측정이 원리적으로 불가능하다 | `core/tests/unit/test_harmony_quality.py::test_다이어토닉_7음만_나오는_음정이_없다` | 합성 · 실물 균등난수 2만 창(편향 실측) · 합성 화음 창(판정 확인) · 코퍼스 실측은 미실행 |
 | D-0301 | 규약을 인용해서 일을 안 했다 | `core/tests/unit/test_check_decisions.py::test_자료_확인은_뒤_번호만_가리킨다` | 해당 없음 |
 | D-0302 | 화음 품질 첫 실측 | `core/tests/unit/test_chord_quality_confounds.py::test_번짐만으로_생긴_m7은_두_자에서_뒤집힌다` | 합성 · 실물 1004곡 230096창 (`other`) · 교란 판정은 합성 두 코퍼스 |
-| D-0303 | 「커지면 X」에는 귀무 하나로 모자란다 | `core/tests/unit/test_chord_quality_confounds.py::test_스템별_경고가_갈린다` | 합성 |
+| D-0303 | 「커지면 X」에는 귀무 하나로 모자란다 | `core/tests/unit/test_chord_quality_confounds.py::test_스템별_경고가_갈린다` | 합성 (D-0304 승격 아님) |
 | D-0304 | 강제자를 여러 줄로 적었더니 파서 셋이 다 놓쳤다 | `core/tests/unit/test_decision_ledger.py::test_여러_줄_강제자를_읽는다` | 실물 대장 238행 · 기록 303건 |
 | D-0305 | O-64가 닫힌다 | `core/tests/unit/test_chord_quality_confounds.py::test_선언이_없으면_형제_jsonl에서_창_길이를_읽는다` | 실물 1004곡 230096창 (`other` · `mix`) · 검색 부트스트랩 1000회 |
 | D-0306 | 가짜를 만드는 쌍이 품질마다 다른데 하나로만 확인했다 | `core/tests/unit/test_chord_quality_confounds.py::test_섞임이_만든_품질은_품질마다_뒤집힌다` | 합성 · 실물 섞임 네 쌍 대조 · 판정 대상은 1004곡 230096창 |
@@ -2459,15 +2459,16 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0310 | 없는 명령을 또 줬다 | `core/tests/unit/test_doc_commands.py::test_현재형_문서의_명령이_실재한다` | 실물 1004곡 사전 · 8마디 출력 쌍 100 · 현재형 문서 3개 전수 |
 | D-0311 | 음성 대조가 스스로 판정 규칙을 통과했다 | `core/tests/unit/test_evaluate_order_conditioning.py::test_음성_대조가_스스로_판정_규칙을_통과할_수_있다` | 실물 200곡 64마디 · 전이 있음/없음 두 선 |
 | D-0313 | 「갚는 법」이 없는 도구를 가리키고 있었다 | `core/tests/unit/test_doc_commands.py::test_현재형_문서의_명령이_실재한다` | 실물 등재 명령 28개 전수 · 대장 246행 |
-| D-0314 | 온셋 판정 도구를 지었다 | `core/tests/unit/test_evaluate_onsets.py::test_박이_있으면_판정이_참이다` | 합성 |
+| D-0314 | 온셋 판정 도구를 지었다 | `core/tests/unit/test_evaluate_onsets.py::test_박이_있으면_판정이_참이다` | 합성 (D-0315 승격 아님) |
 | D-0315 | 자가 실물에서 고장났다 | `core/tests/unit/test_evaluate_onsets.py::test_차분을_빼면_자가_뒤집힌다` | 합성 · 실물 1004곡 온셋 포락선 |
 | D-0316 | 빚 표가 틀린 명령을 가리키고 있었다 | `core/tests/unit/test_segment_invariance.py::test_늘여도_대각선을_버린_사전은_안_움직인다` | 합성 · 실물 200곡 64마디 유지 판정 · 자기 전이 훑기 12칸 |
 | D-0317 | 빚 넷을 갚았다 | `core/tests/unit/test_evaluate_onsets.py::test_배수_격차를_버리지_않는다` | 합성 · 실물 1004곡 온셋 포락선 · 1004곡 크로마 시계열 |
 | D-0318 | 집계 수준이 판정을 뒤집는다 | `core/tests/unit/test_evaluate_onsets.py::test_곡_평균_위상은_원점이_다르면_균등해진다` | 합성 · 실물 1004곡 온셋 포락선 |
-| D-0319 | 전제를 지키는 검사가 제품이 안 쓰는 설정으로 돌고 있었다 | `core/tests/unit/test_chroma_series.py::test_창_안이_같으면_묶기가_거의_정확하다` | 합성 |
-| D-0320 | 뽑기 명령을 「닫힌다」의 자리에 적었다 | `core/tests/unit/test_window_length.py::test_묶어서_만든_긴_창은_거리가_0이다` | 합성 |
+| D-0319 | 전제를 지키는 검사가 제품이 안 쓰는 설정으로 돌고 있었다 | `core/tests/unit/test_chroma_series.py::test_창_안이_같으면_묶기가_거의_정확하다` | 합성 (D-0322 승격 아님) |
+| D-0320 | 뽑기 명령을 「닫힌다」의 자리에 적었다 | `core/tests/unit/test_window_length.py::test_묶어서_만든_긴_창은_거리가_0이다` | 합성 (D-0322 승격 아님) |
 | D-0321 | 복사해 붙일 수 없는 명령은 안내가 아니다 | `core/tests/unit/test_window_length.py::test_폴더를_스스로_고른다` | 해당 없음 |
 | D-0322 | D-0104의 전제가 실물에서 깨졌다 | `core/tests/unit/test_chroma_series.py::test_창마다_바뀌면_전제가_깨진다` | 합성 · 실물 40곡 스템 넷 |
+| D-0323 | 「아니다」로만 찬 명단은 아무도 안 읽는다 | `core/tests/unit/test_decision_ledger.py::test_승격_아님을_적으면_명단에서_나간다` | 해당 없음 |
 
 <!-- decision-ledger:end -->
 

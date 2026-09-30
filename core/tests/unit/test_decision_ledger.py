@@ -94,3 +94,64 @@ def test_지금_대장에_최근_판이_전부_있다() -> None:
     for identifier, _, body in ledger.records_with_body(text):
         if ledger.keeper_text(body):
             assert identifier in listed, f"{identifier}의 강제자가 대장에 없다"
+
+
+# ------------------------------------------ 승격 아님 꼬리표 (D-0317 · D-0323)
+
+
+def marked(number: int, source: str, updated: int | None = None) -> str:
+    """`자료` 칸과 갱신 배지를 가진 기록 하나."""
+    badge = f"> **갱신됨 — D-{updated:04d}.** 무엇을 찾았다.\n\n" if updated else ""
+    return (
+        f"\n---\n\n## D-{number:04d}. 제목 {number}\n\n{badge}"
+        "- **배경**: 무엇이 있었다.\n\n"
+        f"자료  {source}\n"
+    )
+
+
+def test_승격_아님을_적으면_명단에서_나간다() -> None:
+    """**「아니다」로만 찬 명단은 아무도 안 읽는다** (D-0323).
+
+    첫 판에서 다섯이던 것이 두 판 만에 일곱이 됐다 — 뒤 판이 앞 판을 뒤집을 때마다
+    한 줄이 영원히 쌓인다.
+    """
+    text = HEAD + marked(100, "합성", updated=200) + marked(200, "실물 1004곡")
+    rows = ledger.scan_records(text)
+    assert evidence.payable(rows) == ["D-0100 ← D-0200"]
+
+    judged = HEAD + marked(100, "합성 (D-0200 승격 아님)", updated=200) + marked(200, "실물 1004곡")
+    assert evidence.payable(ledger.scan_records(judged)) == []
+
+
+def test_꼬리표가_붙어도_합성으로_센다() -> None:
+    """**꼬리표는 「뒤 판이 안 올린다」이지 「실물이 됐다」가 아니다** (D-0323).
+
+    합성 수가 줄면 빚이 갚인 것처럼 보이고 PLAN이 그 수를 든다.
+    """
+    assert ledger.EVIDENCE_VALUES.match("합성 (D-0200 승격 아님)")
+    assert ledger.evidence_base("합성 (D-0200 승격 아님)") == "합성"
+    assert ledger.evidence_base("합성 · 실물 40곡") == "합성 · 실물 40곡"
+    # **세는 쪽이 같은 정본을 쓴다** — 두 벌이 되면 한쪽만 고치는 날이 온다.
+    import doc_fsck
+
+    assert doc_fsck.evidence_base is ledger.evidence_base
+
+
+def test_꼬리표도_뒤_번호여야_한다() -> None:
+    """`(D-xxxx 확인)`과 같은 규율이다 (D-0301 · D-0323). 앞 번호는 갱신할 수 없다."""
+    bad = HEAD + marked(200, "합성 (D-0100 승격 아님)") + marked(100, "실물 1004곡")
+    problems = evidence.check_evidence(ledger.scan_records(bad))
+    assert any("앞 번호다" in problem for problem in problems)
+
+    good = HEAD + marked(100, "합성 (D-0200 승격 아님)") + marked(200, "실물 1004곡")
+    assert evidence.check_evidence(ledger.scan_records(good)) == []
+
+
+def test_지금_명단이_비어_있다() -> None:
+    """**모든 줄이 판단됐다는 뜻이다** (D-0323).
+
+    0이 목표가 아니라 **판단을 기다리는 줄만 남는 것**이 목표다 — 새 합성 판을 뒤
+    실물 판이 갱신하면 다시 한 줄이 선다.
+    """
+    rows = ledger.scan_records(DECISIONS.read_text(encoding="utf-8"))
+    assert evidence.payable(rows) == []

@@ -63,13 +63,18 @@ def test_합성만으로_선_강제자_수가_대장과_같다() -> None:
 
     대장 201건 중 자료 칸이 `합성`인 것이 몇인가. 이 수가 PLAN의 주장과 어긋나면
     **둘 중 하나가 낡았고, 낡은 쪽은 사람이 읽는 쪽이다.**
+
+    **꼬리표를 떼는 것은 `decision_ledger.evidence_base`가 든다** (D-0323). 이 식이 여기
+    한 벌 더 있었고 `합성 (D-xxxx 승격 아님)`이 생기자 **열이 넷으로 보였다** — 세 번째
+    사본이었다.
     """
+    base = tool_module("decision_ledger").evidence_base
     master = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
     block = master.split("<!-- decision-ledger:begin -->")[1].split("<!-- decision-ledger:end -->")[
         0
     ]
     rows = [line for line in block.splitlines() if line.startswith("| D-")]
-    synthetic = [row for row in rows if row.rsplit("|", 2)[1].strip() == "합성"]
+    synthetic = [row for row in rows if base(row.rsplit("|", 2)[1]) == "합성"]
 
     assert rows, "대장이 비었다"
     assert _claim(r"강제자 \*\*(\d+)건\*\*이 합성 자료만으로") == len(synthetic)

@@ -18,7 +18,14 @@ import ast
 import re
 from pathlib import Path
 
-from decision_ledger import EVIDENCE, EVIDENCE_VALUES, Record, keeper_text
+from decision_ledger import (
+    EVIDENCE,
+    EVIDENCE_VALUES,
+    NOT_PROMOTED,
+    Record,
+    evidence_base,
+    keeper_text,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -73,15 +80,16 @@ CONFIRMED_BY = re.compile(r"\(D-(\d{4}) 확인\)")
 
 
 def _confirmation(record: Record, value: str) -> list[str]:
-    """`(D-xxxx 확인)`이 **자기보다 뒤 번호**를 가리키는가 (D-0301)."""
+    """`(D-xxxx 확인)`과 `(D-xxxx 승격 아님)`이 **자기보다 뒤 번호**인가 (D-0301 · D-0323)."""
     problems: list[str] = []
-    for mark in CONFIRMED_BY.finditer(value):
-        number = int(mark.group(1))
-        if number <= record.number:
-            problems.append(
-                f"{record.identifier}의 `자료`가 D-{number:04d}로 확인됐다는데 "
-                f"자기보다 앞 번호다. 뒤에 온 판만 앞 판의 자료를 갱신한다"
-            )
+    for label, pattern in (("확인됐다", CONFIRMED_BY), ("승격 아니라고 판단됐다", NOT_PROMOTED)):
+        for mark in pattern.finditer(value):
+            number = int(mark.group(1))
+            if number <= record.number:
+                problems.append(
+                    f"{record.identifier}의 `자료`가 D-{number:04d}로 {label}는데 "
+                    f"자기보다 앞 번호다. 뒤에 온 판만 앞 판의 자료를 갱신한다"
+                )
     return problems
 
 
@@ -249,25 +257,19 @@ def payable(records: list[Record]) -> list[str]:
 
     D-0301이 `(D-xxxx 확인)` 규약을 세운 것이 바로 그 자리인데 **소급 적용을 안 했다.**
 
-    ### 경보가 아니라 **명단**이다 (GR-0.8)
+    ### 명단은 **비워지는 것**이다 (D-0323)
 
     **전부가 갚을 것은 아니다.** 승격 조건은 *"뒤 판이 실물로 쟀다"*가 아니라 **"뒤 판이
-    그 주장을 확인했다"*이고, 둘은 다르다.
+    그 주장을 확인했다"*이고, 둘은 다르다 — 결함을 찾았거나 판정을 뒤집었으면 승격 대상이
+    아니다.
 
-    | 걸린 것 | 갱신한 판이 한 일 | 승격 |
-    |---|---|---|
-    | D-0094 | 어휘가 손잡이에 안 닿았다 (D-0095) | **아니다** — 결함을 찾았다 |
-    | D-0167 | 원인을 절반만 짚었다 (D-0170) | **아니다** |
-    | D-0197 | 바닥을 안 붙였다 (D-0201) | **아니다** |
-    | D-0303 | 다른 것을 쟀다 (D-0304) | **아니다** |
-    | D-0314 | 판정이 뒤집혔다 (D-0315) | **아니다** |
+    **그 판단을 `자료` 칸에 적으면 명단에서 나간다.** `합성 (D-xxxx 승격 아님)`이며
+    `(D-xxxx 확인)`의 짝이다. 안 적으면 「아니다」가 쌓이고, **「아니다」로만 찬 명단은
+    아무도 안 읽는다** — 첫 판에서 다섯이던 것이 두 판 만에 일곱이 됐다.
 
-    **다섯이 다 「아니다」인 것이 지금 상태다.** D-0143은 D-0318이 갚아 명단에서 나갔다 —
-    **명단이 비는 것이 목표가 아니라 각 줄에 답이 있는 것이 목표다.**
-
-    **판정이 뒤집힌 판은 승격 대상이 아니다** — 그것이 이 표의 규칙이다. 그래서 **못을
-    안 박는다.** 0으로 박으면 「아니다」를 적을 칸이 없어지고, 그러면 거짓 경보가 되고
-    **거짓 경보는 진짜 경보를 죽인다** (`fire-lane` MASTER §18-13).
+    그래서 **못을 안 박는다.** 명단이 0인 것이 목표가 아니라 **모든 줄이 판단을 기다리는
+    줄인 것**이 목표다. 0으로 박으면 「아니다」를 승격으로 바꾸게 되고, 그러면 거짓
+    경보가 되고 **거짓 경보는 진짜 경보를 죽인다** (`fire-lane` MASTER §18-13).
 
     `make ship`이 이 수를 찍는다 — 보는 자리에 두는 것이 이 함수의 전부다.
     """
@@ -278,7 +280,8 @@ def payable(records: list[Record]) -> list[str]:
     }
     rows: list[str] = []
     for record in records:
-        if source.get(record.identifier) != "합성":
+        value = source.get(record.identifier, "")
+        if evidence_base(value) != "합성" or NOT_PROMOTED.search(value):
             continue
         later = [
             f"D-{number}"
