@@ -371,3 +371,89 @@ def test_위상_보고가_두_선과_판정을_찍는다(
     record = json.loads(next((out / "eval").glob("*-onsets.eval.json")).read_text("utf-8"))
     assert record["phase"] is not None
     assert record["median_margin"] is not None
+
+
+# ------------------------------ 집계 수준이 판정을 뒤집는다 (O-25 일곱째 줄 · D-0318)
+
+
+def offset_clicks(*, seed: int, offset: int) -> np.ndarray:
+    """위상 원점을 옮긴 클릭 트랙. **원점은 파일 시작이고 으뜸박이 아니다.**"""
+    envelope = np.zeros(FRAMES)
+    for start in range(offset, FRAMES, PERIOD):
+        for step in range(6):
+            if start + step < FRAMES:
+                envelope[start + step] += float(np.exp(-step / 2.0))
+    return envelope + np.random.default_rng(seed).random(FRAMES) * 0.2
+
+
+def _deviation(profile: tuple[float, ...]) -> float:
+    flat = 1.0 / len(profile)
+    return sum(abs(value - flat) for value in profile) / 2.0
+
+
+def test_곡_평균_위상은_원점이_다르면_균등해진다() -> None:
+    """**D-0154의 결정적 수가 해석할 수 없는 수였다** (D-0318).
+
+    곡마다 한 칸에 몰려 있어도 몰리는 칸이 다르면 **곡 평균은 평평해진다.** D-0154는
+    그 평평함을 실패로 읽었고, 견준 상대는 D-0143의 **합성 한 곡** 분포였다 —
+    **자를 확인한 집계 수준과 자를 쓴 집계 수준이 달랐다** (D-0306과 같은 부류).
+    """
+    from hathor.application.evaluate_onsets import phase_mean, phase_spread
+
+    spread_songs = [
+        (offset_clicks(seed=index, offset=index * 7 % PERIOD), HOP) for index in range(40)
+    ]
+    each = [phase_spread(envelope, hop) or 0.0 for envelope, hop in spread_songs]
+    assert float(np.median(each)) > 0.5, "곡별로는 한 칸에 몰려 있다"
+
+    averaged = phase_mean(spread_songs)
+    assert averaged is not None
+    assert _deviation(averaged) < float(np.median(each)) / 3.0, "곡 평균이 훨씬 평평하다"
+
+
+def test_원점만_맞춰도_곡_평균이_선다() -> None:
+    """**균등의 원인이 원점이라는 것을 이 줄이 고정한다** (O-25 여섯째 줄 · D-0318).
+
+    없으면 위 시험은 «위상이 원래 없다»로도 설명된다. **자료를 한 비트도 안 바꾸고
+    원점만 맞춘다** — 그것만으로 곡 평균이 서면 원인은 원점이다.
+    """
+    from hathor.application.evaluate_onsets import phase_mean
+
+    scattered = phase_mean(
+        [(offset_clicks(seed=index, offset=index * 7 % PERIOD), HOP) for index in range(40)]
+    )
+    aligned = phase_mean([(offset_clicks(seed=index, offset=0), HOP) for index in range(40)])
+    assert scattered is not None
+    assert aligned is not None
+    assert _deviation(aligned) > _deviation(scattered) * 3.0, "원점이 같으면 곡 평균도 몰린다"
+
+
+def test_배수_오류는_몰림을_안_망친다() -> None:
+    """**D-0317이 위상 판정을 배수 격차에 걸었고 과했다** (D-0318).
+
+    배수 오류는 봉우리를 두 칸에 쪼갤 뿐이다. 무너지는 것은 **배수가 아닌 오류**다.
+    """
+    from hathor.domain.services.onset import phase_profile
+
+    song = offset_clicks(seed=3, offset=0)
+    span = PERIOD * HOP
+    truth = _deviation(phase_profile(song, span, HOP))
+    assert truth > 0.5
+    for factor in (2.0, 0.5):
+        assert _deviation(phase_profile(song, span * factor, HOP)) > truth / 2.0
+    assert _deviation(phase_profile(song, span * 1.5, HOP)) < truth / 2.0, "비배수는 무너진다"
+
+
+def test_몰림은_봉우리_수_탓이_아니다() -> None:
+    """**적게 고르면 우연히 몰린다**가 아니라는 것을 고정한다 (O-25 (2)).
+
+    섞은 것이 실측보다 봉우리를 **더 많이** 고르는데도 편차가 열 배 이상 낮다.
+    """
+    from hathor.application.evaluate_onsets import phase_spread
+
+    song = offset_clicks(seed=5, offset=0)
+    real = phase_spread(song, HOP)
+    mixed = phase_spread(shuffled(song, seed=5), HOP)
+    assert real is not None
+    assert mixed is not None
+    assert real > mixed * 5.0

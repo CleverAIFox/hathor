@@ -2319,7 +2319,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0139 | 베이스를 붙인다 | `core/tests/unit/test_voice_leading.py` | 실물 생성 출력 |
 | D-0141 | 가락을 붙인다 | `core/tests/unit/test_melody.py` | 실물 생성 출력 |
 | D-0142 | 두 번째로 들었다 | `core/tests/unit/test_melody.py` | 실물 생성 출력 |
-| D-0143 | 박과 온셋 | `core/tests/unit/test_onset.py` | 합성 |
+| D-0143 | 박과 온셋 | `core/tests/unit/test_onset.py` | 합성 · 실물 1004곡 온셋 포락선 (D-0318 확인) |
 | D-0144 | 온셋 포락선 | `core/tests/unit/test_onset.py` | 합성 · 실물 1004곡 온셋 포락선 (D-0317 확인) |
 | D-0145 | 온셋 배선을 끝낸다 | `core/tests/unit/test_extract_onsets.py` | 실물 저장소 문서 |
 | D-0146 | 검사마다 빼 둔 나무를 전수로 훑는다 | `tools/check_egress.py` | 실물 저장소 코드 |
@@ -2463,6 +2463,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0315 | 자가 실물에서 고장났다 | `core/tests/unit/test_evaluate_onsets.py::test_차분을_빼면_자가_뒤집힌다` | 합성 · 실물 1004곡 온셋 포락선 |
 | D-0316 | 빚 표가 틀린 명령을 가리키고 있었다 | `core/tests/unit/test_segment_invariance.py::test_늘여도_대각선을_버린_사전은_안_움직인다` | 합성 · 실물 200곡 64마디 유지 판정 · 자기 전이 훑기 12칸 |
 | D-0317 | 빚 넷을 갚았다 | `core/tests/unit/test_evaluate_onsets.py::test_배수_격차를_버리지_않는다` | 합성 · 실물 1004곡 온셋 포락선 · 1004곡 크로마 시계열 |
+| D-0318 | 집계 수준이 판정을 뒤집는다 | `core/tests/unit/test_evaluate_onsets.py::test_곡_평균_위상은_원점이_다르면_균등해진다` | 합성 · 실물 1004곡 온셋 포락선 |
 
 <!-- decision-ledger:end -->
 

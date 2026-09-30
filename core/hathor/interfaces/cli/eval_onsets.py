@@ -59,6 +59,12 @@ def margin_lines(measured: BeatLine) -> list[str]:
     `measure`가 줄곧 이 값을 내고 있었고 **D-0314가 버리고 있었다.** D-0154는 격차
     `< 0.10`이 12 / 20이고 중앙이 0.02라서 *"과반이 배수 모호"*라고 적었다 — 그 수를
     1004곡에서 다시 낸다.
+
+    **위상 판정을 무르게 하지 않는다** (D-0318). D-0317이 여기에 *"과반이 모호하면 위상을
+    곡 전체로 나눠 읽을 수 없다"*고 적었고 **재보니 과했다.** 배수 오류는 봉우리를 두 칸에
+    쪼갤 뿐이라 **몰림 자체는 남는다** — 참 주기 편차 0.6003 · 2배 0.4588 · 절반 0.5304.
+    무너지는 것은 **배수가 아닌 오류**다 (1.5배에서 0.2207). 망가지는 것은 «어느 칸인가»이고
+    «몰렸는가»가 아니다.
     """
     middle, rate = measured.median_margin, measured.ambiguous_rate
     if middle is None or rate is None:
@@ -67,7 +73,8 @@ def margin_lines(measured: BeatLine) -> list[str]:
         f"배수 격차 — 중앙 {middle:.4f} · `< {AMBIGUOUS_FLOOR:.2f}`가 {rate:.1%}"
         f"  (D-0154 실물 20곡: 중앙 {D0154_MARGIN:.2f} · {D0154_AMBIGUOUS:.0%})",
         "**배수 모호는 결함이 아니라 성질이다** (D-0054와 같은 근거) — 사람도 120을 60으로",
-        "짚는다. **다만 과반이 모호하면 위상을 곡 전체로 나눠 읽을 수 없다** (D-0154).",
+        "짚는다. **「어느 칸인가」만 망치고 「몰렸는가」는 안 망친다** (D-0318) — 배수 오류는",
+        "봉우리를 두 칸에 쪼갤 뿐이다. 위상 판정은 몰림만 보므로 이 수에 안 걸린다.",
     ]
 
 
@@ -127,8 +134,13 @@ def _report_phase(folder: Path, args: argparse.Namespace) -> BeatGain | None:
     if found is None:
         print(f"위상 — {MISSING} (박을 고른 곡이 없다)")
         return gain
-    print(f"평균 분포 — {' · '.join(f'{value:.3f}' for value in found)}")
-    print(f"D-0154 실물 20곡 — {' · '.join(f'{value:.3f}' for value in D0154_PHASE)}  (완전 균등)")
+    print(f"곡 평균 분포 — {' · '.join(f'{value:.3f}' for value in found)}")
+    print(f"D-0154 실물 20곡 — {' · '.join(f'{value:.3f}' for value in D0154_PHASE)}")
+    print("  ⚠ **위 두 줄로 판정하지 않는다** (D-0318). 곡 평균 위상은 **곡마다 몰리는")
+    print("    칸이 달라도 균등해진다** — 위상 원점이 파일 시작이고 으뜸박이 아니어서다.")
+    print("    합성 40곡에서 곡별 편차 중앙 0.6023인데 곡 평균의 편차는 0.1355였고,")
+    print("    원점을 0으로 고정하니 곡 평균도 `0.388 · 0.061 · 0.059 · 0.492`로 섰다.")
+    print("    **D-0154가 이 줄을 실패 증거로 썼고 그것은 해석할 수 없는 수였다.**")
     for text in render_table(
         (
             ("짝지은이득", "<12"),
