@@ -2,6 +2,24 @@
 
 **D-0104의 전제가 여기 걸려 있다** — 묶은 것과 처음부터 그 길이로 뽑은 것이 같아야
 "짧게 뽑아 두고 묶는다"가 성립한다. **그것이 이 파일의 첫 검사다.**
+
+### 그 검사가 제품이 안 쓰는 설정으로 돌고 있었다 (D-0319)
+
+배음 감산을 **끄고** 쟀다. 켜면 x8 거리가 0.0129에서 **0.0812**로 벌어지고 문턱 0.02를
+넘어서다. 문서 문자열이 그 수를 적어 두고 *"이 검사가 재는 것은 묶기의 충실도"*로
+범위를 좁혔다 — **수를 보고 판정을 안 한 것이다.**
+
+그리고 파형이 **순음 3화음**이었다. 배음도 강약도 없어 감산이 뺄 것이 거의 없다.
+
+    자료            감산   x2      x4      x8
+    순음            켬     0.0003  0.0002  0.0812
+    배음+강약       켬     0.0078  0.0062  0.0313
+
+**x4에서 0.0002와 0.0062는 30배 차이다.** 순음은 안심시키는 쪽으로 틀렸다 (O-25 (5)).
+
+**결론은 전제가 선다는 것이다** — 제품이 쓰는 배수는 `GROUPS = (1, 2, 4)`이고 거기서는
+감산을 켜도 0.008 이하다. 지표 규모 0.2~0.6에 비해 무시할 수준이다. **x8은 아무도 안
+쓴다.** 그래서 **쓰는 배수는 제품 설정으로 조이고, 안 쓰는 배수는 따로 적는다.**
 """
 
 from __future__ import annotations
@@ -10,7 +28,11 @@ import numpy as np
 import pytest
 
 from hathor.domain.ports.audio_analysis import SOURCE_SAMPLE_RATE, Waveform
-from hathor.domain.services.key_estimation import chroma_series, group_series
+from hathor.domain.services.key_estimation import (
+    HARMONIC_STRENGTH,
+    chroma_series,
+    group_series,
+)
 
 SR = SOURCE_SAMPLE_RATE
 
@@ -32,24 +54,110 @@ def _chord(seconds: float, roots: tuple[float, ...], seed: int = 3) -> Waveform:
 # ------------------------------------------------------------------ 묶기
 
 
-@pytest.mark.parametrize("factor", [2, 4, 8])
-def test_묶은_것과_직접_뽑은_것이_같다(factor):
-    """**D-0104의 전제다.** 다르면 "짧게 뽑아 두고 묶는다"가 무너진다.
+def _rich(seconds: float, roots: tuple[float, ...], seed: int = 3) -> Waveform:
+    """배음·강약·잡음 바닥이 있는 파형 (D-0319).
 
-    정확히 0은 아니다 — `cq_chroma`가 대역마다 다른 창을 쓰고 프레임 수로 나눈다.
-    실측 전변동 거리가 2초 0.0001 · 8초 0.0117이고 **지표 규모(0.2~0.6)에 비해
-    무시할 수준이다.**
+    **순음으로는 감산이 뺄 것이 없다.** `subtract_harmonics`가 하는 일이 배음 몫을
+    빼는 것이므로, 배음이 없는 자료에서 감산을 검증하면 아무것도 검증하지 않는다.
     """
-    wave = _chord(4.0, (220.0, 261.6, 196.0, 293.7, 246.9, 174.6))
-    # **감산을 끄고 본다** (D-0201). 클리핑이 비선형이라 감산을 켜면 묶기와
-    # 교환되지 않고 이 거리가 0.0117 → 0.0812로 벌어진다. 이 검사가 재는 것은
-    # **묶기의 충실도**이지 감산의 성질이 아니다.
-    grouped = group_series(chroma_series(wave, window_seconds=1.0, harmonic=0.0), factor)
-    direct = chroma_series(wave, window_seconds=float(factor), harmonic=0.0)
+    generator = np.random.default_rng(seed)
+    parts = []
+    for root in roots:
+        count = int(seconds * SR)
+        time = np.arange(count) / SR
+        wave = np.zeros(count)
+        for step in (0, 4, 7):
+            pitch = root * 2 ** (step / 12)
+            for overtone, weight in ((1, 1.0), (2, 0.5), (3, 0.3), (4, 0.2), (5, 0.12), (6, 0.08)):
+                wave += weight * np.sin(
+                    2 * np.pi * pitch * overtone * time + generator.uniform(0.0, 2 * np.pi)
+                )
+        swell = 0.4 + 0.6 * np.abs(np.sin(2 * np.pi * time / (seconds * 2)))
+        wave = wave * swell
+        parts.append((wave / np.abs(wave).max()).astype(np.float32))
+    made = np.concatenate(parts)
+    noise = generator.standard_normal(made.size).astype(np.float32) * 0.05
+    return np.asarray(made + noise, dtype=np.float32)
+
+
+ROOTS = (220.0, 261.6, 196.0, 293.7, 246.9, 174.6, 207.7, 233.1)
+
+PRODUCTION_CEILING = 0.01
+"""제품이 쓰는 배수에서의 천장 (D-0319). **실측 최대 0.0078에 붙여 둔다.**
+
+지표 규모가 0.2~0.6이므로 0.01은 그것의 2% 아래다. **느슨하게 두면 벌어지는 것을
+못 본다** — 0.02였을 때 x8의 0.0812를 감산을 끄는 것으로 넘겼다.
+"""
+
+EIGHT_CEILING = 0.09
+"""x8에서의 천장. **제품은 이 배수를 안 쓴다** (`GROUPS = (1, 2, 4)`).
+
+순음에서 0.0812이고 배음 자료에서 0.0313이다. **쓰기 시작하면 이 수부터 판정한다** —
+지표 규모의 1/3이라 무시할 수 없다.
+"""
+
+
+def _gaps(wave: Waveform, factor: int, *, harmonic: float | None = None) -> float:
+    """묶은 것과 직접 뽑은 것의 전변동 거리 최대값.
+
+    **`harmonic`을 안 주면 제품 기본값이 걸린다** — 그것이 이 검사의 요점이다 (D-0319).
+    """
+    strength = HARMONIC_STRENGTH if harmonic is None else harmonic
+    grouped = group_series(chroma_series(wave, window_seconds=1.0, harmonic=strength), factor)
+    direct = chroma_series(wave, window_seconds=float(factor), harmonic=strength)
     count = min(len(grouped), len(direct))
     assert count > 0
-    gaps = [0.5 * float(np.abs(grouped[i] - direct[i]).sum()) for i in range(count)]
-    assert max(gaps) < 0.02, f"묶기가 어긋난다: {max(gaps):.4f}"
+    return max(0.5 * float(np.abs(grouped[i] - direct[i]).sum()) for i in range(count))
+
+
+@pytest.mark.parametrize("factor", [2, 4])
+@pytest.mark.parametrize("maker", [_chord, _rich], ids=["순음", "배음강약"])
+def test_제품_설정에서_묶은_것과_직접_뽑은_것이_같다(factor, maker):
+    """**D-0104의 전제다.** 다르면 "짧게 뽑아 두고 묶는다"가 무너진다 (D-0319).
+
+    **배음 감산을 켠 채로 잰다** — 제품이 그렇게 돈다. 끄고 재면 감산이 묶기와
+    교환되는지를 안 보게 되고, 그것이 첫 판이 놓친 자리다.
+
+    정확히 0은 아니다 — `cq_chroma`가 대역마다 다른 창을 쓰고 프레임 수로 나눈다.
+    """
+    found = _gaps(maker(4.0, ROOTS), factor, harmonic=None)
+    assert found < PRODUCTION_CEILING, f"묶기가 어긋난다: {found:.4f}"
+
+
+def test_쓰는_배수만_조인다():
+    """**제품이 쓰는 배수와 조이는 배수가 같아야 한다** (D-0319).
+
+    `GROUPS`에 8이 들어오면 이 검사가 깨진다 — 그때 `EIGHT_CEILING`부터 판정한다.
+    `test_doc_commands`가 문서와 등재표를 대조하는 것과 같은 자리다.
+    """
+    from hathor.application.evaluate_chord_quality import GROUPS
+
+    assert GROUPS == (1, 2, 4), "쓰는 배수가 바뀌었다. 위 검사의 배수도 함께 옮긴다"
+    assert 8 not in GROUPS
+
+
+@pytest.mark.parametrize("maker", [_chord, _rich], ids=["순음", "배음강약"])
+def test_x8은_더_벌어진다_그리고_안_쓴다(maker):
+    """**끄지 않고 수를 적는다** (D-0319 · GR-0.5).
+
+    첫 판은 이 수가 문턱을 넘자 **감산을 껐다.** 값을 끄는 대신 배수를 갈랐다 —
+    제품이 안 쓰는 배수이므로 천장이 다른 것이 정직하다.
+    """
+    found = _gaps(maker(4.0, ROOTS), 8, harmonic=None)
+    assert found > PRODUCTION_CEILING, "x8이 x2·x4와 같으면 이 검사를 합친다"
+    assert found < EIGHT_CEILING, f"x8이 더 벌어졌다: {found:.4f}"
+
+
+def test_감산을_끄면_순음이_안심시킨다():
+    """**순음은 감산을 검증하지 못한다** (O-25 (5) · D-0319).
+
+    배음이 없으면 뺄 것이 없으므로 감산을 켜도 꺼도 거의 같다. 배음 자료에서는
+    갈린다 — **그것이 순음으로 검증한 것이 무효인 이유다.**
+    """
+    pure = _chord(4.0, ROOTS)
+    rich = _rich(4.0, ROOTS)
+    assert _gaps(pure, 4, harmonic=0.0) == pytest.approx(_gaps(pure, 4, harmonic=None), abs=1e-3)
+    assert _gaps(rich, 4, harmonic=None) > _gaps(pure, 4, harmonic=None) * 5.0
 
 
 def test_묶으면_창이_그만큼_준다():

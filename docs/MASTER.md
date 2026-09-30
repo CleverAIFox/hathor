@@ -2464,6 +2464,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0316 | 빚 표가 틀린 명령을 가리키고 있었다 | `core/tests/unit/test_segment_invariance.py::test_늘여도_대각선을_버린_사전은_안_움직인다` | 합성 · 실물 200곡 64마디 유지 판정 · 자기 전이 훑기 12칸 |
 | D-0317 | 빚 넷을 갚았다 | `core/tests/unit/test_evaluate_onsets.py::test_배수_격차를_버리지_않는다` | 합성 · 실물 1004곡 온셋 포락선 · 1004곡 크로마 시계열 |
 | D-0318 | 집계 수준이 판정을 뒤집는다 | `core/tests/unit/test_evaluate_onsets.py::test_곡_평균_위상은_원점이_다르면_균등해진다` | 합성 · 실물 1004곡 온셋 포락선 |
+| D-0319 | 전제를 지키는 검사가 제품이 안 쓰는 설정으로 돌고 있었다 | `core/tests/unit/test_chroma_series.py::test_제품_설정에서_묶은_것과_직접_뽑은_것이_같다` | 합성 |
 
 <!-- decision-ledger:end -->
 

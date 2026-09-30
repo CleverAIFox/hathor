@@ -573,8 +573,8 @@ def test_감산은_평균과_교환되지_않는다():
     """**클리핑 때문이다** (D-0201). 빼고 평균 ≠ 평균 내고 빼기.
 
     `np.maximum(reduced, 0.0)`이 비선형이라 창을 묶는 순서가 결과를 바꾼다.
-    기본값을 켜자 `group_series` 검사가 0.0117에서 **0.0812**로 벌어져 드러났다.
-    **파이프라인은 감산을 한 자리에서만 해야 한다.**
+    켜자 `group_series` 거리가 0.0117에서 **0.0812**로 벌어졌다 — **x8·순음이고 쓰는
+    x2·x4는 0.008 이하다** (D-0319). **감산은 한 자리에서만 한다.**
     """
     from hathor.domain.services.key_estimation import subtract_harmonics
 
