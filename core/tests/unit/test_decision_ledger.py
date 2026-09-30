@@ -170,7 +170,10 @@ def test_빚_표가_기록마다_한_줄이다() -> None:
     assert style.DEBT_TABLE in body
     rest = body[body.index(style.DEBT_TABLE) :]
     rows = [line for line in rest.splitlines() if line.startswith("| D-")]
-    assert len(rows) >= 5, f"빚 표가 {len(rows)}행이다. 그물이 비면 늘 통과한다 (D-0230)"
+    # **「다섯 줄 이상」이었다** (D-0328). 판결이 난 일곱 줄을 빼자 셋이 됐고, 그 일곱은
+    # 미래 문서가 이고 있던 과거였다. 그물이 비지 않는 것은 아래 동치 검사가 지킨다 —
+    # **줄 수가 아니라 「기록과 같은가」가 그물이다.**
+    assert rows, "빚 표가 비었다. 그물이 비면 늘 통과한다 (D-0230)"
     assert len({line.split("|")[1].strip() for line in rows}) == len(rows), "같은 기록이 두 줄이다"
 
 
@@ -185,19 +188,35 @@ def test_갚는_법이_빈_행을_잡는다() -> None:
     assert "승격 아님" in style.NO_TOOL
 
 
-def test_지금_표가_대장의_합성과_같다() -> None:
-    """**표와 세는 것이 갈리면 표가 낡는다** (D-0263과 같은 자리)."""
+def test_지금_표가_아직_판결_안_난_합성과_같다() -> None:
+    """**표와 세는 것이 갈리면 표가 낡는다** (D-0263과 같은 자리).
+
+    **판결이 난 것은 뺀다** (D-0328). `(D-xxxx 승격 아님)` · `(D-xxxx 뒤집힘)`은
+    *"더 갚을 것이 없다"*는 뜻이고, 그 판단은 `자료` 칸이 든다. 미래 문서에 두었더니
+    **일곱 줄이 쌓였고 그것은 과거였다** — 한 항목은 한 문서에만 산다 (D-0262).
+
+    그래서 이 검사는 **양쪽을 다 본다**: 아직 판결 안 난 것이 표에 있는가, 그리고
+    **판결 난 것이 표에 없는가.** 뒤엣것이 없으면 일곱 줄이 조용히 돌아온다.
+    """
     import doc_fsck
 
     body = (repo_root() / "docs" / "PLAN.md").read_text(encoding="utf-8")
     rest = body[body.index(style.DEBT_TABLE) :]
     listed = {line.split("|")[1].strip() for line in rest.splitlines() if line.startswith("| D-")}
     rows = ledger.scan_records(DECISIONS.read_text(encoding="utf-8"))
-    synthetic = {
-        record.identifier
-        for record in rows
-        if (found := ledger.EVIDENCE.search(record.body))
-        and ledger.evidence_base(found.group(1)) == "합성"
+    synthetic = {}
+    for record in rows:
+        found = ledger.EVIDENCE.search(record.body)
+        if found and ledger.evidence_base(found.group(1)) == "합성":
+            synthetic[record.identifier] = found.group(1)
+    settled = {
+        name
+        for name, value in synthetic.items()
+        if ledger.NOT_PROMOTED.search(value) or ledger.OVERTURNED.search(value)
     }
-    assert listed == synthetic, f"표에만 {listed - synthetic} · 기록에만 {synthetic - listed}"
+    open_rows = set(synthetic) - settled
+
+    assert listed == open_rows, f"표에만 {listed - open_rows} · 기록에만 {open_rows - listed}"
+    assert not (listed & settled), f"판결이 난 줄이 미래 문서에 있다: {sorted(listed & settled)}"
+    assert settled, "판결 난 것이 하나도 없으면 이 검사의 뒤쪽 절반이 헛돈다"
     assert doc_fsck.synthetic_rows() <= len(synthetic)

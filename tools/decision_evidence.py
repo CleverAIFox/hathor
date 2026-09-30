@@ -22,6 +22,8 @@ from decision_ledger import (
     EVIDENCE,
     EVIDENCE_VALUES,
     NOT_PROMOTED,
+    OVERTURNED,
+    REVERSAL,
     Record,
     evidence_base,
     keeper_text,
@@ -82,7 +84,11 @@ CONFIRMED_BY = re.compile(r"\(D-(\d{4}) 확인\)")
 def _confirmation(record: Record, value: str) -> list[str]:
     """`(D-xxxx 확인)`과 `(D-xxxx 승격 아님)`이 **자기보다 뒤 번호**인가 (D-0301 · D-0323)."""
     problems: list[str] = []
-    for label, pattern in (("확인됐다", CONFIRMED_BY), ("승격 아니라고 판단됐다", NOT_PROMOTED)):
+    for label, pattern in (
+        ("확인됐다", CONFIRMED_BY),
+        ("승격 아니라고 판단됐다", NOT_PROMOTED),
+        ("뒤집혔다고 적혔다", OVERTURNED),
+    ):
         for mark in pattern.finditer(value):
             number = int(mark.group(1))
             if number <= record.number:
@@ -90,6 +96,33 @@ def _confirmation(record: Record, value: str) -> list[str]:
                     f"{record.identifier}의 `자료`가 D-{number:04d}로 {label}는데 "
                     f"자기보다 앞 번호다. 뒤에 온 판만 앞 판의 자료를 갱신한다"
                 )
+    problems += _reversal(record, value)
+    return problems
+
+
+def _reversal(record: Record, value: str) -> list[str]:
+    """**뒤집은 판을 「확인」으로 적었나** (D-0328).
+
+    갱신 배지가 「기각·뒤집·깨졌」라고 말하는데 `자료`가 `(D-xxxx 확인)`이면 모순이다 —
+    **기각을 통과로 읽게 만든다.** 그때는 `(D-xxxx 뒤집힘)`을 쓴다.
+    """
+    problems: list[str] = []
+    for mark in CONFIRMED_BY.finditer(value):
+        number = int(mark.group(1))
+        badge = re.search(
+            rf"^> \*\*갱신됨 — D-{number:04d}\.\*\*(.+?)(?=\n(?!>))",
+            record.body,
+            re.MULTILINE | re.DOTALL,
+        )
+        if badge is None:
+            continue
+        said = REVERSAL.search(badge.group(1))
+        if said:
+            problems.append(
+                f"{record.identifier}의 `자료`가 `(D-{number:04d} 확인)`인데 "
+                f"그 판의 갱신 배지가 「{said.group(0)}」이라고 적는다. "
+                f"뒤집은 것은 확인이 아니다 — `(D-{number:04d} 뒤집힘)`으로 적는다 (D-0328)"
+            )
     return problems
 
 

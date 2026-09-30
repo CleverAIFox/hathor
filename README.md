@@ -26,13 +26,15 @@
 ## 현재 단계
 
 **분석과 기호 생성은 섰고, 생성 엔진은 장비를 기다린다** (D-0218).
+**「섰다」가 「다 맞다」는 아니다** — 분석 쪽에서 판정 넷이 뒤집혔다
+(D-0315 온셋 자 · D-0322 창 길이 · D-0325 사전 가림 · D-0327 단조 차용 기각).
 목표는 **남들이 쓰는 제품**이다 (D-0215). 취향은 가창·음색·프로덕션에 살고, 기호 생성의
 상한은 «편곡 스케치»라서 **오디오 생성 엔진이 핵심 경로**가 됐다 (D-0214).
 
 | 영역 | 상태 |
 |---|---|
 | 인제스트 · 분석 | **완료.** 1004곡을 한 패스로 뽑았다 (D-0203) — MERT 13층 × 5소스 · 크로마 · 온셋 · 음고 · 무음. 곡마다 manifest |
-| 검색 (취향 축) | M1 앨범 검색 P@10 **무작위 대비 20.4배** (D-0027). **MERT가 비상업이라 제품 경로에 못 간다** — CLAP로 다시 잰다 (O-68) |
+| 검색 (취향 축) | M1 앨범 검색 P@10 **무작위 대비 20.4배** (D-0027). **MERT가 비상업이라 제품 경로에 못 간다.** CLAP으로 다시 쟀고 **MERT의 27%다** (O-68 닫힘 D-0235). MFCC 단독 41.9%가 CLAP+MFCC 38%보다 높다 (D-0299) |
 | 기호 생성 | 구조 → 화성 → 가락 → 베이스 → 반주를 SMF로 쓴다. 참조곡 조성·화성 사전으로 조건화. **기준선으로 동결** (D-0214) |
 | 생성 엔진 | 서류 관문으로 일곱을 걸러 **ACE-Step 1.5(MIT)** 1순위 (D-0217). 실측 G0에서 **기기가 떨어졌다** — GTX 1660 Ti에서 fp16은 NaN, fp32는 메모리 부족. **VRAM 16GB 이상 장비를 기다린다** |
 | 규약 | `make check` · CI 3잡 · 커밋 훅. 셋이 같은 것을 보는지 차집합으로 대조한다 (D-0219) |
@@ -44,7 +46,8 @@
 실측 수치는 `docs/MASTER.md` §10 평가 설계에 있다. **여기 옮겨 적지 않는다** — 두 곳이 어긋난다.
 
 > **아래 명령 예시 중 `keys-*`를 가리키는 것은 `ingest keys --from-bundles`를 한 번
-> 돌린 뒤에 돈다** (D-0211). 조합·반쪽을 요구하는 것과 `mert-layers`는 아직 안 돈다 (O-62).
+> 돌린 뒤에 돈다** (D-0211). 조합·반쪽을 요구하는 것은 아직 안 돈다.
+> 옛 `mert-layers` 폴더는 **없다** — 층은 묶음 안에 있다 (D-0203 · O-62 닫힘 D-0274).
 
 ## 빠른 실행
 
@@ -87,7 +90,7 @@ cd core
 uv run python -m hathor.cli search --like "밤편지" -k 10
 uv run python -m hathor.cli search --like "밤편지" --like "뱅뱅뱅" -k 10   # 시드 퓨전
 uv run python -m hathor.cli eval retrieval --out var/ingest \
-    --features var/ingest/mert-layers --keys layer00 --label mert-layer00
+    --keys layer00 --label mert-layer00   # 층은 묶음에서 읽는다 (D-0203)
 
 # 상업 가능한 축으로 같은 하네스 (O-68 · D-0231)
 uv run python -m hathor.cli eval clap --limit 20        # 배치. 빼면 전량
@@ -213,12 +216,16 @@ make artifacts-push ONLY=keys # 화성 작업이 읽는 keys-*만 (74MB)
 | 반음계 질량의 정체 (O-33 · O-35) | `eval chromatic-origin` | D-0089 ~ D-0093 |
 | 순서 조건화 게이트 · 배열 (O-32) | `eval time-drift` · `generate --transitions` | D-0098 ~ D-0113 |
 | 화성 리듬 (O-37) | `tools/probe_chord_rhythm.py` | D-0123 ~ D-0125 |
-| 박 · 온셋 (O-47) | `tools/probe_onsets.py` | D-0143 ~ D-0173 |
+| 박 · 온셋 (O-47) | `eval onsets` · `--phase` | D-0143 ~ D-0173 · **D-0314 ~ D-0318** |
 | 어느 층이 화성을 담는가 (O-52) | `tools/probe_latent.py` | D-0179 ~ D-0181 |
 | 가사축 | `lyrics extract` · `eval retrieval` | D-0036 ~ D-0048 |
 | M0 분할 규칙 | `eval retrieval --split random --split-repeats 5` | D-0040 · D-0041 |
 | 취향 라벨 (보조) | `taste compare` · `taste status` | D-0028 · D-0029 |
 | 참조곡 스템이 층에 줄 수 있는 것 | `tools/probe_stems.py` | D-0214 |
+| 화음이 3화음뿐이다 (O-64) | `eval chord-quality` | D-0300 ~ D-0306 |
+| 전이 조건화가 도수 누설과 갈리는가 (O-72) | `eval harmony-output` 짝지은 이득 | D-0311 · D-0312 |
+| 창 길이가 분석 인자인가 | `eval window-length` | D-0320 · **D-0322 (전제가 깨졌다)** |
+| 단조 차용인가 누설인가 (O-35) | `eval chromatic-origin` | D-0089 ~ D-0093 · **D-0327 (기각)** |
 
 ## Compose 프로파일
 
@@ -239,7 +246,7 @@ docs/               MASTER(현재) · PLAN(미래) · DECISIONS(과거) · propo
 core/hathor/        domain · application · engines · infrastructure · interfaces · shared
 core/tests/         unit · integration
 tools/              검사 · 탐침 · 운영 · 기획서 빌드
-site/               기획서 웹 뷰어 — docx를 브라우저가 그대로 그린다 (D-0222)
+site/               기획서 웹 뷰어 — **PDF로 구워** 보여 주고 docx도 같이 올린다 (D-0229)
 infra/ · docker/    postgres init · prometheus · mlflow 이미지
 ```
 
@@ -277,6 +284,16 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/gpu_smoke.py` | 엔진 재개 조건(VRAM · bf16) 판정 — 러너가 돈다 |
 | `tools/register_runner.sh` | 셀프호스티드 러너 등록 — 토큰은 `gh`가 받는다 |
 | `tools/gh_ops.py` | GitHub 설정 · 봇 PR · 봇 로그 · 스모크를 터미널에서 |
+| `tools/check_forbidden.py` | 금지 부류 — D-0003 실존 가수 음색 복제·보간 |
+| `tools/check_compose.py` | compose 메모리 상한 — 8GB 노트북이 기준이다 |
+| `tools/check_artifacts.py` | 산출물 대장 ↔ 실물 · 재생성 가능 여부 |
+| `tools/decision_ledger.py` | 결정 기록 긁기 · 대장 생성 — **긁는 자리가 하나다** |
+| `tools/decision_evidence.py` | `자료` 칸 검사 · 갚을 수 있는 빚 명단 |
+| `tools/debts.py` | **빚을 축마다 센다** — 한 축만 세고 「없다」를 찍고 있었다 (D-0328) |
+| `tools/tidy.py` | git 찌꺼기 · 바이트코드 — `make tidy` |
+| `tools/mutate_gate.py` | 검사가 진짜로 잡는가 — 일부러 깨 본다 |
+| `tools/repro_from_artifacts.py` | 산출물만으로 결정 기록의 수를 다시 내는가 |
+| `tools/bake_proposal.py` | 기획서 PDF 굽기 — 배포용 (D-0229) |
 | `tools/probe_id3.py` · `tools/probe_artist.py` · `tools/probe_musicbrainz.py` | 코퍼스 실측 탐침 (일회성) |
 | `tools/probe_chord_rhythm.py` · `tools/probe_onsets.py` · `tools/probe_latent.py` · `tools/probe_stems.py` | 화성 · 박 · 잠재 표현 · 스템 탐침 |
 | `tools/lyrics_language_profile.py` · `tools/lyrics_exclusion_probe.py` | 가사 언어 구성 · 제외 곡 진단 |

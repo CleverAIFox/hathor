@@ -51,6 +51,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import debts
 import tidy
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -382,6 +383,11 @@ def main() -> int:
     print(f"{DIM}── 기록{OFF}")
     print(f"   마지막 결정  {last_decision()}")
     for line in payable_debts():
+        print(f"{DIM}   {line}{OFF}")
+
+    # **한 축만 세고 「빚 없다」를 찍고 있었다** (D-0328). 축을 전부 든다.
+    print(f"{DIM}── 빚 (축마다 · 막지 않는다){OFF}")
+    for line in debts.report(debts.survey()):
         print(f"{DIM}   {line}{OFF}")
 
     print(f"{DIM}── CI (직전 커밋){OFF}")
