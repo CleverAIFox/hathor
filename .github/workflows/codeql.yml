@@ -33,9 +33,9 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: python
           # 기본 질의에 보안 질의를 더한다. `security-and-quality`는 품질 질의까지
@@ -44,6 +44,6 @@ jobs:
 
       # 파이썬은 빌드가 없다. `autobuild`를 부르지 않는 것이 더 빠르고, 부르면
       # 의존성을 깔려다 실패해 **잡 전체가 빨개진다.**
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
         with:
           category: /language:python
