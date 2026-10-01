@@ -2500,6 +2500,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0334 | 사전엔 정보가 있고 출력엔 안 실린다 | `core/tests/unit/test_cell_novelty.py::test_읽는_법이_셋을_가른다` | 합성 · 실물 1004곡 |
 | D-0335 | 경보 다섯이 떴고 화면은 「합계 35」를 찍었다 | `core/tests/unit/test_debts.py::test_안_갚은_행을_센다` | 실물 Dependabot 경보 5건 · 이 저장소의 잠금 |
 | D-0336 | 질문 둘은 이미 답이 나와 있었고 여섯은 조건이 걸려 있었다 | `core/tests/unit/test_debts.py::test_조건이_걸린_질문을_따로_센다` | 실물 이 저장소의 미해결표 전수 |
+| D-0337 | 중앙값 추출은 이미 있었다 | `core/tests/unit/test_compare_aggregation.py::test_넓어지면_잡는다` | 합성 |
 
 <!-- decision-ledger:end -->
 

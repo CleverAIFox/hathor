@@ -9,8 +9,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from hathor.application.evaluate_fusion import EvaluateFusion
+from hathor.domain.services.harmony_prior import HalfChroma
 from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import STEM_SETS, stems_overlap
@@ -87,6 +89,84 @@ def run_eval_fusion(args: argparse.Namespace) -> int:
     return 0
 
 
+def load_halves(path: Path, stem_set: str | None) -> list[HalfChroma]:
+    """keys.jsonl에서 반쪽 크로마를 읽는다 (D-0337).
+
+    **`run_eval_harmony_prior` 안에 있었다.** 두 산출물을 맞대려면 두 번 읽어야 하고,
+    그 자리에서 복사하면 **같은 블록이 둘**이 된다 — 이 저장소가 되풀이해 맞은 부류다
+    (D-0317 · D-0323 · D-0326).
+    """
+
+    from hathor.domain.value_objects.key import PITCH_CLASSES
+
+    with path.open(encoding="utf-8") as stream:
+        rows = [json.loads(line) for line in stream if line.strip()]
+
+    found: list[HalfChroma] = []
+    for row in rows:
+        key_text = row.get("key_head")
+        if stem_set:
+            # **조성은 전체 믹스에서 추정한 것을 그대로 쓴다** (D-0073). 스템에서
+            # 다시 추정하면 조합마다 회전 기준이 달라져 비교가 성립하지 않는다.
+            bundle = row.get("stems") or {}
+            picked = bundle.get(stem_set)
+            if picked is None:
+                continue
+            head, tail = picked.get("head"), picked.get("tail")
+        else:
+            head, tail = row.get("chroma_head"), row.get("chroma_tail")
+        if head is None or tail is None or key_text is None:
+            continue
+        tonic = str(key_text).rsplit(" ", 1)[0]
+        found.append(
+            HalfChroma(
+                source_key=str(row.get("source_key", "")),
+                tonic_pitch_class=PITCH_CLASSES.index(tonic),
+                margin=float(row.get("margin_head", 0.0)),
+                head=tuple(float(value) for value in head),
+                tail=tuple(float(value) for value in tail),
+            )
+        )
+    return found
+
+
+def _compare_aggregation(args: argparse.Namespace, observations: list[HalfChroma]) -> int:
+    """두 집계의 달성 가능 폭을 짝지어 맞댄다 (D-0064 · D-0337).
+
+    **눈으로 빼지 않는다.** 폭을 한 수로 찍어 두 번 돌려 빼면 오차가 없다 — D-0327이
+    그 부류로 오경보율 50%짜리 판정을 돌렸다.
+    """
+    from hathor.application.compare_aggregation import compare
+    from hathor.application.compare_output import PAIRED_T_FLOOR
+    from hathor.domain.services.harmony_prior import PriorCondition
+
+    other = load_halves(args.against, args.stem_set)
+    condition = PriorCondition(
+        harmonic=args.harmonic,
+        smoothing=args.smoothing,
+        margin_floor=args.margin_floor,
+        confident_only=args.confident_only,
+    )
+    # **`--replay`가 앞, `--against`가 뒤다.** 어느 쪽이 중앙값인지는 사람이 안다 —
+    # 행에 `aggregate`가 적혀 있고(D-0073) 그것을 화면이 든다.
+    found = compare(observations, other, condition)
+    if not found.songs:
+        print("짝지을 곡이 없다. 두 산출물이 같은 코퍼스인지 본다", file=sys.stderr)
+        return 1
+
+    gap = found.paired_gap
+    print(f"짝지은 곡 {len(found.songs)}개 · {args.replay.name} 대 {args.against.name}")
+    print(f"  달성 가능 폭  앞 {found.median_width:.4f} · 뒤 {found.mean_width:.4f}")
+    print(f"  차이 {gap.gain:+.4f} ± {gap.standard_error:.4f} · t = {gap.t:+.2f}", end="")
+    print(f" (문턱 {PAIRED_T_FLOOR:.1f})")
+    print(f"  쌍 단위 승률 {gap.win_rate:.1%} — **진단이다** (D-0327)")
+    print(f"판정: **{'앞이 더 넓다' if found.widens else '앞이 뒤를 못 넘는다'}**\n")
+    print("**폭은 클수록 좋다** — `uniform`과 `oracle` 사이가 넓다는 것은 곡 고유")
+    print("정보가 들어갈 자리가 넓다는 뜻이다. D-0064는 그 폭이 **0.0187에서 오르는가**를")
+    print("물었고, 중앙값이 창별 잡음을 깎으면서 **신호도 깎으면 진다** (D-0337).")
+    return 0
+
+
 def run_eval_harmony_prior(args: argparse.Namespace) -> int:
     """화성 도수 사전이 참조곡 고유 정보를 담는지 판정한다 (O-21 · D-0062).
 
@@ -98,40 +178,14 @@ def run_eval_harmony_prior(args: argparse.Namespace) -> int:
     """
 
     from hathor.domain.services.harmony_prior import (
-        HalfChroma,
         PriorCondition,
         compare_priors,
     )
-    from hathor.domain.value_objects.key import PITCH_CLASSES
 
-    with args.replay.open(encoding="utf-8") as stream:
-        rows = [json.loads(line) for line in stream if line.strip()]
+    observations = load_halves(args.replay, args.stem_set)
 
-    observations: list[HalfChroma] = []
-    for row in rows:
-        key_text = row.get("key_head")
-        if args.stem_set:
-            # **조성은 전체 믹스에서 추정한 것을 그대로 쓴다** (D-0073). 스템에서
-            # 다시 추정하면 조합마다 회전 기준이 달라져 비교가 성립하지 않는다.
-            bundle = row.get("stems") or {}
-            picked = bundle.get(args.stem_set)
-            if picked is None:
-                continue
-            head, tail = picked.get("head"), picked.get("tail")
-        else:
-            head, tail = row.get("chroma_head"), row.get("chroma_tail")
-        if head is None or tail is None or key_text is None:
-            continue
-        tonic = str(key_text).rsplit(" ", 1)[0]
-        observations.append(
-            HalfChroma(
-                source_key=str(row.get("source_key", "")),
-                tonic_pitch_class=PITCH_CLASSES.index(tonic),
-                margin=float(row.get("margin_head", 0.0)),
-                head=tuple(float(value) for value in head),
-                tail=tuple(float(value) for value in tail),
-            )
-        )
+    if args.against is not None:
+        return _compare_aggregation(args, observations)
 
     if len(observations) < 2:
         hint = (
@@ -309,6 +363,12 @@ def _build_harmony_prior(parser: argparse.ArgumentParser) -> None:
         "--stem-set",
         default=None,
         help="스템 조합 이름 (예: other, other+bass). --separate로 뽑은 것만 쓸 수 있다",
+    )
+    parser.add_argument(
+        "--against",
+        type=resolve_path,
+        default=None,
+        help="다른 집계로 뽑은 keys.jsonl. 달성 가능 폭을 **짝지어** 맞댄다 (D-0064 · D-0337)",
     )
     parser.add_argument(
         "--harmonic", type=float, default=0.0, help="배음 감산 강도. 네 선 전부에 적용된다"

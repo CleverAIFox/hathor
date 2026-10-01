@@ -23,6 +23,26 @@ def write_keys(path, rows):
     return path
 
 
+def write_halves(path, *, concentration, prefix="곡", count=60):
+    """**뒷반쪽의 뾰족함만 바꾼다.** 뾰족할수록 달성 가능 폭이 넓다 (D-0337)."""
+    rng = np.random.default_rng(7)
+    rows = []
+    for index in range(count):
+        head = rng.dirichlet(np.full(DEGREES, 0.4))
+        tail = rng.dirichlet(np.full(DEGREES, 1.0 / concentration))
+        rows.append(
+            {
+                "source_key": f"{prefix}{index:03d}.flac",
+                "key": "C major",
+                "key_head": "C major",
+                "margin_head": 0.5,
+                "chroma_head": [round(float(v), 6) for v in head],
+                "chroma_tail": [round(float(v), 6) for v in tail],
+            }
+        )
+    return write_keys(path, rows)
+
+
 def synth_rows(count, *, informative, seed=20260819, margin=0.2):
     """곡 고유 신호가 있는/없는 합성 코퍼스."""
     rng = np.random.default_rng(seed)
@@ -339,3 +359,32 @@ def test_후보가_없으면_없음이다(tmp_path, capsys):
     assert keys_candidates(tmp_path, "other") == []
     assert find_keys_store(tmp_path, "other") is None
     assert capsys.readouterr().err == ""
+
+
+def test_두_집계를_짝지어_맞댄다(tmp_path, capsys):
+    """**눈으로 빼지 않는다** (D-0064 · D-0337).
+
+    `--against`가 없으면 사람이 두 번 돌려 폭 둘을 빼야 하고 **그러면 오차가 없다** —
+    D-0327이 그 부류로 오경보율 50%짜리 판정을 돌렸다.
+    """
+    sharp = tmp_path / "median.keys.jsonl"
+    flat = tmp_path / "mean.keys.jsonl"
+    write_halves(sharp, concentration=5.0)
+    write_halves(flat, concentration=0.4)
+
+    assert main(["eval", "harmony-prior", "--replay", str(sharp), "--against", str(flat)]) == 0
+    said = capsys.readouterr().out
+    assert "짝지은 곡" in said
+    assert "t = " in said and "문턱" in said, "오차 없이 판정하면 D-0327의 반복이다"
+    assert "앞이 더 넓다" in said
+
+
+def test_짝지을_곡이_없으면_그렇게_말한다(tmp_path, capsys):
+    """**빈 그물이 「차이 0」으로 읽히면 안 된다** (GR-0.5)."""
+    left = tmp_path / "a.keys.jsonl"
+    right = tmp_path / "b.keys.jsonl"
+    write_halves(left, concentration=2.0)
+    write_halves(right, concentration=2.0, prefix="다른곡")
+
+    assert main(["eval", "harmony-prior", "--replay", str(left), "--against", str(right)]) == 1
+    assert "짝지을 곡이 없다" in capsys.readouterr().err
