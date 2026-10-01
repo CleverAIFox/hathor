@@ -131,12 +131,19 @@ def load_halves(path: Path, stem_set: str | None) -> list[HalfChroma]:
 
 
 def _compare_aggregation(args: argparse.Namespace, observations: list[HalfChroma]) -> int:
-    """두 집계의 달성 가능 폭을 짝지어 맞댄다 (D-0064 · D-0337).
+    """두 집계의 달성 가능 폭을 짝지어 맞댄다 (D-0065 재현 · D-0337 · D-0338).
 
     **눈으로 빼지 않는다.** 폭을 한 수로 찍어 두 번 돌려 빼면 오차가 없다 — D-0327이
     그 부류로 오경보율 50%짜리 판정을 돌렸다.
+
+    **(b)를 다시 묻는 자가 아니다.** D-0065가 272판 전에 기각했고 이것은 **그 판을
+    1004곡에서 재현하며 (a)의 기준선에 오차를 붙이는 자**다 (D-0338).
     """
-    from hathor.application.compare_aggregation import compare
+    from hathor.application.compare_aggregation import (
+        ACHIEVABLE_FLOOR,
+        REFERENCE_WIDTH,
+        compare,
+    )
     from hathor.application.compare_output import PAIRED_T_FLOOR
     from hathor.domain.services.harmony_prior import PriorCondition
 
@@ -160,10 +167,49 @@ def _compare_aggregation(args: argparse.Namespace, observations: list[HalfChroma
     print(f"  차이 {gap.gain:+.4f} ± {gap.standard_error:.4f} · t = {gap.t:+.2f}", end="")
     print(f" (문턱 {PAIRED_T_FLOOR:.1f})")
     print(f"  쌍 단위 승률 {gap.win_rate:.1%} — **진단이다** (D-0327)")
-    print(f"판정: **{'앞이 더 넓다' if found.widens else '앞이 뒤를 못 넘는다'}**\n")
-    print("**폭은 클수록 좋다** — `uniform`과 `oracle` 사이가 넓다는 것은 곡 고유")
-    print("정보가 들어갈 자리가 넓다는 뜻이다. D-0064는 그 폭이 **0.0187에서 오르는가**를")
-    print("물었고, 중앙값이 창별 잡음을 깎으면서 **신호도 깎으면 진다** (D-0337).")
+    print(f"판정: **{'앞이 더 넓다' if found.widens else '앞이 뒤를 못 넘는다'}**")
+    # **참조선이고 판정이 아니다** (D-0338). 1004곡 평균이 이미 0.031을 넘으므로
+    # 판정에 걸면 아무것도 안 막고, 자료가 적을 때만 막는 거꾸로 된 자가 된다.
+    print(f"참조선  D-0064 등록 문턱 {ACHIEVABLE_FLOOR:.3f}", end="")
+    print(f" — 앞이 {'넘는다' if found.clears_floor else '**미달**'}", end="")
+    print(f" · D-0063의 200곡 값 {REFERENCE_WIDTH:.4f}\n")
+    print("**판정은 짝지은 차이 하나다.** 폭의 절대 기준은 찍기만 한다 — 1004곡 평균이")
+    print("이미 0.031을 넘어서 **걸면 아무것도 안 막는다** (D-0338).\n")
+    print("**O-27 (b)는 D-0065가 기각했다** — 200곡에서 0.0187 → 0.0198이고 기준의 3분의")
+    print("2에도 못 미쳤다. 이 명령은 **그 판을 뒤집는 자가 아니다.** 그 판에 없던 둘을")
+    print("보탠다: 차이의 오차와, 1004곡 재현이다 (D-0065는 산출물이 안 남았다 · D-0253).")
+    return 0
+
+
+def _print_width_draws(args: argparse.Namespace, observations: list[HalfChroma]) -> int:
+    """D-0063의 0.0187이 작은 뽑기의 폭 분포 안에 드나 (D-0338)."""
+    from hathor.application.compare_aggregation import width_draws
+    from hathor.domain.services.harmony_prior import PriorCondition
+
+    found = width_draws(
+        observations,
+        PriorCondition(
+            harmonic=args.harmonic,
+            smoothing=args.smoothing,
+            margin_floor=args.margin_floor,
+            confident_only=args.confident_only,
+        ),
+        size=args.subsample,
+        draws=args.draws,
+        seed=args.seed,
+    )
+    if found is None:
+        print(f"신뢰도 있는 곡이 {args.subsample}개보다 적다", file=sys.stderr)
+        return 1
+
+    low, high = found.interval
+    print(f"{found.size}곡 뽑기 {len(found.widths)}번 · 복원 없음 · 씨드 {args.seed}")
+    print(f"  전수 폭 {found.whole:.4f} · 뽑기 중앙값 {found.median:.4f}")
+    print(f"  뽑기 95% 구간 [{low:.4f}, {high:.4f}]")
+    print(f"  D-0063의 {found.target:.4f} — 뽑기의 {found.quantile:.1%} 분위")
+    print(f"판정: {found.reading()}\n")
+    print("**전수 폭이 뽑기 중앙값과 크게 다르면 그것부터 본다** — 중앙값은 표본이")
+    print("작아지면 치우칠 수 있고, 그 치우침과 D-0063의 차이를 섞으면 안 된다.")
     return 0
 
 
@@ -186,6 +232,9 @@ def run_eval_harmony_prior(args: argparse.Namespace) -> int:
 
     if args.against is not None:
         return _compare_aggregation(args, observations)
+
+    if args.subsample is not None:
+        return _print_width_draws(args, observations)
 
     if len(observations) < 2:
         hint = (
@@ -368,8 +417,17 @@ def _build_harmony_prior(parser: argparse.ArgumentParser) -> None:
         "--against",
         type=resolve_path,
         default=None,
-        help="다른 집계로 뽑은 keys.jsonl. 달성 가능 폭을 **짝지어** 맞댄다 (D-0064 · D-0337)",
+        help="다른 집계로 뽑은 keys.jsonl. 달성 가능 폭을 **짝지어** 맞댄다 (D-0337 · D-0338)",
     )
+    parser.add_argument(
+        "--subsample",
+        type=int,
+        default=None,
+        help="이 곡수만큼 뽑아 폭 분포를 낸다. D-0063의 0.0187이 그 안에 드나 (D-0338)",
+    )
+    # 씨드는 이 명령에 **이미 있다** (`--seed`, 귀무선 짝짓기용). 손잡이를 또 만들지
+    # 않는다 — `--subsample` 경로는 귀무선을 안 쓰므로 겹치지 않는다.
+    parser.add_argument("--draws", type=int, default=200, help="--subsample 뽑기 횟수")
     parser.add_argument(
         "--harmonic", type=float, default=0.0, help="배음 감산 강도. 네 선 전부에 적용된다"
     )

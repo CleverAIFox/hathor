@@ -13,7 +13,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hathor.application.compare_aggregation import compare, song_widths
+from hathor.application.compare_aggregation import (
+    ACHIEVABLE_FLOOR,
+    compare,
+    song_widths,
+    width_draws,
+)
 from hathor.domain.services.harmony_prior import HalfChroma, PriorCondition
 
 DEGREES = 12
@@ -100,6 +105,87 @@ def test_좁아지면_진다() -> None:
     )
     assert found.paired_gap.gain < 0.0
     assert found.widens is False
+
+
+def _flatish(count: int, *, blend: float, seed: int) -> list[HalfChroma]:
+    """폭이 **실물 급(0.01~0.02)**인 코퍼스.
+
+    위의 `_songs`는 폭이 0.08~1.08로 나와 **절대 기준 0.031을 늘 넘는다** — 그 코퍼스로는
+    기준이 걸리는지 아닌지를 알 수 없다. 자를 확인한 조건이 자를 쓸 조건과 같아야 한다
+    (O-25 일곱째 줄 · D-0306).
+    """
+    rng = np.random.default_rng(seed)
+    flat = np.full(DEGREES, 1.0 / DEGREES)
+    made: list[HalfChroma] = []
+    for index in range(count):
+        shape = (1.0 - blend) * flat + blend * rng.dirichlet(np.full(DEGREES, 0.5))
+        made.append(
+            HalfChroma(
+                source_key=f"곡{index:03d}",
+                tonic_pitch_class=0,
+                margin=1.0,
+                head=tuple(float(v) for v in flat),
+                tail=tuple(float(v) for v in shape),
+            )
+        )
+    return made
+
+
+def test_절대_기준은_판정에_안_걸린다() -> None:
+    """**걸었다가 뺐다** (D-0338). 이 검사가 그 결정을 고정한다.
+
+    처음에 D-0064의 0.031을 `widens`의 조건으로 넣었다. **1004곡 평균의 폭이 이미
+    0.0471이라 그 문턱은 아무것도 안 막고**, 더 나쁘게는 **자료가 적을 때만 막는**
+    거꾸로 된 자가 된다 — 실물 급(0.01~0.02) 코퍼스에서만 걸린다.
+
+    그래서 판정은 짝지은 차이 하나이고 절대 기준은 **찍기만 한다.**
+    """
+    found = compare(_flatish(120, blend=0.15, seed=3), _flatish(120, blend=0.08, seed=3), CONDITION)
+
+    assert found.median_width is not None
+    assert found.median_width < ACHIEVABLE_FLOOR, "이 코퍼스는 기준 미달이어야 한다"
+    assert found.clears_floor is False, "참조선은 그대로 찍힌다"
+    assert found.paired_gap.t > 10.0
+    assert found.widens is True, "**절대 기준이 판정을 막으면 안 된다**"
+
+
+def test_문턱을_이_판에서_고르지_않았다() -> None:
+    """**D-0058이다.** 0.031은 D-0064가 K-K 장조 폭의 절반으로 등록한 값이다."""
+    assert pytest.approx(0.0616 / 2, abs=0.0009) == ACHIEVABLE_FLOOR
+
+
+# ------------------------------------------------------- 작은 표본에서 폭이 흔들리나
+
+
+def test_뽑기_분포가_전수를_둘러싼다() -> None:
+    """**자의 방향 먼저** (O-25). 전수 폭은 뽑기 분포 가운데 있어야 한다."""
+    songs = _flatish(400, blend=0.15, seed=9)
+    whole = float(np.median(list(song_widths(songs, CONDITION).values())))
+    found = width_draws(songs, CONDITION, size=80, draws=120, target=whole)
+
+    assert found is not None
+    assert found.inside is True, "전수 값이 자기 뽑기 분포 밖이면 자가 깨진 것이다"
+    assert 0.2 < found.quantile < 0.8
+
+
+def test_분포_밖이면_요동이_아니라고_말한다() -> None:
+    """**질 수 있는 자여야 한다** (O-25 (2)).
+
+    D-0063의 0.0187이 1004곡의 200곡 뽑기 분포 밖이면 **표본 요동으로 설명이 안 된다** —
+    그 200곡이 코퍼스를 안 대표했거나 그 사이 코드가 바뀐 것이다.
+    """
+    songs = _flatish(400, blend=0.15, seed=9)
+    found = width_draws(songs, CONDITION, size=80, draws=120, target=0.0)
+
+    assert found is not None
+    assert found.quantile == 0.0
+    assert found.inside is False
+    assert "요동으로 설명이 안 된다" in found.reading()
+
+
+def test_곡이_모자라면_없다고_말한다() -> None:
+    """**없는 것을 0이라 하지 않는다** (GR-0.5). 뽑을 곡이 없으면 분포도 없다."""
+    assert width_draws(_flatish(20, blend=0.15, seed=9), CONDITION, size=80, draws=5) is None
 
 
 def test_곡이_없으면_없다고_말한다() -> None:

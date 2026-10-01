@@ -2268,9 +2268,9 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0056 | 크로마를 반음 격자로 바꾼다 | `core/tests/unit/test_key_estimation.py` | 합성 · 실물 200곡 |
 | D-0059 | 베이스라인이 조건을 따라가지 않았다 | `core/tests/unit/test_key_estimation.py` | 합성 · 실물 200곡 |
 | D-0060 | 베이스라인이 또 조건을 안 따라갔다 | `core/tests/unit/test_key_estimation.py` | 합성 · 실물 200곡 |
-| D-0062 | O-21의 판정 장치를 생성기보다 먼저 만든다 | `core/tests/unit/test_harmony_prior.py` | 합성 |
+| D-0062 | O-21의 판정 장치를 생성기보다 먼저 만든다 | `core/tests/unit/test_harmony_prior.py` | 합성 · 실물 200곡 (D-0063 확인) |
 | D-0063 | O-21을 닫는다 | `core/tests/unit/test_harmony_generator.py` | 실물 200곡 |
-| D-0064 | 창별 중앙값 크로마를 넣는다 (O-27 (b)) | `core/tests/unit/test_key_estimation.py` | 합성 |
+| D-0064 | 창별 중앙값 크로마를 넣는다 (O-27 (b)) | `core/tests/unit/test_key_estimation.py` | 합성 (D-0065 승격 아님) |
 | D-0066 | 두 기기 개발 환경을 규약으로 고정한다 | `core/tests/unit/test_paths.py` | 실물 기기 |
 | D-0067 | 규약을 기계가 확인하게 한다 | `core/tests/unit/test_paths.py` | 실물 기기 |
 | D-0068 | 기기 설정을 탐지해서 쓴다 | `core/tests/unit/test_paths.py` | 실물 기기 |
@@ -2501,6 +2501,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0335 | 경보 다섯이 떴고 화면은 「합계 35」를 찍었다 | `core/tests/unit/test_debts.py::test_안_갚은_행을_센다` | 실물 Dependabot 경보 5건 · 이 저장소의 잠금 |
 | D-0336 | 질문 둘은 이미 답이 나와 있었고 여섯은 조건이 걸려 있었다 | `core/tests/unit/test_debts.py::test_조건이_걸린_질문을_따로_센다` | 실물 이 저장소의 미해결표 전수 |
 | D-0337 | 중앙값 추출은 이미 있었다 | `core/tests/unit/test_compare_aggregation.py::test_넓어지면_잡는다` | 합성 |
+| D-0338 | 끝난 질문의 자를 지었다 | `core/tests/unit/test_debts.py::test_닫힌_질문을_막고_있다고_적으면_잡는다` | 합성 · 실물 1004곡 |
 
 <!-- decision-ledger:end -->
 

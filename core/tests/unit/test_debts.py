@@ -148,6 +148,36 @@ def test_경보를_못_읽으면_모름이다() -> None:
         assert not found.note, "읽었으면 「모름」이라고 적지 않는다"
 
 
+def test_닫힌_질문을_막고_있다고_적으면_잡는다() -> None:
+    """**손 표가 대장을 이겼다** (D-0338).
+
+    §3.1에 D-0062·D-0064 행이 서 있었고 **둘 다 닫힌 질문이었다** — D-0063이 O-21을
+    닫고 D-0065가 O-27 (b)를 기각했다. `payable()` 명단은 **비어 있었는데** 손으로 쓴
+    표가 「빚 4건」을 찍었고, 그것을 보고 **D-0337이 끝난 질문의 자를 지었다.**
+
+    0이어야 정상인 축이다. 0이 아니면 **미래 문서가 닫힌 과거를 막고 있다고 말하는
+    것**이다.
+    """
+    debts = tool_module("debts")
+    found = debts.plan_closed_question_rows()
+
+    assert found.name == "PLAN 닫힌 질문 행"
+    assert found.count == 0, f"닫힌 질문을 막고 있다고 적은 행: {found.note}"
+
+
+def test_닫힌_질문_표를_실제로_읽는다() -> None:
+    """**빈 집합이면 축이 늘 0이다** (GR-0.5 · GR-0.8).
+
+    `MASTER`의 표식 이름이 바뀌면 `_closed_issues()`가 조용히 빈 집합을 내고 축이
+    영원히 통과한다 — 그러면 **안 세는 것이 0으로 보인다.**
+    """
+    debts = tool_module("debts")
+    closed = debts._closed_issues()
+
+    assert len(closed) > 20, "닫힌 질문 표를 못 읽었다 — 표식 이름이 바뀌었나 본다"
+    assert {"O-21", "O-27"} <= closed, "둘(닫힘 D-0074)이 표에 있어야 이 축이 작동한다"
+
+
 def test_조건이_걸린_질문을_따로_센다() -> None:
     """**「아직 못 한다」와 「지금 할 수 있다」는 다른 빚이다** (D-0336).
 

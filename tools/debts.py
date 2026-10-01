@@ -176,6 +176,60 @@ def plan_open_rows() -> Axis:
     return Axis("PLAN 안 갚은 행", len(open_rows))
 
 
+CLOSED_ISSUE = re.compile(r"^\| (O-\d+) \|", re.MULTILINE)
+RECORD_TITLE = re.compile(r"^## (D-\d{4})\. (.+)$", re.MULTILINE)
+TITLE_ISSUE = re.compile(r"O-\d+")
+
+
+def _closed_issues() -> set[str]:
+    """`MASTER`의 닫힌 미해결 표. **표식 사이만 읽는다** — 열린 표도 같은 꼴이다."""
+    return set(
+        CLOSED_ISSUE.findall(
+            _section(
+                _read("docs/MASTER.md"),
+                "<!-- closed-issues:begin -->",
+                "<!-- closed-issues:end -->",
+            )
+        )
+    )
+
+
+def plan_closed_question_rows() -> Axis:
+    """§3.1의 행이 **이미 닫힌 질문**을 가리키나 (D-0338).
+
+    ### 이 축이 없어서 하루를 썼다
+
+    D-0337이 D-0064의 자를 지었다. **그 질문은 D-0065가 272판 전에 기각했다** —
+    창별 중앙값의 달성 가능 폭이 0.0198이고 사전 등록 기준 0.031에 못 미쳤다.
+    D-0062도 같다: 판정 장치가 **D-0063에서 실물 200곡으로 돌았고** O-21이 닫혔다.
+
+    **왜 안 보였나.** §3.1 표는 **손으로 쓴다.** `payable()`은 대장을 읽어 명단을
+    내는데 **그 명단은 비어 있었다** — 두 행 중 어느 것도 거기 없었다. 손 표와 대장이
+    서로 다른 것을 세고 **둘을 맞춰 보는 코드가 없었다.** 그래서 손 표가 이겼다.
+
+    ### 제목이 근거다
+
+    기록 제목에 `(O-27 (b))`(닫힘 D-0074)처럼 질문 번호가 박혀 있다. `MASTER`의 닫힌
+    표에 그 번호가 있으면 **그 행은 닫힌 질문을 막고 있다고 말하는 것**이다.
+
+    **제목에 번호가 없는 행은 안 센다** — D-0199(WSL 파서)·D-0337(자 자체)이 그렇고,
+    그 둘은 질문이 아니라 기기와 도구를 기다린다. 못 세는 것을 세는 척하지 않는다
+    (GR-0.5).
+    """
+    table = _section(_read("docs/PLAN.md"), "### 3.1 합성으로만 선 판단", "\n## ")
+    titles = dict(RECORD_TITLE.findall(_read("docs/DECISIONS.md")))
+    closed = _closed_issues()
+    hit: list[str] = []
+    for line in table.splitlines():
+        if not line.startswith("| D-"):
+            continue
+        identifier = line.split("|")[1].strip()
+        shut = [name for name in TITLE_ISSUE.findall(titles.get(identifier, "")) if name in closed]
+        if shut:
+            hit.append(f"{identifier}→{'·'.join(shut)}")
+    return Axis("PLAN 닫힌 질문 행", len(hit), " ".join(hit))
+
+
 def dependabot_alerts() -> Axis:
     """열린 Dependabot 경보 (D-0335).
 
@@ -250,6 +304,7 @@ def survey() -> list[Axis]:
         plan_unblocked(),
         plan_settled_rows(),
         plan_open_rows(),
+        plan_closed_question_rows(),
         security_setup(),
         dependabot_alerts(),
         *staleness(),
