@@ -2496,6 +2496,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0332 | 기획서 안에 운영 장부가 살고 있었다 | `core/tests/unit/test_docx_check.py::test_운영_장부는_기획서_밖에_있다` | 실물 이 저장소의 기획서 구간 |
 | D-0333 | 날퍼짐이 아니라 잔차를 본다 | `core/tests/unit/test_cell_novelty.py::test_온음계로_설명되면_잔차가_줄어든다` | 합성 · 실물 1004곡 (D-0334 확인) |
 | D-0334 | 사전엔 정보가 있고 출력엔 안 실린다 | `core/tests/unit/test_cell_novelty.py::test_읽는_법이_셋을_가른다` | 합성 · 실물 1004곡 |
+| D-0335 | 경보 다섯이 떴고 화면은 「합계 35」를 찍었다 | `core/tests/unit/test_debts.py::test_안_갚은_행을_센다` | 실물 Dependabot 경보 5건 · 이 저장소의 잠금 |
 
 <!-- decision-ledger:end -->
 

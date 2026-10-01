@@ -139,6 +139,48 @@ def security_setup() -> Axis:
     return Axis("보안 설정 빠짐", len(missing), note)
 
 
+def plan_open_rows() -> Axis:
+    """§3.1에서 **아직 안 갚은** 행 (D-0335).
+
+    D-0328이 「판결 난 행」만 셌다. 그래서 **갚을 것이 남은 행은 아무 데도 안 세어졌고**,
+    화면이 「합계 35」를 찍는 동안 넷이 서 있었다 — **같은 병의 세 번째다**
+    (D-0328 · D-0329).
+    """
+    table = _section(_read("docs/PLAN.md"), "### 3.1 합성으로만 선 판단", "\n## ")
+    rows = [line for line in table.splitlines() if line.startswith("| D-")]
+    open_rows = [line for line in rows if "승격 아님" not in line and "뒤집힘" not in line]
+    return Axis("PLAN 안 갚은 행", len(open_rows))
+
+
+def dependabot_alerts() -> Axis:
+    """열린 Dependabot 경보 (D-0335).
+
+    **`gh`가 없거나 로그인 안 됐으면 0이 아니라 「모름」이다** (GR-0.5). 0으로 내면
+    「경보가 없다」로 읽히고, 그것이 이 파일이 막으려는 병이다.
+
+    `tidy`가 봇 **브랜치**를 치우고 `gh_ops.bot`이 봇 **PR**을 닫는다 — **열린 경보를
+    읽는 코드는 한 줄도 없었다.** 2026-10-01에 다섯이 떴고 `make ship`은 「합계 35」만
+    찍었다.
+    """
+    unknown = Axis("Dependabot 열린 경보", 0, "**모름** — `gh`를 못 읽었다. 0이 아니다")
+    try:
+        done = subprocess.run(
+            ["gh", "api", "repos/{owner}/{repo}/dependabot/alerts?state=open", "--jq", "length"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        # **`gh`가 아예 없으면 터진다.** 터지는 것은 0을 내는 것보다 낫지만,
+        # 빚을 세다가 죽으면 **나머지 축도 안 보인다** — 여기서 잡는다.
+        return unknown
+    counted = done.stdout.strip()
+    if done.returncode != 0 or not counted.isdigit():
+        return unknown
+    return Axis("Dependabot 열린 경보", int(counted))
+
+
 def _last_decision_of(name: str) -> int | None:
     """그 파일을 마지막으로 바꾼 커밋의 결정 번호. **못 읽으면 `None`이다.**"""
     done = subprocess.run(
@@ -182,7 +224,9 @@ def survey() -> list[Axis]:
         synthetic_only(),
         plan_open_issues(),
         plan_settled_rows(),
+        plan_open_rows(),
         security_setup(),
+        dependabot_alerts(),
         *staleness(),
     ]
 

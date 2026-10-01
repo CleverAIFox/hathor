@@ -114,3 +114,35 @@ def test_통과시킨_판은_확인이_맞다() -> None:
         "> **1 / 39**로 줄었다.\n\n본문\n\n자료  합성 · 실물 39곡 (D-0171 확인)\n"
     )
     assert evidence.check_evidence([_record(body, 169)]) == []
+
+
+def test_안_갚은_행을_센다() -> None:
+    """**판결 난 것만 세고 있었다** (D-0335).
+
+    D-0328이 「판결 난 행」 축을 만들었는데 그것은 **0이어야 정상인 축**이다. 갚을 것이
+    남은 행은 아무 데도 안 세어졌고, 화면이 「합계 35」를 찍는 동안 넷이 서 있었다 —
+    **D-0328 · D-0329와 같은 병의 세 번째다.**
+    """
+    debts = tool_module("debts")
+    table = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    block = table.split("### 3.1 합성으로만 선 판단")[1].split("\n## ")[0]
+    rows = [line for line in block.splitlines() if line.startswith("| D-")]
+
+    assert debts.plan_open_rows().count == len(rows) - debts.plan_settled_rows().count
+    assert rows, "표가 비면 두 축이 다 0이 되고 그것은 「다 갚았다」로 읽힌다"
+
+
+def test_경보를_못_읽으면_모름이다() -> None:
+    """**`gh`가 없을 때 0을 내면 「경보가 없다」로 읽힌다** (GR-0.5 · D-0335).
+
+    처음에 `FileNotFoundError`로 터지게 썼다. 터지는 것이 0보다는 낫지만 **빚을 세다가
+    죽으면 나머지 축도 안 보인다** — 잡아서 「모름」을 낸다.
+    """
+    debts = tool_module("debts")
+    found = debts.dependabot_alerts()
+
+    assert found.name == "Dependabot 열린 경보"
+    if "모름" in found.note:
+        assert found.count == 0, "모를 때 수를 지어내지 않는다"
+    else:
+        assert not found.note, "읽었으면 「모름」이라고 적지 않는다"
