@@ -146,3 +146,18 @@ def test_경보를_못_읽으면_모름이다() -> None:
         assert found.count == 0, "모를 때 수를 지어내지 않는다"
     else:
         assert not found.note, "읽었으면 「모름」이라고 적지 않는다"
+
+
+def test_조건이_걸린_질문을_따로_센다() -> None:
+    """**「아직 못 한다」와 「지금 할 수 있다」는 다른 빚이다** (D-0336).
+
+    «P5 착수 때» 같은 조건을 적어 두고 **아무도 안 세면 영원히 잠긴다** (D-0126).
+    O-17의 조건은 **283건 전**에 걸렸고 그동안 열린 질문 35에 섞여 안 보였다.
+    """
+    debts = tool_module("debts")
+    plan = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    block = plan.split("<!-- open-issues:begin -->")[1].split("<!-- open-issues:end -->")[0]
+
+    counted = debts.plan_unblocked().count
+    assert counted == len([x for x in block.splitlines() if debts.CONDITION_MET in x])
+    assert counted <= debts.plan_open_issues().count, "조건 걸린 것은 열린 것의 부분집합이다"

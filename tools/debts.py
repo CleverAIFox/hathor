@@ -108,6 +108,30 @@ def plan_open_issues() -> Axis:
     return Axis("PLAN 열린 질문", len(OPEN_ISSUE.findall(block)))
 
 
+CONDITION_MET = "**조건 충족**"
+"""재개·착수 조건이 **이미 걸린** 질문의 표식 (D-0336).
+
+«P5 착수 때» · «Part III가 800줄을 넘으면» 같은 조건을 적어 두고 **아무도 안 세면
+영원히 잠긴다** (D-0126). 실제로 여섯이 그랬다 — O-17의 조건은 **283건 전**에 걸렸다.
+
+**기계가 세려면 글자가 있어야 한다.** 조건이 걸렸다고 판단한 사람이 이 표식을 달고,
+그 수가 화면에 뜬다.
+"""
+
+
+def plan_unblocked() -> Axis:
+    """조건이 걸렸는데 **아직 안 움직인** 질문 (D-0336).
+
+    열린 질문 수(35)에 섞여 있으면 안 보인다 — **「아직 못 한다」와 「지금 할 수 있다」는
+    다른 빚이다.**
+    """
+    block = _section(
+        _read("docs/PLAN.md"), "<!-- open-issues:begin -->", "<!-- open-issues:end -->"
+    )
+    rows = [line for line in block.splitlines() if CONDITION_MET in line]
+    return Axis("PLAN 조건 걸린 질문", len(rows), "지금 할 수 있다" if rows else "")
+
+
 def plan_settled_rows() -> Axis:
     """§3.1에서 **이미 판결이 난** 행 (D-0328).
 
@@ -223,6 +247,7 @@ def survey() -> list[Axis]:
     return [
         synthetic_only(),
         plan_open_issues(),
+        plan_unblocked(),
         plan_settled_rows(),
         plan_open_rows(),
         security_setup(),
