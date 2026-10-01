@@ -323,3 +323,48 @@ def test_make_clean이_선언과_같은_것을_지운다() -> None:
         assert pattern in target, f"`make clean`이 {pattern}을 안 지운다"
     for pattern in SHIP.COUNTED:
         assert pattern not in target, f"`make clean`이 {pattern}을 지운다. 세기만 해야 한다"
+
+
+def test_러너를_고정한다() -> None:
+    """**`ubuntu-latest`는 날짜가 오면 저절로 바뀐다** (D-0330).
+
+    2026-10-19부터 Ubuntu 26으로 옮겨 간다고 GitHub이 잡마다 경고를 찍었고, 그 경고를
+    낸 잡 하나의 이름이 **`reproducibility`**였다 — 재현성을 보는 관문이 안 고정된 라벨
+    위에 서 있었다.
+
+    `uv.lock`을 리눅스 x86_64 하나로 좁혀 둔 저장소에서(D-0227) **러너만 떠다니면
+    무엇이 재현된 것인지 알 수 없다.** 자체 호스팅 러너(`self-hosted`)는 라벨이
+    기기를 가리키므로 해당이 없다.
+    """
+    floating: list[str] = []
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "runs-on:" in line and "-latest" in line:
+                floating.append(f"{path.name}:{number}")
+    assert not floating, f"떠다니는 러너 라벨: {floating}. 판을 고정한다 (D-0330)"
+
+
+def test_액션이_노드20에_머물러_있지_않다() -> None:
+    """**Dependabot이 9월 22일에 올리라고 했고 PR이 닫혔다** (D-0330).
+
+    `make bot-close`가 봇 PR을 **내용을 안 보고 전부 닫는다.** 그래서 아홉 날 뒤 Node 20
+    폐기 경고가 떴다. 여기 적힌 판은 그 PR(#10)이 계산한 것이며 **내가 고른 수가 아니다.**
+
+    `gitleaks-action`은 뺐다 — 주요 판을 올리면 비밀 검사 관문이 **닫히는 쪽으로** 깨질
+    수 있고 여기서 돌려 볼 수가 없다. **못 재는 것을 고친 척하지 않는다** (GR-0.5).
+    """
+    least = {
+        "actions/checkout": 5,
+        "astral-sh/setup-uv": 7,
+        "actions/configure-pages": 6,
+        "actions/upload-pages-artifact": 5,
+        "actions/deploy-pages": 5,
+    }
+    behind: list[str] = []
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        body = path.read_text(encoding="utf-8")
+        for action, floor in least.items():
+            for found in re.finditer(rf"uses: {re.escape(action)}@v(\d+)", body):
+                if int(found.group(1)) < floor:
+                    behind.append(f"{path.name}: {action}@v{found.group(1)} < v{floor}")
+    assert not behind, f"Node 20 판에 머물러 있다: {behind}"

@@ -27,13 +27,13 @@ permissions:
 jobs:
   analyze:
     name: analyze (python)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # 결과를 Security 탭에 올리는 데 필요하다. **쓰기는 이 하나뿐이다.**
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: github/codeql-action/init@v3
         with:

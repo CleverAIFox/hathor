@@ -127,6 +127,14 @@ def bot(close: bool) -> int:
         for pull in pulls:
             gh("pr", "close", str(pull["number"]), "--delete-branch")
         print(f"봇 PR {len(pulls)}개를 닫고 브랜치를 지웠다. 다음 달에 한 PR로 다시 온다")
+        if pulls:
+            # **닫은 것은 아무 데도 안 세어진다** (D-0330). 2026-09-22에 PR #10이
+            # 액션 여섯의 상한을 계산해 왔고 닫혔다 — 아홉 날 뒤 Node 20 폐기 경고가
+            # 떴다. 닫는 것은 **판단이지 정리가 아니다.**
+            print(
+                "  ⚠ 닫은 PR이 계산한 상한은 **어디에도 안 남는다.** 내용을 봤는가 —\n"
+                "    액션 판 뒤처짐은 `test_액션이_노드20에_머물러_있지_않다`가 잡는다 (D-0330)"
+            )
     return 0
 
 

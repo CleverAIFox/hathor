@@ -2479,6 +2479,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0327 | 판정 규칙이 동전이었다 | `core/tests/unit/test_compare_output.py::test_참_차이가_0이면_거의_다_떨어진다` | 합성 · 실물 1004곡 |
 | D-0328 | 「갚을 수 있는 빚 없다」가 128건이었다 | `core/tests/unit/test_debts.py::test_모든_축을_찍는다` | 실물 이 저장소의 문서 넷 |
 | D-0329 | 같은 화면이 「빚 없다」와 「35」를 함께 찍었다 | `core/tests/unit/test_debts.py::test_보안_설정을_파일로_센다` | 실물 이 저장소의 보안 설정 |
+| D-0330 | 재현성 관문이 안 고정된 러너 위에 서 있었다 | `core/tests/unit/test_hygiene.py::test_러너를_고정한다` | 실물 GitHub Actions 주석 · Dependabot PR #10 |
 
 <!-- decision-ledger:end -->
 
