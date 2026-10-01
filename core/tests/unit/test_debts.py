@@ -58,6 +58,19 @@ def test_판결_난_행은_PLAN에_없다() -> None:
     assert tool_module("debts").plan_settled_rows().count == 0
 
 
+def test_보안_설정을_파일로_센다() -> None:
+    """**설정은 축에 없다** (D-0329 · GR-0.5).
+
+    «비공개 취약점 보고»는 GitHub 설정이라 파일이 없다. 세는 척하면 0이 «켜져 있다»로
+    읽힌다 — 이 도구가 막으려는 바로 그 병이다. 파일로 확인되는 것만 든다.
+    """
+    debts = tool_module("debts")
+    for name in debts.SECURITY_SETUP:
+        assert (ROOT / name).is_file(), f"{name}이 없다"
+    assert debts.security_setup().count == 0
+    assert not any("보고" in name for name in debts.SECURITY_SETUP), "설정은 파일로 못 센다"
+
+
 def test_신선도는_못_읽으면_0이_아니라_모름이다() -> None:
     """**없는 것을 0이라고 말하지 않는다** (GR-0.5).
 

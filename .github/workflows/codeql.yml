@@ -1,0 +1,49 @@
+# 코드 스캐닝 (D-0329).
+#
+# `make check`의 검사 열일곱은 **이 저장소의 규약**을 본다 — 망 구멍 개수 · 계층 계약 ·
+# 문서 시제 · 자료 표기. **코드 수준 결함 부류는 아무도 안 봤다.**
+#
+# CodeQL이 보는 것 중 여기 실제로 닿는 것은 **경로 탈출**이다. 코퍼스 파일 이름과 ID3
+# 태그가 외부 입력이고(개발자가 안 쓴 문자열이다), 그것으로 만든 경로에 산출물을 쓴다.
+# `SECURITY.md`가 그것을 보고 대상으로 든다.
+#
+# **`make check`를 대신하지 않는다.** 서로 다른 부류를 보며, 이 잡이 빨개도 규약 검사는
+# 따로 돈다.
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 주 1회. 의존성이 안 바뀌어도 **질의 자체가 갱신된다** — 어제 통과한 코드가
+    # 오늘 걸리는 것이 이 도구의 정상 동작이다.
+    - cron: "37 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze (python)
+    runs-on: ubuntu-latest
+    permissions:
+      # 결과를 Security 탭에 올리는 데 필요하다. **쓰기는 이 하나뿐이다.**
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # 기본 질의에 보안 질의를 더한다. `security-and-quality`는 품질 질의까지
+          # 끌고 오는데 **그 부류는 `ruff` · `mypy` · `deadcheck`가 이미 본다.**
+          queries: security-extended
+
+      # 파이썬은 빌드가 없다. `autobuild`를 부르지 않는 것이 더 빠르고, 부르면
+      # 의존성을 깔려다 실패해 **잡 전체가 빨개진다.**
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:python

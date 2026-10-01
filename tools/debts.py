@@ -121,6 +121,24 @@ def plan_settled_rows() -> Axis:
     return Axis("PLAN 판결 난 행", len(settled), "미래 문서가 과거를 인다" if settled else "")
 
 
+SECURITY_SETUP = {
+    "SECURITY.md": "취약점을 어디에 보고하나",
+    ".github/workflows/codeql.yml": "코드 수준 결함을 아무도 안 본다",
+}
+"""GitHub 보안 탭에서 **파일로 확인할 수 있는 것** (D-0329).
+
+«비공개 취약점 보고»는 저장소 설정이라 파일이 없다 — **여기서 못 센다.** 세는 척하면
+0이 「켜져 있다」로 읽히므로 아예 축에서 뺀다 (GR-0.5). `make gh-setup`이 든다.
+"""
+
+
+def security_setup() -> Axis:
+    """보안 설정 중 **빠진 것**. 0이면 파일 쪽은 다 있다는 뜻이다."""
+    missing = [name for name in SECURITY_SETUP if not (ROOT / name).is_file()]
+    note = " · ".join(f"{name}: {SECURITY_SETUP[name]}" for name in missing)
+    return Axis("보안 설정 빠짐", len(missing), note)
+
+
 def _last_decision_of(name: str) -> int | None:
     """그 파일을 마지막으로 바꾼 커밋의 결정 번호. **못 읽으면 `None`이다.**"""
     done = subprocess.run(
@@ -160,7 +178,13 @@ def staleness() -> list[Axis]:
 
 def survey() -> list[Axis]:
     """모든 축. **순서가 뜻을 갖는다** — 갚을 수 있는 것이 먼저다."""
-    return [synthetic_only(), plan_open_issues(), plan_settled_rows(), *staleness()]
+    return [
+        synthetic_only(),
+        plan_open_issues(),
+        plan_settled_rows(),
+        security_setup(),
+        *staleness(),
+    ]
 
 
 def report(axes: list[Axis]) -> list[str]:

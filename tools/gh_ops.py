@@ -69,9 +69,34 @@ def failed(runs: list[dict[str, object]]) -> list[dict[str, object]]:
     ]
 
 
+def private_reporting() -> str:
+    """비공개 취약점 보고를 켠다 (D-0329).
+
+    **이것만 파일로 못 센다.** `SECURITY.md`와 코드 스캐닝 워크플로는 저장소에 있어
+    `debts`가 세지만, 이 스위치는 GitHub 설정이라 흔적이 안 남는다. 그래서 **켜는
+    자리를 여기 둔다** — 웹 화면 대신 `gh`가 한다 (D-0226).
+
+    이미 켜져 있으면 GitHub이 422를 낸다. **그것은 실패가 아니다.**
+    """
+    slug = gh("repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner").strip()
+    done = subprocess.run(
+        ["gh", "api", "-X", "PUT", f"repos/{slug}/private-vulnerability-reporting"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode == 0:
+        return "비공개 취약점 보고: 켬"
+    if "422" in done.stderr or "already enabled" in done.stderr.lower():
+        return "비공개 취약점 보고: 이미 켜져 있다"
+    said = done.stderr.strip().splitlines()
+    return f"비공개 취약점 보고: 못 켰다 — {said[-1] if said else '사유 없음'}"
+
+
 def setup() -> int:
     gh("repo", "edit", "--delete-branch-on-merge")
     print("머지 뒤 브랜치 자동 삭제: 켬")
+    print(private_reporting())
     print("기획서 배포:")
     return dispatch(PAGES)
 

@@ -237,7 +237,10 @@ def payable_debts() -> list[str]:
     text = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
     rows = decision_evidence.payable(scan_records(text))
     if not rows:
-        return ["갚을 수 있는 빚  없다"]
+        # **「없다」를 여기서 찍지 않는다** (D-0329). 이 함수는 **한 축**을 보는데
+        # 그 문구는 전체를 말하는 것처럼 읽혔다 — 바로 아래 빚 구역이 35를 찍는
+        # 동안 이 줄이 「없다」를 찍고 있었다. **합계만 「없다」를 말할 수 있다.**
+        return []
     # **한 줄에 하나씩 찍는다.** `·`를 사이와 안쪽에 함께 쓰면 어디까지가 한 건인지
     # 안 보인다 — 짓자마자 그 꼴로 나왔다.
     return [
@@ -382,12 +385,14 @@ def main() -> int:
 
     print(f"{DIM}── 기록{OFF}")
     print(f"   마지막 결정  {last_decision()}")
-    for line in payable_debts():
-        print(f"{DIM}   {line}{OFF}")
 
     # **한 축만 세고 「빚 없다」를 찍고 있었다** (D-0328). 축을 전부 든다.
+    # **명단은 합계 아래 붙인다** (D-0329) — 두 구역으로 나뉘어 있어서 한쪽이
+    # 「없다」, 다른 쪽이 「35」를 같은 화면에 찍었다.
     print(f"{DIM}── 빚 (축마다 · 막지 않는다){OFF}")
     for line in debts.report(debts.survey()):
+        print(f"{DIM}   {line}{OFF}")
+    for line in payable_debts():
         print(f"{DIM}   {line}{OFF}")
 
     print(f"{DIM}── CI (직전 커밋){OFF}")

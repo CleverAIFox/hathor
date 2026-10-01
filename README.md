@@ -294,6 +294,8 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/mutate_gate.py` | 검사가 진짜로 잡는가 — 일부러 깨 본다 |
 | `tools/repro_from_artifacts.py` | 산출물만으로 결정 기록의 수를 다시 내는가 |
 | `tools/bake_proposal.py` | 기획서 PDF 굽기 — 배포용 (D-0229) |
+| `SECURITY.md` | **이 저장소에서 취약점이 무엇인가** — 오디오 비이동이 중심이다 (D-0329) |
+| `.github/workflows/codeql.yml` | 코드 수준 결함 — `make check`가 안 보는 부류 (D-0329) |
 | `tools/probe_id3.py` · `tools/probe_artist.py` · `tools/probe_musicbrainz.py` | 코퍼스 실측 탐침 (일회성) |
 | `tools/probe_chord_rhythm.py` · `tools/probe_onsets.py` · `tools/probe_latent.py` · `tools/probe_stems.py` | 화성 · 박 · 잠재 표현 · 스템 탐침 |
 | `tools/lyrics_language_profile.py` · `tools/lyrics_exclusion_probe.py` | 가사 언어 구성 · 제외 곡 진단 |
