@@ -66,12 +66,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from hathor.application.compare_output import PairedGap, gap_of
-from hathor.domain.services.harmony_prior import (
-    DegreeMatrix,
-    cross_entropy,
-    rotate_to_degrees,
-    smooth,
-)
+from hathor.domain.services.harmony_prior import achievable_widths
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -149,22 +144,12 @@ class AggregationComparison:
 
 
 def song_widths(observations: Sequence[HalfChroma], condition: PriorCondition) -> dict[str, float]:
-    """곡별 달성 가능 폭 `CE(tail, uniform) - CE(tail, smooth(tail))`.
+    """곡별 달성 가능 폭. **식은 도메인에 하나다** (`achievable_widths` · D-0339).
 
-    **중앙값을 내기 전 벡터다.** `compare_priors`가 같은 두 양을 쓰고 중앙값으로
-    접는다 — 여기서는 접지 않고 곡 이름에 붙여 낸다.
+    여기 식을 베꼈더니 `_stack`의 전처리 셋이 전부 빠졌고 **손잡이 셋이 동시에 안
+    걸렸다** — `--harmonic`을 0에서 1.0까지 돌려도 소수점 넷째 자리까지 같았다.
     """
-    kept = [item for item in observations if item.is_confident]
-    if not kept:
-        return {}
-    rotated = [
-        rotate_to_degrees(np.asarray(item.tail, dtype=np.float64), item.tonic_pitch_class)
-        for item in kept
-    ]
-    tails: DegreeMatrix = np.stack(rotated)
-    uniform: DegreeMatrix = np.full_like(tails, 1.0 / tails.shape[1])
-    gap = cross_entropy(tails, uniform) - cross_entropy(tails, smooth(tails, condition))
-    return {item.source_key: float(value) for item, value in zip(kept, gap, strict=True)}
+    return achievable_widths(observations, condition)
 
 
 @dataclass(frozen=True, slots=True)

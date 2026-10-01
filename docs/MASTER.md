@@ -2502,6 +2502,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0336 | 질문 둘은 이미 답이 나와 있었고 여섯은 조건이 걸려 있었다 | `core/tests/unit/test_debts.py::test_조건이_걸린_질문을_따로_센다` | 실물 이 저장소의 미해결표 전수 |
 | D-0337 | 중앙값 추출은 이미 있었다 | `core/tests/unit/test_compare_aggregation.py::test_넓어지면_잡는다` | 합성 |
 | D-0338 | 끝난 질문의 자를 지었다 | `core/tests/unit/test_debts.py::test_닫힌_질문을_막고_있다고_적으면_잡는다` | 합성 · 실물 1004곡 |
+| D-0339 | 손잡이 셋이 동시에 안 걸렸다 | `core/tests/unit/test_compare_aggregation.py::test_배음_손잡이가_실제로_결과를_바꾼다` | 합성 · 실물 1004곡 |
 
 <!-- decision-ledger:end -->
 

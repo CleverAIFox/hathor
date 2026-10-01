@@ -52,18 +52,43 @@ def test_뾰족하면_폭이_넓다() -> None:
     assert np.median(list(sharp.values())) > np.median(list(flat.values()))
 
 
-def test_신뢰도_낮은_곡은_뺀다() -> None:
-    """`is_confident`가 거짓인 곡은 안 센다 — **조성이 틀렸으면 회전이 틀렸다.**"""
-    songs = _songs(10, sharpness=2.0, seed=3)
+def test_배음_손잡이가_실제로_결과를_바꾼다() -> None:
+    """**손잡이 셋이 동시에 안 걸려 있었다** (D-0339).
+
+    D-0338이 식을 베끼면서 `_stack`을 안 썼고 `subtract_harmonics`가 빠졌다.
+    실물에서 `--harmonic`을 **0에서 1.0까지** 돌렸는데 소수점 넷째 자리까지 같았다.
+
+    D-0064가 열 번째로 같은 형태를 겪고 적은 규칙이 이것이다 — *"새 인자를 넣으면
+    그 인자가 실제로 결과를 바꾸는지 단위 검사로 고정한다."* **읽고도 안 지켰다.**
+    """
+    songs = _songs(40, sharpness=2.0, seed=3)
+    off = song_widths(songs, PriorCondition(harmonic=0.0))
+    on = song_widths(songs, PriorCondition(harmonic=0.8))
+
+    assert off.keys() == on.keys()
+    assert any(off[name] != on[name] for name in off), "배음이 아무 일도 안 한다"
+
+
+def test_애매_제외가_곡_수를_줄인다() -> None:
+    """`confident_only`도 같이 죽어 있었다 (D-0339).
+
+    `HalfChroma.is_confident`가 `margin >= 0.0`을 박아 두고 독스트링은 *"기준값은
+    조건 객체가 들고 있다"*고 적었다. **격차는 음수가 안 되므로 늘 참이었다.**
+    쓰는 곳이 내 코드 한 줄뿐이라 **그 속성을 지웠다.**
+    """
+    songs = list(_songs(10, sharpness=2.0, seed=3))
     songs[0] = HalfChroma(
         source_key=songs[0].source_key,
         tonic_pitch_class=0,
-        margin=-1.0,
+        margin=0.0,
         head=songs[0].head,
         tail=songs[0].tail,
     )
-    assert songs[0].source_key not in song_widths(songs, CONDITION)
-    assert len(song_widths(songs, CONDITION)) == 9
+    strict = PriorCondition(confident_only=True, margin_floor=0.5)
+
+    assert len(song_widths(songs, CONDITION)) == 10
+    assert songs[0].source_key not in song_widths(songs, strict)
+    assert len(song_widths(songs, strict)) == 9
 
 
 def test_한쪽에만_있는_곡은_뺀다() -> None:

@@ -124,11 +124,6 @@ class HalfChroma:
             if len(vector) != DEGREE_COUNT:
                 raise ValueError(f"{name} 크로마는 12차원이어야 한다: {len(vector)}")
 
-    @property
-    def is_confident(self) -> bool:
-        """조성 추정 격차가 기준을 넘는가. 기준값은 조건 객체가 들고 있다."""
-        return self.margin >= 0.0
-
 
 @dataclass(frozen=True, slots=True)
 class PriorCondition:
@@ -437,6 +432,46 @@ def compare_priors(
         other_wins=int(np.sum(other_scores < corpus_scores)),
         ambiguous_count=ambiguous,
     )
+
+
+def achievable_widths(
+    observations: Sequence[HalfChroma], condition: PriorCondition | None = None
+) -> dict[str, float]:
+    """곡별 **달성 가능 폭** `CE(tail, uniform) - CE(tail, smooth(tail))` (D-0339).
+
+    `compare_priors`의 `uniform_score` · `oracle_score`를 **중앙값으로 접기 전** 벡터다.
+    `uniform`이 모든 곡에서 상수이므로 **곡별 폭의 중앙값이 곧 달성 가능 폭**이다.
+
+    ### 왜 도메인으로 내려왔나
+
+    D-0338이 이 식을 **애플리케이션 계층에 베꼈고 `_stack`을 안 썼다.** 그 결과
+    `_stack`이 하는 세 가지가 **전부 빠졌다.**
+
+    | 빠진 것 | 결과 |
+    |---|---|
+    | `subtract_harmonics` | `--harmonic`이 **아무 일도 안 했다.** 0에서 1.0까지 수가 같았다 |
+    | `_to_distribution` | 감산 뒤 합이 1이 아닌 벡터를 교차 엔트로피에 넣었다 |
+    | `confident_only` 걸러내기 | `--confident-only` · `--margin-floor`도 조용히 죽었다 |
+
+    **손잡이 셋이 동시에 안 걸렸다.** D-0064가 열 번째로 겪은 형태이고 그 판이 세운
+    규칙이 *"새 인자를 넣으면 그 인자가 실제로 결과를 바꾸는지 단위 검사로 고정한다"*
+    였다. **식을 베낀 것이 원인이다** — `_stack`을 불렀으면 셋 다 공짜였다.
+
+    그래서 식을 **`compare_priors` 옆 한 자리**에 둔다. 조건 객체 하나를 받아
+    같은 전처리를 지나므로 **새 손잡이가 생기면 여기도 자동으로 걸린다** (O-25).
+    """
+    settings = condition if condition is not None else PriorCondition()
+    kept = (
+        [item for item in observations if item.margin >= settings.margin_floor]
+        if settings.confident_only
+        else list(observations)
+    )
+    if not kept:
+        return {}
+    _, tails = _stack(kept, settings)
+    uniform: DegreeMatrix = np.full_like(tails, 1.0 / DEGREE_COUNT)
+    gap = cross_entropy(tails, uniform) - cross_entropy(tails, smooth(tails, settings))
+    return {item.source_key: float(value) for item, value in zip(kept, gap, strict=True)}
 
 
 def merge_degree_priors(
