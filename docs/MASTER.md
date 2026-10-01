@@ -2480,6 +2480,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0328 | 「갚을 수 있는 빚 없다」가 128건이었다 | `core/tests/unit/test_debts.py::test_모든_축을_찍는다` | 실물 이 저장소의 문서 넷 |
 | D-0329 | 같은 화면이 「빚 없다」와 「35」를 함께 찍었다 | `core/tests/unit/test_debts.py::test_보안_설정을_파일로_센다` | 실물 이 저장소의 보안 설정 |
 | D-0330 | 재현성 관문이 안 고정된 러너 위에 서 있었다 | `core/tests/unit/test_hygiene.py::test_러너를_고정한다` | 실물 GitHub Actions 주석 · Dependabot PR #10 |
+| D-0331 | CodeQL 0건이 예측을 확인해 주지 않았다 | `core/tests/unit/test_artifact_paths.py::test_곡_이름이_경로를_못_만든다` | 실물 CodeQL 첫 실행 0건 · 적대 입력 일곱 |
 
 <!-- decision-ledger:end -->
 
