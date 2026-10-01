@@ -2494,7 +2494,8 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0330 | 재현성 관문이 안 고정된 러너 위에 서 있었다 | `core/tests/unit/test_hygiene.py::test_러너를_고정한다` | 실물 GitHub Actions 주석 · Dependabot PR #10 |
 | D-0331 | CodeQL 0건이 예측을 확인해 주지 않았다 | `core/tests/unit/test_artifact_paths.py::test_곡_이름이_경로를_못_만든다` | 실물 CodeQL 첫 실행 0건 · 적대 입력 일곱 |
 | D-0332 | 기획서 안에 운영 장부가 살고 있었다 | `core/tests/unit/test_docx_check.py::test_운영_장부는_기획서_밖에_있다` | 실물 이 저장소의 기획서 구간 |
-| D-0333 | 날퍼짐이 아니라 잔차를 본다 | `core/tests/unit/test_cell_novelty.py::test_온음계로_설명되면_잔차가_줄어든다` | 합성 |
+| D-0333 | 날퍼짐이 아니라 잔차를 본다 | `core/tests/unit/test_cell_novelty.py::test_온음계로_설명되면_잔차가_줄어든다` | 합성 · 실물 1004곡 (D-0334 확인) |
+| D-0334 | 사전엔 정보가 있고 출력엔 안 실린다 | `core/tests/unit/test_cell_novelty.py::test_읽는_법이_셋을_가른다` | 합성 · 실물 1004곡 |
 
 <!-- decision-ledger:end -->
 
