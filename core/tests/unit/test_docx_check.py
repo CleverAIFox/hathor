@@ -142,3 +142,21 @@ def test_Part_밖을_고치면_지문이_그대로다(tmp_path: Path) -> None:
     master = root / "docs/MASTER.md"
     master.write_text(master.read_text(encoding="utf-8") + "\n추가\n", encoding="utf-8")
     assert SOURCE.fingerprint(root) == before
+
+
+def test_운영_장부는_기획서_밖에_있다() -> None:
+    """**밖이 읽는 문서에 내부 장부가 실렸다** (D-0332).
+
+    닫힘표와 갚음표가 `## 3. 시장현황 및 유사 서비스 분석` 안에 있었다. 그래서
+    **닫힌 질문 한 줄만 고쳐도 지문이 깨져 기획서를 다시 빌드해야 했다** — 그 재빌드는
+    기획서 내용과 아무 상관이 없었다.
+
+    지문은 «밖에 나가는 것이 정본과 같은가»를 묻는 장치다 (D-0221). 운영 장부가 그 안에
+    있으면 **지문이 운영을 따라다닌다.**
+    """
+    source = tool_module("proposal_source").source()
+
+    assert "closed-issues:begin" not in source, "닫힘표가 기획서 구간에 있다 (D-0332)"
+    assert "### 갚은 빚" not in source, "갚음표가 기획서 구간에 있다 (D-0332)"
+    # **열린 것은 남는다** — 제안서의 정직한 리스크 공개이고 짧다.
+    assert "### □ 진행 중 미해결" in source, "열린 미해결까지 빼면 제안서가 리스크를 감춘다"
