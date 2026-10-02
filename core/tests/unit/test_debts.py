@@ -161,7 +161,10 @@ def test_안_갚은_행을_센다() -> None:
     rows = [line for line in block.splitlines() if line.startswith("| D-")]
 
     assert debts.plan_open_rows().count == len(rows) - debts.plan_settled_rows().count
-    assert rows, "표가 비면 두 축이 다 0이 되고 그것은 「다 갚았다」로 읽힌다"
+    # **표는 비어도 된다 — 머리가 없으면 안 된다** (D-0345). 원래 `assert rows`였는데
+    # 네 행이 하루 만에 0이 되자 그 검사가 **갚은 것을 막았다.** 「갚았다」와 「표를
+    # 잃었다」를 가르는 것은 행 수가 아니라 **표 머리**다.
+    assert "| 기록 | 막고 있는 것 | 갚는 법 |" in block, "표 머리가 사라졌다 — 두 축이 거짓 0이다"
 
 
 def test_경보를_못_읽으면_모름이다() -> None:
@@ -214,7 +217,7 @@ def test_조건이_걸린_질문을_따로_센다() -> None:
     """**「아직 못 한다」와 「지금 할 수 있다」는 다른 빚이다** (D-0336).
 
     «P5 착수 때» 같은 조건을 적어 두고 **아무도 안 세면 영원히 잠긴다** (D-0126).
-    O-17의 조건은 **283건 전**에 걸렸고 그동안 열린 질문 35에 섞여 안 보였다.
+    O-17(닫힘 D-0344)의 조건은 **283건 전**에 걸렸고 그동안 열린 질문 35에 섞여 안 보였다.
     """
     debts = tool_module("debts")
     plan = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")

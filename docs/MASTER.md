@@ -2154,6 +2154,9 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | O-8 | MERT가 MFCC에 진 원인 | D-0024 · D-0025 · D-0026 |
 | O-9 | 어느 레이어를 쓸 것인가 | D-0026 · D-0027 |
 | O-12 | 가사축 M0 정의 부적합 | D-0044 |
+| O-15 | M0 게이트 전제가 가사축에서 성립 안 한다 — **고칠 축이 종료됐다** (D-0048) | D-0044 · D-0048 · D-0344 |
+| O-16 | 문자 n-gram 언어 편향 — **편향 없는 인코더도 기준 미달이었다** (D-0048) | D-0045 · D-0048 · D-0344 |
+| O-17 | 해시 · BGE-M3 앙상블 — **종료된 축을 섞을 이유가 없다** | D-0048 · D-0344 |
 | O-18 | 가사 구간 분할에서 1곡이 조용히 빠진다 | D-0050 |
 | O-21 | 화성 어휘 조건화 | D-0054 · D-0063 · D-0074 · D-0082 |
 | O-22 | 조성 라벨이 없다 → **안 만든다.** 취향에는 맞음이 아니라 일관됨이 든다 (D-0201) | D-0055 · D-0056 · D-0201 |
@@ -2371,7 +2374,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0196 | `make apply`가 넉 달째 죽어 있었다 | `core/tests/unit/test_doc_fsck.py::test_배선이_없는_스크립트를_부르면_잡는다` | 실물 저장소 |
 | D-0197 | 선법별 지표에는 선법별 바닥을 댄다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_선법별_바닥이_전체_바닥과_다르다` | 합성 (D-0201 승격 아님) |
 | D-0198 | `--check`가 검사를 안 하고 썼다 | `core/tests/unit/test_check_decisions.py::test_check가_대장을_쓰지_않는다` | 실물 저장소 |
-| D-0199 | `.env`를 읽는 파서가 둘이었다 | `core/tests/unit/test_paths.py::test_셸이_env를_따로_가르지_않는다` | 합성 |
+| D-0199 | `.env`를 읽는 파서가 둘이었다 | `core/tests/unit/test_paths.py::test_셸이_env를_따로_가르지_않는다` | 합성 · 실물 WSL 기기 (D-0345 확인) |
 | D-0200 | 죽은 손잡이 하나와, 모든 표가 어긋나 있었다 | `core/tests/unit/test_tables.py::test_한글_머리글이_값과_어긋나지_않는다` | 실물 저장소 |
 | D-0201 | 배음 감산을 켠다 | `core/tests/unit/test_sweep_harmonic_modes.py::test_고정_집합_바닥이_전체_바닥보다_낮다` | 합성 · 실물 1004곡 |
 | D-0203 | 산출물을 전부 버리고 한 패스로 다시 뽑는다 | `core/tests/unit/test_ingest_all.py::test_디코딩과_분리를_곡당_한_번만_한다` | 실물 기기 · 산출물 |
@@ -2506,6 +2509,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0340 | 「달성 가능 폭」은 뾰족함을 잰다 | `core/tests/unit/test_compare_aggregation.py::test_폭은_뾰족함을_재고_곡_고유성을_안_잰다` | 합성 · 실물 1004곡 |
 | D-0341 | 거짓 빨강을 찍고 있었다 | `core/tests/unit/test_ship.py::test_봇_실행을_우리_CI로_안_센다` | 실물 이 저장소의 워크플로 실행 8건 · Dependabot 실행 6건 · PyPI 휠 꼬리표 |
 | D-0342 | 합계가 34를 40으로 찍었다 | `core/tests/unit/test_debts.py::test_부분집합인_축은_합계에_안_더한다` | 실물 이 저장소의 미해결표 전수 · 워크플로 실행 로그 2건 |
+| D-0345 | §3.1이 비었다 | `core/tests/unit/test_debts.py::test_안_갚은_행을_센다` | 실물 WSL 기기 31건 |
 
 <!-- decision-ledger:end -->
 

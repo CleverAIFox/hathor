@@ -471,6 +471,9 @@ def check_plan_leftovers() -> list[str]:
 DEBT_TABLE = "### 3.1 합성으로만 선 판단"
 """한 줄에 한 기록을 적는 빚 표 (D-0324). **여기서만 본다.**"""
 
+DEBT_HEADING = "| 기록 | 막고 있는 것 | 갚는 법 |"
+"""§3.1 빚 표의 머리. **행이 0인 것과 표가 없는 것을 가른다** (D-0345)."""
+
 NO_TOOL = ("도구 없음", "승격 아님")
 """갚는 법이 **명령이 아닐 때** 쓰는 말. 빈칸과 다르다 — 빈칸은 「안 봤다」와
 「볼 것이 없다」를 못 가른다."""
@@ -507,9 +510,12 @@ def check_debt_rows() -> list[str]:
         for line in rows
         if "`" not in line.rsplit("|", 2)[1] and not any(word in line for word in NO_TOOL)
     ]
-    if not rows:
-        # **그물이 비면 «전부 맞다»가 거짓으로 참이 된다** (D-0230).
-        found.append("docs/PLAN.md 빚 표가 비었다. 기록마다 한 줄을 적는다 (D-0324)")
+    # **행이 아니라 표 머리를 본다** (D-0345). *"그물이 비면 «전부 맞다»가 거짓으로
+    # 참이 된다"*(D-0230)가 이 자의 근거였고 **옳은 걱정에 틀린 자였다** — 진짜로 다
+    # 갚아서 비는 경우를 막는다. 네 행이 하루 만에 0이 되자 이 줄이 걸렸고, 걸린 이유가
+    # **빚을 다 갚아서**였다. 같은 가정을 `test_debts.py`도 하고 있었다.
+    if DEBT_HEADING not in rest:
+        found.append("docs/PLAN.md 빚 표의 머리가 없다. 「갚았다」와 「표를 잃었다」가 안 갈린다")
     return found
 
 
