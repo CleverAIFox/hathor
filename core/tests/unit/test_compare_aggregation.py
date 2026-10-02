@@ -13,12 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hathor.application.compare_aggregation import (
-    ACHIEVABLE_FLOOR,
-    compare,
-    song_widths,
-    width_draws,
-)
+from hathor.application.compare_aggregation import compare, song_widths, width_draws
 from hathor.domain.services.harmony_prior import HalfChroma, PriorCondition
 
 DEGREES = 12
@@ -44,8 +39,47 @@ def _songs(count: int, *, sharpness: float, seed: int) -> list[HalfChroma]:
     return made
 
 
+def test_폭은_뾰족함을_재고_곡_고유성을_안_잰다() -> None:
+    """**D-0337이 적은 해석이 거짓이었다** (D-0340).
+
+    그 독스트링은 *"`uniform`과 `oracle` 사이가 넓다는 것은 곡 고유 정보가 들어갈
+    자리가 넓다는 뜻"*이라 적었다. **반대 방향 합성 둘로 가른다** (D-0303 여섯째 줄).
+
+    | 코퍼스 | 폭 |
+    |---|---|
+    | 뾰족하고 곡끼리 **똑같다** — 고유성 0 | 0.74 |
+    | 평평하고 곡끼리 **다르다** — 고유성 있다 | 0.001 |
+
+    `oracle`은 뒷반쪽으로 뒷반쪽을 맞히므로 **뾰족한 벡터는 자기 자신을 잘 맞힌다.**
+    """
+    rng = np.random.default_rng(7)
+    flat = np.full(DEGREES, 1.0 / DEGREES)
+    one = rng.dirichlet(np.full(DEGREES, 0.3))
+
+    def _corpus(tails: list[np.ndarray]) -> list[HalfChroma]:
+        return [
+            HalfChroma(
+                source_key=f"곡{index:03d}",
+                tonic_pitch_class=0,
+                margin=1.0,
+                head=tuple(float(v) for v in flat),
+                tail=tuple(float(v) for v in tail),
+            )
+            for index, tail in enumerate(tails)
+        ]
+
+    # 뾰족한데 곡끼리 **완전히 같다** — 곡 고유 정보가 한 비트도 없다.
+    same = song_widths(_corpus([one] * 120), CONDITION)
+    # 평평한데 곡끼리 **다르다** — 고유 정보는 있고 뾰족함만 없다.
+    nudged = [0.96 * flat + 0.04 * rng.dirichlet(np.full(DEGREES, 0.5)) for _ in range(120)]
+    varied = song_widths(_corpus(nudged), CONDITION)
+
+    assert np.median(list(same.values())) > 0.5, "고유성 0인데도 폭이 크다"
+    assert np.median(list(varied.values())) < 0.01, "고유성이 있는데도 폭이 작다"
+
+
 def test_뾰족하면_폭이_넓다() -> None:
-    """**자의 방향을 먼저 고정한다.** 폭은 클수록 좋다 — 곡 고유 정보가 들어갈 자리다."""
+    """**자의 방향을 고정한다.** 뾰족할수록 폭이 넓다 — 그것이 이 양이 재는 것이다."""
     flat = song_widths(_songs(60, sharpness=0.2, seed=1), CONDITION)
     sharp = song_widths(_songs(60, sharpness=5.0, seed=1), CONDITION)
 
@@ -156,27 +190,33 @@ def _flatish(count: int, *, blend: float, seed: int) -> list[HalfChroma]:
     return made
 
 
-def test_절대_기준은_판정에_안_걸린다() -> None:
-    """**걸었다가 뺐다** (D-0338). 이 검사가 그 결정을 고정한다.
+def test_절대_문턱이_판정을_막지_않는다() -> None:
+    """**D-0338이 걸었고 D-0340이 상수째로 지웠다.** 이 검사가 그 결정을 고정한다.
 
-    처음에 D-0064의 0.031을 `widens`의 조건으로 넣었다. **1004곡 평균의 폭이 이미
-    0.0471이라 그 문턱은 아무것도 안 막고**, 더 나쁘게는 **자료가 적을 때만 막는**
-    거꾸로 된 자가 된다 — 실물 급(0.01~0.02) 코퍼스에서만 걸린다.
-
-    그래서 판정은 짝지은 차이 하나이고 절대 기준은 **찍기만 한다.**
+    실물 급(0.01~0.02) 폭에서도 짝지은 차이는 선다. 여기 절대 문턱이 들어오면
+    **자료가 적을 때만 막는** 거꾸로 된 자가 되고, 애초에 **폭은 `--harmonic` 하나로
+    9배 움직이므로 절대 문턱을 걸 수 있는 양이 아니다** (D-0340).
     """
     found = compare(_flatish(120, blend=0.15, seed=3), _flatish(120, blend=0.08, seed=3), CONDITION)
 
     assert found.median_width is not None
-    assert found.median_width < ACHIEVABLE_FLOOR, "이 코퍼스는 기준 미달이어야 한다"
-    assert found.clears_floor is False, "참조선은 그대로 찍힌다"
+    assert found.median_width < 0.031, "이 코퍼스는 옛 문턱 미달이어야 한다"
     assert found.paired_gap.t > 10.0
-    assert found.widens is True, "**절대 기준이 판정을 막으면 안 된다**"
+    assert found.widens is True, "**절대 문턱이 판정을 막으면 안 된다**"
 
 
-def test_문턱을_이_판에서_고르지_않았다() -> None:
-    """**D-0058이다.** 0.031은 D-0064가 K-K 장조 폭의 절반으로 등록한 값이다."""
-    assert pytest.approx(0.0616 / 2, abs=0.0009) == ACHIEVABLE_FLOOR
+def test_과녁을_안_주면_전수_폭이다() -> None:
+    """**D-0338은 과녁을 0.0187로 박아 뒀다** (D-0340).
+
+    그 수는 **배음 감산이 안 걸린** 크로마의 것이고 지금 산출물은 걸린 것이다 —
+    비교 대상이 아닌데 「분포 밖」이 **표본 얘기로 읽혔다.**
+    """
+    songs = _flatish(300, blend=0.15, seed=9)
+    found = width_draws(songs, CONDITION, size=80, draws=60)
+
+    assert found is not None
+    assert found.target == pytest.approx(found.whole), "과녁 기본값이 전수 폭이어야 한다"
+    assert found.inside is True, "전수 값이 자기 뽑기 분포 밖이면 자가 깨진 것이다"
 
 
 # ------------------------------------------------------- 작은 표본에서 폭이 흔들리나
@@ -205,7 +245,8 @@ def test_분포_밖이면_요동이_아니라고_말한다() -> None:
     assert found is not None
     assert found.quantile == 0.0
     assert found.inside is False
-    assert "요동으로 설명이 안 된다" in found.reading()
+    assert "뽑기로 설명이 안 된다" in found.reading()
+    assert "조건이 달랐다" in found.reading(), "**표본 얘기로 읽히면 안 된다** (D-0340)"
 
 
 def test_곡이_모자라면_없다고_말한다() -> None:

@@ -314,7 +314,10 @@ def payable(records: list[Record]) -> list[str]:
     rows: list[str] = []
     for record in records:
         value = source.get(record.identifier, "")
-        if evidence_base(value) != "합성" or NOT_PROMOTED.search(value):
+        # **`뒤집힘`도 명단에서 뺀다** (D-0340). D-0328이 그 꼬리표를 만들었는데
+        # 여기서 안 읽었다 — **판정이 뒤집힌 판은 승격 후보가 아니다.** 「승격 아님」이
+        # 그 약한 짝이고, 강한 쪽을 안 보면 뒤집힌 판이 명단에 영원히 선다.
+        if evidence_base(value) != "합성" or NOT_PROMOTED.search(value) or OVERTURNED.search(value):
             continue
         later = [
             f"D-{number}"

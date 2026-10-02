@@ -2500,9 +2500,10 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0334 | 사전엔 정보가 있고 출력엔 안 실린다 | `core/tests/unit/test_cell_novelty.py::test_읽는_법이_셋을_가른다` | 합성 · 실물 1004곡 |
 | D-0335 | 경보 다섯이 떴고 화면은 「합계 35」를 찍었다 | `core/tests/unit/test_debts.py::test_안_갚은_행을_센다` | 실물 Dependabot 경보 5건 · 이 저장소의 잠금 |
 | D-0336 | 질문 둘은 이미 답이 나와 있었고 여섯은 조건이 걸려 있었다 | `core/tests/unit/test_debts.py::test_조건이_걸린_질문을_따로_센다` | 실물 이 저장소의 미해결표 전수 |
-| D-0337 | 중앙값 추출은 이미 있었다 | `core/tests/unit/test_compare_aggregation.py::test_넓어지면_잡는다` | 합성 |
+| D-0337 | 중앙값 추출은 이미 있었다 | `core/tests/unit/test_compare_aggregation.py::test_넓어지면_잡는다` | 합성 (D-0340 뒤집힘) |
 | D-0338 | 끝난 질문의 자를 지었다 | `core/tests/unit/test_debts.py::test_닫힌_질문을_막고_있다고_적으면_잡는다` | 합성 · 실물 1004곡 |
 | D-0339 | 손잡이 셋이 동시에 안 걸렸다 | `core/tests/unit/test_compare_aggregation.py::test_배음_손잡이가_실제로_결과를_바꾼다` | 합성 · 실물 1004곡 |
+| D-0340 | 「달성 가능 폭」은 뾰족함을 잰다 | `core/tests/unit/test_compare_aggregation.py::test_폭은_뾰족함을_재고_곡_고유성을_안_잰다` | 합성 · 실물 1004곡 |
 
 <!-- decision-ledger:end -->
 
