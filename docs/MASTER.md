@@ -2505,6 +2505,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0339 | 손잡이 셋이 동시에 안 걸렸다 | `core/tests/unit/test_compare_aggregation.py::test_배음_손잡이가_실제로_결과를_바꾼다` | 합성 · 실물 1004곡 |
 | D-0340 | 「달성 가능 폭」은 뾰족함을 잰다 | `core/tests/unit/test_compare_aggregation.py::test_폭은_뾰족함을_재고_곡_고유성을_안_잰다` | 합성 · 실물 1004곡 |
 | D-0341 | 거짓 빨강을 찍고 있었다 | `core/tests/unit/test_ship.py::test_봇_실행을_우리_CI로_안_센다` | 실물 이 저장소의 워크플로 실행 8건 · Dependabot 실행 6건 · PyPI 휠 꼬리표 |
+| D-0342 | 합계가 34를 40으로 찍었다 | `core/tests/unit/test_debts.py::test_부분집합인_축은_합계에_안_더한다` | 실물 이 저장소의 미해결표 전수 · 워크플로 실행 로그 2건 |
 
 <!-- decision-ledger:end -->
 

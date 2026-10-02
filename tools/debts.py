@@ -73,10 +73,21 @@ class Axis:
     name: str
     count: int
     note: str = ""
+    summed: bool = True
+    """합계에 더하는가. **다른 축의 부분집합이면 거짓이다** (D-0342).
+
+    「PLAN 조건 걸린 질문」 6건은 전부 「PLAN 열린 질문」 33건 **안에 있다** — 같은
+    블록의 같은 줄을 한 번은 전부, 한 번은 표식이 달린 것만 센다. 그런데 합계가 둘을
+    더해 **34를 40으로 찍었다.**
+
+    **수가 틀리면 그 수를 안 믿게 된다** (GR-0.8). 이 도구가 생긴 이유가
+    *"안 세는 것은 0으로 보인다"*인데, **부풀린 수도 같은 자리에서 신뢰를 깎는다.**
+    """
 
     def line(self) -> str:
+        mark = "" if self.summed else "  ↳"
         tail = f"  {self.note}" if self.note else ""
-        return f"{self.name:<24} {self.count:>4}{tail}"
+        return f"{mark}{self.name:<{24 - len(mark)}} {self.count:>4}{tail}"
 
 
 def _read(name: str) -> str:
@@ -129,7 +140,13 @@ def plan_unblocked() -> Axis:
         _read("docs/PLAN.md"), "<!-- open-issues:begin -->", "<!-- open-issues:end -->"
     )
     rows = [line for line in block.splitlines() if CONDITION_MET in line]
-    return Axis("PLAN 조건 걸린 질문", len(rows), "지금 할 수 있다" if rows else "")
+    # **합계에 안 더한다** (D-0342). 이 줄들은 「열린 질문」과 같은 블록의 같은 줄이다.
+    return Axis(
+        "PLAN 조건 걸린 질문",
+        len(rows),
+        "지금 할 수 있다" if rows else "",
+        summed=False,
+    )
 
 
 def plan_settled_rows() -> Axis:
@@ -312,7 +329,8 @@ def survey() -> list[Axis]:
 
 
 def report(axes: list[Axis]) -> list[str]:
-    total = sum(axis.count for axis in axes)
+    """**부분집합인 축은 합계에서 뺀다** (D-0342). 두 번 세면 수가 부푼다."""
+    total = sum(axis.count for axis in axes if axis.summed)
     lines = [axis.line() for axis in axes]
     lines.append(f"{'합계':<24} {total:>4}" + ("" if total else "  **정말 없다**"))
     return lines

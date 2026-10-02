@@ -23,6 +23,9 @@ updates:
       python-security:
         applies-to: security-updates
         patterns: ["*"]
+    # **거부한 판단은 여기 적어야 막힌다** (D-0342). D-0330이 `gitleaks` 2→3을
+    # *"못 재는 것을 고친 척하지 않는다"*로 거부하고 **사유만 결정 기록에 적었다.**
+    # 다음 달 봇이 같은 PR을 다시 냈고 **조용히 들어갔다.** 결정 기록은 봇을 안 읽는다.
     ignore:
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]

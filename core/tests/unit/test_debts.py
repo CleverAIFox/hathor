@@ -38,6 +38,38 @@ def test_합계가_0일_때만_없다고_말한다() -> None:
     assert debts.report(some)[-1].split()[-1] == "3"
 
 
+def test_부분집합인_축은_합계에_안_더한다() -> None:
+    """**34를 40으로 찍고 있었다** (D-0342).
+
+    「조건 걸린 질문」 6건은 전부 「열린 질문」 33건 안에 있다 — 같은 블록의 같은 줄을
+    한 번은 전부, 한 번은 표식이 달린 것만 센다. **그런데 합계가 둘을 더했다.**
+
+    이 도구는 *"안 세는 것은 0으로 보인다"*를 막으려고 생겼는데, **부풀린 수도 같은
+    자리에서 신뢰를 깎는다** (GR-0.8).
+    """
+    debts = tool_module("debts")
+    axes = [debts.Axis("전체", 33), debts.Axis("그중 일부", 6, summed=False)]
+
+    assert debts.report(axes)[-1].split()[-1] == "33"
+    assert "↳" in debts.report(axes)[1], "부분집합임이 화면에 보여야 한다"
+
+
+def test_조건_걸린_축이_합계에서_빠진다() -> None:
+    """**실물에서 그 축이 부분집합인지 확인한다.** 아니게 되면 이 결정이 틀린 것이다."""
+    debts = tool_module("debts")
+    plan = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    block = plan.split("<!-- open-issues:begin -->")[1].split("<!-- open-issues:end -->")[0]
+    opened = {line.split("|")[1].strip() for line in block.splitlines() if line.startswith("| O-")}
+    met = {
+        line.split("|")[1].strip()
+        for line in block.splitlines()
+        if line.startswith("| O-") and debts.CONDITION_MET in line
+    }
+
+    assert met <= opened, "부분집합이 아니면 합계에서 빼면 안 된다"
+    assert debts.plan_unblocked().summed is False
+
+
 def test_열린_질문을_실제로_센다() -> None:
     """PLAN의 `O-` 행 수와 같아야 한다. **손으로 적은 수를 안 믿는다.**"""
     debts = tool_module("debts")
