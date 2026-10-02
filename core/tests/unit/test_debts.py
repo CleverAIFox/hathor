@@ -226,3 +226,19 @@ def test_조건이_걸린_질문을_따로_센다() -> None:
     counted = debts.plan_unblocked().count
     assert counted == len([x for x in block.splitlines() if debts.CONDITION_MET in x])
     assert counted <= debts.plan_open_issues().count, "조건 걸린 것은 열린 것의 부분집합이다"
+
+
+def test_기획서는_신선도_축에_없다() -> None:
+    """**모든 결정과 견주면 멀쩡한 기획서가 뒤처졌다고 찍힌다** (D-0348).
+
+    `docs/proposal.docx`는 `MASTER` Part I ~ III **지문 구간이 바뀔 때만** 움직인다.
+    결정 기록만 쌓는 날이 열 번 이어지면 문턱을 넘고, 그것은 **거짓 경보**다 —
+    D-0343이 *"정상이다"*라 적어 두고 고치지 않아 **9까지 올라와 있었다.**
+
+    **`docx_check`가 sha256 지문으로 이미 본다.** 같은 것을 더 나쁜 자로 또 세지 않는다.
+    """
+    debts = tool_module("debts")
+
+    assert "docs/proposal.docx" not in debts.WATCHED
+    assert "README.md" in debts.WATCHED, "입구 문서는 모든 결정과 견주는 것이 맞다"
+    assert (ROOT / "tools" / "docx_check.py").is_file(), "지문 대조가 그 자리를 맡는다"

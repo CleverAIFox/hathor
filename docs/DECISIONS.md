@@ -28053,3 +28053,77 @@ MBID 없이 돈다** (RESOLVED 78.5% · 폴백 21.5%, D-0017이 *"폴백이 주 
 강제자 없음 — 사유: 질문만 올렸다. 코드가 안 바뀌었다
 
 자료  실물 이 저장소 — `np.median` 8개 모듈 · `ScanLibrary` 델타 분류
+
+---
+
+## D-0348. 의존성 취약점 검사가 안 돌고 있었다 — 노란불이 늘 켜져 있어서
+
+- **배경**: `gate / quality`가 **succeeded**인데 그 안의 단계 로그가 이랬다.
+
+      Run uv run pip-audit --strict
+      ERROR:pip_audit._cli:hathor: Dependency not found on PyPI and could not be
+        audited: hathor (0.0.0)
+      Error: Process completed with exit code 1.
+
+  `continue-on-error: true`는 **의도된 것**이다 — D-0219가 *"상류 패키지의 취약점은 이
+  저장소가 고칠 수 없다. 막지 않고 노란불로 알린다"*고 적었다. **문제는 노란불이 켜진
+  이유가 취약점이 아니라는 것이다.**
+
+### 재서 갈랐다
+
+| 명령 | 결과 |
+|---|---|
+| `pip-audit --strict` | `ERROR: hathor (0.0.0)` — **취약점 요약조차 안 찍는다** |
+| `pip-audit --strict --skip-editable` | `ERROR: distribution marked as editable` |
+| **`uv export --no-emit-project` → `pip-audit --strict -r`** | **`No known vulnerabilities found`** |
+
+`--strict`는 *"감사 못 한 것이 하나라도 있으면 실패"*다. 그래서 **건너뛰기도 실패로
+센다** — `--skip-editable`로는 못 빠져나간다. `--no-emit-project`가 그 줄을 **아예 안
+뽑으므로** `--strict`가 비로소 실질을 갖는다. 뽑은 목록 651줄에 `hathor`가 **0건**이다.
+
+### 노란불이 늘 켜져 있으면 알림이 아니다
+
+**진짜 취약점이 생겨도 같은 노란불이고 아무도 안 가른다** (GR-0.8). D-0219가
+*"`|| true`였을 때는 취약점이 있어도 초록이라 **알림조차 아니었다**"*라고 적으며 고친
+자리인데, **고친 뒤에도 알림이 아니었다** — 색만 초록에서 노랑으로 바뀌었다.
+
+그리고 **D-0330이 그것을 사실로 인용했다** — *"`quality` 잡에 `Dependency
+vulnerabilities` 단계가 이미 있다. **의존성 쪽은 보고 있고** 액션 쪽만 아무도 안 봤다."*
+**보고 있지 않았다.**
+
+### 같은 날 둘째 — 기획서가 신선도 축에 있었다
+
+`docs/proposal.docx`는 `MASTER` Part I ~ III **지문 구간이 바뀔 때만** 움직인다.
+그런데 신선도 축은 **모든 결정**과 견준다. 결정 기록만 쌓는 날이 열 번 이어지면
+**멀쩡한 기획서가 「뒤처졌다」고 찍힌다.**
+
+**D-0343이 그것을 알고도 안 고쳤다** — *"`MASTER` Part I ~ III가 바뀔 때만 움직이므로
+**정상이다**"*라고 「남기는 것」에 적어 두고 넘어갔다. 이 판 직전에 **9**였고 다음
+판이면 떴다.
+
+`docx_check`가 **sha256 지문으로 이미 더 정확히 본다.** 같은 것을 **더 나쁜 자로** 또
+세면 거짓 경보만 는다. `WATCHED`에서 뺐다.
+
+- **결과**:
+  - `ci.yml`이 **잠금에서 뽑아 넘긴다.** `--strict`가 실질을 갖는다.
+  - `debts.WATCHED`에서 `docs/proposal.docx`를 뺐다. 축이 **셋**이다.
+  - 검사 하나. **이 결정을 못으로 박는다.**
+
+### 남기는 것
+
+- **얼마나 오래 이랬는지 모른다.** `--strict`가 들어간 판을 안 찾았고, 그 사이의
+  취약점이 몇이었는지도 **알 길이 없다** — 그때 감사가 안 돌았으니 기록이 없다.
+- **고친 뒤 첫 결과가 「없다」이다.** 651개 패키지에 알려진 취약점이 0이다. **그것이
+  이 수선의 첫 참값이고, 다음에 노란불이 뜨면 그때는 진짜다.**
+- **`make check`은 이 단계를 안 돈다** (`ci-only`). 로컬은 망을 안 타므로 맞고,
+  **그래서 이 결함을 로컬에서 못 봤다** — 스크린샷이 아니었으면 계속 몰랐다.
+
+재현
+    cd core && uv export --format requirements-txt --no-emit-project \
+      --all-extras --all-groups --no-hashes -q -o /tmp/audit.txt
+    cd core && uv run pip-audit --strict -r /tmp/audit.txt
+
+강제자
+    `core/tests/unit/test_debts.py::test_기획서는_신선도_축에_없다`
+
+자료  실물 이 저장소 — 패키지 651개 감사 · 워크플로 실행 로그

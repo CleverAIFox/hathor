@@ -54,8 +54,17 @@ OPEN_ISSUE = re.compile(r"^\| (O-\d+) \|", re.MULTILINE)
 DEBT_ROW = re.compile(r"^\| (D-\d{4}) \|", re.MULTILINE)
 PATCH_DECISION = re.compile(r"D-?(\d{4})")
 
-WATCHED = ("README.md", "docs/proposal.docx", "docs/MASTER.md", "docs/PLAN.md")
-"""신선도를 보는 문서. **`DECISIONS.md`는 안 본다** — 판마다 바뀌므로 늘 0이다."""
+WATCHED = ("README.md", "docs/MASTER.md", "docs/PLAN.md")
+"""신선도를 보는 문서. **`DECISIONS.md`는 안 본다** — 판마다 바뀌므로 늘 0이다.
+
+**`docs/proposal.docx`도 뺐다** (D-0348). 그것은 `MASTER` Part I ~ III **지문 구간이
+바뀔 때만** 움직이는데 이 축은 **모든 결정**과 견준다 — 결정 기록만 쌓는 날이 열 번
+이어지면 **멀쩡한 기획서가 「뒤처졌다」고 찍힌다.** D-0343이 *"정상이다"*라고 적어 두고
+고치지는 않았고, 이 판의 직전에 **9**까지 올라와 있었다.
+
+**`docx_check`가 sha256 지문으로 이미 더 정확히 본다.** 같은 것을 **더 나쁜 자로**
+또 세면 거짓 경보만 는다 (GR-0.8).
+"""
 
 STALE_FLOOR = 10
 """몇 판 뒤처지면 화면에 드는가.

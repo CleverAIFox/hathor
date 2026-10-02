@@ -133,11 +133,20 @@ jobs:
 
       # 상류 패키지의 취약점은 이 저장소가 고칠 수 없다. 막지 않고 노란불로 알린다 (D-0219).
       # `|| true`였을 때는 취약점이 있어도 초록이라 **알림조차 아니었다.**
+      #
+      # **잠금에서 뽑아 넘긴다** (D-0348). `pip-audit --strict`를 환경에 바로 걸면
+      # `hathor` 자신을 PyPI에서 못 찾아 **첫 줄에서 죽고 취약점 요약조차 안 찍었다** —
+      # 노란불이 늘 켜져 있었고 **진짜 취약점과 안 갈렸다** (GR-0.8). `--skip-editable`도
+      # 안 통한다: `--strict`가 건너뛰기도 실패로 센다. `--no-emit-project`가 그 줄을
+      # 아예 안 뽑으므로 **`--strict`가 비로소 실질을 갖는다.**
       # ci-only: pip-audit 로컬 `make check`은 망을 안 탄다. 취약점 DB 조회는 CI에서만 한다
       # advisory: pip-audit 상류 취약점은 우리가 못 고친다. 실패를 노란불로만 본다
       - name: Dependency vulnerabilities
         continue-on-error: true
-        run: uv run pip-audit --strict
+        run: |
+          uv export --format requirements-txt --no-emit-project \
+            --all-extras --all-groups --no-hashes -q -o /tmp/audit.txt
+          uv run pip-audit --strict -r /tmp/audit.txt
 
   secret-scan:
     runs-on: ubuntu-24.04
