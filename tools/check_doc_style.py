@@ -55,7 +55,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 DOCUMENTS = (
     "README.md",
-    "MASTER.md",
     "docs/PLAN.md",
     "docs/MASTER.md",
     "docs/DECISIONS.md",
@@ -367,6 +366,20 @@ ENFORCER_FROM = 1
 
 **없다는 사실 자체가 기록이어야 한다.** 비워 두면 보이지 않는다."""
 
+PAST = "docs/DECISIONS.md"
+"""**과거 축.** 소급 수정이 금지다 (D-0081). 두 검사가 이 이름으로 갈린다.
+
+### 빈 접두사였다 — 두 자리 다 (D-0349)
+
+`not name.startswith("")`는 늘 거짓이고 `name.startswith("")`는 늘 참이다. 그래서
+`check_bold_density`가 **한 번도 안 돌았고**(과밀 27곳을 놓쳤다) `check_records`는
+**문서 넷 전부**에 돌아 0건으로 조용히 통과했다. **이름을 지우면서 둘을 같이 비웠다.**
+
+`check_bold_density`의 눈금은 D-0131이 **살아 있는 문서**에서 쟀고, `check_records`는
+`## D-xxxx`를 푸는 것이라 **과거 축에서만** 뜻이 있다. `deadcheck`의 `눈먼 접두사`가
+이제 이 꼴을 센다.
+"""
+
 AXES = ("PLAN.md", "MASTER.md", "DECISIONS.md")
 """`docs/` 바로 아래에 허용되는 문서. **미래·현재·과거 세 시제가 다 찼다** (D-0130)."""
 
@@ -553,9 +566,10 @@ def check() -> list[str]:
         name = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
         problems.extend(check_layout(name, text))
-        if not name.startswith(""):
+        # **이름을 상수로 든다** (D-0349). 맨 문자열을 여기 적으면 다시 비울 수 있다.
+        if not name.startswith(PAST):
             problems.extend(check_bold_density(name, text))
-        if name.startswith(""):
+        if name.startswith(PAST):
             problems.extend(check_records(name, text))
     return problems
 

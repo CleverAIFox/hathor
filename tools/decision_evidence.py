@@ -21,6 +21,7 @@ from pathlib import Path
 from decision_ledger import (
     EVIDENCE,
     EVIDENCE_VALUES,
+    KEEPER_HEAD,
     NOT_PROMOTED,
     OVERTURNED,
     REVERSAL,
@@ -220,6 +221,44 @@ def check_keeper_text(records: list[Record]) -> list[str]:
         for record in records
         if keeper_text(record.body) == ""
     ]
+
+
+DROPPED_KEEPER = re.compile(r"`[^`]+\.(?:py|toml|yml|sh)[^`]*`")
+"""버려진 강제자처럼 보이는 줄. **파일로 보이면 강제자였다.**"""
+
+
+def check_keeper_dropped(records: list[Record]) -> list[str]:
+    """`강제자` 블록의 **둘째 줄부터가 들여쓰기를 놓쳤나** (D-0349).
+
+    ### 왜 빈 칸만으로는 모자랐나
+
+    D-0304가 *"머리만 두고 들여쓰기를 잊으면 `keeper_text`가 빈 문자열을 낸다"*를 잡았다.
+    **반대 변종이 남아 있었다** — 머리줄에 내용이 **있고** 둘째 줄이 들여쓰기를 놓치면
+    `keeper_text`가 **거기서 멈춘다.** 빈 문자열이 아니므로 그 검사를 지난다.
+
+    넷이 그 상태였다 (D-0015 · D-0124 · D-0133 · D-0263). 버려진 줄의 파일은 대장에도
+    없고 **실재 확인도 안 받는다** — D-0124는 머리줄이 `·`로 끝나 **대장에 달린
+    가운뎃점이 박혀 있었다.**
+
+    **「검사가 있다」와 「그 변종을 본다」는 다르다.**
+    """
+    found: list[str] = []
+    for record in records:
+        head = KEEPER_HEAD.search(record.body)
+        if head is None:
+            continue
+        lines = record.body[head.end() :].splitlines()
+        rest = lines[1:] if lines and not lines[0].strip() else lines
+        for line in rest:
+            if not line.strip():
+                break
+            if not line.startswith(("    ", "\t")) and DROPPED_KEEPER.search(line):
+                found.append(
+                    f"{record.identifier}의 `강제자` 둘째 줄부터가 들여쓰기를 놓쳤다: "
+                    f"{line.strip()[:48]} — 네 칸 들여쓴다 (D-0349)"
+                )
+                break
+    return found
 
 
 def check_keepers(records: list[Record]) -> list[str]:

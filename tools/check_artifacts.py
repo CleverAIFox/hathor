@@ -197,7 +197,55 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
                     f"{name}은 재생성 불가인데 `store`가 참이 아니다. "
                     "`var/`는 전부 ignore되므로 그대로면 소실된다 (R2)"
                 )
+        problems.extend(check_waiting_closed(name, entry))
     return problems
+
+
+WAITING = "미투입"
+ISSUE = re.compile(r"O-\d+")
+
+
+def closed_questions() -> set[str]:
+    """`MASTER` 닫힘표의 질문 번호. **표가 정본이다** — 여기 목록을 적지 않는다 (D-0043)."""
+    text = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    if "<!-- closed-issues:begin -->" not in text:
+        return set()
+    block = text.split("<!-- closed-issues:begin -->")[1].split("<!-- closed-issues:end -->")[0]
+    return {
+        found.group(1)
+        for found in (re.match(r"^\|\s*(O-\d+)\s*\|", row) for row in block.splitlines())
+        if found
+    }
+
+
+def check_waiting_closed(name: str, entry: dict[str, object]) -> list[str]:
+    """**「미투입 — <조건>」인데 그 조건이 이미 충족됐나** (D-0349).
+
+    ### 조건을 적어 두고 아무도 안 세면 영원히 잠긴다 (D-0126)
+
+    `clap` 계열이 *"미투입 — O-68의 배치가 아직 안 돌았다 (D-0231)"*로 남아 있었다.
+    **D-0235가 그 배치를 돌려 O-68을 닫았고 D-0299가 다시 쟀다.** 실물에
+    `var/ingest/clap/features/vectors`가 1017개 있다. **네 판 뒤에도 대장은 「아직 안
+    돌았다」였다.**
+
+    R4는 *"못 채우면 「미투입 — 언제 쓸지」를 적고 산다"*이고 그것은 맞다. 다만
+    **「언제」가 오면 갈아야 한다** — 안 갈면 **적고 남긴 것이 아니라 거짓이다** (GR-0.5).
+
+    번호가 닫혔는지는 `MASTER` 닫힘표에서 읽는다. 결정 번호로는 못 판단한다 —
+    `(D-0231)`은 **그 자리를 만든** 결정이고 닫은 것은 D-0235다 (D-0126의 그 구분).
+    """
+    reads = entry.get("reads")
+    if not isinstance(reads, list):
+        return []
+    shut = closed_questions()
+    return [
+        f"{name}의 `reads`가 «{WAITING}»인데 그 조건의 {issue}은 이미 닫혔다. "
+        f"조건이 충족된 미투입은 **적고 남긴 것이 아니라 거짓이다** — 누가 읽는지 적는다"
+        for one in reads
+        if isinstance(one, str) and one.lstrip().startswith(WAITING)
+        for issue in dict.fromkeys(ISSUE.findall(one))
+        if issue in shut
+    ]
 
 
 TODO = "TODO"

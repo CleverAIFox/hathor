@@ -41,9 +41,12 @@ run() {
 }
 
 # **첫 실패에서 멈추지 않는다.** 한 번에 다 보여야 한 번에 고친다.
+# **시야 못이 맨 앞이다** — 그물이 줄어 있으면 아래 전부의 초록이 뜻이 없다 (D-0349).
+run "시야 못"    python3 tools/check_sight.py --check
 run "결정 기록"   python3 tools/check_decisions.py --check
 run "닫힌 질문"   python3 tools/check_issue_mentions.py --check
 run "문서 레이아웃" python3 tools/check_doc_style.py --check
+run "지운 말"    python3 tools/check_retired.py --check
 run "망 접점"    python3 tools/check_egress.py --check
 run "금지"       python3 tools/check_forbidden.py --check
 run "compose"    python3 tools/check_compose.py --check

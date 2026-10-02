@@ -652,3 +652,40 @@ def test_자료_확인_표식이_대장에_실린다() -> None:
     assert "(D-0299 확인)" in ledger
     master = (DECISIONS.parent / "MASTER.md").read_text(encoding="utf-8")
     assert "(D-0299 확인)" in master
+
+
+# ─────────────────────────────── 카나리아: 버려지는 강제자를 잡는다 (D-0349)
+
+
+def _planted(keeper_block: str) -> list[object]:
+    """`강제자` 블록만 바꾼 가짜 기록 하나."""
+    import decision_ledger as ledger
+
+    body = f"- **배경**: 카나리아.\n\n---\n\n{keeper_block}\n\n---\n\n자료  해당 없음\n"
+    return [ledger.Record(identifier="D-9999", number=9999, title="카나리아", body=body)]
+
+
+def test_들여쓰기를_놓친_강제자를_잡는다():
+    """**머리줄에 내용이 있으면 빈 칸 검사를 지난다** (D-0349).
+
+    D-0304가 *"머리만 두고 들여쓰기를 잊으면 빈 문자열이 된다"*를 잡았는데, **반대
+    변종**이 남아 있었다 — 머리줄에 내용이 **있고** 둘째 줄이 들여쓰기를 놓치면
+    `keeper_text`가 **거기서 멈춘다.** 넷이 그 상태로 348판을 지났다
+    (D-0015 · D-0124 · D-0133 · D-0263).
+    """
+    good = "강제자\n    `tools/a.py`\n    `tools/b.py`"
+    bad = "강제자  `tools/a.py` ·\n`tools/b.py`"
+
+    assert evidence.check_keeper_dropped(_planted(good)) == []
+    problems = evidence.check_keeper_dropped(_planted(bad))
+
+    assert problems, "둘째 줄이 버려지는데 안 운다"
+    assert "tools/b.py" in problems[0]
+
+
+def test_버려진_강제자가_지금_저장소에_없다():
+    """**0이어야 정상인 축이다.** 넷을 고쳤고 그 자리를 못으로 박는다."""
+    import decision_ledger as ledger
+
+    text = (repo_root() / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    assert evidence.check_keeper_dropped(ledger.scan_records(text)) == []

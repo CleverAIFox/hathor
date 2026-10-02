@@ -159,9 +159,22 @@ def test_저장소가_통과한다():
     assert CHECKER.check() == []
 
 
-@pytest.mark.parametrize("name", ["README.md", "MASTER.md", "docs/MASTER.md"])
-def test_세_축을_다_본다(name):
+@pytest.mark.parametrize("name", ["README.md", "docs/PLAN.md", "docs/MASTER.md"])
+def test_살아_있는_문서를_다_본다(name: str) -> None:
+    """**이 시험이 죽은 항목을 붙들고 있었다** (D-0349).
+
+    뿌리 `MASTER.md`를 요구했는데 **그 파일은 D-0189가 흡수해 없다.** `exists()`에
+    걸려 조용히 지나가므로 검사는 초록이었고, **지우려면 이 시험이 막았다** — 그래서
+    아무도 안 지웠다. 시험이 **사장된 사실을 못으로 박고 있던 것**이다.
+    """
     assert name in CHECKER.DOCUMENTS
+    assert (ROOT / name).exists(), f"{name}이 없는데 검사 대상에 있다"
+
+
+def test_검사_대상이_전부_실재한다() -> None:
+    """**없는 것을 목록에 두면 「본다」와 「봤다」가 갈린다** (D-0349)."""
+    for name in CHECKER.DOCUMENTS:
+        assert (ROOT / name).exists(), name
 
 
 def test_폐기_보관소가_없다():
@@ -379,3 +392,16 @@ def test_취소선_못이_실제로_잡는다(tmp_path: Path, monkeypatch: pytes
     found = CHECKER.check_plan_leftovers()
     assert len(found) == 2
     assert "MASTER.md" in found[0]
+
+
+def test_강조_밀도_가지가_실제로_돈다() -> None:
+    """**`not name.startswith("")`는 늘 거짓이라 이 가지가 한 번도 안 돌았다** (D-0349).
+
+    27곳을 놓쳤다 — `MASTER` 3 · `DECISIONS` 24. 검사가 **있는** 것과 **도는** 것은
+    다르다. 과밀을 심어 가지가 살아 있는지 본다.
+    """
+    planted = "### 절\n\n" + "**굵게** " * 40 + "\n" + "가" * 300 + "\n"
+    assert cast("list[str]", CHECKER.check_bold_density("docs/MASTER.md", planted))
+
+    whole = cast("list[str]", CHECKER.check())
+    assert whole == [], whole

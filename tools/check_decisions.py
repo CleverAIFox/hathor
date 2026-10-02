@@ -76,6 +76,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from decision_evidence import (
     check_attribution,
     check_evidence,
+    check_keeper_dropped,
     check_keeper_text,
     check_keepers,
 )
@@ -427,6 +428,7 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_evidence(records),
         *check_attribution(records),
         *check_keeper_text(records),
+        *check_keeper_dropped(records),
         *check_keepers(records),
         *check_supersession(records),
         *check_open_issues(issues),

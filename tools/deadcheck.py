@@ -63,6 +63,7 @@ CEILING = {
     "삼킨 예외": 0,
     "빈 그물": 0,
     "버려진 문서 문자열": 0,
+    "눈먼 접두사": 0,
 }
 """프로브별 천장. **정본은 여기 하나다** (D-0223).
 
@@ -285,6 +286,68 @@ def probe_empty_net(root: Path = ROOT) -> list[Hit]:
     return found
 
 
+BLIND = ("startswith", "endswith")
+"""빈 문자열에 **늘 맞는** 메서드. `in`은 안 본다 — `"" in text`도 늘 참이지만
+그 꼴은 실물에 없고, 넣으면 `"" in collection`(정상)과 가릴 자가 필요하다."""
+
+
+def blind_prefixes(tree: ast.Module) -> list[tuple[int, str]]:
+    """`startswith`·`endswith`에 **빈 문자열**을 넘기는 자리 (D-0349).
+
+    ### 이것이 D-0349의 세 사고 전부다
+
+    `name.startswith("")`는 **늘 참**이다. 그래서 그물이 통째로 비거나, `not`을 씌운
+    가지가 **한 번도 안 돈다.** 실물에서 세 자리가 났고 셋 다 지워진 이름이
+    `docs/DECISIONS.md`였다.
+
+    | 자리 | 꼴 | 무엇이 됐나 |
+    |---|---|---|
+    | `check_issue_mentions.SKIP_TREES` | `("",)` | 문서 축을 한 줄도 안 봤다 |
+    | `check_doc_style` 강조 가지 | `not …startswith("")` | **한 번도 안 돌았다** (27곳 놓침) |
+    | `check_doc_style` 기록 가지 | `…startswith("")` | 문서 넷 전부에 돌았다 |
+
+    **D-0349가 「덫은 한 곳뿐」이라 적었고 틀렸다** — 튜플 꼴(`(("",))`)만 훑고 맨
+    문자열 꼴을 안 봤다. 자는 사람이 아니라 기계가 세야 한다는 것이 D-0117이다.
+
+    상수 하나만 비는 것은 `check_sight`가 수로 잡는다. **여기는 꼴로 잡는다** —
+    `("",)`는 세면 1개라 어느 수 눈금에도 안 걸린다.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        method = node.func
+        if not isinstance(method, ast.Attribute) or method.attr not in BLIND:
+            continue
+        for argument in node.args:
+            pieces: list[ast.expr] = [argument]
+            if isinstance(argument, ast.Tuple | ast.List | ast.Set):
+                pieces = list(argument.elts)
+            if any(
+                isinstance(one, ast.Constant) and one.value == "" and isinstance(one.value, str)
+                for one in pieces
+            ):
+                found.append((node.lineno, f"{method.attr}에 빈 문자열"))
+    return found
+
+
+def probe_blind_prefix(root: Path = ROOT) -> list[Hit]:
+    """`startswith("")`처럼 **늘 참인 조건**. 그물이 통째로 비거나 가지가 안 돈다."""
+    found: list[Hit] = []
+    for tree_name in CODE_TREES:
+        for path in python_files(root, tree_name):
+            tree = parsed(path)
+            if tree is None:
+                continue
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for line, what in blind_prefixes(tree):
+                if exempt(lines, line - 1, line):
+                    continue
+                where = f"{path.relative_to(root).as_posix()}:{line}"
+                found.append(Hit("눈먼 접두사", where, what))
+    return found
+
+
 def _is_text(node: ast.stmt) -> bool:
     """이 문장이 «문자열 하나만 덜렁 있는 줄»인가."""
     return (
@@ -349,6 +412,7 @@ PROBES: dict[str, Callable[[Path], list[Hit]]] = {
     "삼킨 예외": probe_swallowed,
     "빈 그물": probe_empty_net,
     "버려진 문서 문자열": probe_dropped_doc,
+    "눈먼 접두사": probe_blind_prefix,
 }
 
 
@@ -382,7 +446,11 @@ def _plant(folder: Path) -> None:
         "    try:\n"
         "        open('x')\n"
         "    except OSError:\n"
-        "        pass\n",
+        "        pass\n\n\n"
+        # **늘 참인 조건을 심는다** (D-0349). 이 꼴이 실물에서 세 번 났고 그중 둘은
+        # **가지가 한 번도 안 도는** 꼴이었다 — 어떤 수 눈금에도 안 걸린다.
+        "def blind(name: str) -> bool:\n"
+        '    return name.startswith("")\n',
         encoding="utf-8",
     )
 

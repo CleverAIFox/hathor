@@ -142,7 +142,7 @@ state = "있음"
 what = "CLAP 임베딩 — 상업 가능한 취향 축 (O-68 · D-0231)"
 made = "core/hathor/interfaces/cli/eval_clap.py"
 regen = "cd core && uv run python -m hathor.cli eval clap"
-reads = ["미투입 — O-68의 배치가 아직 안 돌았다 (D-0231)"]
+reads = ["eval retrieval", "D-0235 (O-68 판정)", "D-0299 (MFCC 단독 대조)"]
 store = true
 state = "있음"
 

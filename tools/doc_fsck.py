@@ -120,6 +120,115 @@ def check_orphan_tools() -> list[str]:
     return problems
 
 
+GR_TREES = ("docs", "tools", "core/hathor", "core/tests", ".github")
+"""`GR-` 참조를 셀 나무. 뿌리 `README.md`는 따로 더한다."""
+
+
+def rule_mentions() -> int:
+    """`GR-` 규약 ID를 부르는 자리의 수 (D-0349).
+
+    `MASTER`가 *"저장소 안에서 220곳이 그 ID를 부른다"*라 적고 있었고 **실측은 353**이다.
+    번호를 다시 안 매기는 **근거가 그 수**인데, 그 수가 낡으면 근거가 낡는다.
+
+    셈은 **나타난 자리 전부**다 — 한 줄에 둘이면 둘로 센다. 「참조만 깬다」가 세려는 것이
+    고치는 손의 수이기 때문이다.
+    """
+    found = 0
+    for tree in GR_TREES:
+        base = ROOT / tree
+        if not base.is_dir():
+            continue
+        for path in base.rglob("*"):
+            if path.suffix not in (".md", ".py", ".toml", ".yml") or "__pycache__" in path.parts:
+                continue
+            found += len(re.findall(r"GR-\d[\d.]*", path.read_text(encoding="utf-8")))
+    return found + len(re.findall(r"GR-\d[\d.]*", (ROOT / "README.md").read_text(encoding="utf-8")))
+
+
+def egress_points() -> int:
+    """망 접점 허용 목록의 수. **정본은 `check_egress.ALLOWED`다** (D-0223).
+
+    `MASTER` 두 곳과 README 한 곳이 「4곳」을 손으로 적고 있었다. 지금 맞지만 **늘어도
+    아무 일이 안 일어난다** — 그리고 이 수는 **보안 주장**이다 (NFR-SEC-007).
+    """
+    body = (ROOT / "tools" / "check_egress.py").read_text(encoding="utf-8")
+    if "ALLOWED" not in body:
+        raise LookupError("`check_egress.ALLOWED`를 못 찾았다. 정본이 사라졌다")
+    inside = body.split("ALLOWED", 1)[1].split("\n}", 1)[0]
+    return len(re.findall(r'(?m)^    "', inside))
+
+
+def grandfathered_records() -> int:
+    """형식 검사가 **안 걸리는** 옛 기록의 수 (D-0349).
+
+    `MASTER`가 **78건**이라 적고 있었고 실측은 **79**다 (`FORMAT_ENFORCED_FROM = 80`
+    미만이 79건). 세 곳이 그 수를 들고 있었다 — *"78건이 쌓이는 동안"* ·
+    *"78건을 손대는 순간"* · *"78건 시점에"*.
+
+    **이 수는 추가 전용의 크기다.** 틀리면 「얼마를 안 건드리는가」가 틀린다.
+    """
+    threshold = re.search(
+        r"(?m)^FORMAT_ENFORCED_FROM\s*=\s*(\d+)",
+        (ROOT / "tools" / "check_decisions.py").read_text(encoding="utf-8"),
+    )
+    if not threshold:
+        raise LookupError("`FORMAT_ENFORCED_FROM`을 못 찾았다. 정본이 사라졌다")
+    body = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    numbers = {int(one) for one in re.findall(r"(?m)^## D-(\d{4})\.", body)}
+    return len([one for one in numbers if one < int(threshold.group(1))])
+
+
+def compose_services() -> list[str]:
+    """`docker-compose.yml`의 서비스 이름. **정본은 그 파일이다** (D-0223)."""
+    body = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    inside = body.split("\nservices:", 1)[-1].split("\nvolumes:", 1)[0]
+    return re.findall(r"(?m)^  ([a-z][a-z0-9-]*):$", inside)
+
+
+def service_count() -> int:
+    """서비스 수. `check_compose`가 메모리로 세는 것과 같은 실물을 센다."""
+    return len(compose_services())
+
+
+def check_orphan_workflows() -> list[str]:
+    """**실물 워크플로가 살아 있는 문서에 적혀 있나** (D-0349 — `fire-lane`에서 가져왔다).
+
+    ### 거꾸로 보는 눈이 없었다
+
+    `check_paths`와 `check_orphan_tools`는 *"문서가 가리키는 것이 실물로 있나"*와
+    *"도구가 문서에 불리나"*를 본다. 그런데 **CI 표는 손으로 적은 목록**이라 워크플로가
+    생겨도 아무도 안 적는다 — `codeql.yml`이 **스무 판 넘게** `MASTER`의 CI 표에 없었다.
+
+    `fire-lane`의 `readmecheck`가 같은 자리다 — `web/` 실물과 README 표를 대조한다.
+    **문서→실물만 보면 실물이 늘어난 것은 영원히 안 보인다.**
+
+    도구와 달리 **과거 축은 안 센다** — 결정 기록이 한 번 불렀다고 CI 표에 있는 것이
+    아니다. 지금 도는 것은 **지금 문서**가 적어야 한다.
+    """
+    blob = "".join(path.read_text(encoding="utf-8") for path in living_documents())
+    lowered = blob.lower()
+    problems = [
+        f"docker-compose.yml의 `{name}` 서비스를 살아 있는 문서가 안 적는다. "
+        f"`MASTER`의 컨테이너 표에 한 줄 더한다 (D-0349)"
+        for name in compose_services()
+        if name.replace("-", "") not in lowered.replace("-", "").replace(" ", "")
+    ]
+    if not compose_services():
+        problems.append("docker-compose.yml에 서비스가 0개다. **그물이 비었다** (D-0230)")
+    base = ROOT / ".github" / "workflows"
+    if not base.is_dir():
+        return [*problems, ".github/workflows가 없다. 실물이 사라졌다"]
+    found = sorted(base.glob("*.yml"))
+    if not found:
+        return [*problems, ".github/workflows에 워크플로가 0개다. **그물이 비었다** (D-0230)"]
+    return problems + [
+        f"{path.relative_to(ROOT).as_posix()}: 살아 있는 문서가 이 워크플로를 안 적는다. "
+        f"`MASTER`의 CI 표에 한 줄 더한다 (D-0349)"
+        for path in found
+        if path.stem not in blob
+    ]
+
+
 def wiring_files() -> list[Path]:
     """**배선이다** — 문서가 아니라 실제로 실행되는 자리."""
     found = [ROOT / "Makefile", *sorted((ROOT / "tools").glob("*.sh"))]
@@ -220,6 +329,44 @@ def contract_count() -> int:
     return body.count("[[tool.importlinter.contracts]]")
 
 
+def record_check_count() -> int:
+    """`check_decisions.run_checks`가 거느린 검사의 수. **정본은 그 함수 하나다** (D-0223).
+
+    `MASTER`가 *"`make check`가 다음을 본다: 색인 일치 · 번호 중복·결번 · …"*라고 **손으로
+    열을 적고 있었다** (D-0349). 재 보니
+
+    | | |
+    |---|---|
+    | 「색인 일치」 | **D-0189가 색인을 없앴다.** 그런 검사가 없다 |
+    | 목록에 없던 실물 검사 | **여섯** — 자료 · 귀속 · 강제자 둘 · 질문 참조 · 떠돌이 기록 |
+
+    **이름을 두 곳에 적으면 한쪽만 고쳐진다** (D-0043). 그래서 문서는 **수만 든다** —
+    `fire-lane`이 `docgen.py`로 푼 자리와 같은 꼴이다.
+    """
+    body = (ROOT / "tools" / "check_decisions.py").read_text(encoding="utf-8")
+    if "def run_checks(" not in body:
+        raise LookupError("`check_decisions.run_checks`를 못 찾았다. 정본이 사라졌다 (D-0223)")
+    inside = body.split("def run_checks(", 1)[1].split("\n    ]", 1)[0]
+    return len(re.findall(r"\*check_\w+\(", inside))
+
+
+def probe_count() -> int:
+    """`deadcheck`의 프로브 수. **정본은 `PROBES` 하나다** (D-0223).
+
+    README가 *"프로브 넷"*이라 적고 있었고 실물은 다섯이었다 (D-0349). `probe_empty_net`과
+    `probe_dropped_doc`이 들어온 판에 README를 안 고쳤다 — D-0261의 여섯째 계약과 같은
+    꼴이다.
+
+    **한글 수사로 적혀 있어서 이 축이 못 봤다.** 세는 자가 `(\\d+)`만 보고 「넷」은
+    못 읽는다. 그래서 수는 숫자로 적는다 — `check_doc_style`이 그것을 본다 (D-0349).
+    """
+    body = (ROOT / "tools" / "deadcheck.py").read_text(encoding="utf-8")
+    if "PROBES: dict" not in body:
+        raise LookupError("`deadcheck.PROBES`를 못 찾았다. 정본이 사라졌다 (D-0223)")
+    inside = body.split("PROBES: dict", 1)[1].split("\n}", 1)[0]
+    return len(re.findall(r"(?m)^    \"", inside))
+
+
 LEDGER = ("<!-- decision-ledger:begin -->", "<!-- decision-ledger:end -->")
 """결정 대장이 사는 자리. **표식 밖의 `| D-xxxx |` 행은 안 센다** — `MASTER`에는
 기록 번호를 드는 표가 대장 말고도 있고, 전부 세면 230과 223처럼 **말없이 갈린다.**"""
@@ -261,6 +408,19 @@ def unknown_reproductions() -> int:
     return len(re.findall(r"(?m)^재현 불명", body))
 
 
+def frozen_issues() -> int:
+    """「얼림」이 붙은 열린 질문의 수 (D-0349).
+
+    `PLAN` §1이 *"O-54 → O-53 → O-49가 한 줄에 걸려 있고"*라 적어 **셋**으로 읽히는데
+    표에는 **여덟**이 「얼림」이다. 셋은 **막는 사슬**이고 여덟은 **얼린 전부**인데
+    읽는 사람이 그 둘을 가를 수 없었다 — D-0328이 두 자리가 *"서로를 몰랐다"*고 적은
+    그 자리에 **수가 없었다.**
+    """
+    body = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    inside = body.split("<!-- open-issues:begin -->")[-1].split("<!-- open-issues:end -->")[0]
+    return len(re.findall(r"(?m)^\| O-\d+ \| \*\*얼림\*\*", inside))
+
+
 def open_issues() -> int:
     """열린 질문의 수. **`check_decisions`가 표 자체는 이미 보고, 여기는 산문의 수를 본다.**"""
     body = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
@@ -277,9 +437,16 @@ BOLD = r"\*{0,2}(\d+)\*{0,2}\s*"
 
 COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("import-linter 계약", re.compile(rf"(?:계약|import-linter)\s*{BOLD}종"), contract_count),
+    ("deadcheck 프로브", re.compile(rf"프로브\s*{BOLD}종"), probe_count),
+    ("결정 기록 검사", re.compile(rf"결정 기록에서\s*{BOLD}종"), record_check_count),
     ("결정 대장", re.compile(rf"대장\s*{BOLD}건\s*중"), ledger_rows),
     ("합성으로만 선 판단", re.compile(rf"합성\s*{BOLD}\s*·"), synthetic_rows),
     ("열린 질문", re.compile(rf"열린 질문\s*{BOLD}건"), open_issues),
+    ("얼린 질문", re.compile(rf"「얼림」이 붙은 행\s*{BOLD}개"), frozen_issues),
+    ("compose 서비스", re.compile(rf"서비스\s*{BOLD}개"), service_count),
+    ("GR 참조", re.compile(rf"저장소 안에서\s*{BOLD}곳이"), rule_mentions),
+    ("망 접점", re.compile(rf"허용 목록\s*{BOLD}곳"), egress_points),
+    ("형식 면제 기록", re.compile(rf"형식 면제\s*{BOLD}건"), grandfathered_records),
     ("재현 불명", re.compile(rf"재현 불명\s*{BOLD}건"), unknown_reproductions),
 )
 """문서가 **세어서 적은 수**와 실물 (D-0263).
@@ -400,7 +567,7 @@ def main() -> int:
 
     problems = check_paths() + check_commands() + check_orphan_tools()
     problems += check_wiring() + check_reserved_packages() + check_counts()
-    problems += check_album_lift()
+    problems += check_album_lift() + check_orphan_workflows()
     if problems:
         print(f"문서가 없는 것을 가리키는 자리가 {len(problems)}곳 있다.", file=sys.stderr)
         for problem in problems:
@@ -408,7 +575,8 @@ def main() -> int:
         return 1
     print(
         f"문서 대조 검사 통과 · 문서 {len(living_documents())}개 · 도구 "
-        f"{len(list((ROOT / 'tools').glob('*.py')))}개"
+        f"{len(list((ROOT / 'tools').glob('*.py')))}개 · 축 {len(COUNTED)}개 · "
+        f"워크플로 {len(list((ROOT / '.github' / 'workflows').glob('*.yml')))}개"
     )
     return 0
 

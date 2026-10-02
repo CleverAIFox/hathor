@@ -40,10 +40,12 @@ smoke:         ## gpu-smoke를 돌리고 끝날 때까지 본다 (D-0226)
 	python3 tools/gh_ops.py smoke
 
 docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대조 (D-0129 · D-0189)
+	python3 tools/check_sight.py --check
 	python3 tools/check_decisions.py --check
 	python3 tools/check_issue_mentions.py --check
 	python3 tools/check_secrets.py --check
 	python3 tools/check_doc_style.py --check
+	python3 tools/check_retired.py --check
 	python3 tools/check_egress.py --check
 	python3 tools/check_forbidden.py --check
 	python3 tools/check_compose.py --check

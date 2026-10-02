@@ -203,3 +203,64 @@ def test_별칭이_아닌_이름은_안_센다(tmp_path: Path) -> None:
 def test_천장이_실측과_같다() -> None:
     """**강제자다.** 2에서 15로 올린 것은 새로 생겨서가 아니라 **안 보여서**다 (D-0289)."""
     assert DEAD.CEILING["건너뛴 시험"] == len(DEAD.probe_skipped())
+
+
+# ------------------------------------------------------------------ 눈먼 접두사 (D-0349)
+
+
+def test_빈_접두사를_잡는다() -> None:
+    """**D-0349의 세 사고가 전부 이 꼴이다.** `name.startswith("")`는 늘 참이다."""
+    import ast
+
+    found = DEAD.blind_prefixes(ast.parse('x.startswith("")\n'))
+
+    assert found and found[0][0] == 1
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'x.startswith("")',
+        'x.startswith(("",))',
+        'x.startswith(("docs/", ""))',
+        'x.endswith("")',
+        'x.startswith(["", "a"])',
+    ],
+)
+def test_빈_문자열이_어디_있어도_잡는다(source: str) -> None:
+    """**튜플 안에 숨은 것이 실물에서 난 꼴이다** — `SKIP_TREES = ("",)`.
+
+    D-0349가 처음에 맨 문자열 꼴만 훑어 **「덫은 한 곳뿐」이라 잘못 적었다.** 다섯 꼴을
+    다 심는다.
+    """
+    import ast
+
+    assert DEAD.blind_prefixes(ast.parse(source + "\n"))
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'x.startswith("docs/")',
+        'x.startswith(("a", "b"))',
+        "x.startswith(PAST)",
+        'startswith("")',
+        'x.lower("")',
+    ],
+)
+def test_멀쩡한_접두사는_안_잡는다(source: str) -> None:
+    """**오탐이 쏟아지면 사람이 프로브를 끈다** (GR-0.8). 상수로 준 것도 안 잡는다."""
+    import ast
+
+    assert DEAD.blind_prefixes(ast.parse(source + "\n")) == []
+
+
+def test_프로브가_천장에_있다() -> None:
+    """**프로브를 넣고 천장을 안 넣으면 `--ratchet`이 그 프로브를 안 본다** (D-0223)."""
+    assert set(DEAD.PROBES) == set(DEAD.CEILING)
+    assert "눈먼 접두사" in DEAD.CEILING
+
+
+def test_저장소에_눈먼_접두사가_없다() -> None:
+    """셋을 고쳤다 — `check_issue_mentions` 하나 · `check_doc_style` 둘 (D-0349)."""
+    assert DEAD.probe_blind_prefix() == []

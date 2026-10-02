@@ -33,8 +33,13 @@ def test_지금_대장에_결함이_없다() -> None:
 def test_모든_계열이_누가_읽는지_적는다() -> None:
     """**R4.** 못 채우면 «미투입 — 언제 쓸지»를 적고 산다.
 
-    *"문제는 모은 데서 안 나오고 안 치운 데서 나온다."* 지금 `clap` 하나가 미투입이고
-    그것도 **적혀 있다** — 안 적힌 것과 적고 남긴 것은 다르다.
+    *"문제는 모은 데서 안 나오고 안 치운 데서 나온다."* 안 적힌 것과 **적고 남긴 것**은
+    다르다.
+
+    **미투입은 「언제 쓸지」와 함께 적고, 그 「언제」가 오면 갈아야 한다** (D-0349).
+    `clap`이 *"O-68의 배치가 아직 안 돌았다 (D-0231)"*로 남아 있었는데 **D-0235가 돌려
+    O-68을 닫고 D-0299가 다시 쟀다.** 실물에 `var/ingest/clap/features/vectors`가 1017개
+    있다. **조건이 충족된 미투입은 미투입이 아니라 거짓이다.**
     """
     for name, entry in sorted(LEDGER.load().items()):
         reads = entry["reads"]
@@ -635,3 +640,54 @@ def test_리비전을_묻는_자리가_선언과_같다() -> None:
         if isinstance(node, ast.Call) and "repo_revision" in ast.unparse(node.func)
     }
     assert writers == REVISION_WRITERS, f"리비전을 묻는 모듈이 달라졌다: {sorted(writers)}"
+
+
+# ------------------------------------------------------------------ 충족된 미투입 (D-0349)
+
+
+def test_닫힌_질문을_기다리는_미투입을_잡는다() -> None:
+    """**카나리아다.** `clap`이 당한 꼴을 심고 **검사가 우는지** 본다.
+
+    *"미투입 — O-68의 배치가 아직 안 돌았다"*가 **네 판 뒤에도 그대로였다.** D-0235가
+    돌려 O-68을 닫았고 D-0299가 다시 쟀는데 대장만 몰랐다.
+    """
+    shut = next(iter(LEDGER.closed_questions()))
+    entry = {"reads": [f"미투입 — {shut}의 배치가 아직 안 돌았다 (D-0001)"]}
+
+    problems = LEDGER.check_waiting_closed("심은것", entry)
+
+    assert problems, f"{shut}은 닫혔는데 안 운다"
+    assert "거짓" in problems[0]
+
+
+def test_열린_질문을_기다리는_미투입은_통과한다() -> None:
+    """**열린 조건은 정상이다** (R4). 이걸 막으면 사람이 검사를 끈다 (GR-0.8).
+
+    **번호를 글자로 안 적는다.** 적으면 `check_issue_mentions`가 *"두 표 어디에도 없는
+    고아"*로 잡는다 — 이 파일을 건너뛰기 목록에 넣는 길도 있지만 그러면 600줄이 통째로
+    사각지대가 된다 (D-0349). 안 닫힌 번호를 **계산해서** 쓴다.
+    """
+    shut = {int(one.removeprefix("O-")) for one in LEDGER.closed_questions()}
+    never = f"O-{max(shut) + 1000}"
+
+    assert LEDGER.check_waiting_closed("x", {"reads": [f"미투입 — {never}가 풀리면"]}) == []
+
+
+def test_미투입이_아니면_안_본다() -> None:
+    """닫힌 질문을 **소비자로** 적는 것은 옳다 — 그것까지 잡으면 오탐이다."""
+    assert (
+        LEDGER.check_waiting_closed("x", {"reads": ["eval retrieval", "D-0235 (O-68 판정)"]}) == []
+    )
+
+
+def test_닫힘표에서_읽는다() -> None:
+    """**표가 정본이다.** 도구에 번호 목록을 적으면 두 곳이 어긋난다 (D-0043)."""
+    shut = LEDGER.closed_questions()
+
+    assert len(shut) >= 40, len(shut)
+    assert "O-68" in shut, "O-68은 D-0235가 닫았다"
+
+
+def test_지금_대장에_충족된_미투입이_없다() -> None:
+    for name, entry in sorted(LEDGER.load().items()):
+        assert LEDGER.check_waiting_closed(name, entry) == []
