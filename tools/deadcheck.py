@@ -109,17 +109,26 @@ def parsed(path: Path) -> ast.Module | None:
         return None
 
 
+FLOOR_CLAUSE = re.compile(r">=\s*(\d+)\.(\d+)")
+
+
 def python_floor(root: Path = ROOT) -> tuple[int, int]:
-    """저장소가 요구하는 파이썬. **정본은 `core/pyproject.toml`이다** (D-0199와 같은 규율).
+    """저장소가 요구하는 파이썬 **하한**. 정본은 `core/pyproject.toml`이다 (D-0199).
 
     `tomllib`은 표준 라이브러리이므로 맨 `python3`으로 도는 규약을 깨지 않는다 (D-0256).
+
+    **상한이 붙을 수 있다** (D-0341). 앞을 `lstrip`하고 점으로 자르던 파서가
+    `">=3.12,<3.13"`에서 `'12,<3'`을 `int`에 넘기고 터졌다 — **한 가지 꼴만
+    가정한 파서다.** `>=` 절만 집어낸다.
     """
     import tomllib
 
     raw = tomllib.loads((root / "core" / "pyproject.toml").read_text(encoding="utf-8"))
-    spec = str(raw["project"]["requires-python"]).lstrip("><=~^ ")
-    major, minor = (int(part) for part in spec.split(".")[:2])
-    return major, minor
+    spec = str(raw["project"]["requires-python"])
+    hit = FLOOR_CLAUSE.search(spec)
+    if hit is None:
+        raise ValueError(f"`requires-python`에 하한이 없다: {spec!r}")
+    return int(hit.group(1)), int(hit.group(2))
 
 
 def too_old() -> str:

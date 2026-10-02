@@ -368,3 +368,33 @@ def test_액션이_노드20에_머물러_있지_않다() -> None:
                 if int(found.group(1)) < floor:
                     behind.append(f"{path.name}: {action}@v{found.group(1)} < v{floor}")
     assert not behind, f"Node 20 판에 머물러 있다: {behind}"
+
+
+def test_파이썬_하한을_상한과_같이_읽는다(tmp_path: Path) -> None:
+    """**한 가지 꼴만 가정한 파서였다** (D-0341).
+
+    앞을 `lstrip("><=~^ ")`하고 점으로 자르던 코드가 `">=3.12,<3.13"`에서
+    `'12,<3'`을 `int`에 넘기고 **`make check`를 통째로 세웠다.** 상한을 박은 이유는
+    `uv`가 3.13 · 3.14 · 3.15 칸까지 풀어 Dependabot이 다섯 번 죽어서다.
+    """
+    for spec, want in (
+        (">=3.12", (3, 12)),
+        (">=3.12,<3.13", (3, 12)),
+        (">= 3.13 , <3.14", (3, 13)),
+    ):
+        folder = tmp_path / spec.replace(" ", "").replace(",", "_").replace("<", "lt")
+        (folder / "core").mkdir(parents=True)
+        (folder / "core" / "pyproject.toml").write_text(
+            f'[project]\nname = "x"\nversion = "0"\nrequires-python = "{spec}"\n', encoding="utf-8"
+        )
+        assert deadcheck.python_floor(folder) == want, spec
+
+
+def test_하한이_없으면_수를_지어내지_않는다(tmp_path: Path) -> None:
+    """**없는 것을 0이라고 말하지 않는다** (GR-0.5). 하한이 없으면 판정을 못 한다."""
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = "<3.13"\n', encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="하한이 없다"):
+        deadcheck.python_floor(tmp_path)

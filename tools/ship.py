@@ -300,18 +300,34 @@ PASSING = ("success", "skipped", "neutral")
 새는 것을 확인했다. **모르는 값을 통과시키는 그물은 모르는 사고를 통과시킨다.**"""
 
 
-def ci_verdict() -> list[str]:
-    """`main`의 최근 워크플로 결론 (D-0254).
+WORKFLOW_NAME = re.compile(r"^name:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
 
-    **빨간 CI를 아무도 안 보고 있었다.** D-0246이 `python-docx`를 시험에 끌어들인 뒤
-    CI가 계속 빨갰고, 로컬 `make check`는 초록이라 여덟 판을 그 위에 쌓았다.
-    내보내기 전에 **직전 커밋이 어떻게 됐는지** 여기서 말한다.
 
-    `gh`가 없거나 로그인 안 된 기기도 있다. **막지 않고 알리기만 한다** (D-0068).
-    없는 명령을 `_run`에 넘기면 `FileNotFoundError`로 배가 가라앉는다 — 실측으로 확인했다.
+def our_workflows() -> set[str]:
+    """`.github/workflows`가 선언한 이름. **손으로 적지 않는다** (D-0341).
+
+    우리 것과 **GitHub이 돌리는 것**을 가려야 한다. `Dependabot Updates`와
+    `Dependency Graph`는 워크플로 파일이 없고, 그 결론은 **코드 상태가 아니다.**
+    """
+    folder = ROOT / ".github" / "workflows"
+    found: set[str] = set()
+    for path in sorted(folder.glob("*.yml")):
+        hit = WORKFLOW_NAME.search(path.read_text(encoding="utf-8"))
+        if hit:
+            found.add(hit.group(1))
+    return found
+
+
+def _recent_runs() -> list[dict[str, object]] | str:
+    """`main`의 최근 실행. **못 읽으면 사유를 글로 낸다** (GR-0.5).
+
+    **캐시를 안 쓴다.** `functools.cache`를 걸었더니 검사 하나가 캐운 값을 뒤
+    검사가 썼다 — **숨은 상태는 다음에 또 문다.** 두 절이 같은 목록을 봐야 하므로
+    `main`이 한 번 읽어 넘긴다. 안 넘기면 각자 읽고, 그 사이 목록이 바뀌면
+    **두 절이 서로 모순된 화면을 낸다.**
     """
     if shutil.which("gh") is None:
-        return [f"{DIM}못 읽었다 — `gh`가 없다{OFF}"]
+        return "못 읽었다 — `gh`가 없다"
     code, text = _run(
         "gh",
         "run",
@@ -319,31 +335,98 @@ def ci_verdict() -> list[str]:
         "--branch",
         "main",
         "--limit",
-        "6",
+        "14",
         "--json",
-        "conclusion,name,headSha",
+        "conclusion,workflowName,name,headSha",
     )
     if code != 0 or not text.strip():
-        return [f"{DIM}못 읽었다 — `gh`가 없거나 로그인 안 됐다{OFF}"]
+        return "못 읽었다 — `gh`가 없거나 로그인 안 됐다"
     try:
-        runs = json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
-        return [f"{DIM}못 읽었다 — `gh` 출력이 JSON이 아니다{OFF}"]
+        return "못 읽었다 — `gh` 출력이 JSON이 아니다"
+    return list(parsed)
 
-    newest = runs[0]["headSha"] if runs else ""
-    latest = [run for run in runs if run.get("headSha") == newest]
-    # **모르는 결론은 빨강이다** (D-0255). `failure`만 걸렀더니 `timed_out` ·
-    # `cancelled` · `action_required`가 초록으로 샜다 — 차단 목록은 모르는 것을 통과시킨다.
-    failed = [run for run in latest if run.get("conclusion") not in (*PASSING, None, "")]
+
+def _is_failure(run: dict[str, object]) -> bool:
+    """**모르는 결론은 빨강이다** (D-0255).
+
+    `failure`만 걸렀더니 `timed_out` · `cancelled` · `action_required`가 초록으로
+    샜다 — 차단 목록은 모르는 것을 통과시킨다.
+    """
+    return run.get("conclusion") not in (*PASSING, None, "")
+
+
+def ci_verdict(runs: list[dict[str, object]] | str | None = None) -> list[str]:
+    """**우리** 워크플로의 최근 결론 (D-0254 · D-0341).
+
+    **빨간 CI를 아무도 안 보고 있었다.** D-0246이 `python-docx`를 시험에 끌어들인 뒤
+    CI가 계속 빨갰고, 로컬 `make check`는 초록이라 여덟 판을 그 위에 쌓았다.
+    내보내기 전에 **가장 최근 실행이 달린 커밋이 어떻게 됐는지** 여기서 말한다.
+
+    ### 거짓 빨강을 찍고 있었다 (D-0341)
+
+    D-0340을 내보낼 때 화면이 **「빨강 · uv in /core - Update #1603683755」**을 찍었다.
+    우리 CI 네 개는 **전부 초록이었다.** 결함이 셋이다.
+
+    | 무엇 | 왜 틀렸나 |
+    |---|---|
+    | `name`을 워크플로 이름으로 썼다 | Dependabot 실행에서 그 칸은 **PR 제목**이다 |
+    | `Dependabot Updates`를 우리 CI로 셌다 | GitHub이 돌리는 갱신 작업이고 **코드와 무관하다** |
+    | 「직전 커밋」이라 적었다 | 푸시 직후엔 실행이 아직 없어 **한 판 전**을 본다 |
+
+    **거짓 경보는 진짜 경보를 죽인다** (GR-0.8). 이 절은 *"빨간 CI를 아무도 안 보고
+    있었다"*를 막으려고 생겼는데, **거짓 빨강이 쌓이면 똑같이 안 보게 된다.**
+
+    `gh`가 없거나 로그인 안 된 기기도 있다. **막지 않고 알리기만 한다** (D-0068).
+    없는 명령을 `_run`에 넘기면 `FileNotFoundError`로 배가 가라앉는다 — 실측으로 확인했다.
+    """
+    found = _recent_runs() if runs is None else runs
+    if isinstance(found, str):
+        return [f"{DIM}{found}{OFF}"]
+
+    ours = [run for run in found if run.get("workflowName") in our_workflows()]
+    if not ours:
+        return [f"{DIM}우리 워크플로 실행이 없다 — 봇 실행만 보인다{OFF}"]
+
+    newest = ours[0].get("headSha")
+    latest = [run for run in ours if run.get("headSha") == newest]
+    failed = [run for run in latest if _is_failure(run)]
     if failed:
-        names = " · ".join(str(run.get("name", "?")) for run in failed)
+        names = " · ".join(str(run.get("workflowName", "?")) for run in failed)
         return [
             f"{RED}빨강{OFF}  {names}",
             f"{DIM}      `gh run list` · 고치고 나서 다음 것을 쌓는다{OFF}",
         ]
     if any(run.get("conclusion") in (None, "") for run in latest):
-        return [f"{DIM}도는 중{OFF}"]
+        return [f"{DIM}도는 중  {len(latest)}개{OFF}"]
     return [f"{GREEN}초록{OFF}  {len(latest)}개"]
+
+
+def bot_verdict(runs: list[dict[str, object]] | str | None = None) -> list[str]:
+    """워크플로 파일이 없는 실행 — **GitHub이 돌리는 것** (D-0341).
+
+    `Dependabot Updates`가 실패하면 **의존성을 못 올리고 있다**는 뜻이다. 코드가
+    깨진 것이 아니므로 CI 자리에 섞지 않고, **그렇다고 안 세지도 않는다** — 안 세는
+    것은 0으로 보이고 0은 다 끝난 것으로 읽힌다 (D-0328).
+
+    실제로 2026-10-01에 `uv in /core`가 죽어 있었고 **세는 축이 하나도 없었다.**
+    「Dependabot 열린 경보」는 **보안 경보**이고 갱신 작업 실패는 다른 것이다.
+    """
+    found = _recent_runs() if runs is None else runs
+    # **CI 절이 이미 사유를 말했다.** 같은 줄을 두 번 찍으면 화면이 자기를 반복한다.
+    if isinstance(found, str):
+        return []
+
+    mine = our_workflows()
+    failed = [run for run in found if run.get("workflowName") not in mine and _is_failure(run)]
+    if not failed:
+        return []
+    names = " · ".join(str(run.get("name", "?")) for run in failed)
+    return [
+        f"{RED}갱신 실패{OFF}  {names}",
+        f"{DIM}      코드가 아니라 **갱신이 죽었다.** 로그는 저장소 쓰기 권한이 든다{OFF}",
+    ]
 
 
 def main() -> int:
@@ -395,8 +478,16 @@ def main() -> int:
     for line in payable_debts():
         print(f"{DIM}   {line}{OFF}")
 
-    print(f"{DIM}── CI (직전 커밋){OFF}")
-    for line in ci_verdict():
+    # **「직전 커밋」이라 적지 않는다** (D-0341). 푸시 직후엔 실행이 아직 없어
+    # 한 판 전을 본다. 라벨이 실제로 보는 것과 같아야 한다.
+    print(f"{DIM}── CI (최근 실행이 달린 커밋){OFF}")
+    # **한 번 읽어 둘에 넘긴다.** 각자 읽으면 `gh`를 두 번 부르고, 그 사이 목록이
+    # 바뀌면 두 절이 서로 모순된 화면을 낸다.
+    recent = _recent_runs()
+    for line in ci_verdict(recent):
+        print(f"   {line}")
+
+    for line in bot_verdict(recent):
         print(f"   {line}")
 
     print(f"{DIM}── 위생 (세기만 한다){OFF}")

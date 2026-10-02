@@ -27443,3 +27443,142 @@ D-0203이 적었다 — *"manifest가 크로마 조건을 안 적었다. 기본�
     `core/tests/unit/test_compare_aggregation.py::test_과녁을_안_주면_전수_폭이다`
 
 자료  합성 · 실물 1004곡
+
+---
+
+## D-0341. 거짓 빨강을 찍고 있었다 — 진짜 빨강은 안 도는 칸 셋이었다
+
+- **배경**: D-0340을 내보낼 때 `make ship`이 찍었다.
+
+      ── CI (직전 커밋)
+         빨강  uv in /core - Update #1603683755
+
+  **우리 CI 네 개는 전부 초록이었다.** 실측으로 확인했다.
+
+      36955340816 | codeql   | cf18ec8 | completed/success
+      36955340896 | ci       | cf18ec8 | completed/success
+      36921872541 | Dependabot Updates | fb221e8 | completed/failure
+
+### 결함이 셋이다
+
+| 무엇 | 왜 틀렸나 |
+|---|---|
+| `name`을 워크플로 이름으로 썼다 | Dependabot 실행에서 그 칸은 **PR 제목**이다 |
+| `Dependabot Updates`를 우리 CI로 셌다 | GitHub이 돌리는 갱신 작업이고 **코드와 무관하다** |
+| 「직전 커밋」이라 적었다 | 푸시 직후엔 실행이 아직 없어 **한 판 전**을 본다 |
+
+`gh run list --json name`이 **실행마다 다른 것을 준다** — 우리 실행에서는 워크플로
+이름이고 Dependabot 실행에서는 PR 제목이다. `workflowName`이 제 칸이다.
+
+**이 절은 D-0254가 *"빨간 CI를 아무도 안 보고 있었다"*를 막으려고 만들었다.**
+거짓 빨강이 쌓이면 **똑같이 안 보게 된다** (GR-0.8).
+
+### 우리 것과 봇 것을 파일로 가른다
+
+- **후보**: (1) 이름 목록을 손으로 적는다 (2) `Dependabot`으로 시작하면 뺀다
+  (3) **`.github/workflows`의 `name:`을 읽어 그 안에 든 것만 본다.**
+- **선택**: **(3).** (1)은 새 워크플로가 조용히 빠진다. (2)는 차단 목록이고
+  **차단 목록은 모르는 것을 통과시킨다** — D-0255가 같은 자리에서 겪었다.
+
+`our_workflows()`가 다섯을 읽는다 (`ci` · `codeql` · `gpu-smoke` · `proposal` ·
+`release`). `Dependabot Updates`와 `Dependency Graph`는 **워크플로 파일이 없다.**
+
+### 그렇다고 안 세지도 않는다
+
+`bot_verdict()`가 **별도 줄**로 든다 — 갱신이 죽은 것도 빚이고, **안 세는 것은
+0으로 보인다** (D-0328). 「Dependabot 열린 경보」 축은 **보안 경보**이고 갱신 작업
+실패는 다른 것이다. 초록이면 **줄을 안 낸다** — 사건이 있을 때만 뜨는 자리다.
+
+### 진짜 실패 — 내 환경이 못 갈랐고 **사실이 갈랐다**
+
+Dependabot 로그가 가리킨 것.
+
+    error: No solution found when resolving dependencies for split
+      (markers: python_full_version >= '3.15' and platform_machine == ...)
+    cause: Because torch==2.14.0 has no `platform_machine == 'x86_64' and
+           sys_platform == 'linux'`-compatible wheels and hathor[gpu]...
+
+**일시적 상태가 아니다.** 지난주 세 번 · 어제 한 번 · 다시 돌린 방금 한 번,
+**다섯 번 죽었다.**
+
+**재현은 세 번 다 실패했다.**
+
+| 무엇 | 결과 |
+|---|---|
+| 수정 전 · `uv lock --upgrade` | 성공 — `torch 2.13.0 → 2.14.1` |
+| 수정 전 · `torch==2.14.0` 못 박고 `--upgrade` | 성공 |
+| 수정 전 · 락을 **지우고** 처음부터 · `torch==2.14.0` | 성공 |
+
+**이 컨테이너의 `uv` 0.8.17이 그 칸을 그냥 넘긴다.** 그것 자체가 사실이고 더 나쁘다 —
+**로컬은 풀리고 Dependabot은 죽는다.** 같은 `pyproject.toml`이 도구 판에 따라 갈린다.
+
+**그래서 자료로 갈랐다.** PyPI가 `torch 2.14.0`에 대해 내는 휠 꼬리표다.
+
+| 꼬리표 | 플랫폼 |
+|---|---|
+| cp310 · cp311 · cp312 · cp313 · cp314 | macosx arm64 · manylinux aarch64 · **manylinux x86_64** · win_amd64 |
+| **cp315** | **없다** |
+
+그런데 그 배포의 `requires_python`이 `>=3.10`이라 **상한이 없고 3.15를 지원한다고
+말한다.** 우리 쪽도 `requires-python = ">=3.12"`로 상한이 없었다. 그 둘이 만나
+**해가 없는 칸**이 생긴다.
+
+**잠금 파일이 직접 증거였다.**
+
+    resolution-markers = [
+        "python_full_version >= '3.15' and ...",
+        "python_full_version == '3.14.*' and ...",
+        "python_full_version == '3.13.*' and ...",
+        "python_full_version < '3.13' and ...",
+    ]
+
+**넷 중 셋이 우리가 안 도는 칸이다.** D-0227이 `environments`로 **플랫폼 축**을
+하나로 좁히면서 *"미래 파이썬까지 한 잠금에 풀고"*를 적었는데 **파이썬 축은 넷으로
+열어 뒀다.** 같은 병의 다른 축이고, **torch만의 문제가 아니다** — 어떤 패키지든
+최신 판이 아직 그 파이썬용 휠을 안 내면 같은 일이 난다.
+
+### 상한을 박는다
+
+- **후보**: (1) `environments`에 파이썬 조건을 더한다 (2) `torch`를 `ignore`에 넣는다
+  (3) **`requires-python`에 상한을 박는다.**
+- **선택**: **(3).** (1)은 `environments`가 *잠금을 풀 환경*이고 Dependabot은
+  `requires-python`을 보고 해상도 범위를 정한다 — **원인에 안 닿는다.** (2)는 다음
+  패키지에서 또 터진다. **문제는 torch가 아니라 안 도는 칸 셋이다.**
+
+`requires-python = ">=3.12,<3.13"`. **`resolution-markers`가 4에서 1이 됐고**
+잠금의 선언이 `"==3.12.*"`가 됐다. 올릴 때 이 줄을 **고의로** 고친다.
+
+- **결과**:
+  - `ship.our_workflows` · `bot_verdict`. `ci_verdict`가 `workflowName`을 쓴다.
+  - 라벨이 **「CI (최근 실행이 달린 커밋)」**이다. 보는 것과 적는 것을 맞췄다.
+  - `_recent_runs`를 `main`이 한 번 읽어 두 절에 넘긴다. **`functools.cache`를
+    걸었다가 뺐다** — 검사 하나가 캐운 값을 뒤 검사가 썼다.
+  - `requires-python = ">=3.12,<3.13"`. 잠금을 다시 풀었다 — `resolution-markers`
+    **4 → 1**, 패키지 219 → 218 (`whenever`가 3.13+ 전용이라 빠졌다).
+  - `deadcheck.python_floor`가 **상한을 못 읽고 터졌다.** 앞을 `lstrip`하고 점으로
+    자르던 파서가 `'12,<3'`을 `int`에 넘겨 `make check`를 통째로 세웠다 — `>=` 절만
+    집어낸다. **같은 가정을 한 파서는 `grep`으로 확인했고 이 하나뿐이다.**
+
+### 남기는 것
+
+- **고쳤는지는 다음 Dependabot 실행이 말한다.** 이 컨테이너의 `uv`가 수정 전에도
+  풀어 버리므로 **여기서는 확인할 길이 없다** — 넣은 근거는 휠 꼬리표와 split 소멸이지
+  재현이 아니다. 실행 자리는 Insights → Dependency graph → Dependabot → `uv` 행의
+  「Check for updates」다.
+- **`uv` 버전이 같은 파일을 다르게 푼다.** 0.8.17은 해 없는 칸을 넘기고 Dependabot의
+  것은 안 넘긴다. **어느 쪽이 맞는지 안 쟀고**, 재는 법도 모른다 — 그쪽 버전이 로그
+  머리줄에 없다.
+- **맥북은 arm64이고 `environments`가 x86_64 하나다.** 같은 파일의 다른 축이며
+  `uv sync`를 그 기기에서 돌려 봐야 안다. **이 판에서 손대지 않았다.**
+
+재현
+    cd core && uv run pytest tests/unit/test_ship.py -q
+    gh run list --branch main --limit 8 --json workflowName,name,conclusion
+
+강제자
+    `core/tests/unit/test_ship.py::test_봇_실행을_우리_CI로_안_센다`
+    `core/tests/unit/test_ship.py::test_봇_실행이_죽으면_따로_센다`
+    `core/tests/unit/test_ship.py::test_워크플로_이름을_파일에서_읽는다`
+    `core/tests/unit/test_hygiene.py::test_파이썬_하한을_상한과_같이_읽는다`
+
+자료  실물 이 저장소의 워크플로 실행 8건 · Dependabot 실행 6건 · PyPI 휠 꼬리표

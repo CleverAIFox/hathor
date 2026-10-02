@@ -213,9 +213,9 @@ def test_직전_커밋의_CI가_빨가면_그렇게_말한다(monkeypatch: pytes
     """**여덟 판을 빨간 CI 위에 쌓았다** (D-0254). 내보내기 전에 말한다."""
     monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
     runs = [
-        {"conclusion": "failure", "name": "ci", "headSha": "abc"},
-        {"conclusion": "success", "name": "proposal", "headSha": "abc"},
-        {"conclusion": "failure", "name": "ci", "headSha": "older"},
+        {"conclusion": "failure", "workflowName": "ci", "name": "ci", "headSha": "abc"},
+        {"conclusion": "success", "workflowName": "proposal", "name": "proposal", "headSha": "abc"},
+        {"conclusion": "failure", "workflowName": "ci", "name": "ci", "headSha": "older"},
     ]
     monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
 
@@ -230,8 +230,8 @@ def test_옛_커밋의_실패는_안_센다(monkeypatch: pytest.MonkeyPatch) -> 
     """**직전 커밋을 본다.** 지난 실패까지 세면 고친 뒤에도 계속 빨갛다고 한다."""
     monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
     runs = [
-        {"conclusion": "success", "name": "ci", "headSha": "new"},
-        {"conclusion": "failure", "name": "ci", "headSha": "old"},
+        {"conclusion": "success", "workflowName": "ci", "name": "ci", "headSha": "new"},
+        {"conclusion": "failure", "workflowName": "ci", "name": "ci", "headSha": "old"},
     ]
     monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
 
@@ -244,7 +244,7 @@ def test_모르는_결론은_빨강이다(monkeypatch: pytest.MonkeyPatch) -> No
     차단 목록은 모르는 값을 통과시킨다. GitHub가 결론 종류를 더하면 그때마다 사각이 는다.
     """
     monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
-    runs = [{"conclusion": "timed_out", "name": "ci", "headSha": "abc"}]
+    runs = [{"conclusion": "timed_out", "workflowName": "ci", "name": "ci", "headSha": "abc"}]
     monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
 
     assert "빨강" in " ".join(SHIP.ci_verdict())
@@ -253,7 +253,14 @@ def test_모르는_결론은_빨강이다(monkeypatch: pytest.MonkeyPatch) -> No
 def test_건너뛴_것은_빨강이_아니다(monkeypatch: pytest.MonkeyPatch) -> None:
     """조건이 안 맞아 안 돈 잡까지 빨갛다고 하면 **사람이 그 줄을 안 믿게 된다.**"""
     monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
-    runs = [{"conclusion": "skipped", "name": "gpu-smoke", "headSha": "abc"}]
+    runs = [
+        {
+            "conclusion": "skipped",
+            "workflowName": "gpu-smoke",
+            "name": "gpu-smoke",
+            "headSha": "abc",
+        }
+    ]
     monkeypatch.setattr(SHIP, "_run", lambda *_args: (0, json.dumps(runs)))
 
     assert "초록" in " ".join(SHIP.ci_verdict())
@@ -432,3 +439,84 @@ def test_터진_표식이_없으면_잡음만_뺀다():
 def test_출력이_한_줄이면_그_줄을_낸다():
     printed = "\n".join(SHIP.blocked("Error 1"))
     assert "Error 1" in printed
+
+
+# ----------------------------------------------- 봇 실행을 우리 CI로 세고 있었다 (D-0341)
+
+
+def _dependabot_run(conclusion: str = "failure") -> dict[str, str]:
+    """실물에서 받은 꼴. **`workflowName`과 `name`이 다르다** — 뒤가 PR 제목이다."""
+    return {
+        "conclusion": conclusion,
+        "workflowName": "Dependabot Updates",
+        "name": "uv in /core - Update #1603683755",
+        "headSha": "fb221e8",
+    }
+
+
+def test_워크플로_이름을_파일에서_읽는다() -> None:
+    """**손으로 적지 않는다** (D-0341). 적으면 새 워크플로가 조용히 빠진다."""
+    found = SHIP.our_workflows()
+
+    assert "ci" in found and "release" in found
+    assert "Dependabot Updates" not in found, "워크플로 파일이 없는 것은 우리 것이 아니다"
+    assert "Dependency Graph" not in found
+
+
+def test_봇_실행을_우리_CI로_안_센다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**거짓 빨강을 찍고 있었다** (D-0341 · GR-0.8).
+
+    D-0340을 내보낼 때 화면이 「빨강 · uv in /core - Update #1603683755」을 찍었고
+    **우리 CI 네 개는 전부 초록이었다.** 이 절은 *"빨간 CI를 아무도 안 보고 있었다"*를
+    막으려고 생겼는데(D-0254) **거짓 빨강이 쌓이면 똑같이 안 보게 된다.**
+    """
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    runs = [
+        {"conclusion": "success", "workflowName": "ci", "name": "ci", "headSha": "cf18ec8"},
+        _dependabot_run(),
+    ]
+    monkeypatch.setattr(SHIP, "_recent_runs", lambda: runs)
+
+    assert "초록" in " ".join(SHIP.ci_verdict())
+
+
+def test_봇_실행이_죽으면_따로_센다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**안 세는 것은 0으로 보인다** (D-0328).
+
+    코드가 깨진 것이 아니므로 CI 자리에 안 섞되, **갱신이 죽은 것도 빚이다.**
+    「Dependabot 열린 경보」는 **보안 경보**이고 이것은 다른 축이다.
+    """
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    monkeypatch.setattr(SHIP, "_recent_runs", lambda: [_dependabot_run()])
+
+    printed = " ".join(SHIP.bot_verdict())
+
+    assert "갱신 실패" in printed
+    assert "uv in /core" in printed, "무엇이 죽었는지 적는다"
+    assert "코드가 아니라" in printed
+
+
+def test_봇이_초록이면_아무_줄도_안_낸다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**0인 축을 줄로 내지 않는다** — 여기는 사건이 있을 때만 뜨는 자리다."""
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    monkeypatch.setattr(SHIP, "_recent_runs", lambda: [_dependabot_run("success")])
+
+    assert SHIP.bot_verdict() == []
+
+
+def test_못_읽으면_같은_줄을_두_번_안_찍는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI 절이 이미 사유를 말했다. **화면이 자기를 반복하면 안 읽힌다.**"""
+    monkeypatch.setattr(SHIP, "_recent_runs", lambda: "못 읽었다 — `gh`가 없다")
+
+    assert SHIP.bot_verdict() == []
+
+
+def test_우리_실행이_없으면_없다고_말한다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**봇 실행만 보일 때 그것을 초록이라 하지 않는다** (GR-0.5)."""
+    monkeypatch.setattr(SHIP.shutil, "which", lambda _name: "/usr/bin/gh")
+    monkeypatch.setattr(SHIP, "_recent_runs", lambda: [_dependabot_run("success")])
+
+    (line,) = SHIP.ci_verdict()
+
+    assert "없다" in line
+    assert "초록" not in line
