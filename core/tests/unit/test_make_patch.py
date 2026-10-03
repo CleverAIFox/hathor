@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -17,7 +18,8 @@ import pytest
 
 from hathor.shared.config.paths import repo_root
 
-SCRIPT = repo_root() / "tools" / "make_patch.sh"
+ROOT = repo_root()
+SCRIPT = ROOT / "tools" / "make_patch.sh"
 
 
 def _git(folder: Path, *args: str, check: bool = True) -> str:
@@ -451,3 +453,82 @@ def test_폴더를_모르면_그렇게_말한다(tmp_path: Path) -> None:
 
     assert done.returncode != 0
     assert "패치 폴더를 모른다" in done.stderr
+
+
+# ------------------------------------------- 파이프가 거짓 실패를 낸다 (D-0354)
+
+
+def test_큰_대장에서도_뽑힌다(tmp_path: Path) -> None:
+    """**`git show … | grep -q`는 부하가 걸리면 거짓으로 실패한다** (D-0354).
+
+    `grep -q`가 일치하자마자 끝내고, `git show`가 아직 쓰고 있으면 `SIGPIPE`로 죽는다.
+    `set -o pipefail`이 그것을 파이프라인의 실패로 읽어 **대장에 번호가 멀쩡히 있는데
+    「없다」고 막았다.** 사용자 기기에서 `make check`이 터졌고, 시험을 네 갈래로 돌리자
+    **3/3 재현**됐다 — 한 갈래로는 안 보인다.
+
+    여기서는 **일치를 맨 앞에 두고 뒤에 큰 덩어리를 붙여** 경주를 없앤다. 파이프로
+    되돌리면 이 시험은 반드시 빨개진다.
+    """
+    where = tmp_path / "r"
+    where.mkdir(parents=True)
+    (where / "docs").mkdir()
+
+    def run(*args: str) -> None:
+        subprocess.run(
+            args,
+            cwd=where,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=True,
+            env=dict(
+                os.environ,
+                GIT_AUTHOR_NAME="x",
+                GIT_AUTHOR_EMAIL="x@y",
+                GIT_COMMITTER_NAME="x",
+                GIT_COMMITTER_EMAIL="x@y",
+            ),
+        )
+
+    run("git", "init", "-q", ".")
+    past = where / "docs" / "DECISIONS.md"
+    past.write_text("## D-0001. 첫 기록\n", encoding="utf-8")
+    (where / "a.txt").write_text("처음\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "D-0001. 첫 기록")
+
+    # **표제가 맨 앞, 그 뒤로 8MB.** `grep -q`는 첫 줄에서 끝나고 `git show`는 계속 쓴다.
+    filler = "### 채움 — 파이프가 막히도록 길게 쓴다.\n" * 200_000
+    past.write_text(f"## D-0001. 첫 기록\n## D-0002. 둘째\n{filler}", encoding="utf-8")
+    (where / "a.txt").write_text("둘째\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "D-0002. 둘째")
+    assert past.stat().st_size > 4_000_000, past.stat().st_size
+
+    done = _make(where)
+
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    assert "hathor-base" in _headers(where / "D0002.patch")
+
+
+def test_일찍_끝내는_소비자에_파이프를_안_물린다() -> None:
+    r"""**거꾸로도 본다** (D-0354).
+
+    `set -o pipefail`이 켜진 셸에서 `… | grep -q` · `… | head`는 **언제든 거짓 실패를
+    낸다.** 앞쪽이 큰 것을 쓰는 순간 터지고, 그때는 부하가 걸린 날이다. 새로 들어오면
+    여기가 빨개진다.
+    """
+    guilty = []
+    for path in sorted((ROOT / "tools").glob("*.sh")):
+        text = path.read_text(encoding="utf-8")
+        if "pipefail" not in text:
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            # **주석은 안 센다.** 첫 판이 이 결함을 설명하는 제 주석에 걸렸다 — `check_args`의
+            # 속성 문서 문자열과 같은 자리다 (D-0352).
+            if line.lstrip().startswith("#"):
+                continue
+            if re.search(r"\|\s*(grep\s+-[a-zA-Z]*q|head\b|grep\s+-m\s?[0-9])", line):
+                guilty.append(f"{path.name}:{number}  {line.strip()}")
+
+    assert guilty == [], "파이프를 `<<<`나 변수로 바꾼다 (D-0354)"

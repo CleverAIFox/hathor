@@ -217,7 +217,8 @@ fi
 # 못을 박는다 (D-0134). 막는다: 여기서 막으면 패치를 다시 짜면 되고, 안 막으면 그 판단은
 # 영영 번호가 없다.
 TOOLCHAIN="$(echo "$EXPECTED" | grep -E '^(Makefile|\.github/workflows/|\.githooks/)' || true)"
-if [[ -n "$TOOLCHAIN" ]] && ! echo "$EXPECTED" | grep -qx 'docs/DECISIONS.md'; then
+# `<<<`로 준다 — 파이프 + `grep -q` + `pipefail`은 거짓 실패를 낸다 (D-0354).
+if [[ -n "$TOOLCHAIN" ]] && ! grep -qx 'docs/DECISIONS.md' <<<"$EXPECTED"; then
   echo
   printf '\033[31m도구 체인을 바꾸면서 결정 기록이 없다 (D-0039).\033[0m\n' >&2
   echo "$TOOLCHAIN" | sed 's/^/  /' >&2

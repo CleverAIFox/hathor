@@ -176,7 +176,13 @@ NUMBER="$(printf '%s' "$SUBJECT" | grep -oE '^D-[0-9]{4}' || true)"
 [[ -n "$NUMBER" ]] || die "커밋 제목이 \`D-XXXX.\`로 시작하지 않는다: ${SUBJECT}"
 
 # **번호를 적었다고 말하고 안 적었을 수 있다.** 그 커밋의 대장에 그 표제가 있어야 한다.
-git show "${REV}:docs/DECISIONS.md" | grep -q "^## ${NUMBER}\." \
+#
+# **파이프로 넘기지 않는다** (D-0354). `git show … | grep -q`는 **부하가 걸리면 거짓으로
+# 실패한다** — `grep -q`가 일치하자마자 끝내고, `git show`가 아직 1MB를 쓰고 있으면
+# `SIGPIPE`로 죽고, `set -o pipefail`이 그것을 파이프라인의 실패로 읽는다. 한가할 때는
+# 안 보이고 **시험을 네 갈래로 돌리자 3/3 재현됐다.** 통째로 받아 둔다.
+LEDGER="$(git show "${REV}:docs/DECISIONS.md")"
+grep -q "^## ${NUMBER}\." <<<"$LEDGER" \
   || die "${NUMBER}이 그 커밋의 대장에 없다. 기록을 같이 담는다 (D-0039)"
 
 # 선행은 **부모의** 마지막 번호다. 내 번호를 적으면 제 자신을 기다린다.
