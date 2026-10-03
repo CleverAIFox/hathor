@@ -338,13 +338,21 @@ dec -> ban [label="예"]; dec -> ok [label="아니오"];
 
 def patch_pipe(out: Path, font: str) -> Path:
     body = f"""
+mk [label="make patch\\n머리 셋을 커밋에서 · 기준 위에서 검증", fillcolor="{GRAY}"];
 dl [label="윈도 다운로드 폴더\\nHATHOR_PATCH_DIR (.env)", fillcolor="{GRAY}"];
 apply [label="make apply\\n최신 패치 · 멱등 · 깨끗한 트리"];
+base [label="# hathor-base: = 내 HEAD의 트리?", shape=diamond, fillcolor="white"];
+needs [label="# hathor-needs: 표제가 대장에?", shape=diamond, fillcolor="white"];
 same [label="선언한 파일 = 바뀐 파일?", shape=diamond, fillcolor="white"];
 commit [label="커밋\\n메시지 = # hathor-commit:"]; check [label="make check\\n검사 전부"];
 push [label="git push → CI 3잡", fillcolor="{GREEN}"];
+wrong [label="멈춘다 — 다른 판이다\\n두 트리를 같이 찍는다", fillcolor="{ROSE}"];
+missing [label="멈춘다 — 선행을 먼저 붙인다", fillcolor="{ROSE}"];
 stop [label="멈춘다 — 다른 작업이 섞였다", fillcolor="{ROSE}"];
-dl -> apply -> same; same -> commit [label="같다"]; same -> stop [label="다르다"];
+mk -> dl -> apply -> needs;
+needs -> base [label="있다"]; needs -> missing [label="없다"];
+base -> same [label="같다"]; base -> wrong [label="다르다"];
+same -> commit [label="같다"]; same -> stop [label="다르다"];
 commit -> check -> push;
 """
     return render(out, "patch_pipe", body, font, "TB")

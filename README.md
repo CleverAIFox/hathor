@@ -128,6 +128,8 @@ make apply                    # 패치 폴더의 가장 최근 **hathor** .patch
 make apply PATCH=D0221.patch
 make apply WHICH=1            # 무엇을 집을지만 찍는다
 make check && git push
+make patch                    # 뽑는 쪽 — 머리 셋을 손으로 안 적고 기준 위에서 검증한다 (D-0351)
+make patch VERIFY=D0350.patch # 받은 패치가 어느 판 위에 서는지 찍는다
 make ship                     # 규약 · git 상태 · 위생 · 산출물을 한 번에 (D-0147)
 make tidy                     # 로컬 찌꺼기를 센다 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치
 make tidy YES=1               # 치운다. 패치는 지우지 않고 applied/로 옮긴다 (D-0225)
@@ -156,8 +158,21 @@ make bot CLOSE=1                       # 열린 봇 PR을 닫고 브랜치까지
 ```
 
 `make apply`는 작업 트리가 깨끗한지 보고, 이미 적용됐으면 아무것도 안 한다. **패치가 선언한
-파일과 실제로 바뀐 파일이 같아야 커밋한다** (D-0072). 커밋 메시지는 패치의 `# hathor-commit:`
-줄이다. 되돌리기는 `git reset --hard HEAD~1` — 별도 백업 폴더를 만들지 않는다 (GR-0.7).
+파일과 실제로 바뀐 파일이 같아야 커밋한다** (D-0072). 되돌리기는 `git reset --hard HEAD~1` —
+별도 백업 폴더를 만들지 않는다 (GR-0.7).
+
+**패치 머리는 셋이고 `make patch`가 전부 커밋에서 뽑는다** (D-0351). 손으로 적으면 틀린다.
+
+| 머리 | 무엇 | 받는 쪽이 |
+|---|---|---|
+| `# hathor-commit:` | 커밋 제목 | 커밋 메시지로 쓴다. **표식도 겸한다** — 폴더를 여러 저장소가 나눠 쓴다 (D-0249) |
+| `# hathor-needs:` | **부모의** 마지막 결정 번호 | 그 표제가 대장에 있는지 본다 (D-0287) |
+| `# hathor-base:` | **부모의 트리 해시** | 제 `HEAD`의 트리와 대조하고, 다르면 **둘을 같이 찍는다** (D-0351) |
+
+**번호는 판을 가르지 못한다.** `D0349.patch`가 세 판 나갔고 셋 다 `D-0349`라 선행 검사는
+전부 통과한다 — 다음 패치가 안 붙자 `git apply`는 *"브랜치와 기준 커밋을 확인한다"*고만
+했고 어느 기준인지는 말하지 않았다. **트리 해시는 이력이 안 들어가 미러와 실물에서 같다**
+(실측: 커밋 350개와 1개가 같은 트리를 냈다).
 
 ## 릴리스 · 커버리지 (D-0223)
 
@@ -298,7 +313,8 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/build_proposal.py` | 기획서 빌드 (pandoc) |
 | `tools/render_figures.py` | 기획서 구조도 (graphviz) |
 | `tools/render_charts.py` | 기획서 수치 그림 (matplotlib) |
-| `tools/apply_patch.sh` | `make apply` — 패치 적용 · 선언 대조 · 커밋 |
+| `tools/apply_patch.sh` | `make apply` — 패치 적용 · 기준 대조 · 선언 대조 · 커밋 |
+| `tools/make_patch.sh` | `make patch` — 패치 뽑기 · 머리 셋 · 기준 위에서 검증 |
 | `tools/ship.py` | `make ship` — 내보내도 되는가 |
 | `tools/sync_artifacts.py` | 산출물 백업 · 복원 · 추가 전용 |
 | `tools/var_fsck.py` | 산출물이 무엇인지 찍는다 |

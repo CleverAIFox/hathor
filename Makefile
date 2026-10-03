@@ -137,6 +137,9 @@ mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 25�
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [WHICH=1] [NOCOMMIT=1] (D-0070 · D-0249)
 	@bash tools/apply_patch.sh $(if $(WHICH),--which,) $(PATCH)
 
+patch:         ## 패치를 뽑고 기준 위에서 정·역 검증한다. [REV=] [OUT=] [VERIFY=기존.patch] (D-0351)
+	@REV="$(REV)" OUT="$(OUT)" VERIFY="$(VERIFY)" AGAINST="$(AGAINST)" bash tools/make_patch.sh
+
 clean:         ## 저장소의 파이썬 바이트코드만 지운다. **.venv/와 var/는 건드리지 않는다** (D-0148)
 	find . -type d \( -name .venv -o -name var -o -name node_modules \) -prune -o \
 	     -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true

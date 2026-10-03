@@ -243,3 +243,117 @@ def test_여럿을_선언하면_전부_본다(tmp_path: Path) -> None:
 def test_선언이_없는_옛_패치는_막지_않는다(tmp_path: Path) -> None:
     """**옛 패치가 실재한다.** 표식이 없다고 막으면 되돌릴 수 없는 것이 생긴다."""
     assert _needs("# hathor-commit: 무언가\n", "## D-0001. 제목\n", tmp_path) == 0
+
+
+# --------------------------------------------- 어느 판 위에 서는가 (D-0351)
+
+BASE_START = 'BASE="$(grep'
+BASE_END = "\nfi\n"
+
+
+def _base_gate() -> str:
+    """스크립트에서 기준 검사의 **실제 줄**을 떼어 온다."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    start = text.index(BASE_START)
+    return text[start : text.index(BASE_END, start) + len(BASE_END)]
+
+
+def _tiny_repo(folder: Path, content: str) -> str:
+    """커밋 하나짜리 저장소를 만들고 **트리 해시**를 돌려준다."""
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            args, cwd=folder, capture_output=True, text=True, timeout=60, check=True
+        )
+
+    run("git", "init", "-q", ".")
+    run("git", "config", "user.email", "x@y")
+    run("git", "config", "user.name", "x")
+    (folder / "a.txt").write_text(content, encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "하나")
+    return run("git", "rev-parse", "HEAD^{tree}").stdout.strip()
+
+
+def _base(declared: str, folder: Path) -> subprocess.CompletedProcess[str]:
+    """기준 선언을 주고 관문을 그 저장소에서 돌린다."""
+    patch = folder / "x.patch"
+    patch.write_text(declared, encoding="utf-8")
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'die() {{ echo "$1" >&2; exit 1; }}\nPATCH="{patch}"\n{_base_gate()}',
+        ],
+        cwd=folder,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def test_기준이_같으면_통과한다(tmp_path: Path) -> None:
+    tree = _tiny_repo(tmp_path / "repo", "하나")
+
+    assert _base(f"# hathor-base: {tree}\n", tmp_path / "repo").returncode == 0
+
+
+def test_기준이_다르면_막고_둘_다_찍는다(tmp_path: Path) -> None:
+    """**그날의 꼴이다** (D-0351).
+
+    `D0349.patch`가 세 판 나갔고 사람은 첫째를 붙였다고 했는데 **둘째가 들어가 있었다.**
+    셋 다 `# hathor-needs: D-0349`라 선행 검사는 전부 통과한다. 다음 패치가 안 붙자
+    `git apply`는 *"브랜치와 기준 커밋을 확인한다"*고 했고 **어느 기준인지는 말하지
+    않았다** — blob 해시를 손으로 좇아서야 알았다. 여기서는 **둘을 같이 찍는다.**
+    """
+    tree = _tiny_repo(tmp_path / "repo", "하나")
+    other = _tiny_repo(tmp_path / "다른곳", "둘")
+    assert tree != other
+
+    done = _base(f"# hathor-base: {other}\n", tmp_path / "repo")
+
+    assert done.returncode != 0
+    assert "기준이 다르다" in done.stderr
+    assert other in done.stderr, "이 패치가 서는 트리를 찍는다"
+    assert tree in done.stderr, "네 트리도 찍는다 — 없으면 또 손으로 좇는다"
+
+
+def test_트리_해시는_이력과_무관하다(tmp_path: Path) -> None:
+    """**이것이 `# hathor-base:`가 서는 근거다.**
+
+    D-0287은 *"해시가 아니다 — 미러와 실물 저장소는 이력이 달라 해시가 안 맞는다"*고
+    적었다. **커밋 해시까지가 맞는 말이다.** 트리 해시는 파일 이름·모드·내용만으로
+    정해져 이력이 안 들어간다 — 그래서 결정 번호처럼 어디서나 같고 번호보다 촘촘하다.
+    주장이 아니라 **여기서 센다.**
+    """
+    first = _tiny_repo(tmp_path / "하나", "같은 내용")
+    second = tmp_path / "둘"
+    # 이력을 다르게 만든다 — 커밋 둘을 거쳐 같은 내용에 도달한다.
+    second.mkdir(parents=True)
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            args, cwd=second, capture_output=True, text=True, timeout=60, check=True
+        )
+
+    run("git", "init", "-q", ".")
+    run("git", "config", "user.email", "남@남")
+    run("git", "config", "user.name", "남")
+    (second / "a.txt").write_text("딴 것", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "딴 길")
+    (second / "a.txt").write_text("같은 내용", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "도달")
+
+    assert run("git", "rev-parse", "HEAD^{tree}").stdout.strip() == first
+    assert run("git", "rev-parse", "HEAD").stdout.strip() != first
+
+
+def test_기준이_없는_옛_패치는_막지_않는다(tmp_path: Path) -> None:
+    """**이미 나간 패치 350판에는 그 머리가 없다.** 막으면 되돌릴 수 없는 것이 생긴다."""
+    _tiny_repo(tmp_path / "repo", "하나")
+
+    assert _base("# hathor-commit: 무언가\n", tmp_path / "repo").returncode == 0
