@@ -88,14 +88,18 @@ def gate_tools() -> list[str]:
 ENTRIES = ("check", "main")
 """배선을 보는 자리. 관문의 입구다."""
 
-WIRING_CEILING = 49
+WIRING_CEILING = 92
 """**배선을 끊어도 안 우는 자리의 천장** (D-0353).
 
-실측 49곳이다. 한 판에 다 메울 수 있는 수가 아니고, **메우는 척하지도 않는다** —
+실측 **92곳**이다. 처음에 49라고 적었는데 **그 측정이 틀렸다** — 저장소에 커밋 안 된
+변경이 있어 시험 묶음이 이미 빨갰고, 그것을 「내 절단 때문에 울었다」로 세어 생존자를
+적게 셌다 (53 → 92). 이제 **자르기 전에 한 번 돌려** 그 자리를 막는다.
+
+한 판에 다 메울 수 있는 수가 아니고, **메우는 척하지도 않는다** —
 이 수는 `check_ratchets`가 못으로 들고 있어서 **올라가면 빨개지고 내려가면 조인다.**
 0이 되는 날이 이 빚을 다 갚은 날이다.
 
-`check_ratchets`의 넷은 이 판에서 메웠다 (53 → 49).
+`check_doc_style`·`encoding_check`의 열둘은 D-0356에서 메웠다.
 """
 
 
@@ -204,6 +208,7 @@ def cut_wiring() -> int:
     tools = gate_tools()
     print(f"관문 도구 {len(tools)}개의 배선을 끊어 본다\n")
     survived: list[str] = []
+    unmeasured: list[str] = []
     for name in tools:
         path = ROOT / "tools" / f"{name}.py"
         if not path.exists():
@@ -218,6 +223,13 @@ def cut_wiring() -> int:
         if not targets:
             print(f"  {name:<24} **여는 시험이 없다**")
             survived.append(f"{name}(시험 없음)")
+            continue
+        # **자르기 전에 한 번 돌린다** (D-0356). 이미 빨간 시험 묶음에 절단을 얹으면 **내
+        # 절단 때문에 울었다고 거짓으로 센다.** 실측: 저장소에 커밋 안 된 변경이 있던 판이
+        # 53곳, 깨끗한 판이 92곳이었고 **53이 틀렸다.** 거짓 빨강이 메울 자리를 가린다.
+        if run_tests(targets) != 0:
+            print(f"  {name:<24} **시험이 이미 빨갛다 — 못 쟀다** (GR-0.5)")
+            unmeasured.append(name)
             continue
         for line, called in wires:
             maimed = cut(original, line, called)
@@ -242,6 +254,11 @@ def cut_wiring() -> int:
     if left:
         print(f"\n**변이가 남았다.** 되돌린다: {left}")
         subprocess.run(["git", "checkout", "--", *left], cwd=ROOT, timeout=120, check=False)
+
+    if unmeasured:
+        print(f"\n**못 잰 도구 {len(unmeasured)}개**: {unmeasured}")
+        print("시험 묶음이 이미 빨갛다 — 먼저 초록으로 만든다. 그 전의 수는 믿을 수 없다.")
+        return 1
 
     print(f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}): {survived}")
     if len(survived) > WIRING_CEILING:

@@ -99,6 +99,10 @@ def scan(root: Path = ROOT) -> list[tuple[str, list[str]]]:
     return found
 
 
+FLOOR_TRACKED = 200
+"""훑어야 하는 추적 텍스트의 **바닥** (D-0230 · D-0356). 실측 357개."""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="글자 · 개행 검사 (D-0230)")
     parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
@@ -106,6 +110,12 @@ def main() -> int:
     args = parser.parse_args()
 
     problems = scan()
+    # **훑은 것이 0개면 「통과」가 거짓이다** (D-0230 · D-0356). 심은 결함으로 재니
+    # `scan()`을 끊어도 아무 시험이 안 울었다 — 추적 텍스트 수가 화면에만 있었다.
+    seen = sum(1 for one in tracked() if looked_at(one))
+    if seen < FLOOR_TRACKED:
+        print(f"훑은 텍스트가 {seen}개다(바닥 {FLOOR_TRACKED}). **그물이 비었다**", file=sys.stderr)
+        return 1
     if args.fix:
         fixed = 0
         for name, bad in problems:
@@ -122,7 +132,7 @@ def main() -> int:
             print(f"  - {name}: {' · '.join(bad)}", file=sys.stderr)
         print("고치려면 `python3 tools/encoding_check.py --fix`", file=sys.stderr)
         return 1
-    print(f"글자 · 개행 검사 통과 · 추적 텍스트 {sum(1 for p in tracked() if looked_at(p))}개")
+    print(f"글자 · 개행 검사 통과 · 추적 텍스트 {seen}개")
     return 0
 
 

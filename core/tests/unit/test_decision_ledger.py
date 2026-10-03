@@ -23,6 +23,9 @@ import check_doc_style as style
 import decision_evidence as evidence
 import decision_ledger as ledger
 
+# **저장소 전체를 보는 넷은 `doc_style_repo`로 뗐다** (D-0356 · 611줄 > 상한 600).
+import doc_style_repo as style_repo
+
 DECISIONS = repo_root() / "docs" / "DECISIONS.md"
 
 HEAD = "# 결정 기록\n\n"
@@ -187,7 +190,7 @@ def test_갚는_법이_빈_행을_잡는다() -> None:
     D-0320이 같은 검사를 **부류 단위**로 지었고 원인이 된 자리를 못 잡았다 — 표를
     한 줄에 한 기록으로 바꾸자 같은 규칙이 정확해졌다.
     """
-    assert style.check_debt_rows() == []
+    assert style_repo.check_debt_rows() == []
     assert "도구 없음" in style.NO_TOOL
     assert "승격 아님" in style.NO_TOOL
 

@@ -197,6 +197,7 @@ jobs:
         working-directory: core
       # ci-only: check_under_load.py 관문 전부를 한 번 더 돈다. `make check`에 넣으면 두 배가 되고, 그러면 사람이 검사를 끈다 (D-0129)
       - name: Gates under load
+        working-directory: .
         run: python3 tools/check_under_load.py --check
 
   secret-scan:

@@ -205,6 +205,41 @@ def check_passthrough(text: str) -> list[str]:
     return problems
 
 
+STEP = re.compile(r"(?m)^      - ")
+"""워크플로의 단계 머리. 단계마다 제 `working-directory`를 가질 수 있다."""
+
+DEFAULT_DIR = re.compile(r"(?m)^defaults:\n  run:\n    working-directory: (\S+)")
+WHERE = re.compile(r"(?m)^        working-directory:\s*(\S+)")
+UP_CALL = re.compile(r"(?m)(?:uv run )?python3? ((?:\.\./)?tools/[a-z_0-9]+\.py)")
+
+
+def check_workdir(text: str, where: str) -> list[str]:
+    """워크플로가 도구를 **맞는 디렉터리에서** 부르나 (D-0356).
+
+    실측으로 CI가 빨개져서 알았다 — `ci.yml`은 `defaults: working-directory: core`를
+    두고, 관문 단계마다 `working-directory: .`를 **다시 적는다.** 스물셋이 그렇게 적혀
+    있었고 **내가 더한 하나만 빠뜨렸다.** CI는 *"No such file or directory"* 한 줄을 냈다.
+
+    `core`에서 돌면 `../tools/X.py`, 뿌리에서 돌면 `tools/X.py`다. **둘이 어긋나면 잡는다.**
+    `actionlint`도 `test_ci_parity`도 이 자리를 안 본다.
+    """
+    found = DEFAULT_DIR.search(text)
+    base = found.group(1) if found else "."
+    problems: list[str] = []
+    for step in STEP.split(text)[1:]:
+        here = WHERE.search(step)
+        folder = here.group(1) if here else base
+        at_root = folder in {".", "./"}
+        for tool in UP_CALL.findall(step):
+            up = tool.startswith("../")
+            if at_root is up:
+                problems.append(
+                    f"{where}: `{tool}`을 `working-directory: {folder}`에서 부른다 — "
+                    f"**그 자리에 그 파일이 없다** (D-0356)"
+                )
+    return problems
+
+
 def run_blocks(text: str) -> str:
     """워크플로의 `run:` 블록만 모은다 (D-0352).
 
@@ -360,6 +395,15 @@ def sources() -> list[tuple[str, str]]:
     return found
 
 
+def check_workflow_dirs() -> list[str]:
+    """워크플로 전부의 `working-directory` 대조 (D-0356)."""
+    problems: list[str] = []
+    for path in workflows():
+        name = path.relative_to(ROOT).as_posix()
+        problems += check_workdir(path.read_text(encoding="utf-8"), name)
+    return problems
+
+
 def check() -> list[str]:
     make = MAKEFILE.read_text(encoding="utf-8")
     made = recipes(make)
@@ -368,7 +412,7 @@ def check() -> list[str]:
         problems += check_any_calls(text, where)
         problems += check_make_calls(text, where, made)
         problems += check_usage(text, where, made)
-    return problems + check_passthrough(make) + check_advice()
+    return problems + check_passthrough(make) + check_advice() + check_workflow_dirs()
 
 
 def main() -> int:

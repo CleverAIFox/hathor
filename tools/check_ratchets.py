@@ -342,6 +342,7 @@ BASELINE: dict[str, int] = {
     "check_compose.CEILING[obs]": 768,
     "check_decisions.FORMAT_ENFORCED_FROM": 80,
     "check_doc_style.ENFORCER_FROM": 1,
+    "check_doc_style.FLOOR_DOCS": 3,
     "check_doc_style.REPRODUCE_FROM": 1,
     "check_doc_style.UNKNOWN_UNTIL": 249,
     "check_issue_mentions.FLOOR[문서]": 3,
@@ -358,7 +359,8 @@ BASELINE: dict[str, int] = {
     "debts.STALE_FLOOR": 10,
     "decision_evidence.NODE_FROM": 270,
     "decision_evidence.UNKNOWN_EVIDENCE": 0,
-    "mutate_gate.WIRING_CEILING": 49,
+    "encoding_check.FLOOR_TRACKED": 200,
+    "mutate_gate.WIRING_CEILING": 92,
     "test_gate_tools.UNTESTED": 0,
     "test_gate_types.UNTYPED_FAKES": 0,
 }

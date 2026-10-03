@@ -17,6 +17,8 @@ from hathor.shared.config.paths import repo_root
 from tests.conftest import tool_module as _tool
 
 STYLE = _tool("check_doc_style")
+# **저장소 전체를 보는 넷은 `doc_style_repo`로 뗐다** (D-0356 · 611줄 > 상한 600).
+STYLE_REPO = _tool("doc_style_repo")
 COMPOSE = _tool("check_compose")
 
 
@@ -25,7 +27,7 @@ COMPOSE = _tool("check_compose")
 
 def test_문서가_세_줄을_겹치지_않는다() -> None:
     """**D-0043이 열여덟 달 전에 손으로 한 번 세고 끝냈다.** 재 보니 1건이 있었다."""
-    assert STYLE.check_duplicates() == []
+    assert STYLE_REPO.check_duplicates() == []
 
 
 def test_겹치는_세_줄을_잡는다() -> None:

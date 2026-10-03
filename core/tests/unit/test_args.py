@@ -279,3 +279,67 @@ def test_셸_워크플로_검사가_배선돼_있다(monkeypatch: pytest.MonkeyP
     problems = cast("list[str]", CHECKER.check())
 
     assert "심은 것" in problems and "심은 둘" in problems
+
+
+# ------------------------------- 워크플로가 맞는 디렉터리에서 부르나 (D-0356)
+
+
+def test_그날의_단계를_잡는다() -> None:
+    """**CI가 빨개져서 알았다** (D-0356).
+
+    `ci.yml`은 `defaults: working-directory: core`를 두고 관문 단계마다
+    `working-directory: .`를 **다시 적는다.** 스물셋이 그렇게 적혀 있었고 **내가 더한
+    하나만 빠뜨렸다** — CI는 *"No such file or directory"* 한 줄을 냈다.
+    `actionlint`도 `test_ci_parity`도 이 자리를 안 본다.
+    """
+    that_day = (
+        "defaults:\n  run:\n    working-directory: core\n\njobs:\n  x:\n    steps:\n"
+        "      - name: Gates under load\n"
+        "        run: python3 tools/check_under_load.py --check\n"
+    )
+    problems = cast("list[str]", CHECKER.check_workdir(that_day, "시험"))
+
+    assert problems and "그 자리에 그 파일이 없다" in problems[0]
+
+
+def test_선언하면_통과한다() -> None:
+    fixed = (
+        "defaults:\n  run:\n    working-directory: core\n\njobs:\n  x:\n    steps:\n"
+        "      - name: Gates under load\n        working-directory: .\n"
+        "        run: python3 tools/check_under_load.py --check\n"
+    )
+
+    assert cast("list[str]", CHECKER.check_workdir(fixed, "시험")) == []
+
+
+def test_core에서는_상대경로가_맞다() -> None:
+    """`core`에서 돌면 `../tools/X.py`다 — **거꾸로도 잡는다.**"""
+    right = (
+        "jobs:\n  x:\n    steps:\n      - name: smoke\n        working-directory: core\n"
+        "        run: uv run python ../tools/gpu_smoke.py\n"
+    )
+    wrong = right.replace("../tools/", "tools/")
+
+    assert cast("list[str]", CHECKER.check_workdir(right, "시험")) == []
+    assert cast("list[str]", CHECKER.check_workdir(wrong, "시험"))
+
+
+def test_뿌리에서_상대경로를_쓰면_잡는다() -> None:
+    text = (
+        "jobs:\n  x:\n    steps:\n      - name: x\n        working-directory: .\n"
+        "        run: python3 ../tools/check_sight.py --check\n"
+    )
+
+    assert cast("list[str]", CHECKER.check_workdir(text, "시험"))
+
+
+def test_저장소_워크플로가_전부_맞다() -> None:
+    """**스물셋이 맞게 적혀 있었다.** 그 수가 줄면 여기가 빨개진다."""
+    assert cast("list[str]", CHECKER.check_workflow_dirs()) == []
+
+
+def test_디렉터리_검사가_배선돼_있다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**부품은 재고 배선은 안 쟀다** (D-0352 · D-0353 · D-0356)."""
+    monkeypatch.setattr(CHECKER, "check_workflow_dirs", lambda: ["심은 것"])
+
+    assert "심은 것" in cast("list[str]", CHECKER.check())

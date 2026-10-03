@@ -24329,7 +24329,7 @@ PLAN §2가 이렇게 적어 두었다.
 강제자
     `core/tests/unit/test_doc_style.py::test_PLAN에_취소선이_남으면_잡는다`
     `core/tests/unit/test_doc_style.py::test_취소선_못이_실제로_잡는다`
-    `tools/check_doc_style.py::check_plan_leftovers`
+    `tools/doc_style_repo.py::check_plan_leftovers`
 
 자료  실물 PLAN 빚 표 14행 전수
 
@@ -24407,7 +24407,7 @@ O-41이 가리키던 재현 불명은 D-0307에서 갚혔다.
 
 강제자
     `core/tests/unit/test_plan_counts.py::test_합성만으로_선_강제자_수가_대장과_같다`
-    `tools/check_doc_style.py::check_plan_leftovers`
+    `tools/doc_style_repo.py::check_plan_leftovers`
 
 자료  실물 PLAN 전수 · 대장 243행
 
@@ -27901,7 +27901,7 @@ O-17은 D-0048 자신이 *"강한 표현과 약한 표현을 섞으면 대개 �
 
 강제자
     `core/tests/unit/test_debts.py::test_안_갚은_행을_센다`
-    `tools/check_doc_style.py::check_debt_rows`
+    `tools/doc_style_repo.py::check_debt_rows`
     `core/tests/unit/test_decision_ledger.py::test_빚_표가_기록마다_한_줄이다`
 
 자료  실물 WSL 기기 31건
@@ -29302,3 +29302,101 @@ D-0121이 *"`--check`를 달고 `make check` 사슬이 안 부르면 막는다"*
 
 자료  실물 이 저장소 — 관문 19개 x 4판(76회 · 65초) · 되살린 결함 1건 실측 ·
       심은 결함 1건(아무 데도 안 걸린 도구) · 파이썬 파이프 전수 0건 · 시험 2320건
+
+---
+
+## D-0356. 세는 자가 「내 탓에 울었다」와 「이미 빨갰다」를 구분 못 했다 — 49가 92였다
+
+> **갱신**: D-0353 — `WIRING_CEILING = 49`가 **틀린 측정**이었다. 92로 올린다.
+
+- **배경**: 배선 49곳을 메우러 들어갔다. 둘(`check_doc_style` · `encoding_check`)을 메우고
+  다시 재니 **92가 나왔다.** 메웠는데 늘었다 — **수가 아니라 저울이 틀렸다.**
+
+### 하나. 같은 절단을 세 판 돌려 갈랐다
+
+`ship.check_git()`을 끊고 그 시험 묶음을 세 번 돌렸다 — **0 · 0 · 0**, 즉 **안 운다.**
+그런데 둘째 판 전수에서는 `ship`이 「울었다」로 찍혀 있었다. **절단은 같고 판정이 달랐다.**
+
+까닭은 `run_tests`가 **종료코드 하나만** 본다는 것이다. `-x`로 여덟 파일을 돌리는데,
+그중 어느 하나가 **내 절단과 무관하게** 빨갰으면 그것도 「울었다」가 된다. 둘째 판을 돌릴
+때 저장소에 **커밋 안 된 변경**이 있었고(`check_ratchets` 기준선 미반영 · `doc_fsck` 축
+낡음), 그래서 멀쩡한 생존자들이 「울었다」로 세어졌다.
+
+**거짓 빨강이 메울 자리를 가린다** — D-0353에서 `ast.unparse` 때문에 똑같은 일을 겪고
+62 → 53으로 고쳤는데, **같은 부류가 하나 더 있었다.** 그때 「수가 바뀌었으니 이제 맞다」로
+멈춘 것이 잘못이다. **바뀐 수는 맞은 수가 아니다.**
+
+### 둘. 자르기 전에 한 번 돌린다
+
+이제 절단 없이 그 시험 묶음을 먼저 돌린다. 이미 빨갛다면 **「못 쟀다」로 적고 막는다**
+(GR-0.5) — 그 판의 수는 믿을 수 없기 때문이다. 수를 내지 않는 쪽이 틀린 수를 내는 것보다
+낫다.
+
+| | 안 운 배선 |
+|---|---|
+| D-0353 첫 측정 (`ast.unparse` 거짓 빨강) | 62 |
+| D-0353 둘째 측정 (저장소가 더러웠다) | **53 — 틀렸다** |
+| 이 판 (깨끗 · 기준 판 있음) | **92** |
+
+### 셋. 둘은 그래도 메웠다
+
+`make mutate WIRING=1`이 가리킨 자리에 입구를 거치는 시험을 붙였다. **작은 검사를 직접
+부르는 시험만 있으면 배선이 끊겨도 안 운다** — D-0352에서 배우고 D-0353에서 또 틀린 그
+자리다. 이번엔 파일을 따로 뒀다(`test_gate_wiring.py`).
+
+- `check_doc_style` 아홉 — 일곱은 「심은 문제를 `check()`가 들고 나오는가」로, `targets()`
+  둘은 **바닥**으로 막았다. `targets()`가 비면 아래 루프가 한 번도 안 도는데 **「통과」가
+  떴다** (D-0230).
+- `encoding_check` 셋 — `scan()`·`looked_at()`을 끊으면 **훑은 수가 0인데 통과**했다.
+  바닥 200을 박았다(실측 357).
+
+### 넷. 그 사이 CI가 빨개졌다 — D-0355가 틀린 디렉터리에서 돌았다
+
+```text
+python3: can't open file '/home/runner/work/hathor/hathor/core/tools/check_under_load.py'
+```
+
+`ci.yml`은 `defaults: working-directory: core`를 두고 **관문 단계마다
+`working-directory: .`를 다시 적는다.** 스물셋이 그렇게 적혀 있었고 **내가 더한 하나만
+빠뜨렸다.** `actionlint`도 `test_ci_parity`도 그 자리를 안 본다 — 문법은 맞고 선언도
+있으니까.
+
+**세는 자를 만들었다.** `core`에서 돌면 `../tools/X.py`, 뿌리에서 돌면 `tools/X.py`다.
+둘이 어긋나면 막는다. 실측으로 워크플로 다섯의 호출 **스물아홉이 전부 맞게** 적혀 있었고,
+결함을 되살리니 정확히 그 한 줄을 집었다.
+
+**이것도 「한 갈래로는 안 보이는」 부류다** — 내 컨테이너에서는 `make load`가 뿌리에서
+돌아 통과했다. 디렉터리가 다른 자리는 **CI에만 있다.**
+
+- **결과**:
+  - `ci.yml`의 `gates-under-load`에 `working-directory: .` (D-0355의 결함).
+  - `check_args`에 **워크플로 작업 디렉터리 대조** — 호출 29개 전수.
+  - `mutate_gate`: **기준 판**을 먼저 돌린다. 이미 빨간 묶음은 **못 쟀다고 적고 막는다.**
+  - `WIRING_CEILING` **49 → 92**(올린다 · 이 기록이 그 값이다). 메운 열둘은 이미 그 92에
+    반영돼 있다 — 92는 **메운 뒤의 수**다.
+  - `check_doc_style.FLOOR_DOCS = 3` · `encoding_check.FLOOR_TRACKED = 200` 새 못 둘.
+  - `check_doc_style.py`가 **611줄로 상한 600을 넘어** 저장소 전체를 보는 넷을
+    `doc_style_repo.py`로 뗐다(500 + 140). **떼어 내자마자 시험 여섯이 빨개졌다** —
+    `from … import ROOT`가 값으로 묶여 임시 폴더를 안 따라왔다. 모듈로 참조한다.
+  - 시험 **열넷** 새로 (`test_gate_wiring.py`).
+
+- **남기는 것**:
+  - **92가 참값인지도 한 판 측정이다.** 깨끗한 저장소에서 두 판 더 돌려 같은 수가 나오는
+    것은 **안 봤다** (GR-0.5).
+  - `run_tests`가 여전히 **종료코드 하나**를 본다. 「내 절단이 잡은 시험이 바로 그 시험인가」는
+    안 본다 — 다른 시험이 울어도 통과로 센다.
+  - 배선 **92곳** · 열린 질문 29 · MacBook arm64 세 측정 · 그의 기기에서만 되는 둘.
+
+재현
+    make mutate WIRING=1        # 15분 · 기준 판을 먼저 돈다
+    cd core && uv run pytest tests/unit/test_gate_wiring.py -q
+
+강제자
+    `core/tests/unit/test_gate_wiring.py::test_볼_문서가_없으면_통과시키지_않는다`
+    `core/tests/unit/test_gate_wiring.py::test_훑은_것이_0이면_통과시키지_않는다`
+    `core/tests/unit/test_gate_wiring.py::test_문서마다_도는_검사가_배선돼_있다`
+    `core/tests/unit/test_mutate_gate.py::test_글자_단위로_자른다`
+
+자료  실물 이 저장소 — 배선 끊기 전수 3판(62 · 53 · 92) · 같은 절단 3회 재측정(0·0·0) ·
+      실물 CI 실패 1건(#234 · #114 · #113) · 워크플로 호출 29개 전수 ·
+      추적 텍스트 357 · 문서 4 · 시험 2340건

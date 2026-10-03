@@ -24,6 +24,8 @@ def _module() -> ModuleType:
 
 
 CHECKER = _module()
+# **저장소 전체를 보는 넷은 `doc_style_repo`로 뗐다** (D-0356 · 611줄 > 상한 600).
+REPO = tool_module("doc_style_repo")
 
 
 def _layout(text: str) -> list[str]:
@@ -204,7 +206,7 @@ def test_여섯_번째_문서를_잡는다(tmp_path, monkeypatch):
     base.mkdir()
     (base / "NOTES.md").write_text("# 메모\n", encoding="utf-8")
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-    problems = CHECKER.check_sixth_document()
+    problems = REPO.check_sixth_document()
     assert len(problems) == 1
     assert "여섯 번째 문서" in problems[0]
 
@@ -215,7 +217,7 @@ def test_하위_폴더까지_본다(tmp_path, monkeypatch):
     nested.mkdir(parents=True)
     (nested / "copy.md").write_text("# 사본\n", encoding="utf-8")
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-    assert CHECKER.check_sixth_document()
+    assert REPO.check_sixth_document()
 
 
 def test_축_셋만_통과한다(tmp_path, monkeypatch):
@@ -224,16 +226,16 @@ def test_축_셋만_통과한다(tmp_path, monkeypatch):
         (tmp_path / "docs" / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / "docs" / name).write_text("# x\n", encoding="utf-8")
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-    assert CHECKER.check_sixth_document() == []
+    assert REPO.check_sixth_document() == []
 
     nested = tmp_path / "docs" / "decisions" / "D-0001-0050.md"
     nested.parent.mkdir(parents=True, exist_ok=True)
     nested.write_text("# x\n", encoding="utf-8")
-    assert CHECKER.check_sixth_document() != []
+    assert REPO.check_sixth_document() != []
 
 
 def test_저장소에_여섯_번째가_없다():
-    assert CHECKER.check_sixth_document() == []
+    assert REPO.check_sixth_document() == []
 
 
 def test_미래_축을_검사한다():
@@ -378,7 +380,7 @@ def test_PLAN에_취소선이_남으면_잡는다() -> None:
     빚 표 14행 중 **13행이 취소선**이었고 남은 진짜 빚 하나가 그 안에 묻혀 있었다.
     규율은 이미 옆 표에 있었다 — *"닫힌 질문은 여기 없다"*.
     """
-    assert CHECKER.check_plan_leftovers() == []
+    assert REPO.check_plan_leftovers() == []
 
 
 def test_취소선_못이_실제로_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -389,7 +391,7 @@ def test_취소선_못이_실제로_잡는다(tmp_path: Path, monkeypatch: pytes
         "| 빚 | 크기 |\n|---|---|\n| ~~다 갚았다~~ | 0 |\n- ~~이것도~~\n", encoding="utf-8"
     )
     monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-    found = CHECKER.check_plan_leftovers()
+    found = REPO.check_plan_leftovers()
     assert len(found) == 2
     assert "MASTER.md" in found[0]
 
