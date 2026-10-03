@@ -131,6 +131,63 @@ def test_두_모드가_다_걸려_있다(mode: str) -> None:
     assert not mode or mode in made
 
 
+# ------------------------------------------------- 빨간 이름으로 센다 (D-0357)
+
+
+def test_빨간_시험의_이름을_읽는다(tmp_path: Path) -> None:
+    """**종료코드 하나로는 「내 탓」과 「원래 빨갰다」가 안 갈린다** (D-0356 → D-0357).
+
+    실측으로 생존자가 **53 ↔ 92**로 흔들렸고 53이 틀렸다. 이름을 받아 오면 **새로 빨개진
+    것만** 보면 되고, 원래 빨간 것이 있어도 잴 수 있다.
+    """
+    planted = ROOT / "core" / "tests" / "unit" / "test_심은빨강.py"
+    planted.write_text("def test_원래_빨갛다() -> None:\n    assert False\n", encoding="utf-8")
+    try:
+        found = cast("set[str]", TOOL.failing(["tests/unit/test_심은빨강.py"]))
+    finally:
+        planted.unlink()
+
+    assert found == {"tests/unit/test_심은빨강.py::test_원래_빨갛다"}
+
+
+def test_초록이면_빈_집합이다() -> None:
+    """**제 파일을 겨누면 재귀한다** — 안쪽 pytest가 이 시험을 또 돌린다. 심은 초록을 쓴다."""
+    planted = ROOT / "core" / "tests" / "unit" / "test_심은초록.py"
+    planted.write_text("def test_초록이다() -> None:\n    assert True\n", encoding="utf-8")
+    try:
+        found = cast("set[str]", TOOL.failing(["tests/unit/test_심은초록.py"]))
+    finally:
+        planted.unlink()
+
+    assert found == set()
+
+
+def test_이름_없는_실패를_0으로_안_센다(tmp_path: Path) -> None:
+    """**수집 오류는 `FAILED` 줄을 안 찍는다** — 그것을 빈 집합으로 읽으면 통과가 된다 (GR-0.5)."""
+    broken = ROOT / "core" / "tests" / "unit" / "test_깨진것.py"
+    broken.write_text("import 없는모듈\n", encoding="utf-8")
+    try:
+        found = cast("set[str]", TOOL.failing(["tests/unit/test_깨진것.py"]))
+    finally:
+        broken.unlink()
+
+    assert found, "수집 오류를 초록으로 읽었다"
+
+
+def test_첫_실패에서_안_멈춘다() -> None:
+    r"""**`-x`를 떼었다** (D-0357).
+
+    첫 실패에서 멈추면 **기준 판의 빨간 목록이 잘리고**, 잘린 뒤의 실패가 「새로 빨개졌다」로
+    보인다 — 없던 결함을 만들어 낸다.
+    """
+    import inspect
+
+    source = inspect.getsource(TOOL.failing)
+
+    assert '"-x"' not in source
+    assert '"-rf"' in source and '"--tb=no"' in source
+
+
 # ------------------------------------------------------------------ 죽어도 되돌린다
 
 

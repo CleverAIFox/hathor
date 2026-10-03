@@ -88,12 +88,17 @@ def gate_tools() -> list[str]:
 ENTRIES = ("check", "main")
 """배선을 보는 자리. 관문의 입구다."""
 
-WIRING_CEILING = 92
+WIRING_CEILING = 106
 """**배선을 끊어도 안 우는 자리의 천장** (D-0353).
 
-실측 **92곳**이다. 처음에 49라고 적었는데 **그 측정이 틀렸다** — 저장소에 커밋 안 된
-변경이 있어 시험 묶음이 이미 빨갰고, 그것을 「내 절단 때문에 울었다」로 세어 생존자를
-적게 셌다 (53 → 92). 이제 **자르기 전에 한 번 돌려** 그 자리를 막는다.
+실측 **106곳**이다. 거기까지 오는 데 세 번 틀렸다:
+
+| 수 | 왜 틀렸나 |
+|---|---|
+| 62 | `ast.unparse`가 파일을 다시 써 **소스를 읽는 시험이 변이와 무관하게** 터졌다 (D-0353) |
+| 53 | 저장소가 더러워 **이미 빨간 시험**을 「내 절단 때문」으로 셌다 (D-0356) |
+| 92 | 종료코드 하나만 봐서 **남의 실패도 내 공으로** 셌다 (D-0357) |
+| **106** | 빨간 **이름**을 대조한다. 두 판을 돌려 **수도 목록도 같았다** |
 
 한 판에 다 메울 수 있는 수가 아니고, **메우는 척하지도 않는다** —
 이 수는 `check_ratchets`가 못으로 들고 있어서 **올라가면 빨개지고 내려가면 조인다.**
@@ -159,16 +164,45 @@ def tests_for(name: str) -> list[str]:
     return found
 
 
-def run_tests(targets: list[str]) -> int:
+FAILED = re.compile(r"(?m)^FAILED (\S+)")
+
+
+def failing(targets: list[str]) -> set[str]:
+    """그 시험 묶음에서 **빨간 시험의 이름**을 돌려준다 (D-0357).
+
+    첫 판은 **종료코드 하나**만 봤다. 그러면 *"내 절단 때문에 울었다"*와 *"원래 빨갰다"*가
+    구분이 안 된다 — 실측으로 생존자 수가 **53 ↔ 92**로 흔들렸고 53이 틀렸다 (D-0356).
+    D-0356은 「이미 빨가면 못 쟀다고 적고 막는다」로 때웠는데, **그러면 빨간 날에는 아예
+    못 잰다.**
+
+    이름을 받아 오면 **새로 빨개진 것만** 보면 된다. 원래 빨간 것이 있어도 잴 수 있다.
+    `-x`도 뗀다 — 첫 실패에서 멈추면 **기준 판의 목록이 잘려** 없던 실패가 새 실패로 보인다.
+    """
     done = subprocess.run(
-        ["uv", "run", "--no-sync", "pytest", *targets, "-x", "-q", "--no-cov", "-p", "no:randomly"],
+        [
+            "uv",
+            "run",
+            "--no-sync",
+            "pytest",
+            *targets,
+            "-q",
+            "--no-cov",
+            "--tb=no",
+            "-rf",
+            "-p",
+            "no:randomly",
+        ],
         cwd=ROOT / "core",
         capture_output=True,
         text=True,
-        timeout=900,
+        timeout=1800,
         check=False,
     )
-    return done.returncode
+    found = set(FAILED.findall(done.stdout))
+    if not found and done.returncode != 0:
+        # 수집 오류·임포트 실패는 이름이 안 찍힌다. **모르는 것을 0으로 세지 않는다** (GR-0.5).
+        return {"(이름 없는 실패)"}
+    return found
 
 
 def restore_on_death(path: Path, original: str) -> None:
@@ -208,7 +242,6 @@ def cut_wiring() -> int:
     tools = gate_tools()
     print(f"관문 도구 {len(tools)}개의 배선을 끊어 본다\n")
     survived: list[str] = []
-    unmeasured: list[str] = []
     for name in tools:
         path = ROOT / "tools" / f"{name}.py"
         if not path.exists():
@@ -224,13 +257,12 @@ def cut_wiring() -> int:
             print(f"  {name:<24} **여는 시험이 없다**")
             survived.append(f"{name}(시험 없음)")
             continue
-        # **자르기 전에 한 번 돌린다** (D-0356). 이미 빨간 시험 묶음에 절단을 얹으면 **내
-        # 절단 때문에 울었다고 거짓으로 센다.** 실측: 저장소에 커밋 안 된 변경이 있던 판이
-        # 53곳, 깨끗한 판이 92곳이었고 **53이 틀렸다.** 거짓 빨강이 메울 자리를 가린다.
-        if run_tests(targets) != 0:
-            print(f"  {name:<24} **시험이 이미 빨갛다 — 못 쟀다** (GR-0.5)")
-            unmeasured.append(name)
-            continue
+        # **자르기 전에 한 번 돌려 빨간 이름을 적어 둔다** (D-0356 → D-0357). 그래야
+        # *"내 절단 때문에 울었다"*와 *"원래 빨갰다"*가 갈린다. 이름을 보므로 **원래 빨간
+        # 것이 있어도 잴 수 있다** — D-0356은 그때 아예 못 쟀다.
+        was_red = failing(targets)
+        if was_red:
+            print(f"  {name:<24} 미리 빨간 시험 {len(was_red)}개 — 그것 말고 센다")
         for line, called in wires:
             maimed = cut(original, line, called)
             if maimed is None or maimed == original:
@@ -242,23 +274,19 @@ def cut_wiring() -> int:
                 continue
             path.write_text(maimed, encoding="utf-8")
             try:
-                code = run_tests(targets)
+                now_red = failing(targets)
             finally:
                 path.write_text(original, encoding="utf-8")
-            mark = "울었다" if code != 0 else "**안 울었다**"
+            fresh = now_red - was_red
+            mark = f"울었다 ({len(fresh)}건)" if fresh else "**안 울었다**"
             print(f"  {name:<24} {called}() 끊음 → {mark}")
-            if code == 0:
+            if not fresh:
                 survived.append(f"{name}:{called}")
 
     left = [one for one in dirty_tools() if one not in before]
     if left:
         print(f"\n**변이가 남았다.** 되돌린다: {left}")
         subprocess.run(["git", "checkout", "--", *left], cwd=ROOT, timeout=120, check=False)
-
-    if unmeasured:
-        print(f"\n**못 잰 도구 {len(unmeasured)}개**: {unmeasured}")
-        print("시험 묶음이 이미 빨갛다 — 먼저 초록으로 만든다. 그 전의 수는 믿을 수 없다.")
-        return 1
 
     print(f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}): {survived}")
     if len(survived) > WIRING_CEILING:
