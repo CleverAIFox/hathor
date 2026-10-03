@@ -340,3 +340,114 @@ def test_Makefile이_두_쪽을_다_건다(target: str) -> None:
     made = (repo_root() / "Makefile").read_text(encoding="utf-8")
 
     assert f"\n{target}:" in made
+
+
+# ------------------------------------------------------------------ 소급 (D-0352)
+
+
+def _old_patch(where: Path, folder: Path, *, subject: str, needs: str = "D-0351") -> Path:
+    """**머리가 없는 옛 패치.** 350판이 이 꼴이다."""
+    assert _make(where).returncode == 0
+    body = (where / "D0352.patch").read_bytes()
+    body = body[body.index(b"diff --git") :]
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "옛것.patch"
+    path.write_bytes(f"# hathor-commit: {subject}\n# hathor-needs: {needs}\n".encode() + body)
+    return path
+
+
+def test_나간_패치에_기준을_박는다(tmp_path: Path) -> None:
+    """**D-0351은 *"소급해 넣지 않는다"*고 적었다.** 그러면 머리 없는 것을 영원히
+    통과시켜야 하고, 선택 사항인 관문은 관문이 아니다 (D-0126)."""
+    where = _repo(tmp_path / "r")
+    box = tmp_path / "patches"
+    old = _old_patch(where, box, subject="D-0352. 둘째 기록")
+
+    done = _make(where, STAMP=str(box), YES="1")
+
+    assert done.returncode == 0, done.stderr
+    assert _headers(old)["hathor-base"] == _git(where, "rev-parse", "HEAD^^{tree}")
+
+
+def test_번호로도_찾는다(tmp_path: Path) -> None:
+    """**제목이 한 글자라도 다르면 정확 일치가 안 된다.** 커밋 제목은 번호를 반드시 품는다.
+
+    실측: 내 미러에서 제목 일치만 쓰면 11건, **번호 대체 조회로 32건**이 됐다.
+    """
+    where = _repo(tmp_path / "r")
+    box = tmp_path / "patches"
+    old = _old_patch(where, box, subject="D-0352. 제목이 **달라졌다**")
+
+    assert _make(where, STAMP=str(box), YES="1").returncode == 0
+    assert "hathor-base" in _headers(old)
+
+
+def test_본문을_한_바이트도_안_건드린다(tmp_path: Path) -> None:
+    where = _repo(tmp_path / "r")
+    box = tmp_path / "patches"
+    old = _old_patch(where, box, subject="D-0352. 둘째 기록")
+    before = old.read_bytes()
+    before = before[before.index(b"diff --git") :]
+
+    _make(where, STAMP=str(box), YES="1")
+
+    after = old.read_bytes()
+    assert after[after.index(b"diff --git") :] == before
+
+
+def test_두_번_박아도_같다(tmp_path: Path) -> None:
+    where = _repo(tmp_path / "r")
+    box = tmp_path / "patches"
+    old = _old_patch(where, box, subject="D-0352. 둘째 기록")
+
+    _make(where, STAMP=str(box), YES="1")
+    once = old.read_bytes()
+    done = _make(where, STAMP=str(box), YES="1")
+
+    assert old.read_bytes() == once
+    assert "이미 있다 1" in done.stdout
+
+
+def test_YES가_없으면_찍기만_한다(tmp_path: Path) -> None:
+    """`tidy`와 같은 규약이다 (D-0225). **고치는 것은 따로 말한다.**"""
+    where = _repo(tmp_path / "r")
+    box = tmp_path / "patches"
+    old = _old_patch(where, box, subject="D-0352. 둘째 기록")
+
+    done = _make(where, STAMP=str(box))
+
+    assert "hathor-base" not in _headers(old)
+    assert "박을 것 1" in done.stdout
+
+
+def test_남의_패치는_안_건드린다(tmp_path: Path) -> None:
+    """패치 폴더를 여러 저장소가 나눠 쓴다 (D-0249)."""
+    where = _repo(tmp_path / "r")
+    box = tmp_path / "patches"
+    box.mkdir()
+    theirs = box / "seshat-083.patch"
+    theirs.write_text("# seshat-commit: 남의 것\ndiff --git a/x b/x\n", encoding="utf-8")
+
+    done = _make(where, STAMP=str(box), YES="1")
+
+    assert "hathor-base" not in theirs.read_text(encoding="utf-8")
+    assert "남의 것 1" in done.stdout
+
+
+def test_못_찾으면_모른다고_적는다(tmp_path: Path) -> None:
+    """**없는 것을 아무 커밋이라고 말하지 않는다** (GR-0.5)."""
+    where = _repo(tmp_path / "r")
+    box = tmp_path / "patches"
+    old = _old_patch(where, box, subject="D-9999. 이 저장소에 없는 판")
+
+    done = _make(where, STAMP=str(box), YES="1")
+
+    assert "hathor-base" not in _headers(old)
+    assert "못 찾았다" in done.stdout and "못 찾음 1" in done.stdout
+
+
+def test_폴더를_모르면_그렇게_말한다(tmp_path: Path) -> None:
+    done = _make(_repo(tmp_path / "r"), STAMP="1", HATHOR_PATCH_DIR="")
+
+    assert done.returncode != 0
+    assert "패치 폴더를 모른다" in done.stderr

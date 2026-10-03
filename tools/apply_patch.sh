@@ -136,6 +136,24 @@ fi
 # 해시만 달랐다. 그의 터미널이 찍은 blob `93b65907`도 미러와 같았다. 내용이라 어디서나
 # 같은 것은 결정 번호와 똑같고, 해상도는 번호보다 높다.
 BASE="$(grep -m1 '^# hathor-base:' "$PATCH" 2>/dev/null | sed 's/^# hathor-base:[[:space:]]*//' || true)"
+
+# **머리가 없으면 영원히 통과시키는 관문은 관문이 아니다** (D-0126 · D-0352). 그 앞의
+# 350판에는 그 머리가 없고 소급해 넣지 않는다 — 추가 전용이 그쪽 방어선이다. 대신
+# **이 번호 이후를 선행으로 선언한 패치는 머리를 반드시 갖는다.** 이 수는
+# `check_patch.BASE_REQUIRED_FROM`과 대조된다 (D-0043).
+BASE_FROM=351
+if [[ -z "$BASE" && -n "$NEEDS" ]]; then
+  NEWEST=0
+  for want in $NEEDS; do
+    digits="${want#D-}"
+    [[ "$digits" =~ ^[0-9]+$ ]] || continue
+    (( 10#$digits > NEWEST )) && NEWEST=$((10#$digits))
+  done
+  if (( NEWEST >= BASE_FROM )); then
+    die "$(basename "$PATCH")에 \`# hathor-base:\`가 없다. D-${BASE_FROM} 이후는 \`make patch\`로 뽑는다 (D-0352)"
+  fi
+fi
+
 if [[ -n "$BASE" ]]; then
   HERE="$(git rev-parse 'HEAD^{tree}')"
   if [[ "$BASE" != "$HERE" ]]; then

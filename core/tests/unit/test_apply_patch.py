@@ -251,11 +251,74 @@ BASE_START = 'BASE="$(grep'
 BASE_END = "\nfi\n"
 
 
-def _base_gate() -> str:
-    """스크립트에서 기준 검사의 **실제 줄**을 떼어 온다."""
+def _slice(start_at: str) -> str:
+    """스크립트에서 한 관문의 **실제 줄**을 떼어 온다."""
     text = SCRIPT.read_text(encoding="utf-8")
-    start = text.index(BASE_START)
+    start = text.index(start_at)
     return text[start : text.index(BASE_END, start) + len(BASE_END)]
+
+
+def _base_gate() -> str:
+    """기준 머리를 **읽는 줄**과 **대조하는 블록**.
+
+    둘 사이에 소급 바닥 블록이 끼어 있다 — 첫 판은 `\nfi\n`까지 통째로 떠서 **소급
+    바닥의 `fi`에서 끊겼고**, 대조 블록이 한 줄도 안 들어와 시험이 거짓으로 통과했다.
+    """
+    text = SCRIPT.read_text(encoding="utf-8")
+    at = text.index(BASE_START)
+    return text[at : text.index("\n", at) + 1] + _slice('if [[ -n "$BASE" ]]; then')
+
+
+def _floor_gate() -> str:
+    """D-0351 이후인데 기준 머리가 없는 패치를 막는 블록 (D-0352)."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    at = text.index("BASE_FROM=")
+    return text[at : text.index("\n", at) + 1] + _slice('if [[ -z "$BASE" && -n "$NEEDS" ]]; then')
+
+
+def _floor(declared: str, folder: Path) -> subprocess.CompletedProcess[str]:
+    """선행 선언만 주고 소급 바닥 블록을 돌린다."""
+    patch = folder / "x.patch"
+    patch.write_text(declared, encoding="utf-8")
+    needs = ""
+    for line in declared.splitlines():
+        if line.startswith("# hathor-needs:"):
+            needs = line.split(":", 1)[1].strip()
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'die() {{ echo "$1" >&2; exit 1; }}\nPATCH="{patch}"\n'
+            f'NEEDS="{needs}"\nBASE=""\n{_floor_gate()}',
+        ],
+        cwd=folder,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def test_소급_바닥_뒤인데_머리가_없으면_막는다(tmp_path: Path) -> None:
+    """**머리 없는 것을 영원히 통과시키면 관문이 선택 사항이 된다** (D-0126 · D-0352)."""
+    done = _floor("# hathor-needs: D-0351\n", tmp_path)
+
+    assert done.returncode != 0
+    assert "make patch" in done.stderr
+
+
+def test_소급_바닥_앞은_안_막는다(tmp_path: Path) -> None:
+    """**나간 350판에는 그 머리가 없다.** 막으면 되돌릴 수 없는 것이 생긴다."""
+    assert _floor("# hathor-needs: D-0350\n", tmp_path).returncode == 0
+
+
+def test_선행_선언이_없으면_안_막는다(tmp_path: Path) -> None:
+    """선행조차 없는 옛 패치는 **번호를 모른다.** 모르면 막지 않는다 (GR-0.5)."""
+    assert _floor("# hathor-commit: 무언가\n", tmp_path).returncode == 0
+
+
+def test_여럿_중_가장_큰_번호를_본다(tmp_path: Path) -> None:
+    assert _floor("# hathor-needs: D-0100 D-0351\n", tmp_path).returncode != 0
 
 
 def _tiny_repo(folder: Path, content: str) -> str:

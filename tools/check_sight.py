@@ -66,6 +66,7 @@ WIDENS = ("SKIP", "ALLOW", "IGNORE", "EXCLUDE")
 
 PINNED = {
     "build_proposal.TBL_PR_ORDER": 17,
+    "check_args.FLOOR": 4,
     "check_args.SKIP_FLAGS": 1,
     "check_artifacts.REQUIRED": 6,
     "check_compose.CEILING": 3,
@@ -90,6 +91,12 @@ PINNED = {
     "check_issue_mentions.TREES": 3,
     "check_model_licenses.COMMERCIAL": 3,
     "check_model_licenses.TREES": 1,
+    "check_patch.HEADS": 3,
+    "check_ratchets.KINDS": 5,
+    "check_ratchets.NAILS": 4,
+    "check_ratchets.OWNED_ELSEWHERE": 1,
+    "check_ratchets.SOURCES": 2,
+    "check_ratchets.VOCABULARY": 5,
     "check_requirements.DONE": 2,
     "check_requirements.MVP_EXEMPT": 9,
     "check_requirements.STATES": 9,

@@ -49,6 +49,8 @@ run "문서 레이아웃" python3 tools/check_doc_style.py --check
 run "지운 말"    python3 tools/check_retired.py --check
 run "요구사항"   python3 tools/check_requirements.py --check
 run "인자 대조"  python3 tools/check_args.py --check
+run "패치 머리"  python3 tools/check_patch.py --check
+run "래칫"      python3 tools/check_ratchets.py --check
 run "망 접점"    python3 tools/check_egress.py --check
 run "금지"       python3 tools/check_forbidden.py --check
 run "compose"    python3 tools/check_compose.py --check

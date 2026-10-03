@@ -27,7 +27,9 @@ jobs:
   quality:
     runs-on: ubuntu-24.04
     steps:
+      # `check_patch`가 `HEAD`를 패치로 뽑아 보려면 **부모가 있어야 한다** (D-0352)
       - uses: actions/checkout@v7
+        with: { fetch-depth: 2 }
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
@@ -66,6 +68,20 @@ jobs:
       - name: Caller/callee arguments
         working-directory: .
         run: python3 tools/check_args.py --check
+
+      # **뽑는 쪽도 본다** (D-0352). `make patch`가 망가지면 다음 패치를 뽑을 때 알게 되고
+      # 그때는 받는 쪽에서 터진다 — D-0350이 그 꼴이다. `HEAD`를 실제로 뽑아 보므로
+      # **부모가 있어야 한다** — 그래서 이 잡은 `fetch-depth: 2`로 받는다. 얕으면 못
+      # 돌렸다고 화면에 적는다 (GR-0.5).
+      - name: Patch heads and pulling
+        working-directory: .
+        run: python3 tools/check_patch.py --check
+
+      # **느슨해진 래칫은 초록으로 위장한다** (D-0352). 못의 값을 부모 커밋과 대조하므로
+      # 여기도 부모가 필요하다 (`fetch-depth: 2`).
+      - name: Ratchet direction
+        working-directory: .
+        run: python3 tools/check_ratchets.py --check
 
       - name: Egress points
         working-directory: .
