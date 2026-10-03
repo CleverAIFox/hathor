@@ -348,6 +348,7 @@ BASELINE: dict[str, int] = {
     "check_issue_mentions.FLOOR[코드]": 250,
     "check_patch.BASE_REQUIRED_FROM": 351,
     "check_ratchets.FLOOR_NAILS": 25,
+    "check_under_load.FLOOR": 15,
     "deadcheck.CEILING[건너뛴 시험]": 15,
     "deadcheck.CEILING[눈먼 접두사]": 0,
     "deadcheck.CEILING[무검증 시험]": 0,

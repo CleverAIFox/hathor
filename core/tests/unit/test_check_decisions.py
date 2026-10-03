@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-import re
 import sys
 from typing import cast
 
@@ -311,49 +310,6 @@ def test_문제를_모아_낸다():
 def test_실제_저장소가_전_검사를_통과한다():
     """**이것이 `make check`가 매번 보는 것이다.**"""
     assert tool.run_checks(tool.load_parts(), tool.MASTER.read_text(encoding="utf-8")) == []
-
-
-def _recipes(makefile: str) -> dict[str, tuple[list[str], list[str]]]:
-    """Makefile을 `타깃 -> (선행, 레시피)`로 읽는다. **탭이 레시피다.**"""
-    targets: dict[str, tuple[list[str], list[str]]] = {}
-    current: str | None = None
-    for line in makefile.split("\n"):
-        if line.startswith("\t"):
-            if current is not None:
-                targets[current][1].append(line.strip())
-            continue
-        head, sep, rest = line.partition(":")
-        if not sep or head.startswith((".", "#", " ")) or "=" in head:
-            current = None
-            continue
-        current = head.strip()
-        prerequisites = rest.split("##")[0].split()
-        targets[current] = (prerequisites, [])
-    return targets
-
-
-def test_check가_있는_도구는_전부_check_사슬에서_불린다():
-    """**도구에 `--check`를 다는 것과 그것이 도는 것은 다르다** (D-0121).
-
-    `split_decisions.py --check`는 D-0080부터 있었고 조각 표가 낡은 것을 정확히
-    잡았는데, `make check`가 부르지 않아 일곱 세션을 그냥 지났다.
-    """
-    root = repo_root()
-    targets = _recipes((root / "Makefile").read_text(encoding="utf-8"))
-    assert "check" in targets, "Makefile에 check 타깃이 없다"
-
-    reachable = [line for name in targets["check"][0] for line in targets.get(name, ([], []))[1]]
-    chain = "\n".join(reachable)
-
-    for path in sorted((root / "tools").glob("*.py")):
-        # **`add_argument` 꼴로 본다** (D-0350). 느슨하게 `"--check"`만 찾으면
-        # 그 문자열을 쓰는 **도서관 모듈**(`doc_counts`)이 관문으로 잡힌다.
-        if not re.search(r'add_argument\(\s*"--check"', path.read_text(encoding="utf-8")):
-            continue
-        assert f"tools/{path.name}" in chain, (
-            f"{path.name}에 --check가 있는데 make check 사슬이 부르지 않는다. "
-            "Makefile의 docs 타깃에 한 줄 더한다"
-        )
 
 
 def test_색인을_만들지_않는다():

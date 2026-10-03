@@ -133,6 +133,9 @@ ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
 proposal:      ## 기획서를 MASTER Part I ~ III에서 빌드한다. graphviz · 한글 글꼴 필요 (D-0221)
 	cd core && uv run --group docs python ../tools/build_proposal.py
 
+load:          ## 관문 전부를 부하 아래서 돌려 거짓 실패를 잡는다. 1분 (D-0355)
+	python3 tools/check_under_load.py --check $(if $(ROUNDS),--rounds $(ROUNDS),)
+
 mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 25분 · WIRING=1은 배선만 (D-0259 · D-0353)
 	WIRING=$(WIRING) python3 tools/mutate_gate.py
 

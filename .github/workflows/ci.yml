@@ -181,6 +181,24 @@ jobs:
             --all-extras --all-groups --no-hashes -q -o /tmp/audit.txt
           uv run pip-audit --strict -r /tmp/audit.txt
 
+  # **한 갈래로는 안 보이는 결함이 있다** (D-0355). D-0354가 그랬다 — `make check`은
+  # 관문을 하나씩 차례로 돌고, 이 잡도 단계마다 하나씩 돈다. 그래서 **일부러 한꺼번에**
+  # 돌리는 자리를 따로 둔다. 나란히 도므로 벽시계로는 공짜다.
+  gates-under-load:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 2 }
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --all-extras --all-groups
+        working-directory: core
+      # ci-only: check_under_load.py 관문 전부를 한 번 더 돈다. `make check`에 넣으면 두 배가 되고, 그러면 사람이 검사를 끈다 (D-0129)
+      - name: Gates under load
+        run: python3 tools/check_under_load.py --check
+
   secret-scan:
     runs-on: ubuntu-24.04
     steps:
