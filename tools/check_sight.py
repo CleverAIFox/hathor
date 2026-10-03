@@ -66,6 +66,7 @@ WIDENS = ("SKIP", "ALLOW", "IGNORE", "EXCLUDE")
 
 PINNED = {
     "build_proposal.TBL_PR_ORDER": 17,
+    "check_args.SKIP_FLAGS": 1,
     "check_artifacts.REQUIRED": 6,
     "check_compose.CEILING": 3,
     "check_decisions.REQUIRED_SECTIONS": 2,
@@ -89,6 +90,9 @@ PINNED = {
     "check_issue_mentions.TREES": 3,
     "check_model_licenses.COMMERCIAL": 3,
     "check_model_licenses.TREES": 1,
+    "check_requirements.DONE": 2,
+    "check_requirements.MVP_EXEMPT": 9,
+    "check_requirements.STATES": 9,
     "check_retired.LIVING": 3,
     "check_secrets.FORBIDDEN": 1,
     "check_secrets.PLACEHOLDER_PREFIXES": 6,
@@ -101,8 +105,8 @@ PINNED = {
     "deadcheck.NET_TREES": 7,
     "debts.SECURITY_SETUP": 2,
     "debts.WATCHED": 3,
-    "doc_fsck.GR_TREES": 5,
-    "doc_fsck.LEDGER": 2,
+    "doc_counts.GR_TREES": 5,
+    "doc_counts.LEDGER": 2,
     "doc_fsck.LIVING": 3,
     "doc_fsck.SKIP_SUFFIXES": 6,
     "encoding_check.BINARY": 16,

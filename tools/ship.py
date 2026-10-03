@@ -263,7 +263,7 @@ def count_leftovers() -> list[str]:
         if not any(part in OUTSIDE for part in path.relative_to(ROOT).parts)
     ]
     if caches:
-        found.append(f"저장소 `__pycache__` {len(caches)}개. `make clean` 또는 `FIX=1`")
+        found.append(f"저장소 `__pycache__` {len(caches)}개. `make clean`")
     scripts = [path.name for path in ROOT.glob("*.sh")]
     if scripts:
         found.append(f"루트에 일회성 스크립트 {len(scripts)}개: {' · '.join(scripts[:3])}")
@@ -496,7 +496,7 @@ def main() -> int:
     for line in leftovers or ["깨끗하다"]:
         print(f"{DIM}   {line}{OFF}")
     if leftovers:
-        print(f"{DIM}   치우려면 `make tidy YES=1` · 바이트코드는 `FIX=1`{OFF}")
+        print(f"{DIM}   치우려면 `make tidy YES=1 FIX=1`{OFF}")
 
     print(f"{DIM}── 산출물 (교두보){OFF}")
     code, text = _run("python3", "tools/sync_artifacts.py", "status")

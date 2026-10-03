@@ -132,9 +132,10 @@ def test_꼬리표가_붙어도_합성으로_센다() -> None:
     assert ledger.evidence_base("합성 (D-0200 승격 아님)") == "합성"
     assert ledger.evidence_base("합성 · 실물 40곡") == "합성 · 실물 40곡"
     # **세는 쪽이 같은 정본을 쓴다** — 두 벌이 되면 한쪽만 고치는 날이 온다.
-    import doc_fsck
+    # 세는 축은 D-0349에서 `doc_counts`로 갈라졌다. **함수는 여전히 한 벌이다.**
+    import doc_counts
 
-    assert doc_fsck.evidence_base is ledger.evidence_base
+    assert doc_counts.evidence_base is ledger.evidence_base
 
 
 def test_꼬리표도_뒤_번호여야_한다() -> None:
@@ -201,7 +202,7 @@ def test_지금_표가_아직_판결_안_난_합성과_같다() -> None:
     그래서 이 검사는 **양쪽을 다 본다**: 아직 판결 안 난 것이 표에 있는가, 그리고
     **판결 난 것이 표에 없는가.** 뒤엣것이 없으면 일곱 줄이 조용히 돌아온다.
     """
-    import doc_fsck
+    import doc_counts
 
     body = (repo_root() / "docs" / "PLAN.md").read_text(encoding="utf-8")
     rest = body[body.index(style.DEBT_TABLE) :]
@@ -222,4 +223,4 @@ def test_지금_표가_아직_판결_안_난_합성과_같다() -> None:
     assert listed == open_rows, f"표에만 {listed - open_rows} · 기록에만 {open_rows - listed}"
     assert not (listed & settled), f"판결이 난 줄이 미래 문서에 있다: {sorted(listed & settled)}"
     assert settled, "판결 난 것이 하나도 없으면 이 검사의 뒤쪽 절반이 헛돈다"
-    assert doc_fsck.synthetic_rows() <= len(synthetic)
+    assert doc_counts.synthetic_rows() <= len(synthetic)

@@ -164,6 +164,24 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+# **공용은 잎이다** (D-0350). `MASTER` §1이 `shared`의 의존 방향을 「없음」이라 적는데
+# **강제하는 계약이 없었다** — `domain`만 있었고 `shared`는 `domain`의 금지 대상으로만
+# 등장했다. 위로 올라가는 길이 열려 있었다.
+#
+# D-0190이 같은 꼴을 적었다 — *"`infrastructure`가 계약에 없어 역방향이 안 잡혔다."*
+# **지금 위반이 0이고 그것이 못을 박는 때다** (D-0134: *"구멍이 0일 때 못 박는다"*).
+#
+# `domain`까지 막는다. 설정·텔레메트리가 도메인 타입을 빌릴 이유가 없고, 빌려야 할
+# 날이 오면 **그것이 결정 기록이다.**
+name = "공용은 위를 모른다"
+type = "forbidden"
+source_modules = ["hathor.shared"]
+forbidden_modules = [
+  "hathor.domain", "hathor.application", "hathor.engines",
+  "hathor.infrastructure", "hathor.interfaces",
+]
+
+[[tool.importlinter.contracts]]
 # 오디오 비이동 (D-0015 · D-0134). 망을 타는 유일한 모듈이 오디오를 만질 수 있는
 # 것들을 **임포트조차 못 하게** 한다. D-0015가 요구한 "타입 수준의 불가능"을
 # 서버가 없는 지금 구현할 수 있는 형태다. 접점의 개수는 tools/check_egress.py가 센다.

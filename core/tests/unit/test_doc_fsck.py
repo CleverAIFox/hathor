@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -19,6 +18,14 @@ def cast_list(value: object) -> list[str]:
 
 
 CHECKER = tool_module("doc_fsck")
+
+
+def _axis(name: str) -> object:
+    """축을 **이름으로** 집는다 (D-0349). 자리로 집으면 축을 넣을 때마다 시험이 깨진다."""
+    for axis in CHECKER.COUNTED:
+        if axis[0] == name:
+            return axis
+    raise LookupError(f"«{name}» 축이 없다")
 
 
 def test_저장소가_통과한다():
@@ -148,14 +155,6 @@ def test_맞는_수는_안_잡는다(tmp_path, monkeypatch):
     assert CHECKER.check_counts() == []
 
 
-def test_계약_수를_pyproject에서_센다():
-    """**정본은 `core/pyproject.toml` 하나다** (D-0223). 문서가 아니라 선언을 센다."""
-    assert CHECKER.contract_count() == 6
-
-
-# ------------------------------- 앨범 효과 위의 수를 대표로 들지 않는다 (D-0284)
-
-
 def test_M1_배수는_앨범_효과를_같이_적는다(monkeypatch, tmp_path):
     """**인용이 부푼 쪽을 골랐다** (D-0284).
 
@@ -196,54 +195,74 @@ def test_지금_문서가_규약과_맞다():
 # --------------------------------- 문서가 든 수는 사람이 세지 않는다 (D-0288)
 
 
-def _axis(name: str) -> object:
-    """축을 **이름으로** 집는다 (D-0349).
+def test_실물_워크플로가_문서에_다_있다() -> None:
+    """**`fire-lane`의 `readmecheck`를 가져왔다** — 실물과 README 표를 대조한다.
 
-    자리로 집고 있었다 — `COUNTED[1]`. 축을 하나 넣자 **시험 셋이 엉뚱한 축을 쥐었다.**
-    목록 가운데에 넣는 것이 정상인데 자리로 집으면 그때마다 시험을 고쳐야 하고,
-    그러면 **고치기 싫어서 끝에만 붙이게 된다.**
+    `check_paths`는 *"문서가 가리키는 것이 실물로 있나"*만 본다. 거꾸로는 안 봐서
+    **`codeql.yml`이 스무 판 넘게 `MASTER`의 CI 표에 없었다.** 문서→실물만 보면
+    **실물이 늘어난 것은 영원히 안 보인다.**
     """
-    for axis in CHECKER.COUNTED:
-        if axis[0] == name:
-            return axis
-    raise LookupError(f"«{name}» 축이 없다")
+    assert cast_list(CHECKER.check_orphan_workflows()) == []
 
 
-def test_축이_일곱_이상이다():
-    """**세는 그물이 비면 «전부 맞다»가 거짓으로 참이 된다** (D-0230).
+def test_심은_워크플로를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**카나리아다.** 문서가 모르는 워크플로를 심고 우는지 본다."""
+    base = tmp_path / ".github" / "workflows"
+    base.mkdir(parents=True)
+    (base / "심은것.yml").write_text("name: 심은것\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [])
+    monkeypatch.setattr(CHECKER, "compose_services", lambda: [])
+    # **관문 표도 못으로 박는다** — 합성 트리에 `MASTER`가 없다.
+    monkeypatch.setattr(CHECKER, "gate_tools", lambda: [])
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "MASTER.md").write_text(CHECKER.GATE_TABLE + "\n", encoding="utf-8")
 
-    축이 하나였다 — 문서에 손으로 적힌 수가 214개인데 기계가 보는 것은 `계약 N종`
-    하나뿐이었다. 그 사이에 **「대장 201건 중」이 실물 223일 때까지** 아무도 안 셌고,
-    그 줄이 사는 표의 머리말이 *"크기를 재서 적는다"*다.
+    problems = cast_list(CHECKER.check_orphan_workflows())
 
-    **넷에서 다섯이 됐다 (D-0307)**: `재현 불명`이 PLAN에 **16**으로 적혀 있고 실물이
-    **11**이었다. 축을 놓자마자 *"11이라 적었는데 실물은 1"*로 걸렸다.
+    assert any("심은것" in one for one in problems)
 
-    **다섯에서 일곱이 됐다 (D-0349)**: `프로브`가 README에 「넷」(한글 수사라 축이 못
-    읽었다)이고 실물이 다섯 · `결정 기록 검사`는 **열 이름을 손으로 적고 있었고** 그중
-    하나는 D-0189가 지운 검사였다.
 
-    **바닥으로 둔다.** 축은 늘기만 하는 것이 옳고, 수를 딱 박으면 **축을 넣을 때마다
-    시험을 고쳐야 해서 안 넣게 된다.**
+def test_워크플로가_0개면_통과시키지_않는다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [])
+    monkeypatch.setattr(CHECKER, "compose_services", lambda: [])
+    # **관문 표도 못으로 박는다** — 합성 트리에 `MASTER`가 없다.
+    monkeypatch.setattr(CHECKER, "gate_tools", lambda: [])
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "MASTER.md").write_text(CHECKER.GATE_TABLE + "\n", encoding="utf-8")
+    assert cast_list(CHECKER.check_orphan_workflows())
+
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    assert cast_list(CHECKER.check_orphan_workflows())
+
+
+def test_실물_서비스가_문서에_다_있다() -> None:
+    """**컨테이너 표에 일곱이고 `compose`에 열이었다** (D-0349).
+
+    `labelstudio`·`prometheus`·`grafana` 셋이 표에 없었다. `check_compose`는 **메모리만**
+    보고 이름은 안 본다 — *"서비스 10개"*를 찍으면서 문서가 일곱만 적은 것은 못 봤다.
     """
-    names = [name for name, _, _ in CHECKER.COUNTED]
-    assert len(names) >= 7, names
-    for wanted in ("import-linter 계약", "결정 대장", "deadcheck 프로브", "결정 기록 검사"):
-        assert wanted in names, wanted
+    assert cast_list(CHECKER.check_orphan_workflows()) == []
+    assert len(CHECKER.compose_services()) >= 10
 
 
-def test_축마다_정본이_수를_낸다():
-    """**정본이 없는 값은 축이 아니다.** 셋 다 실제로 세어져야 한다."""
-    for name, _pattern, count in CHECKER.COUNTED:
-        assert isinstance(count(), int), name
-        assert count() > 0, f"{name}의 정본이 0을 낸다 — 세는 자리를 의심한다"
+def test_심은_서비스를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**카나리아다.** 첫 판에 한글 이름으로 심었더니 **안 울었다** — 정규식이
+    `[a-z]`만 보기 때문이다. `compose` 서비스 이름은 실물이 전부 ASCII다."""
+    monkeypatch.setattr(CHECKER, "compose_services", lambda: ["plantedcanary"])
+    monkeypatch.setattr(CHECKER, "living_documents", lambda: [])
+    monkeypatch.setattr(CHECKER, "gate_tools", lambda: [])
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "MASTER.md").write_text(CHECKER.GATE_TABLE + "\n", encoding="utf-8")
 
+    problems = cast_list(CHECKER.check_orphan_workflows())
 
-def test_대장은_표식_안만_센다():
-    """**표식 밖의 `| D-xxxx |` 행이 있다** — 전부 세면 230, 대장은 223이다."""
-    body = (CHECKER.ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
-    everywhere = len(re.findall(r"(?m)^\| D-\d{4} \|", body))
-    assert CHECKER.ledger_rows() < everywhere
+    assert any("plantedcanary" in one for one in problems)
 
 
 def test_틀린_수를_잡는다(monkeypatch, tmp_path):
@@ -292,133 +311,37 @@ def test_고친_뒤에는_검사가_조용하다(monkeypatch, tmp_path):
     assert CHECKER.check_counts() == []
 
 
-def _counted(pattern: str) -> int:
-    """결정 기록에서 그 꼴로 시작하는 줄의 수. **도구와 다른 길로 센다.**"""
-    body = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
-    return len(re.findall(f"(?m){pattern}", body))
+def test_관문_표가_실물을_다_든다() -> None:
+    """**§11의 「검사 체계」 표가 손으로 적힌 목록이라 넷이 빠져 있었다** (D-0350).
 
-
-def test_재현_불명을_센다() -> None:
-    """**PLAN이 16이라 적고 실물은 11이었다** (D-0307).
-
-    `재현`은 *"지금 이 수치를 다시 내는 명령"*이라 조사하면 줄어드는 수다 (D-0136).
-    줄어드는 수는 문서에서 낡고, **수가 틀려도 아무 일이 안 일어난다** (D-0263).
-    """
-    assert CHECKER.unknown_reproductions() == _counted("^재현 불명")
-    # 축이 실제로 표에 실려 있어야 `--fix`가 그 자리를 고친다.
-    assert "재현 불명" in {name for name, _, _ in CHECKER.COUNTED}
-
-
-def test_재현_불명_축이_틀린_수를_잡는다() -> None:
-    """**세는 그물이 비면 «0건»이 거짓으로 참이 된다** (D-0230)."""
-    pattern = next(rule for name, rule, _ in CHECKER.COUNTED if name == "재현 불명")
-    assert pattern.search("| 재현 불명 **11건** |") is not None
-    assert pattern.search("| 재현 불명 1건 |") is not None
-    assert pattern.search("재현 불명 — 이 수치를 내는 명령을 못 찾았다") is None
-
-
-# ------------------------------------------------------------------ 거꾸로 보기 (D-0349)
-
-
-def test_실물_워크플로가_문서에_다_있다() -> None:
-    """**`fire-lane`의 `readmecheck`를 가져왔다** — 실물과 README 표를 대조한다.
-
-    `check_paths`는 *"문서가 가리키는 것이 실물로 있나"*만 본다. 거꾸로는 안 봐서
-    **`codeql.yml`이 스무 판 넘게 `MASTER`의 CI 표에 없었다.** 문서→실물만 보면
-    **실물이 늘어난 것은 영원히 안 보인다.**
+    CI 표가 `codeql`을 스무 판 넘게 빠뜨린 것과 같은 꼴이다.
     """
     assert cast_list(CHECKER.check_orphan_workflows()) == []
 
 
-def test_심은_워크플로를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """**카나리아다.** 문서가 모르는 워크플로를 심고 우는지 본다."""
-    base = tmp_path / ".github" / "workflows"
-    base.mkdir(parents=True)
-    (base / "심은것.yml").write_text("name: 심은것\n", encoding="utf-8")
-    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-    monkeypatch.setattr(CHECKER, "living_documents", lambda: [])
-    monkeypatch.setattr(CHECKER, "compose_services", lambda: [])
+def test_그_표에만_겨눈다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**살아 있는 문서 전체로 보면 README의 도구표가 대신 만족시킨다** (D-0350).
 
-    problems = cast_list(CHECKER.check_orphan_workflows())
-
-    assert any("심은것" in one for one in problems)
-
-
-def test_워크플로가_0개면_통과시키지_않는다(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
-    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-    monkeypatch.setattr(CHECKER, "living_documents", lambda: [])
-    monkeypatch.setattr(CHECKER, "compose_services", lambda: [])
-    assert cast_list(CHECKER.check_orphan_workflows())
-
-    (tmp_path / ".github" / "workflows").mkdir(parents=True)
-    assert cast_list(CHECKER.check_orphan_workflows())
-
-
-def test_새_축_일곱이_실물을_센다() -> None:
-    """**정본이 사라지면 조용히 넘어가면 안 된다** (D-0223).
-
-    축이 **다섯에서 열둘**이 됐다 (D-0349). 일곱 다 **정본이 다른 파일에 있고** 그
-    파일이 사라지면 `LookupError`로 터진다 — 0을 내고 통과하면 그것이 D-0230이다.
+    첫 판이 그랬고 **§11이 넷을 빠뜨린 채로 통과했다.** 표를 콕 집어야 한다.
     """
-    assert CHECKER.probe_count() >= 5
-    assert CHECKER.record_check_count() >= 10
-    assert CHECKER.frozen_issues() >= 1
-    assert CHECKER.service_count() >= 10
-    assert CHECKER.rule_mentions() >= 300
-    assert CHECKER.egress_points() == 4
-    assert CHECKER.grandfathered_records() == 79
+    master = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
 
-    names = {name for name, _, _ in CHECKER.COUNTED}
-    assert len(names) >= 12, names
-    assert {
-        "deadcheck 프로브",
-        "결정 기록 검사",
-        "얼린 질문",
-        "compose 서비스",
-        "GR 참조",
-        "망 접점",
-        "형식 면제 기록",
-    } <= names
+    assert CHECKER.GATE_TABLE in master
+    table = master.split(CHECKER.GATE_TABLE, 1)[1].split("\n### ", 1)[0]
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for name in cast_list(CHECKER.gate_tools()):
+        assert f"tools/{name}.py" in table, name
+    # README도 들지만 **그것으로는 통과시키지 않는다** — 표가 정본이다.
+    assert "tools/check_args.py" in readme
 
 
-@pytest.mark.parametrize(
-    "axis",
-    ["probe_count", "record_check_count", "egress_points", "grandfathered_records"],
-)
-def test_정본이_사라지면_터진다(axis: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """**0을 내고 통과하면 그것이 빈 그물이다** (D-0230 · `fire-lane`의 `doc_fsck ⑥`).
+def test_읽는_자리가_없는_축을_잡는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**카나리아다.** 아무 문서도 안 읽는 축을 심고 우는지 본다 (D-0350)."""
+    import re
 
-    저쪽 규율: *"못 잰 것을 통과로 세지 않는다."* 정본 파일이 없으면 **빨간불**이고
-    조용한 0이 아니다.
-    """
-    (tmp_path / "tools").mkdir()
-    (tmp_path / "docs").mkdir()
-    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    axis = ("심은축", re.compile(r"아무데도없는말\s*(\d+)개"), lambda: 1)
+    monkeypatch.setattr(CHECKER, "COUNTED", (axis,))
 
-    with pytest.raises((LookupError, OSError)):
-        getattr(CHECKER, axis)()
+    problems = cast_list(CHECKER.check_counts())
 
-
-def test_실물_서비스가_문서에_다_있다() -> None:
-    """**컨테이너 표에 일곱이고 `compose`에 열이었다** (D-0349).
-
-    `labelstudio`·`prometheus`·`grafana` 셋이 표에 없었다. `check_compose`는 **메모리만**
-    보고 이름은 안 본다 — *"서비스 10개"*를 찍으면서 문서가 일곱만 적은 것은 못 봤다.
-    """
-    assert cast_list(CHECKER.check_orphan_workflows()) == []
-    assert len(CHECKER.compose_services()) >= 10
-
-
-def test_심은_서비스를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """**카나리아다.** 첫 판에 한글 이름으로 심었더니 **안 울었다** — 정규식이
-    `[a-z]`만 보기 때문이다. `compose` 서비스 이름은 실물이 전부 ASCII다."""
-    monkeypatch.setattr(CHECKER, "compose_services", lambda: ["plantedcanary"])
-    monkeypatch.setattr(CHECKER, "living_documents", lambda: [])
-    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
-
-    problems = cast_list(CHECKER.check_orphan_workflows())
-
-    assert any("plantedcanary" in one for one in problems)
+    assert problems and "0곳" in problems[0]

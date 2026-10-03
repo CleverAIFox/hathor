@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from typing import cast
 
@@ -345,7 +346,9 @@ def test_check가_있는_도구는_전부_check_사슬에서_불린다():
     chain = "\n".join(reachable)
 
     for path in sorted((root / "tools").glob("*.py")):
-        if '"--check"' not in path.read_text(encoding="utf-8"):
+        # **`add_argument` 꼴로 본다** (D-0350). 느슨하게 `"--check"`만 찾으면
+        # 그 문자열을 쓰는 **도서관 모듈**(`doc_counts`)이 관문으로 잡힌다.
+        if not re.search(r'add_argument\(\s*"--check"', path.read_text(encoding="utf-8")):
             continue
         assert f"tools/{path.name}" in chain, (
             f"{path.name}에 --check가 있는데 make check 사슬이 부르지 않는다. "

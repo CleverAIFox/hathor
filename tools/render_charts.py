@@ -297,7 +297,11 @@ def g0_runs(out: Path) -> Path:
         times = re.findall(r"(\d+)초", plain(result))
         if len(times) >= 2:
             runs.append((plain(attempt), float(times[0]), float(times[1])))
-    memory = re.search(r"허용 ([\d.]+)GB에 ([\d.]+)GB", plain(rows[-1][1]))
+    # **「에」와 「중」을 다 받는다** (D-0350). 본문이 *"허용 4.30GB에 4.22GB"*였고
+    # **「할당」이 빠져 「4.22면 들어간다」로 읽혔다.** 문장을 고치자 이 정규식이 끊겼고
+    # 빌드가 멈췄다 — **정본이 문서라는 것이 그렇게 드러난다.** 그림은 처음부터
+    # 「허용선 대 이미 쓴 양」으로 그리고 있었으므로 **문장만 틀렸던 것이다.**
+    memory = re.search(r"허용 ([\d.]+)GB\s*[에중]\s*([\d.]+)GB", plain(rows[-1][1]))
     if len(runs) < 2 or memory is None:
         raise SourceError("G0 표에서 시간과 메모리를 못 읽었다")
     fig, (left, right) = plt.subplots(

@@ -48,9 +48,10 @@
 
 > **아래 명령 예시 중 `keys-*`를 가리키는 것은 `ingest keys --from-bundles`를 한 번
 > 돌린 뒤에 돈다** (D-0211). 조합·반쪽을 요구하는 것은 아직 안 돈다.
-> 옛 `mert-layers` 폴더에는 **벡터가 없다** — 지운 적이 있고 다시 안 뽑았다. 층은
-> 묶음 안에 있다 (D-0203). 그 폴더가 읽는 **기본값**이던 것을 O-69가 잡았고
-> (닫힘 D-0274), 잔해 쌓임은 O-62가 잡았다 (닫힘 D-0203 · D-0245).
+> `mert-layers` 폴더에는 **벡터 1004개가 있다** (348M · D-0350이 실측했다). 층은
+> 묶음 안에도 있으므로 `eval retrieval`에는 **중복이고** `probe_latent`에는 아니다
+> (D-0203). 그 폴더가 읽는 **기본값**이던 것을 O-69가 잡았고 (닫힘 D-0274), 잔해
+> 쌓임은 O-62가 잡았다 (닫힘 D-0203 · D-0245).
 
 ## 빠른 실행
 
@@ -286,6 +287,10 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/check_file_size.py` | 파일 길이 래칫 · 양방향 |
 | `tools/check_test_types.py` | 시험 코드 타입 오류 래칫 |
 | `tools/check_coverage.py` | 커버리지 바닥 래칫 · 양방향 |
+| `tools/check_sight.py` | **관문의 시야에 못을 박는다** — 상수가 조용히 줄면 막는다. `--update`는 조이는 쪽으로만 (D-0349) |
+| `tools/check_retired.py` | 지운 말이 근거 없이 살아 있나 — 같은 줄에 지운 결정이 있으면 통과 (D-0349) |
+| `tools/check_requirements.py` | **요구사항 정의서가 자기 규약을 지키나** — 상태 집합 · 그룹 양방향 · 결번 · 선언 안 된 M/P5+ · 끝났는데 근거 없는 행 (D-0350) |
+| `tools/check_args.py` | **주는 인자를 받는 쪽이 받나** — 플래그 · `$(MAKE)` 넘기기 · **화면이 알려 주는 명령이 그 일을 하나** (D-0350) |
 | `tools/deadcheck.py` | 검사가 죽었는가 — 프로브 6종 · 양방향 래칫 |
 | `tools/encoding_check.py` | BOM · CRLF · 비 UTF-8 · 끝 개행 (`--fix`) |
 | `tools/release_notes.py` | 결정 기록에서 태그 · 릴리스 본문 |
@@ -308,6 +313,7 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/check_artifacts.py` | 산출물 대장 ↔ 실물 · 재생성 가능 여부 |
 | `tools/decision_ledger.py` | 결정 기록 긁기 · 대장 생성 — **긁는 자리가 하나다** |
 | `tools/decision_evidence.py` | `자료` 칸 검사 · 갚을 수 있는 빚 명단 |
+| `tools/doc_counts.py` | **문서가 적은 수 ↔ 실물** 축 열다섯 — `doc_fsck`가 부른다. 정본이 사라지면 **0을 안 내고 터진다** (D-0349) |
 | `tools/debts.py` | **빚을 축마다 센다** — 한 축만 세고 「없다」를 찍고 있었다 (D-0328) |
 | `tools/tidy.py` | git 찌꺼기 · 바이트코드 — `make tidy` |
 | `tools/mutate_gate.py` | 검사가 진짜로 잡는가 — 일부러 깨 본다 |

@@ -24,8 +24,9 @@ check: docs size lint type arch test  ## CI와 동일한 검사를 로컬에서 
 sync:          ## 환경을 맞춘다. **이것만 친다** — 묶음을 골라 치면 나머지가 지워진다 (D-0225)
 	cd core && uv sync --all-extras --all-groups
 
-tidy:          ## 로컬 찌꺼기 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치. YES=1 이면 치운다 (D-0225)
+tidy:          ## 로컬 찌꺼기 — 브랜치 · 봇 참조 · 적용된 패치. YES=1 치운다 · FIX=1 바이트코드까지 (D-0225 · D-0350)
 	python3 tools/tidy.py $(if $(YES),--yes,)
+	$(if $(FIX),@$(MAKE) --no-print-directory clean,)
 
 gh-setup:      ## GitHub 설정 — 머지 뒤 브랜치 자동 삭제 · 기획서 배포. gh 필요 · 몇 번 쳐도 같다 (D-0226)
 	python3 tools/gh_ops.py setup
@@ -46,6 +47,8 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 	python3 tools/check_secrets.py --check
 	python3 tools/check_doc_style.py --check
 	python3 tools/check_retired.py --check
+	python3 tools/check_requirements.py --check
+	python3 tools/check_args.py --check
 	python3 tools/check_egress.py --check
 	python3 tools/check_forbidden.py --check
 	python3 tools/check_compose.py --check

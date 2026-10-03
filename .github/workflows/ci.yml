@@ -59,6 +59,14 @@ jobs:
         working-directory: .
         run: python3 tools/check_retired.py --check
 
+      - name: Requirement conventions
+        working-directory: .
+        run: python3 tools/check_requirements.py --check
+
+      - name: Caller/callee arguments
+        working-directory: .
+        run: python3 tools/check_args.py --check
+
       - name: Egress points
         working-directory: .
         run: python3 tools/check_egress.py --check
