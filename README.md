@@ -132,6 +132,7 @@ make patch                    # 뽑는 쪽 — 머리 셋을 손으로 안 적�
 make patch VERIFY=D0350.patch # 받은 패치가 어느 판 위에 서는지 찍는다
 make patch STAMP=1            # 나간 패치에 기준을 소급해 박는다 (찍기만) · YES=1로 박는다 (D-0352)
 make ship                     # 규약 · git 상태 · 위생 · 산출물을 한 번에 (D-0147)
+make mutate WIRING=1          # 관문의 배선을 끊어 시험이 우는지 본다 (D-0353)
 make tidy                     # 로컬 찌꺼기를 센다 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치
 make tidy YES=1               # 치운다. 패치는 지우지 않고 applied/로 옮긴다 (D-0225)
 ```
@@ -322,7 +323,7 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/apply_patch.sh` | `make apply` — 패치 적용 · 기준 대조 · 선언 대조 · 커밋 |
 | `tools/make_patch.sh` | `make patch` — 패치 뽑기 · 머리 셋 · 기준 위에서 검증 |
 | `tools/check_patch.py` | 패치 머리가 네 곳에서 같은가 · `HEAD`를 실제로 뽑아 본다 |
-| `tools/check_ratchets.py` | 래칫이 느슨해진 자리 — 부모 커밋과 대조한다 |
+| `tools/check_ratchets.py` | 래칫이 느슨해진 자리 — **가장 조였던 값**과 대조한다 |
 | `tools/ship.py` | `make ship` — 내보내도 되는가 |
 | `tools/sync_artifacts.py` | 산출물 백업 · 복원 · 추가 전용 |
 | `tools/var_fsck.py` | 산출물이 무엇인지 찍는다 |

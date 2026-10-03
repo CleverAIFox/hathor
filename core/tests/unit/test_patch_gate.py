@@ -9,7 +9,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 from typing import cast
 
@@ -101,13 +103,65 @@ def test_바닥이_사라지면_운다(tmp_path: Path, monkeypatch: pytest.Monke
 # ------------------------------------------------------------------ 실제로 뽑아 본다
 
 
-def test_HEAD를_정말_뽑아_본다() -> None:
+def _two_commits(folder: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """**제 부모를 가진 저장소를 손수 만든다** (D-0353).
+
+    첫 판은 이 저장소의 부모가 있는지 보고 없으면 `pytest.skip()`했다. 그 건너뛰기 둘이
+    `deadcheck.CEILING["건너뛴 시험"]`을 **15에서 17로 밀어 올렸고**, 이력을 훑으니
+    그 천장의 가장 조였던 값은 **2**였다. **내가 더한 둘은 없앨 수 있는 둘이다** —
+    시험이 제 부대를 들고 있으면 환경에 묻지 않는다.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "docs").mkdir()
+
+    def run(*args: str) -> None:
+        subprocess.run(
+            args,
+            cwd=folder,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
+            env=dict(
+                os.environ,
+                GIT_AUTHOR_NAME="x",
+                GIT_AUTHOR_EMAIL="x@y",
+                GIT_COMMITTER_NAME="x",
+                GIT_COMMITTER_EMAIL="x@y",
+            ),
+        )
+
+    run("git", "init", "-q", ".")
+    (folder / "docs" / "DECISIONS.md").write_text("## D-0001. 첫 기록\n", encoding="utf-8")
+    (folder / "a.txt").write_text("처음\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "D-0001. 첫 기록")
+    past = folder / "docs" / "DECISIONS.md"
+    past.write_text(past.read_text(encoding="utf-8") + "\n## D-0002. 둘째\n", encoding="utf-8")
+    (folder / "a.txt").write_text("둘째\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "D-0002. 둘째")
+    monkeypatch.setattr(CHECKER, "ROOT", folder)
+    return folder
+
+
+def test_HEAD를_정말_뽑아_본다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """**적혀 있다까지가 아니라 돌아간다까지 본다** (D-0352).
 
-    `pull_once`가 `make_patch.sh`를 불러 기준 위에서 붙여 보고 트리까지 맞춘 뒤 버린다.
+    `pull_once`가 실물 `make_patch.sh`를 불러 기준 위에서 붙여 보고 트리까지 맞춘 뒤
+    버린다. **부모를 환경에서 빌리지 않는다** (D-0353).
     """
+    _two_commits(tmp_path / "r", monkeypatch)
+
+    assert cast("bool", CHECKER.has_parent())
+    assert _problems("pull_once") == []
+
+
+def test_이_저장소도_뽑힌다() -> None:
+    """**합성만 보면 실물이 안 뽑히는 것을 놓친다.** 부모가 있을 때만 재고, 없으면
+    `--no-live`가 그 자리를 덮는다 (그 쪽은 `test_얕은_클론을_통과로_안_적는다`가 본다)."""
     if not cast("bool", CHECKER.has_parent()):
-        pytest.skip("부모가 없다 — 얕은 클론")
+        return
 
     assert _problems("pull_once") == []
 
@@ -174,8 +228,8 @@ def test_부품이_main에_배선돼_있다(part: str, monkeypatch: pytest.Monke
     심은 결함으로 재니 `main()`에서 `check_heads()`와 `pull_once()`를 빼도 아무 시험이
     안 울었다 — 시험이 그 함수를 **직접** 부르고 있었다. 여기는 `main()`을 거친다.
     """
-    if part == "pull_once" and not cast("bool", CHECKER.has_parent()):
-        pytest.skip("부모가 없다 — 얕은 클론")
+    # **`has_parent`를 손에 쥔다** — 환경에 묻지 않으면 건너뛸 일이 없다 (D-0353).
+    monkeypatch.setattr(CHECKER, "has_parent", lambda: True)
     monkeypatch.setattr(CHECKER, part, lambda *_: ["심은 것"])
     monkeypatch.setattr("sys.argv", ["check_patch.py", "--check"])
 

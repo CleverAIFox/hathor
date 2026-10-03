@@ -133,11 +133,14 @@ ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
 proposal:      ## 기획서를 MASTER Part I ~ III에서 빌드한다. graphviz · 한글 글꼴 필요 (D-0221)
 	cd core && uv run --group docs python ../tools/build_proposal.py
 
-mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 25분 (D-0259)
-	python3 tools/mutate_gate.py
+mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 25분 · WIRING=1은 배선만 (D-0259 · D-0353)
+	WIRING=$(WIRING) python3 tools/mutate_gate.py
 
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [WHICH=1] [NOCOMMIT=1] (D-0070 · D-0249)
 	@bash tools/apply_patch.sh $(if $(WHICH),--which,) $(PATCH)
+
+ratchets-history: ## 이력 전체에서 가장 조였던 값으로 못을 다시 박는다. 느리다 (D-0353)
+	python3 tools/check_ratchets.py --update --from-history $(if $(LOOSEN),--loosen,)
 
 patch:         ## 패치를 뽑고 기준 위에서 검증한다. [REV=] [OUT=] [VERIFY=] [AGAINST=] [STAMP=1 YES=1] (D-0351 · D-0352)
 	@REV="$(REV)" OUT="$(OUT)" VERIFY="$(VERIFY)" AGAINST="$(AGAINST)" STAMP="$(STAMP)" YES="$(YES)" bash tools/make_patch.sh

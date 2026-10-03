@@ -119,6 +119,7 @@ PINNED = {
     "encoding_check.BINARY": 16,
     "encoding_check.CRLF_KEEP": 3,
     "mlflow_sync.TELEMETRY_OFF": 4,
+    "mutate_gate.ENTRIES": 2,
     "prefect_flow.CLI": 6,
     "probe_artist.SEPARATORS": 13,
     "probe_id3.DATE_FRAMES": 6,

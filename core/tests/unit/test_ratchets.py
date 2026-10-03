@@ -120,58 +120,150 @@ def test_못이_아닌_것은_안_센다(name: str) -> None:
     assert CHECKER.kind(name) is None
 
 
+# ------------------------------------------------- 가장 조였던 값 (D-0353)
+
+
+def test_기준선이_비면_막는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**못이 안 박혀 있으면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
+    monkeypatch.setattr(CHECKER, "BASELINE", {})
+
+    problems, what = cast("tuple[list[str], str]", CHECKER.check())
+
+    assert problems and "빈 그물" in problems[0]
+    assert "못 쟀다" in what
+
+
+def test_기준선이_실측과_같다() -> None:
+    """`--update`가 멱등인지 보는 자리다. 어긋나면 다음 판에 터진다."""
+    assert cast("list[str]", CHECKER.verdict(CHECKER.measure(), CHECKER.BASELINE)) == []
+
+
+def test_누적_침식을_잡는다() -> None:
+    """**첫 판은 부모 커밋만 봤다** (D-0352 → D-0353).
+
+    한 판에 1씩 내려가면 **둘째 판부터 영원히 초록이다** — 1 → 1은 느슨해진 것이 아니고
+    **원래가 0이었다는 사실을 아무도 안 들고 있다.** 기준선은 들고 있다.
+    """
+    nail = "deadcheck.CEILING[빈 그물]"
+    pinned = {nail: 0}
+
+    once = cast("list[str]", CHECKER.verdict({nail: 1}, pinned))
+    twice = cast("list[str]", CHECKER.verdict({nail: 1}, pinned))
+
+    assert once and twice, "그대로 1인 둘째 판도 빨개야 한다"
+
+
+def test_안_박힌_새_못을_잡는다() -> None:
+    """**새 못이 기준선에 없으면 그 자리는 안 보는 자리다.** `--update`로 조인다."""
+    problems = cast("list[str]", CHECKER.verdict({"새것.CEILING": 0}, {}))
+
+    assert problems and "못에 없다" in problems[0]
+
+
+def test_이사를_사라짐으로_안_읽는다() -> None:
+    """**실측에서 거짓 경보가 나왔다** (GR-0.8 · D-0353).
+
+    이력을 훑으니 `check_decisions.UNKNOWN_EVIDENCE`가 「사라졌다」로 떴는데
+    `decision_evidence.py`로 **옮겨간 것**이었다. 키가 `모듈.상수`라서 이사가 사라짐으로
+    보인다 — 같은 상수 이름이 다른 모듈에 있으면 **그 자리에서 값을 비교한다.**
+    """
+    before = {"check_decisions.UNKNOWN_EVIDENCE": 0}
+
+    assert CHECKER.loosened(before, {"decision_evidence.UNKNOWN_EVIDENCE": 0}) == []
+    assert CHECKER.loosened(before, {"decision_evidence.UNKNOWN_EVIDENCE": 3})
+    assert CHECKER.loosened(before, {})
+
+
+def test_이사가_아니면_사라짐이다() -> None:
+    """**이름까지 같아야 이사다.** 아니면 지워진 것이고, 지워진 못은 사각지대다."""
+    assert CHECKER.moved("a.CEILING", {"b.FLOOR": 0}) is None
+    assert CHECKER.moved("a.CEILING", {"b.CEILING": 0}) == "b.CEILING"
+
+
+def test_이력을_훑는_자가_있다() -> None:
+    """**기준선을 지금 값에서 시작하면 이미 침식된 것을 모른다** (GR-0.5).
+
+    실측: 내 미러 125판에서 `건너뛴 시험` 천장의 가장 조였던 값이 **2**였다. 부모만 보는
+    검사는 그 열셋을 영원히 못 본다.
+    """
+    assert callable(CHECKER.tightest_in_history)
+    # 이력 훑기는 느리다(125판에 70초). 여기서는 **기준선에 그 값이 들어왔는지**로 본다.
+    assert CHECKER.BASELINE["deadcheck.CEILING[건너뛴 시험]"] >= 2
+
+
 # ------------------------------------------------------------------ 기록을 요구한다
 
 
-def test_느슨하면_기록을_요구한다(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**이것이 D-0118의 `GROW=1`과 같은 규율이다.** 마찰의 값이 기록 한 줄이다."""
-    monkeypatch.setattr(CHECKER, "at", lambda _: {"debts.STALE_FLOOR": 99})
-    monkeypatch.setattr(CHECKER, "against", lambda: ("아무것", {"tools/debts.py"}, "시험"))
+def test_조이는_쪽은_그냥_박힌다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**조이는 쪽을 막으면 아무도 안 조인다** (GR-0.8)."""
+    fake = tmp_path / "check_ratchets.py"
+    fake.write_text("BASELINE: dict[str, int] = {\n}\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "HERE", fake)
+    monkeypatch.setattr(CHECKER, "BASELINE", {"deadcheck.CEILING[빈 그물]": 9})
 
-    problems, what = cast("tuple[list[str], str]", CHECKER.check())
-
-    assert problems and "기록 없다" in what
-
-
-def test_기록을_같이_담으면_통과한다(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**내려 박지 말라는 것이 아니라 왜인지 적으라는 것이다.**"""
-    monkeypatch.setattr(CHECKER, "at", lambda _: {"debts.STALE_FLOOR": 99})
-    monkeypatch.setattr(
-        CHECKER, "against", lambda: ("아무것", {CHECKER.PAST, "tools/debts.py"}, "시험")
-    )
-
-    problems, what = cast("tuple[list[str], str]", CHECKER.check())
-
-    assert problems == []
-    assert "기록 있다" in what
+    assert CHECKER.update() == 0
+    assert '"deadcheck.CEILING[빈 그물]": 0,' in fake.read_text(encoding="utf-8")
 
 
-def test_비교_상대가_없으면_통과로_안_적는다(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**못 잰 것을 통과로 세지 않는다** (GR-0.5)."""
-    monkeypatch.setattr(CHECKER, "against", lambda: (None, set(), "시험"))
+def test_느슨한_쪽은_loosen_없이_안_박힌다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = tmp_path / "check_ratchets.py"
+    fake.write_text("BASELINE: dict[str, int] = {\n}\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "HERE", fake)
+    monkeypatch.setattr(CHECKER, "BASELINE", {"deadcheck.CEILING[건너뛴 시험]": 0})
 
-    problems, what = cast("tuple[list[str], str]", CHECKER.check())
-
-    assert problems == []
-    assert "안 돌렸다" in what
+    assert CHECKER.update() == 1
+    assert fake.read_text(encoding="utf-8") == "BASELINE: dict[str, int] = {\n}\n"
 
 
-def test_비교할_짝을_맞춘다(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**첫 판이 짝을 틀렸다** (D-0352).
+def test_내려_박으려면_기록이_같은_변경에_있어야_한다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**규약을 화면에만 적으면 아무도 안 쓴다** (D-0126).
 
-    작업 트리를 `HEAD`의 **부모**와 비교하면서 기록은 `HEAD`의 커밋에서 찾았다 — 둘이
-    다른 판이고, 그러면 *"앞 판이 기록을 썼다"*는 이유로 이 판의 느슨함이 통과한다.
+    `check_sight`가 *"`--loosen`에는 결정 기록이 필요하다"*고 적고 **아무도 안 썼다.**
+    여기서는 기록이 같은 변경에 없으면 **안 박힌다.**
     """
-    monkeypatch.setattr(CHECKER, "pending", lambda: {"tools/x.py"})
-    _, changed, how = cast("tuple[str | None, set[str], str]", CHECKER.against())
-    assert "HEAD" in how and "부모" not in how
-    assert changed == {"tools/x.py"}, "더러우면 커밋 안 된 변경에서 기록을 찾는다"
+    fake = tmp_path / "check_ratchets.py"
+    fake.write_text("BASELINE: dict[str, int] = {\n}\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "HERE", fake)
+    monkeypatch.setattr(CHECKER, "BASELINE", {"deadcheck.CEILING[건너뛴 시험]": 0})
+    monkeypatch.setattr(CHECKER, "pending", lambda: {"tools/deadcheck.py"})
 
-    monkeypatch.setattr(CHECKER, "pending", set)
-    monkeypatch.setattr(CHECKER, "touched", lambda _: {"담긴것"})
-    _, changed, how = cast("tuple[str | None, set[str], str]", CHECKER.against())
-    assert "부모" in how
-    assert changed == {"담긴것"}, "깨끗하면 HEAD가 담은 것에서 찾는다"
+    assert CHECKER.update(allow_loosening=True) == 1
+
+    monkeypatch.setattr(CHECKER, "pending", lambda: {CHECKER.PAST, "tools/deadcheck.py"})
+    assert CHECKER.update(allow_loosening=True) == 0
+
+
+def test_정본이_사라지면_터지지_않고_말한다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**없는 것을 0이라고 말하지 않는다** (GR-0.5)."""
+    fake = tmp_path / "check_ratchets.py"
+    fake.write_text("# 블록이 없다\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "HERE", fake)
+
+    assert CHECKER.update() == 1
+
+
+def test_표식_주석을_안_쓴다() -> None:
+    """**첫 판이 제 표식에 걸려 상수 정의를 집어삼켰다** (D-0353).
+
+    `# ---- 못 시작 ----` 꼴 표식을 쓰면 그 표식을 정의하는 `OPEN = "…"` 줄이 정규식에
+    **먼저 걸린다** — `--update`가 파일을 문법 오류로 만들었다. `check_sight`가
+    `PINNED = {`를 바로 겨누는 것이 그 이유다.
+    """
+    source = (ROOT / "tools" / "check_ratchets.py").read_text(encoding="utf-8")
+
+    assert "BASELINE" in CHECKER.BLOCK.pattern, "블록 자신을 안 겨눈다"
+    assert "----" not in CHECKER.BLOCK.pattern, "표식 주석을 쓰면 제 정의에 걸린다"
+    assert len(CHECKER.BLOCK.findall(source)) == 1, "블록이 하나가 아니다"
+
+
+def test_loosen만_주면_안_돈다(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.argv", ["check_ratchets.py", "--loosen"])
+
+    assert CHECKER.main() == 1
 
 
 def test_못을_하나도_안_읽으면_막는다(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -190,3 +282,49 @@ def test_못을_하나도_안_읽으면_막는다(monkeypatch: pytest.MonkeyPatc
 def test_세_곳에_다_걸려_있다(where: str) -> None:
     """**관문을 만들고 안 걸면 영원히 안 돈다** (D-0126)."""
     assert "tools/check_ratchets.py" in (ROOT / where).read_text(encoding="utf-8")
+
+
+# ------------------------------------------------- 배선 (심은 결함 · D-0353)
+
+
+def test_기준선_대조가_check에_배선돼_있다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**부품은 재고 배선은 안 쟀다 — 두 판 연속으로.**
+
+    `make mutate WIRING=1`이 `check()`에서 `verdict(…)`를 끊어도 아무 시험이 안 운다고
+    찍었다. D-0352에서 똑같이 물렸고 **기억이 아니라 기계가 잡아야 한다.**
+    """
+    monkeypatch.setattr(CHECKER, "verdict", lambda *_: ["심은 것"])
+
+    problems, _ = cast("tuple[list[str], str]", CHECKER.check())
+
+    assert "심은 것" in problems
+
+
+def test_update가_main에_배선돼_있다(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(CHECKER, "update", lambda **_: 7)
+    monkeypatch.setattr("sys.argv", ["check_ratchets.py", "--update"])
+
+    assert CHECKER.main() == 7
+
+
+def test_화면이_센_수를_말한다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**통과 줄의 수가 거짓이면 사람이 0을 통과로 읽는다** (D-0230 · GR-0.5)."""
+    monkeypatch.setattr("sys.argv", ["check_ratchets.py", "--check"])
+
+    assert CHECKER.main() == 0
+    printed = capsys.readouterr().out
+    assert f"못 {len(CHECKER.measure())}개" in printed
+    assert "못 0개" not in printed
+
+
+def test_목록이_방향까지_찍는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--list`가 **부류를 안 거치면** 방향이 전부 같은 값으로 찍힌다."""
+    monkeypatch.setattr("sys.argv", ["check_ratchets.py", "--list"])
+
+    assert CHECKER.main() == 0
+    printed = capsys.readouterr().out
+    assert "천장" in printed and "바닥" in printed
