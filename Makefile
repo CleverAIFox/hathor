@@ -137,7 +137,7 @@ load:          ## 관문 전부를 부하 아래서 돌려 거짓 실패를 잡�
 	python3 tools/check_under_load.py --check $(if $(ROUNDS),--rounds $(ROUNDS),)
 
 mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 25분 · WIRING=1은 배선만 (D-0259 · D-0353)
-	WIRING=$(WIRING) python3 tools/mutate_gate.py
+	WIRING=$(WIRING) ONLY="$(ONLY)" python3 tools/mutate_gate.py
 
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [WHICH=1] [NOCOMMIT=1] (D-0070 · D-0249)
 	@bash tools/apply_patch.sh $(if $(WHICH),--which,) $(PATCH)

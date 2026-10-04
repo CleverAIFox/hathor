@@ -88,7 +88,7 @@ def gate_tools() -> list[str]:
 ENTRIES = ("check", "main")
 """배선을 보는 자리. 관문의 입구다."""
 
-WIRING_CEILING = 106
+WIRING_CEILING = 103
 """**배선을 끊어도 안 우는 자리의 천장** (D-0353).
 
 실측 **106곳**이다. 거기까지 오는 데 세 번 틀렸다:
@@ -98,7 +98,8 @@ WIRING_CEILING = 106
 | 62 | `ast.unparse`가 파일을 다시 써 **소스를 읽는 시험이 변이와 무관하게** 터졌다 (D-0353) |
 | 53 | 저장소가 더러워 **이미 빨간 시험**을 「내 절단 때문」으로 셌다 (D-0356) |
 | 92 | 종료코드 하나만 봐서 **남의 실패도 내 공으로** 셌다 (D-0357) |
-| **106** | 빨간 **이름**을 대조한다. 두 판을 돌려 **수도 목록도 같았다** |
+| 106 | `ast`의 열이 **바이트** 오프셋인데 글자로 잘라 **엉뚱한 자리가 잘렸다** (D-0358) |
+| **103** | 바이트로 자르고 **그 호출이 정말 사라졌는지 센다** |
 
 한 판에 다 메울 수 있는 수가 아니고, **메우는 척하지도 않는다** —
 이 수는 `check_ratchets`가 못으로 들고 있어서 **올라가면 빨개지고 내려가면 조인다.**
@@ -136,7 +137,11 @@ def cut(source: str, line: int, name: str) -> str | None:
     `check_ratchets`의 배선 다섯이 전부 「울었다」로 나왔다. **거짓 빨강은 거짓 초록보다
     나쁘다** — 메울 자리를 가린다 (GR-0.8 · D-0353).
     """
-    lines = source.splitlines(keepends=True)
+    # **`ast`의 열은 UTF-8 바이트 오프셋이다** (D-0358). 문자 인덱스로 자르면 한글이 있는
+    # 줄에서 엉뚱한 자리가 잘린다 — 이 저장소는 거의 전부 한글이라 **대부분의 절단이
+    # 빗나갔고**, 빗나간 절단은 그래도 돌아가서 **「안 울었다」로 세어졌다.**
+    raw = source.encode("utf-8")
+    lines = raw.splitlines(keepends=True)
     starts = [0]
     for one in lines:
         starts.append(starts[-1] + len(one))
@@ -151,8 +156,25 @@ def cut(source: str, line: int, name: str) -> str | None:
         ):
             at = starts[node.lineno - 1] + node.col_offset
             to = starts[node.end_lineno - 1] + node.end_col_offset
-            return source[:at] + "[]" + source[to:]
+            cut_out = (raw[:at] + b"[]" + raw[to:]).decode("utf-8")
+            # **정말 그 호출이 사라졌는지 센다.** 빗나간 절단을 통과시키면 그것이 빈 그물이다.
+            if _calls(cut_out, name) >= _calls(source, name):
+                return None
+            return cut_out
     return None
+
+
+def _calls(source: str, name: str) -> int:
+    """그 이름의 호출이 몇 번 나오나. 문법이 깨졌으면 `-1`."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return -1
+    return sum(
+        1
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
+    )
 
 
 def tests_for(name: str) -> list[str]:
@@ -237,9 +259,19 @@ def dirty_tools() -> list[str]:
 
 
 def cut_wiring() -> int:
-    """배선을 하나씩 끊어 본다 (D-0353)."""
+    """배선을 하나씩 끊어 본다 (D-0353).
+
+    `ONLY=<도구>`를 주면 **그 도구만** 잰다 (D-0358). 전수가 25분이라 106곳을 메우는
+    동안 되먹임이 안 돈다 — 한 도구는 1~2분이다. **천장은 전수로만 판정한다.**
+    """
     before = dirty_tools()
     tools = gate_tools()
+    only = os.environ.get("ONLY", "").split()
+    if only:
+        tools = [one for one in tools if one in only]
+        if not tools:
+            print(f"그런 관문 도구가 없다: {only}")
+            return 1
     print(f"관문 도구 {len(tools)}개의 배선을 끊어 본다\n")
     survived: list[str] = []
     for name in tools:
@@ -287,6 +319,13 @@ def cut_wiring() -> int:
     if left:
         print(f"\n**변이가 남았다.** 되돌린다: {left}")
         subprocess.run(["git", "checkout", "--", *left], cwd=ROOT, timeout=120, check=False)
+
+    if only:
+        # **부분 측정은 천장을 판정하지 않는다** (D-0358 · GR-0.5). 일부를 전체로 읽으면
+        # 「줄었다」가 거짓으로 뜬다.
+        print(f"\n{only}만 쟀다 — 안 운 배선 {len(survived)}곳: {survived}")
+        print("**천장은 전수로만 판정한다.** `ONLY=` 없이 다시 돌린다.")
+        return 0
 
     print(f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}): {survived}")
     if len(survived) > WIRING_CEILING:

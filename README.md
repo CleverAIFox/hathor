@@ -133,6 +133,7 @@ make patch VERIFY=D0350.patch # 받은 패치가 어느 판 위에 서는지 찍
 make patch STAMP=1            # 나간 패치에 기준을 소급해 박는다 (찍기만) · YES=1로 박는다 (D-0352)
 make ship                     # 규약 · git 상태 · 위생 · 산출물을 한 번에 (D-0147)
 make mutate WIRING=1          # 관문의 배선을 끊어 시험이 우는지 본다 (D-0353)
+make mutate WIRING=1 ONLY=doc_fsck   # 그 도구만. 6초 (D-0358)
 make load                     # 관문 전부를 부하 아래서 돌린다. 1분 · CI도 돈다 (D-0355)
 make tidy                     # 로컬 찌꺼기를 센다 — 사라진 브랜치 · 봇 추적 참조 · 적용된 패치
 make tidy YES=1               # 치운다. 패치는 지우지 않고 applied/로 옮긴다 (D-0225)
