@@ -1,7 +1,18 @@
-"""일회성 조사: ID3 프레임 전수 히스토그램. 프로덕션 코드 아님."""
+"""ID3 프레임 전수 히스토그램. **`--emit`이 실측 정본의 `counts`를 다시 쓴다** (D-0366).
+
+예전엔 사람이 읽는 글만 찍었고 **사람이 그 수를 `MASTER.md`로 옮겨 적었다.** 옮겨 적은
+수는 낡는다 (GR-0.7). 지금은 이 도구가 `docs/measured.toml`의 `[id3.counts]`를 직접
+쓰고, `tools/measured.py`가 거기서 표를 찍어 낸다.
+
+    python3 tools/probe_id3.py            # 사람이 읽는 전수 히스토그램
+    python3 tools/probe_id3.py --emit     # 정본의 counts를 갈아 넣는다
+
+**기기에서만 돈다** — 1004곡 원본이 필요하고 오디오는 기기를 떠나지 않는다 (D-0015).
+"""
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import unicodedata
@@ -14,6 +25,9 @@ DATE_FRAMES = ("TDRC", "TDRL", "TDOR", "TYER", "TDAT", "TORY")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="ID3 프레임 전수 (D-0366)")
+    parser.add_argument("--emit", action="store_true", help="실측 정본의 counts를 다시 쓴다")
+    args = parser.parse_args()
     root = Path(os.environ.get("HATHOR_LIBRARY_ROOT", "/mnt/d/노래/노래"))
     if not root.is_dir():
         print(f"경로 없음: {root}")
@@ -87,6 +101,17 @@ def main() -> int:
         print("=== 실패 샘플(최대 10) ===")
         for name, detail in failures[:10]:
             print(f"  {name}: {detail}")
+
+    if args.emit:
+        # **`sys.path`를 손대지 않는다** — 같은 `tools/`에 있으므로 그냥 들어온다.
+        import measured
+
+        print()
+        changed = measured.emit("id3", {name: count for name, count in frame_counter.items()})
+        for line in changed or ["바뀐 수가 없다"]:
+            print(f"  {line}")
+        print(f"정본 {measured.CANON.relative_to(measured.ROOT)} · 곡 {total}")
+        print("  `python3 tools/measured.py --fix`로 거울을 맞춘다")
     return 0
 
 

@@ -58,6 +58,7 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 	python3 tools/check_model_licenses.py --check
 	python3 tools/docx_check.py --check
 	python3 tools/doc_fsck.py --check
+	python3 tools/measured.py --check
 	python3 tools/encoding_check.py --check
 	python3 tools/deadcheck.py --ratchet
 
@@ -66,6 +67,7 @@ size:          ## 파일 길이 래칫. 늘어도 줄어도 빨개진다 (D-0117
 
 docs-fix:      ## 문서가 든 수를 실물로 갈아 넣는다. **관문은 안 고친다** (D-0288)
 	python3 tools/doc_fsck.py --fix
+	python3 tools/measured.py --fix
 
 resize:        ## 래칫을 내린다. 올리려면 GROW=1 + 결정 기록 (D-0118)
 	python3 tools/check_file_size.py --update $(if $(GROW),--allow-growth,)

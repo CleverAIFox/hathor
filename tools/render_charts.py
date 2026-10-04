@@ -23,6 +23,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import measured as canon_source
 from matplotlib import font_manager
 from matplotlib.patches import Rectangle
 from proposal_source import (
@@ -207,7 +208,9 @@ def requirement_status(out: Path) -> Path:
 
 
 def id3_frames(out: Path) -> Path:
-    rows = table("### □ ID3 프레임 실측 (1004곡 전수)").rows
+    # **정본을 직접 읽는다** (D-0366). 거울(MASTER 블록)을 거치면 그 사이에 손으로
+    # 고친 수를 그림이 그대로 그린다 — 관문이 뒤에서 잡지만 그림은 이미 틀렸다.
+    rows = canon_source.rows_of(canon_source.canon()["id3"])
     labels = [
         plain(r[0]).split(" (")[0] + "\n" + plain(r[0]).split(" (")[-1].rstrip(")")
         if "(" in r[0]
@@ -228,7 +231,7 @@ def id3_frames(out: Path) -> Path:
 
 
 def artist_notation(out: Path) -> Path:
-    rows = [r for r in table("### □ 아티스트 표기 실측").rows if "%" in r[1]]
+    rows = [r for r in canon_source.rows_of(canon_source.canon()["artist"]) if "%" in r[1]]
     labels = [plain(r[0]) for r in rows]
     values = [number(r[1]) for r in rows]
     fig, ax = plt.subplots(figsize=(WIDTH, 1.9))

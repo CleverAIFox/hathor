@@ -1,0 +1,218 @@
+# **실측 집계의 정본** (D-0366).
+#
+# 기획서의 실측 표는 `MASTER.md`에 **손으로 타이핑돼 있었다.** 세는 도구는 있었다 —
+# `probe_id3.py`가 1004곡을 전수로 세고 사람이 읽는 글을 찍었고 **사람이 그 수를
+# MASTER로 옮겼다.** 옮겨 적은 수는 낡는다 (GR-0.7 · D-0361의 «계약 5종»과 같은 꼴).
+#
+# ### 센 것과 적은 것을 가른다
+#
+# `counts`는 **도구가 센 수**다. `display`는 **사람이 정한 표시·용도**다. 표의 백분율은
+# 둘을 합쳐 `tools/measured.py`가 **계산해서** 낸다 — 여기 백분율을 적지 않는다.
+# 적으면 그것이 또 옮겨 적기다.
+#
+# ### 왜 집계만 커밋하나
+#
+# 원본은 `var/`에 있고 `var/`는 `.gitignore`다. 오디오는 기기를 떠나지 않는다
+# (D-0015 · D-0134). **여기 있는 것은 수뿐이다** — 곡명 · 경로 · 아티스트 문자열 ·
+# 임베딩 · 곡별 행이 없다. 그 경계는 **사람이 지킨다**: 이 파일에 문자열 목록을 넣는
+# 순간 검사가 아니라 사람이 막아야 하는 것이 된다.
+#
+# ### 첫 `counts`는 **백분율에서 거꾸로 푼 것**이다 (D-0366)
+#
+# MASTER에 남아 있던 것은 백분율뿐이었다. 전수가 1004곡이므로 각 백분율을 내는 정수는
+# 대개 하나뿐이고(`62.8%` → 631 하나), 그렇게 복원했다. **그래도 센 수는 아니다** —
+# `--emit`을 그의 기기에서 돌려 확인하고, 바뀌면 그것이 측정이다.
+#
+#     python3 tools/probe_id3.py --emit      # 기기에서. counts만 다시 쓴다
+#     python3 tools/measured.py --fix        # MASTER 거울을 다시 쓴다
+#     python3 tools/measured.py --check      # 정본 ↔ 거울
+
+[corpus]
+stamp = "2025-09-19"
+tracks = 1004
+
+[corpus.counts]
+seconds = 230616
+bytes = 9286565870
+"44.1kHz" = 771
+"48kHz" = 233
+mp3 = 1004
+read_failures = 0
+nfd_names = 0
+filename_convention = 1004
+
+[[corpus.display]]
+label = "곡 수"
+kind = "count"
+of = "mp3"
+
+[[corpus.display]]
+label = "총 재생시간"
+kind = "hours"
+of = "seconds"
+
+[[corpus.display]]
+label = "총 용량"
+kind = "bytes"
+of = "bytes"
+
+[[corpus.display]]
+label = "포맷"
+kind = "share"
+of = "mp3"
+prefix = "mp3 "
+
+[[corpus.display]]
+label = "샘플레이트"
+kind = "share-pair"
+of = ["44.1kHz", "48kHz"]
+
+[[corpus.display]]
+label = "읽기 실패"
+kind = "count"
+of = "read_failures"
+
+[[corpus.display]]
+label = "파일명 규칙"
+kind = "share"
+of = "filename_convention"
+prefix = "`아티스트-제목.mp3` "
+suffix = " 일관"
+
+[[corpus.display]]
+label = "파일명 정규화"
+kind = "nfc"
+of = "nfd_names"
+
+[id3]
+stamp = "2025-09-19"
+tracks = 1004
+
+[id3.counts]
+TIT2 = 1004
+TPE1 = 1004
+TALB = 1004
+USLT = 1004
+APIC = 1004
+POPM = 1004
+TSSE = 631
+TSOA = 37
+TSOP = 8
+TSOT = 7
+TDRC = 0
+TDRL = 0
+TYER = 0
+TDAT = 0
+TSRC = 0
+SYLT = 0
+TRCK = 0
+TPE2 = 0
+TCON = 0
+TPOS = 0
+
+[[id3.display]]
+label = "TIT2 (제목)"
+frames = ["TIT2"]
+use = "사용"
+
+[[id3.display]]
+label = "TPE1 (아티스트)"
+frames = ["TPE1"]
+use = "사용"
+
+[[id3.display]]
+label = "TALB (앨범)"
+frames = ["TALB"]
+use = "사용"
+
+[[id3.display]]
+label = "USLT (가사)"
+frames = ["USLT"]
+use = "사용"
+
+[[id3.display]]
+label = "APIC (앨범아트)"
+frames = ["APIC"]
+use = "존재 여부만 기록"
+
+[[id3.display]]
+label = "POPM (평점)"
+frames = ["POPM"]
+use = "**미사용 — 전곡 동일 최고값, 분산 0**"
+
+[[id3.display]]
+label = "TSSE (인코더)"
+frames = ["TSSE"]
+use = "미사용"
+
+[[id3.display]]
+label = "TSOA/TSOP/TSOT (정렬키)"
+frames = ["TSOA", "TSOP", "TSOT"]
+use = "미사용"
+join = "/"
+
+[[id3.display]]
+label = "**TDRC·TDRL·TYER·TDAT (발매일)**"
+frames = ["TDRC", "TDRL", "TYER", "TDAT"]
+use = "외부 조회로 복구"
+bold = true
+
+[[id3.display]]
+label = "**TSRC (ISRC)**"
+frames = ["TSRC"]
+use = "외부 조회로 복구"
+bold = true
+
+[[id3.display]]
+label = "**SYLT (동기 가사)**"
+frames = ["SYLT"]
+use = "강제정렬로 생성"
+bold = true
+
+[[id3.display]]
+label = "TRCK·TPE2·TCON·TPOS"
+frames = ["TRCK", "TPE2", "TCON", "TPOS"]
+use = "필드 미정의"
+
+[artist]
+stamp = "2025-09-19"
+tracks = 1004
+
+[artist.counts]
+unique = 247
+bracket = 376
+comma = 68
+ampersand = 5
+plain = 591
+separator_words = 0
+
+[[artist.display]]
+label = "고유 아티스트 문자열"
+kind = "count"
+of = "unique"
+
+[[artist.display]]
+label = "괄호 포함"
+kind = "share-tracks"
+of = "bracket"
+
+[[artist.display]]
+label = "쉼표 포함"
+kind = "share-tracks"
+of = "comma"
+
+[[artist.display]]
+label = "앰퍼샌드 포함"
+kind = "share-tracks"
+of = "ampersand"
+
+[[artist.display]]
+label = "구분자 없음"
+kind = "share-tracks"
+of = "plain"
+
+[[artist.display]]
+label = "`feat.` `with` `and` `/` `·`"
+kind = "cases"
+of = "separator_words"
+bold = true
