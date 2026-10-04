@@ -359,6 +359,7 @@ BASELINE: dict[str, int] = {
     "debts.STALE_FLOOR": 10,
     "decision_evidence.NODE_FROM": 270,
     "decision_evidence.UNKNOWN_EVIDENCE": 0,
+    "doc_fsck.FLOOR_CODE": 40,
     "encoding_check.FLOOR_TRACKED": 200,
     "mutate_gate.UNAIMED_CEILING": 3,
     "mutate_gate.WIRING_CEILING": 0,

@@ -74,7 +74,11 @@ def test_fix가_고친_줄을_찍는다(
 def test_통과줄이_문서_수를_말한다(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """**수가 화면에 없으면 0인 것도 모른다** (D-0230). `living_documents()`를 거친다."""
+    """**수가 화면에 없으면 0인 것도 모른다** (D-0230).
+
+    두 시야를 다 찍는다 — `living_documents()`와 `counting_code()`. 뒤쪽은 D-0361이
+    넓힌 자리고, **그 수가 화면에 없으면 다시 조용히 0이 될 수 있다.**
+    """
     monkeypatch.setattr("sys.argv", ["doc_fsck.py", "--check"])
 
     code, spoke = _ran(FSCK, ["--check"], capsys)
@@ -82,6 +86,8 @@ def test_통과줄이_문서_수를_말한다(
     assert code == 0
     assert f"문서 {len(cast('list[Any]', FSCK.living_documents()))}개" in spoke
     assert "문서 0개" not in spoke
+    assert f"코드 {len(cast('list[Any]', FSCK.counting_code()))}개" in spoke
+    assert "코드 0개" not in spoke
 
 
 def test_살아_있는_문서가_셋_이상이다() -> None:
@@ -200,3 +206,72 @@ def test_격리된_것의_크기를_찍는다(
 
     assert code == 1
     assert "[잰 것 심은계열]" in spoke
+
+
+def test_축의_시야에_코드가_들어_있다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**축은 멀쩡하고 시야가 좁았다** (D-0361 · D-0349와 같은 자리).
+
+    «관문 도구» 축은 D-0350부터 살아 있었는데 `check_counts`가 **살아 있는 문서 셋만**
+    봤다. `mutate_gate`의 독스트링이 틀린 수를 적고 338판이 통과했다.
+    """
+    code = tmp_path / "tools"
+    code.mkdir()
+    (code / "거짓말.py").write_text('"""관문 도구 9999개."""\n', encoding="utf-8")
+    monkeypatch.setattr(FSCK, "ROOT", tmp_path)
+    monkeypatch.setattr(FSCK, "FLOOR_CODE", 1)
+    monkeypatch.setattr(FSCK, "living_documents", lambda: [])
+
+    problems = [one for one in FSCK.check_counts() if "거짓말.py" in one]
+
+    assert len(problems) == 1, f"코드에 적힌 틀린 수를 못 봤다: {problems}"
+    assert "9999" in problems[0]
+
+
+def test_과거를_인용한_줄은_선언으로_면제한다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**선언 없는 면제는 없다** (D-0219). 그때 틀렸던 수를 적는 문장은 살려야 한다."""
+    code = tmp_path / "tools"
+    code.mkdir()
+    (code / "인용.py").write_text(
+        f'"""그때는 관문 도구 9999개라 적혀 있었다.  {FSCK.COUNT_OK} 과거 인용 """\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(FSCK, "ROOT", tmp_path)
+    monkeypatch.setattr(FSCK, "FLOOR_CODE", 1)
+    monkeypatch.setattr(FSCK, "living_documents", lambda: [])
+
+    assert [one for one in FSCK.check_counts() if "인용.py" in one] == []
+
+
+def test_코드_시야가_비면_막는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230).
+
+    판정은 **입구에서** 한다 — `counting_code()`가 직접 울면 임시 뿌리를 쓰는 시험이
+    전부 터진다 (GR-0.8). 그래서 `main()`이 그 수를 보는지까지 본다.
+    """
+    # **뿌리를 바꾸지 않는다** — 바꾸면 다른 검사가 없는 파일을 보고 터진다. 바닥만
+    # 올려 「시야가 바닥 밑」 상황을 만든다.
+    monkeypatch.setattr(FSCK, "FLOOR_CODE", 9999)
+    assert FSCK.code_shortfall(), "시야가 바닥 밑인데 조용하다"
+
+    monkeypatch.setattr(FSCK, "code_shortfall", lambda: ["심은 문제"])
+    monkeypatch.setattr("sys.argv", ["doc_fsck.py", "--check"])
+    assert FSCK.main() == 1
+    assert "심은 문제" in capsys.readouterr().err
+
+
+def test_두_셈이_다른_이름을_쓴다() -> None:
+    """**같은 이름에 두 셈이 붙어 있었다** (D-0043 · D-0361).
+
+    «관문 도구» 축은 `--check`를 받는 `check_*.py`만 세고(실측 17), `mutate_gate`는
+    **불리는 것 전부**를 센다(실측 37). 이름이 같은 동안 *«관문 도구 N개»*가 어느
+    셈인지 알 수 없었다.
+    """
+    counts = tool_module("doc_counts")
+    mutate = tool_module("mutate_gate")
+
+    assert not hasattr(mutate, "gate_tools"), "이름이 다시 겹쳤다"
+    assert len(mutate.invoked_tools()) > len(counts.gate_tools())

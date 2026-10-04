@@ -76,7 +76,16 @@ class Flipper(ast.NodeTransformer):
         return node
 
 
-def gate_tools() -> list[str]:
+def invoked_tools() -> list[str]:
+    """`Makefile`·훅·워크플로가 **실제로 부르는** 도구 이름 (D-0361에서 이름을 갈랐다).
+
+    **`doc_counts.gate_tools()`와 다른 셈이다.** 저쪽은 `--check`를 받는 `check_*.py`만
+    세고(실측 17), 이쪽은 **불리는 것 전부**다(실측 37) — `ship` · `tidy` · `deadcheck`
+    처럼 `--check`가 없는 것도 배선은 재야 한다.
+
+    **둘이 같은 이름을 쓰고 있었다** (D-0043). 그래서 *«관문 도구 N개»*가 어느 셈인지
+    알 수 없었고, 축은 17만 세는데 내가 독스트링에 47을 적어도 아무도 안 걸렀다.
+    """
     callers = [
         ROOT / "Makefile",
         ROOT / ".githooks" / "pre-commit",
@@ -92,8 +101,10 @@ ENTRIES = ("check", "main")
 WIRING_CEILING = 0
 """**배선을 끊어도 안 우는 자리의 천장** (D-0353 → D-0359).
 
-**0이다.** 관문 도구 47개의 입구에서 제 함수를 부르는 자리를 하나씩 끊어도
-**전부 운다.** 여기까지 오는 데 수를 네 번 틀렸다:
+**0이다.** 불리는 도구 전부의 입구에서 제 함수를 부르는 자리를 하나씩 끊어도
+**전부 운다.** 도구의 수는 `invoked_tools()`가 세서 화면에 찍는다 — **여기 적지
+않는다**(GR-0.7: D-0361이 여기 적힌 47을 잡았고, 그것은 어느 셈도 아니었다).
+여기까지 오는 데 수를 네 번 틀렸다:
 
 | 수 | 왜 틀렸나 |
 |---|---|
@@ -302,7 +313,7 @@ def cut_wiring() -> int:
     동안 되먹임이 안 돈다 — 한 도구는 1~2분이다. **천장은 전수로만 판정한다.**
     """
     before = dirty_tools()
-    tools = gate_tools()
+    tools = invoked_tools()
     poisoned: list[str] = []
     unaimed: list[str] = []
     only = os.environ.get("ONLY", "").split()
@@ -311,7 +322,7 @@ def cut_wiring() -> int:
         if not tools:
             print(f"그런 관문 도구가 없다: {only}")
             return 1
-    print(f"관문 도구 {len(tools)}개의 배선을 끊어 본다\n")
+    print(f"불리는 도구 {len(tools)}개의 배선을 끊어 본다\n")
     survived: list[str] = []
     for name in tools:
         path = ROOT / "tools" / f"{name}.py"
@@ -413,8 +424,8 @@ def cut_wiring() -> int:
 def main() -> int:
     if os.environ.get("WIRING"):
         return cut_wiring()
-    tools = gate_tools()
-    print(f"관문 도구 {len(tools)}개를 하나씩 망가뜨린다\n")
+    tools = invoked_tools()
+    print(f"불리는 도구 {len(tools)}개를 하나씩 망가뜨린다\n")
     survived: list[str] = []
     for name in tools:
         path = ROOT / "tools" / f"{name}.py"

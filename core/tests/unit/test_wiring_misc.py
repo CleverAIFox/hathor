@@ -425,14 +425,14 @@ def test_WIRING이_배선_모드로_간다(
 def test_관문_도구_목록을_거친다(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`gate_tools()` 자리. 끊으면 **도구 0개를 망가뜨리고 초록을 찍는다** (D-0230).
+    """`invoked_tools()` 자리. 끊으면 **도구 0개를 망가뜨리고 초록을 찍는다** (D-0230).
 
     `WIRING`을 반드시 지운다 — `make mutate WIRING=1`이 자식에게 그 환경을 물려준다.
     """
     monkeypatch.delenv("WIRING", raising=False)
-    monkeypatch.setattr(MUTATE, "gate_tools", lambda: ["있을리없는도구"])
+    monkeypatch.setattr(MUTATE, "invoked_tools", lambda: ["있을리없는도구"])
 
     with pytest.raises((FileNotFoundError, OSError)):
         MUTATE.main()
 
-    assert "관문 도구 1개" in _spoke(capsys), "목록을 안 거쳤다"
+    assert "불리는 도구 1개" in _spoke(capsys), "목록을 안 거쳤다"

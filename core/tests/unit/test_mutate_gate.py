@@ -116,7 +116,7 @@ def test_여는_시험을_찾는다() -> None:
 
 def test_관문_도구를_실제로_읽는다() -> None:
     """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
-    tools = cast("list[str]", TOOL.gate_tools())
+    tools = cast("list[str]", TOOL.invoked_tools())
 
     assert len(tools) >= 25, tools
     assert "check_ratchets" in tools and "check_patch" in tools
@@ -236,7 +236,7 @@ def test_미리_빨간_시험이_있으면_수를_판정하지_않는다(
     """
     monkeypatch.delenv("ONLY", raising=False)
     monkeypatch.setattr(TOOL, "dirty_tools", list)
-    monkeypatch.setattr(TOOL, "gate_tools", lambda: ["tidy"])
+    monkeypatch.setattr(TOOL, "invoked_tools", lambda: ["tidy"])
     monkeypatch.setattr(TOOL, "tests_for", lambda _: ["tests/unit/가짜.py"])
     monkeypatch.setattr(TOOL, "wiring", lambda _: [(1, "survey")])
     monkeypatch.setattr(TOOL, "cut", lambda *_: "# 잘렸다\n")
@@ -276,7 +276,7 @@ def test_겨눔_불명이_늘면_막는다(
     monkeypatch.setattr(TOOL, "UNAIMED_CEILING", 0)
     monkeypatch.setattr(TOOL, "WIRING_CEILING", 0)
     monkeypatch.setattr(TOOL, "dirty_tools", list)
-    monkeypatch.setattr(TOOL, "gate_tools", lambda: ["tidy"])
+    monkeypatch.setattr(TOOL, "invoked_tools", lambda: ["tidy"])
     monkeypatch.setattr(TOOL, "tests_for", lambda _: ["tests/unit/가짜.py"])
     monkeypatch.setattr(TOOL, "wiring", lambda _: [(1, "survey")])
     monkeypatch.setattr(TOOL, "cut", lambda *_: "# 잘렸다\n")

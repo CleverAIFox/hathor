@@ -70,6 +70,53 @@ def living_documents() -> list[Path]:
     return [ROOT / name for name in LIVING if (ROOT / name).exists()]
 
 
+FLOOR_CODE = 40
+"""축의 수를 적을 수 있는 코드의 **바닥** (D-0361 · D-0230). 실측 54개."""
+
+COUNT_OK = "doc_fsck: ok"
+"""축의 수를 **과거 값으로 인용한 줄**의 면제 선언. **사유와 함께 적는다** (D-0361).
+
+`deadcheck`의 `deadcheck: ok`와 같은 규율이다 — **선언 없는 면제는 없다** (D-0219).
+**그 줄이나 바로 윗줄**에 적는다.
+<!-- doc_fsck: ok 선언 그 자체를 설명한다 -->
+도구 독스트링은 *"D-0261이 여섯째 계약을 넣고 «계약 5종» 세 곳을 안 고쳤다"*처럼
+**그때 틀렸던 수**를 적는다. 그것을 실물로 갈아 넣으면 문장이 뜻을 잃는다.
+"""
+
+
+def counting_code() -> list[Path]:
+    """축의 수를 **적을 수 있는 코드** (D-0361).
+
+    ### 축은 있었는데 시야에 코드가 없었다
+
+    «관문 도구» 축은 D-0350부터 살아 있었다. 그런데 `check_counts`가 **살아 있는 문서
+    <!-- doc_fsck: ok 잡은 값을 인용한다 -->
+    셋만** 봤다 — `mutate_gate`의 독스트링이 *"관문 도구 47개"*라 적고 있었고 **실물은
+    17(그 축의 셈)도 37(다른 셈)도 아니었다.** 338판이 통과했다.
+
+    D-0349와 같은 자리다: **축은 멀쩡하고 시야가 좁았다.**
+
+    **고치지는 않는다** — `--fix`는 문서만 간다. 코드의 수를 관문이 고치면 주석의
+    뜻까지 바뀐다 (D-0288이 표기를 안 건드리는 것과 같은 까닭).
+    """
+    return sorted((ROOT / "tools").glob("*.py"))
+
+
+def code_shortfall() -> list[str]:
+    """시야가 바닥 밑으로 내려갔나 (D-0361 · D-0230).
+
+    **판정은 입구에서 한다.** `counting_code()`가 직접 울면 임시 뿌리를 쓰는 시험이
+    전부 터진다 — 거짓 경보다 (GR-0.8). `check_issue_mentions.shortfall()`과 같은 꼴.
+    """
+    seen = len(counting_code())
+    if seen >= FLOOR_CODE:
+        return []
+    return [
+        f"축을 적을 수 있는 코드를 {seen}개 읽었다(바닥 {FLOOR_CODE}). **그물이 비었다** "
+        f"(D-0230) — 비면 이 검사는 D-0361 전으로 돌아간다"
+    ]
+
+
 def check_paths() -> list[str]:
     """문서가 적은 경로가 실재하는가."""
     problems: list[str] = []
@@ -330,12 +377,19 @@ def check_counts() -> list[str]:
                 f"«{name}» 축을 읽는 자리가 **0곳이다** — 살아 있는 문서 중 하나가 그 수를 "
                 f"들어야 한다. 안 들면 그 축은 영원히 아무것도 못 잡는다 (D-0350)"
             )
-        for path in living_documents():
+        # **문서만 보면 코드에 적힌 수는 영원히 안 걸린다** (D-0361). 고치는 쪽은
+        # 문서만 가고, 코드는 **보기만 한다** — 면제는 `doc_fsck: ok` 선언으로만.
+        for path in [*living_documents(), *counting_code()]:
             where = path.relative_to(ROOT).as_posix()
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            body = path.read_text(encoding="utf-8").splitlines()
+            for number, line in enumerate(body, 1):
+                # **그 줄이나 바로 윗줄** — `deadcheck`와 같은 규율이다. 산문 한 줄에
+                # 선언까지 붙이면 100자를 넘어 `ruff`가 막는다.
+                if COUNT_OK in line or (number > 1 and COUNT_OK in body[number - 2]):
+                    continue
                 problems += [
                     f"{where}:{number} «{name}»을 {said}이라 적었는데 실물은 {real}이다. "
-                    "`make docs-fix` (D-0263 · D-0288)"
+                    "`make docs-fix` (D-0263 · D-0288 · D-0361)"
                     for said in pattern.findall(line)
                     if int(said) != real
                 ]
@@ -391,7 +445,7 @@ def main() -> int:
         print(f"축 {len(COUNTED)}개 · 고친 자리 {len(changed)}곳")
         return 0
 
-    problems = check_paths() + check_commands() + check_orphan_tools()
+    problems = code_shortfall() + check_paths() + check_commands() + check_orphan_tools()
     problems += check_wiring() + check_reserved_packages() + check_counts()
     problems += check_album_lift() + check_orphan_workflows()
     if problems:
@@ -400,7 +454,8 @@ def main() -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
     print(
-        f"문서 대조 검사 통과 · 문서 {len(living_documents())}개 · 도구 "
+        f"문서 대조 검사 통과 · 문서 {len(living_documents())}개"
+        f"(축을 보는 코드 {len(counting_code())}개) · 도구 "
         f"{len(list((ROOT / 'tools').glob('*.py')))}개 · 축 {len(COUNTED)}개 · "
         f"워크플로 {len(list((ROOT / '.github' / 'workflows').glob('*.yml')))}개"
     )

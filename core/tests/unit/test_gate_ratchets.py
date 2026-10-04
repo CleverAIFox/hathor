@@ -165,7 +165,7 @@ def test_뒤집을_것이_없으면_센_수가_0이다() -> None:
 
 
 def test_관문_도구를_실제로_찾는다() -> None:
-    assert len(MUTATE.gate_tools()) >= 20
+    assert len(MUTATE.invoked_tools()) >= 20
 
 
 def test_이름_뒤에_숨은_건너뜀도_센다(tmp_path: Path) -> None:
