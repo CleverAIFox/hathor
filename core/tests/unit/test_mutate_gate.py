@@ -245,3 +245,45 @@ def test_미리_빨간_시험이_있으면_수를_판정하지_않는다(
     assert TOOL.cut_wiring() == 1
     spoke = capsys.readouterr()
     assert "못 믿는다" in spoke.out + spoke.err
+
+
+def test_이름을_입에_올리는_시험을_겨눔으로_본다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`aimed()` — **약한 증거다.** 이름을 안 불러도 겨눌 수 있다 (D-0360)."""
+    monkeypatch.setattr(TOOL, "ROOT", tmp_path)
+    where = tmp_path / "core" / "tests" / "unit" / "test_가짜.py"
+    where.parent.mkdir(parents=True)
+    where.write_text("def test_하나():\n    survey()\n", encoding="utf-8")
+
+    assert TOOL.aimed({"tests/unit/test_가짜.py::test_하나"}, "survey") is True
+    assert TOOL.aimed({"tests/unit/test_가짜.py::test_하나"}, "verdict") is False
+
+
+def test_못_읽은_파일을_혐의로_세지_않는다() -> None:
+    """**거짓 경보는 진짜 경보를 죽인다** (GR-0.8). 못 읽었으면 의심하지 않는다."""
+    assert TOOL.aimed({"tests/unit/없는파일.py::test_하나"}, "survey") is True
+
+
+def test_겨눔_불명이_늘면_막는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**「울었다」가 「그 자리를 겨눈 시험이 울었다」와 같지 않다** (D-0360).
+
+    절단이 엉뚱한 것을 깨뜨려 아무 시험이나 울어도 예전에는 「메워졌다」가 됐다.
+    """
+    monkeypatch.delenv("ONLY", raising=False)
+    monkeypatch.setattr(TOOL, "UNAIMED_CEILING", 0)
+    monkeypatch.setattr(TOOL, "WIRING_CEILING", 0)
+    monkeypatch.setattr(TOOL, "dirty_tools", list)
+    monkeypatch.setattr(TOOL, "gate_tools", lambda: ["tidy"])
+    monkeypatch.setattr(TOOL, "tests_for", lambda _: ["tests/unit/가짜.py"])
+    monkeypatch.setattr(TOOL, "wiring", lambda _: [(1, "survey")])
+    monkeypatch.setattr(TOOL, "cut", lambda *_: "# 잘렸다\n")
+    reds = [set(), {"tests/unit/가짜.py::남의_실패"}]
+    monkeypatch.setattr(TOOL, "failing", lambda _: reds.pop(0))
+    monkeypatch.setattr(TOOL, "aimed", lambda *_: False)
+
+    assert TOOL.cut_wiring() == 1
+    spoke = capsys.readouterr()
+    assert "겨눔 불명" in spoke.out + spoke.err

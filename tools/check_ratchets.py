@@ -360,6 +360,7 @@ BASELINE: dict[str, int] = {
     "decision_evidence.NODE_FROM": 270,
     "decision_evidence.UNKNOWN_EVIDENCE": 0,
     "encoding_check.FLOOR_TRACKED": 200,
+    "mutate_gate.UNAIMED_CEILING": 3,
     "mutate_gate.WIRING_CEILING": 0,
     "test_gate_tools.UNTESTED": 0,
     "test_gate_types.UNTYPED_FAKES": 0,

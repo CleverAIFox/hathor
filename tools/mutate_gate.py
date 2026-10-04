@@ -112,6 +112,40 @@ WIRING_CEILING = 0
 """
 
 
+UNAIMED_CEILING = 3
+"""**울었지만 「그 절단을 겨눈 시험」인지 못 보인 자리의 천장** (D-0360).
+
+D-0359까지 이 검사는 *«절단 뒤에 새로 빨개진 시험이 하나라도 있나»*만 봤다. 그러면
+**절단이 엉뚱한 것을 깨뜨려 아무 시험이나 울어도 「메워졌다」가 된다** — 0은 상한이
+아니라 하한이었다. 그 사실을 D-0359가 적어 두고 **안 쟀다** (GR-0.5).
+
+재 보니 **절단 160건 중 157건은 빨개진 시험이 그 함수 이름을 입에 올린다.** 남은
+셋은 `check()`를 통째로 돌리는 시험이 울어서 이름이 안 나온다 — **손으로 셋 다
+확인했고 진짜로 그 자리를 겨눈다**(`test_안_부르는_모델이_표에_남으면_잡는다` ·
+`test_저장소_기획서가_정본과_맞는다` 둘).
+
+**이름을 부르게 만드는 것이 목표가 아니다.** 통째로 돌리는 시험이 더 좋을 때가 있다.
+그래서 막는 것은 **이 수가 늘어나는 것**이다 — 늘면 새로 생긴 자리를 손으로 본다.
+"""
+
+
+def aimed(fresh: set[str], called: str) -> bool:
+    """빨개진 시험 중 **그 함수 이름을 입에 올리는 것**이 하나라도 있나 (D-0360).
+
+    약한 증거다 — 이름을 안 불러도 겨눌 수 있다. 그래서 **판정이 아니라 수를 센다.**
+    파일을 못 읽으면 **의심하지 않는다**: 못 읽은 것을 혐의로 세면 거짓 경보가 된다
+    (GR-0.8).
+    """
+    for one in fresh:
+        where = ROOT / "core" / one.split("::")[0]
+        try:
+            if called in where.read_text(encoding="utf-8"):
+                return True
+        except OSError:
+            return True
+    return False
+
+
 def own_functions(tree: ast.Module) -> set[str]:
     """그 모듈이 가진 최상위 함수 이름."""
     return {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
@@ -270,6 +304,7 @@ def cut_wiring() -> int:
     before = dirty_tools()
     tools = gate_tools()
     poisoned: list[str] = []
+    unaimed: list[str] = []
     only = os.environ.get("ONLY", "").split()
     if only:
         tools = [one for one in tools if one in only]
@@ -316,6 +351,10 @@ def cut_wiring() -> int:
                 path.write_text(original, encoding="utf-8")
             fresh = now_red - was_red
             mark = f"울었다 ({len(fresh)}건)" if fresh else "**안 울었다**"
+            if fresh and not aimed(fresh, called):
+                # **울었지만 그 절단을 겨눈 시험인지 못 보였다** (D-0360).
+                mark += " · 겨눔 불명"
+                unaimed.append(f"{name}:{called}")
             print(f"  {name:<24} {called}() 끊음 → {mark}")
             if not fresh:
                 survived.append(f"{name}:{called}")
@@ -329,10 +368,14 @@ def cut_wiring() -> int:
         # **부분 측정은 천장을 판정하지 않는다** (D-0358 · GR-0.5). 일부를 전체로 읽으면
         # 「줄었다」가 거짓으로 뜬다.
         print(f"\n{only}만 쟀다 — 안 운 배선 {len(survived)}곳: {survived}")
+        print(f"겨눔 불명 {len(unaimed)}곳: {unaimed}")
         print("**천장은 전수로만 판정한다.** `ONLY=` 없이 다시 돌린다.")
         return 0
 
-    print(f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}): {survived}")
+    print(
+        f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}) · "
+        f"겨눔 불명 {len(unaimed)}곳 (천장 {UNAIMED_CEILING}): {survived or unaimed}"
+    )
     if poisoned:
         # **미리 빨간 시험은 그 자리를 겨눈 시험일 수 있다** (D-0359). 그 시험을 빼고
         # 세면 **울었어야 하는 자리가 살아남은 것으로 잡힌다** — 실제로 세 곳이 그렇게
@@ -352,6 +395,17 @@ def cut_wiring() -> int:
         return 1
     if len(survived) < WIRING_CEILING:
         print(f"**줄었다.** `WIRING_CEILING`을 {len(survived)}로 내려 박는다 (D-0257).")
+        return 1
+    if len(unaimed) > UNAIMED_CEILING:
+        # **「울었다」가 「그 자리를 겨눈 시험이 울었다」와 같지 않다** (D-0360).
+        print(
+            f"**겨눔 불명이 늘었다.** {len(unaimed)}곳 > 천장 {UNAIMED_CEILING} — "
+            f"손으로 보고 맞으면 천장을 올리고 기록을 쓴다: {unaimed}",
+            file=sys.stderr,
+        )
+        return 1
+    if len(unaimed) < UNAIMED_CEILING:
+        print(f"**줄었다.** `UNAIMED_CEILING`을 {len(unaimed)}로 내려 박는다 (D-0257).")
         return 1
     return 0
 
