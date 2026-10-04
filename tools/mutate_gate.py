@@ -40,6 +40,7 @@ import os
 import re
 import signal
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,10 +89,11 @@ def gate_tools() -> list[str]:
 ENTRIES = ("check", "main")
 """배선을 보는 자리. 관문의 입구다."""
 
-WIRING_CEILING = 103
-"""**배선을 끊어도 안 우는 자리의 천장** (D-0353).
+WIRING_CEILING = 0
+"""**배선을 끊어도 안 우는 자리의 천장** (D-0353 → D-0359).
 
-실측 **106곳**이다. 거기까지 오는 데 세 번 틀렸다:
+**0이다.** 관문 도구 47개의 입구에서 제 함수를 부르는 자리를 하나씩 끊어도
+**전부 운다.** 여기까지 오는 데 수를 네 번 틀렸다:
 
 | 수 | 왜 틀렸나 |
 |---|---|
@@ -99,13 +101,14 @@ WIRING_CEILING = 103
 | 53 | 저장소가 더러워 **이미 빨간 시험**을 「내 절단 때문」으로 셌다 (D-0356) |
 | 92 | 종료코드 하나만 봐서 **남의 실패도 내 공으로** 셌다 (D-0357) |
 | 106 | `ast`의 열이 **바이트** 오프셋인데 글자로 잘라 **엉뚱한 자리가 잘렸다** (D-0358) |
-| **103** | 바이트로 자르고 **그 호출이 정말 사라졌는지 센다** |
+| 103 | 바이트로 자르고 **그 호출이 정말 사라졌는지 센다** |
+| **0** | 103곳에 시험을 붙였다 (D-0359) |
 
-한 판에 다 메울 수 있는 수가 아니고, **메우는 척하지도 않는다** —
-이 수는 `check_ratchets`가 못으로 들고 있어서 **올라가면 빨개지고 내려가면 조인다.**
-0이 되는 날이 이 빚을 다 갚은 날이다.
+**0은 끝이 아니라 못이다.** 새 관문을 쓰면서 입구 배선을 시험 없이 두면 이 수가
+올라가고 `check_ratchets`가 그 자리에서 막는다. **빚을 다시 쌓지 않는 장치다.**
 
-`check_doc_style`·`encoding_check`의 열둘은 D-0356에서 메웠다.
+0이 되고 나서야 보인 것: **미리 빨간 시험이 그 자리를 겨눈 시험일 수 있다.** 그
+시험을 빼고 세면 수가 **위로** 부푼다 — `poisoned`가 그 판을 무효로 만든다 (D-0359).
 """
 
 
@@ -266,6 +269,7 @@ def cut_wiring() -> int:
     """
     before = dirty_tools()
     tools = gate_tools()
+    poisoned: list[str] = []
     only = os.environ.get("ONLY", "").split()
     if only:
         tools = [one for one in tools if one in only]
@@ -295,6 +299,7 @@ def cut_wiring() -> int:
         was_red = failing(targets)
         if was_red:
             print(f"  {name:<24} 미리 빨간 시험 {len(was_red)}개 — 그것 말고 센다")
+            poisoned.append(name)
         for line, called in wires:
             maimed = cut(original, line, called)
             if maimed is None or maimed == original:
@@ -328,6 +333,17 @@ def cut_wiring() -> int:
         return 0
 
     print(f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}): {survived}")
+    if poisoned:
+        # **미리 빨간 시험은 그 자리를 겨눈 시험일 수 있다** (D-0359). 그 시험을 빼고
+        # 세면 **울었어야 하는 자리가 살아남은 것으로 잡힌다** — 실제로 세 곳이 그렇게
+        # 부풀었다(`doc_fsck:living_documents` · `check_args` 둘). 수가 **위로** 틀리므로
+        # 천장을 내릴 때는 안 걸리고 **올릴 때 거짓 근거가 된다.**
+        print(
+            f"**이 수는 못 믿는다.** 미리 빨간 시험이 있는 도구 {len(poisoned)}개: {poisoned}\n"
+            "먼저 초록으로 만든다 — `make docs-fix`가 흔한 까닭이다 (GR-0.5).",
+            file=sys.stderr,
+        )
+        return 1
     if len(survived) > WIRING_CEILING:
         print(
             f"**늘었다.** 배선을 끊어도 안 우는 자리가 {len(survived)}곳이다 —"

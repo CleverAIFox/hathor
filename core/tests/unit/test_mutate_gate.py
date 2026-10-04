@@ -223,3 +223,25 @@ def test_끝난_뒤_남은_변이를_센다() -> None:
     assert "dirty_tools()" in source
     assert "변이가 남았다" in source
     assert callable(TOOL.dirty_tools)
+
+
+def test_미리_빨간_시험이_있으면_수를_판정하지_않는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**미리 빨간 시험이 그 자리를 겨눈 시험일 수 있다** (D-0359).
+
+    그 시험을 빼고 세면 **울었어야 하는 자리가 살아남은 것으로 잡힌다** — 실제로
+    `doc_fsck:living_documents`가 그렇게 부풀었고, 문서 수 하나가 어긋난 것이 까닭이었다.
+    수가 **위로** 틀리므로 천장을 내릴 때는 안 걸리고 **올릴 때 거짓 근거가 된다.**
+    """
+    monkeypatch.delenv("ONLY", raising=False)
+    monkeypatch.setattr(TOOL, "dirty_tools", list)
+    monkeypatch.setattr(TOOL, "gate_tools", lambda: ["tidy"])
+    monkeypatch.setattr(TOOL, "tests_for", lambda _: ["tests/unit/가짜.py"])
+    monkeypatch.setattr(TOOL, "wiring", lambda _: [(1, "survey")])
+    monkeypatch.setattr(TOOL, "cut", lambda *_: "# 잘렸다\n")
+    monkeypatch.setattr(TOOL, "failing", lambda _: {"tests/unit/가짜.py::미리_빨강"})
+
+    assert TOOL.cut_wiring() == 1
+    spoke = capsys.readouterr()
+    assert "못 믿는다" in spoke.out + spoke.err
