@@ -309,12 +309,14 @@ def test_조사중은_결손이_아니고_천장이_있다() -> None:
     작성자가 이 대장에서 네 판 연속 정체를 추론하고 네 번 다 틀렸다. 그래서 «모른다»에
     자리를 주되 **천장을 둔다** — `해당 없음`이 첫 번째 쓰레기통이 된 것을 봤다 (D-0265).
     """
-    studying = [
+    studying = {
         name for name, entry in LEDGER.load().items() if entry.get("state") == LEDGER.UNDER_STUDY
-    ]
+    }
 
-    assert len(studying) <= LEDGER.UNDER_STUDY_CEILING
-    assert LEDGER.UNDER_STUDY_CEILING == 1, "늘리려면 결정 기록이 필요하다 (D-0118)"
+    # **수가 아니라 이름이다** (D-0363). 수만 보면 ① 밝혀져 0이 돼도 천장 1이 남아
+    # 영원히 비어 있는 허가증이 되고 ② 다른 계열로 바뀌어도 수는 그대로다.
+    assert studying == set(LEDGER.UNDER_STUDY_ALLOWED), "늘리려면 결정 기록이 필요하다 (D-0118)"
+    assert len(LEDGER.UNDER_STUDY_ALLOWED) == 1
 
 
 def test_조사중은_무엇을_확인했는지_적는다() -> None:

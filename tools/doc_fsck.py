@@ -70,6 +70,37 @@ def living_documents() -> list[Path]:
     return [ROOT / name for name in LIVING if (ROOT / name).exists()]
 
 
+FLOOR_RULES = 18
+"""`MASTER`가 선언한 GR의 **바닥** (D-0364 · D-0230). 실측 22개 — 정규식이 망가지면
+0을 읽고 「추적되지 않는 규칙 0개」가 거짓으로 참이 된다."""
+
+UNENFORCED_CEILING = 16
+"""**코드가 이름을 한 번도 안 드는 GR의 천장** (D-0364).
+
+### 강제자 없는 규칙은 글로 후퇴한다
+
+`DECISIONS`는 절마다 `강제자` 줄을 요구한다 — 361절 전부 있다. **`MASTER`에는 그
+요구가 없고, 운영 규칙은 `MASTER`에 산다.** 세샤트/토트 세션이 그 틈에서 당했다:
+`MASTER`가 *"옛 규칙은 둘 다 평서로 바꿨다"*라고 **과거형으로** 적고 있었는데 고친
+적이 없었고, 단방향 톱니가 그 사이를 몇 주 동안 덮어 164줄이 틀린 채로 돌았다.
+
+### 전부에 강제자를 달라는 뜻이 아니다
+
+강제자가 없는 것이 **정상인 규칙도 있다** — GR-0.3(자율성 경계)·GR-0.4(반대 의무)는
+사람의 태도고 기계가 볼 것이 아니다. 그래서 **0을 목표로 두지 않는다.**
+
+막는 것은 **이 수가 자라는 것**이다. 규칙을 새로 적으면서 강제자를 안 달면 16이
+되고 그 판에서 막힌다. **줄어도 운다** — 강제자를 달았으면 박아야 다음 판에 그
+칸이 안 비어 있다 (D-0363이 이름 천장에서 배운 것과 같다).
+
+실측 22개 중 **시험이 이름을 든 것 6개**다. 「이름을 든다」는 약한 자다 — GR-1.1(케이스)은
+`ruff`의 `N` 규칙이 이름을 안 들고 강제한다(내가 오늘 `N806`에 걸렸다). 그래서 이 수는
+**「강제자 없음」이 아니라 「추적되지 않음」**으로 읽는다.
+
+**자를 한 번 틀렸다.** 처음엔 `tools/`의 독스트링까지 「이름을 든 것」으로 셌고, 그
+덕에 이 독스트링을 쓰는 것만으로 15 → 12가 됐다 — **언급이 강제로 셈해졌다.**
+"""
+
 FLOOR_CODE = 40
 """축의 수를 적을 수 있는 코드의 **바닥** (D-0361 · D-0230). 실측 54개."""
 
@@ -355,6 +386,44 @@ def check_album_lift() -> list[str]:
     return problems
 
 
+def unenforced_rules() -> list[str]:
+    """`MASTER`가 선언한 GR 중 **코드가 이름을 한 번도 안 드는 것** (D-0364)."""
+    master = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    rules = sorted(set(re.findall(r"GR-\d+\.\d+", master)))
+    # **시험이 강제자다** (D-0364). 처음엔 `tools/`까지 봤는데, 이 독스트링이 GR-0.3 ·
+    # GR-0.4 · GR-1.1을 입에 올리자 **수가 15에서 12로 좋아졌다** — 강제한 것이 아니라
+    # 언급한 것인데 자가 그것을 못 가렸다. `DECISIONS`의 `강제자` 줄이 시험 노드를
+    # 가리키는 것과 같은 규율로 **시험만 본다.**
+    seen = "".join(
+        path.read_text(encoding="utf-8") for path in sorted((ROOT / "core" / "tests").rglob("*.py"))
+    )
+    return [one for one in rules if one not in seen]
+
+
+def check_enforcers() -> list[str]:
+    """추적되지 않는 규칙의 수가 못과 같은가 (D-0364). **양방향이다.**"""
+    rules = sorted(
+        set(re.findall(r"GR-\d+\.\d+", (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")))
+    )
+    if len(rules) < FLOOR_RULES:
+        return [
+            f"`MASTER`에서 GR을 {len(rules)}개 읽었다(바닥 {FLOOR_RULES}). "
+            f"**그물이 비었다** (D-0230)"
+        ]
+    bare = unenforced_rules()
+    if len(bare) > UNENFORCED_CEILING:
+        return [
+            f"시험이 이름을 안 드는 GR이 {len(bare)}개로 천장 {UNENFORCED_CEILING}개를 "
+            f"넘는다: {' · '.join(bare)} — **규칙을 적으면서 강제자를 안 달았다** (D-0364)"
+        ]
+    if len(bare) < UNENFORCED_CEILING:
+        return [
+            f"시험이 이름을 안 드는 GR이 {len(bare)}개다(천장 {UNENFORCED_CEILING}). "
+            f"**좋아졌으면 박는다** — `UNENFORCED_CEILING`을 {len(bare)}로 내린다 (D-0363)"
+        ]
+    return []
+
+
 def check_counts() -> list[str]:
     """문서가 적은 수가 실물과 같은가 (D-0263).
 
@@ -445,7 +514,8 @@ def main() -> int:
         print(f"축 {len(COUNTED)}개 · 고친 자리 {len(changed)}곳")
         return 0
 
-    problems = code_shortfall() + check_paths() + check_commands() + check_orphan_tools()
+    problems = code_shortfall() + check_enforcers() + check_paths() + check_commands()
+    problems += check_orphan_tools()
     problems += check_wiring() + check_reserved_packages() + check_counts()
     problems += check_album_lift() + check_orphan_workflows()
     if problems:
@@ -455,7 +525,8 @@ def main() -> int:
         return 1
     print(
         f"문서 대조 검사 통과 · 문서 {len(living_documents())}개"
-        f"(축을 보는 코드 {len(counting_code())}개) · 도구 "
+        f"(축을 보는 코드 {len(counting_code())}개) · "
+        f"추적 안 되는 규칙 {len(unenforced_rules())}개 · 도구 "
         f"{len(list((ROOT / 'tools').glob('*.py')))}개 · 축 {len(COUNTED)}개 · "
         f"워크플로 {len(list((ROOT / '.github' / 'workflows').glob('*.yml')))}개"
     )

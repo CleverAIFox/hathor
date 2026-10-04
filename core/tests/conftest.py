@@ -23,6 +23,29 @@ from hathor.domain.entities.track_tags import TrackTags
 pytest.importorskip("mutagen")
 
 MACHINE_ENV_PREFIX = "HATHOR_"
+ENV_EXAMPLE = Path(__file__).resolve().parents[2] / ".env.example"
+
+
+def declared_env() -> frozenset[str]:
+    """`.env.example`이 선언한 키 전부 (D-0364 · D-0043).
+
+    **접두사는 손으로 고른 목록이다.** `HATHOR_*` 셋만 지우고 나머지 열다섯(`REDIS_URL` ·
+    `AMQP_URL` · `S3_ENDPOINT_URL` · `POSTGRES_*` · `MINIO_*` …)은 쉘에서 그대로 들어왔다.
+    정본은 `.env.example`이고, 두 곳에 적으면 어긋난다.
+
+    **유병률은 0으로 쟀다** — 선언 키 열다섯과 원격 `PREFECT_API_URL` · `MLFLOW_TRACKING_URI`를
+    전부 꽂고 2361건이 초록이었다. 그 열다섯을 읽는 코드가 `settings.py`(커버리지 0%)
+    하나뿐이라서다. **고치는 것은 병이 아니라 갈림이다** — 세샤트/토트 세션은 접두사
+    없는 변수 하나로 41건이 깨졌고, 그 변수를 쉘에 꽂으라 한 것이 **저장소 자신의
+    문서**였다. 여기서 같은 자리는 `make up` · devcontainer를 돌린 쉘이다.
+    """
+    if not ENV_EXAMPLE.exists():
+        return frozenset()
+    return frozenset(
+        re.findall(r"(?m)^([A-Z_][A-Z0-9_]*)=", ENV_EXAMPLE.read_text(encoding="utf-8"))
+    )
+
+
 TOOLS_CACHE = Path(__file__).resolve().parents[2] / "tools" / "__pycache__"
 
 
@@ -89,7 +112,10 @@ def isolate_machine_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     `load_dotenv` 자체를 검사하는 것은 `paths` 모듈을 직접 부르므로 영향이 없다.
     """
-    for key in [name for name in os.environ if name.startswith(MACHINE_ENV_PREFIX)]:
+    # **목록을 안 적는다** (D-0364 · GR-0.7). 정본이 선언한 키는 전부 지우고,
+    # 접두사는 **정본에 없는 기기 변수**를 위해 남긴다 — 새 키가 생겨도 함께 덮인다.
+    doomed = declared_env() | {name for name in os.environ if name.startswith(MACHINE_ENV_PREFIX)}
+    for key in sorted(doomed):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(
         "hathor.interfaces.cli.main.load_dotenv", lambda *_args, **_kwargs: {}, raising=False

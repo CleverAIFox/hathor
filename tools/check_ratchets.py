@@ -70,11 +70,16 @@ NAILS = {
 KINDS = {
     "FLOOR": "바닥",
     "CEILING": "천장",
+    "ALLOWED": "천장",
     "UNTESTED": "천장",
     "UNTYPED": "천장",
     "UNKNOWN": "천장",
 }
-"""이름 조각 → 부류. `_FROM`은 아래에서 따로 붙인다."""
+"""이름 조각 → 부류. `_FROM`은 아래에서 따로 붙인다.
+
+`ALLOWED`는 **이름 묶음**이다 (D-0363). 수만 보는 천장은 결함을 기대값으로 얼리므로
+면제를 이름으로 적는 쪽으로 옮겼고, 그러면 **이름이 바뀌는 것은 그 도구가 보고 수가
+자라는 것은 이 못이 본다** — 둘이 다른 것을 막는다."""
 
 SOURCES = ("tools/*.py", "core/tests/unit/test_*.py")
 
@@ -103,6 +108,13 @@ def nails(text: str) -> dict[str, int]:
             value = node.value
             if isinstance(value, ast.Constant) and isinstance(value.value, int):
                 found[one.id] = value.value
+            elif isinstance(value, ast.Tuple | ast.List) and all(
+                isinstance(item, ast.Constant) and isinstance(item.value, str)
+                for item in value.elts
+            ):
+                # **이름 묶음은 그 길이가 못이다** (D-0363). 이름 자체가 맞는지는
+                # 그 도구가 보고, 여기는 **묶음이 조용히 자라는 것**을 본다.
+                found[one.id] = len(value.elts)
             elif isinstance(value, ast.Dict):
                 for key, item in zip(value.keys, value.values, strict=True):
                     if (
@@ -335,12 +347,13 @@ BASELINE: dict[str, int] = {
     "check_args.FLOOR[바깥 파일]": 10,
     "check_args.FLOOR[쓰임새 주석]": 10,
     "check_artifacts.QUARANTINE_CEILING": 0,
-    "check_artifacts.TRANSIENT_CEILING": 1,
-    "check_artifacts.UNDER_STUDY_CEILING": 1,
+    "check_artifacts.TRANSIENT_ALLOWED": 1,
+    "check_artifacts.UNDER_STUDY_ALLOWED": 1,
     "check_compose.CEILING[core]": 2816,
     "check_compose.CEILING[ml]": 2304,
     "check_compose.CEILING[obs]": 768,
     "check_decisions.FORMAT_ENFORCED_FROM": 80,
+    "check_doc_style.ALLOWED_TREES": 0,
     "check_doc_style.ENFORCER_FROM": 1,
     "check_doc_style.FLOOR_DOCS": 3,
     "check_doc_style.REPRODUCE_FROM": 1,
@@ -360,11 +373,14 @@ BASELINE: dict[str, int] = {
     "decision_evidence.NODE_FROM": 270,
     "decision_evidence.UNKNOWN_EVIDENCE": 0,
     "doc_fsck.FLOOR_CODE": 40,
+    "doc_fsck.FLOOR_RULES": 18,
+    "doc_fsck.UNENFORCED_CEILING": 16,
     "encoding_check.FLOOR_TRACKED": 200,
     "mutate_gate.UNAIMED_CEILING": 3,
     "mutate_gate.WIRING_CEILING": 0,
     "test_gate_tools.UNTESTED": 0,
     "test_gate_types.UNTYPED_FAKES": 0,
+    "test_hygiene.SYNC_ALLOWED": 5,
 }
 """**지금까지 가장 조였던 값** (D-0353). 여기서 느슨해지면 몇 판이 걸렸든 빨개진다."""
 

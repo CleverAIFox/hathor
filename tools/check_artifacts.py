@@ -120,19 +120,56 @@ STAMP = re.compile(r"\d{8}T\d{6}Z")
 UNKNOWN = "불명"
 """`regen`이 이것이면 어떻게 만들었는지 모른다. `state = "조사중"`과 짝이다."""
 
-UNDER_STUDY_CEILING = 1
-"""`조사중`의 천장 (D-0269). **지금 1이다** — `keys-*.keys.jsonl.mix-other`.
+UNDER_STUDY_ALLOWED = ("keys-*.keys.jsonl.mix-other",)
+"""`조사중`이어도 되는 계열 — **수가 아니라 이름이다** (D-0269 → D-0363).
 
-무엇을 확인했는지는 그 계열의 `why`에 있다. **늘리려면 결정 기록이 필요하다** (D-0118) —
-모르는 것을 여기 쌓는 길이 열려 있으면 이 칸이 두 번째 쓰레기통이 된다.
+### 수만 보는 천장은 결함을 기대값으로 얼린다
 
-`해당 없음`이 첫 번째였다 (D-0265에서 18건을 되돌렸다)."""
+처음엔 `UNDER_STUDY_CEILING = 1`이었고 **독스트링에만 이름이 적혀 있었다.** 그러면
+셋이 안 걸린다: ① 그 계열이 밝혀져 0이 되어도 천장 1이 남아 **영원히 한 칸 비어 있는
+허가증**이 된다. ② 다른 계열이 조사중으로 바뀌고 이 계열이 밝혀지면 **수는 1 그대로**다.
+③ 이름이 바뀌어도 조용하다.
 
-TRANSIENT_CEILING = 1
-"""`임시`의 천장 (D-0278). **지금 1이다** — `.ingest-keys.lock`.
+세샤트/토트 세션이 코드를 읽고 짚었다 — 저쪽은 `WRONG_CEILING = 214`를 등호로 박아
+두고 **그 214 중 164가 규칙의 결함**인 것을 몇 주 동안 못 봤다.
 
-면제는 세어야 면제다. 늘리려면 결정 기록이 필요하다 (D-0118) — 「산출물이 아니다」가 두
-번째 쓰레기통이 되는 길을 막는다. `조사중`에 천장을 둔 것과 같은 자리다."""
+**늘리려면 결정 기록이 필요하다** (D-0118). 모르는 것을 여기 쌓는 길이 열려 있으면
+이 칸이 두 번째 쓰레기통이 된다 — `해당 없음`이 첫 번째였다 (D-0265에서 18건을
+되돌렸다)."""
+
+TRANSIENT_ALLOWED = (".ingest-keys.lock",)
+"""`임시`여도 되는 계열 — **수가 아니라 이름이다** (D-0278 → D-0363).
+
+면제는 세어야 면제고, **이름까지 세면 바뀐 것도 보인다.** 「산출물이 아니다」가 두 번째
+쓰레기통이 되는 길을 막는다. `조사중`과 같은 자리다."""
+
+
+def named_ceiling(
+    entries: dict[str, dict[str, object]],
+    state: str,
+    allowed: tuple[str, ...],
+    constant: str,
+) -> list[str]:
+    """그 상태인 계열이 **허락한 이름과 정확히 같은가** (D-0363).
+
+    **양방향이다.** 늘면 울고 **줄어도 운다** — 좋아진 것을 사람이 박아야 다음 판에
+    그 칸이 안 비어 있다 (D-0117 · `deadcheck.verdict`와 같은 규율).
+    """
+    seen = {name for name, entry in entries.items() if entry.get("state") == state}
+    extra = sorted(seen - set(allowed))
+    gone = sorted(set(allowed) - seen)
+    problems = [
+        f"`{state}`에 허락 없는 계열이 있다: {name} — **면제는 세어야 면제다**. "
+        f"결정 기록과 함께 `{constant}`에 적는다 (D-0118)"
+        for name in extra
+    ]
+    problems += [
+        f"`{state}`로 허락한 {name}이 더 이상 그 상태가 아니다. **좋아졌으면 박는다** — "
+        f"허락을 빼지 않으면 그 칸은 영원히 비어 있는 허가증이다 (D-0363)"
+        for name in gone
+    ]
+    return problems
+
 
 QUARANTINE_CEILING = 0
 """대장에 없는 계열의 천장 (D-0266). **0이다** — R3가 «없는 산출물»이라 부르는 것이다.
@@ -151,12 +188,8 @@ def check_ledger(entries: dict[str, dict[str, object]]) -> list[str]:
     problems: list[str] = []
     if not entries:
         return ["대장이 비었다. `artifacts.toml`에 계열이 하나도 없다"]
-    transient = sum(1 for entry in entries.values() if entry.get("state") == TRANSIENT)
-    if transient > TRANSIENT_CEILING:
-        problems.append(
-            f"`{TRANSIENT}`가 {transient}개로 천장 {TRANSIENT_CEILING}개를 넘는다. "
-            "**면제는 세어야 면제다** — 결정 기록이 필요하다 (D-0118)"
-        )
+    problems += named_ceiling(entries, TRANSIENT, TRANSIENT_ALLOWED, "TRANSIENT_ALLOWED")
+    problems += named_ceiling(entries, UNDER_STUDY, UNDER_STUDY_ALLOWED, "UNDER_STUDY_ALLOWED")
     for name, entry in sorted(entries.items()):
         if any(isinstance(value, str) and value.startswith(TODO) for value in entry.values()):
             problems.append(f"{name}에 `{TODO}`가 남았다. **붙여 넣고 잊을 수 없다** (D-0268)")

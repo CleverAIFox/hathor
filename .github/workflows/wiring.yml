@@ -1,0 +1,41 @@
+# **가진 것과 도는 것은 다르다** (D-0362 · 세샤트/토트 세션의 지적).
+#
+# `make mutate WIRING=1`은 D-0353부터 있었고 배선 103곳을 정확히 세웠는데 **어느 사슬에도
+# 안 끼어 있었다** — `make check`에도, CI에도, 훅에도. 사람이 기억해야 돌았다.
+#
+# `make check`에 넣지 않는 까닭은 D-0129다: **25분을 거기 넣으면 사람이 검사를 끈다.**
+# 그래서 CI가 제 잡으로 돌리고 `# ci-only:` 선언이 그 차이를 적는다 (D-0219 · D-0355).
+#
+# **판마다 돌리지 않는다.** 하루 한 번이다 — 배선은 커밋마다 바뀌는 값이 아니고, 25분을
+# 밀 때마다 치르면 그것도 사람이 끄는 이유가 된다. 빨개지면 `make ship`의 CI 절이
+# 그것을 든다 (`_recent_runs`는 잡 이름으로 안 가린다).
+#
+# **러너를 고정한다** (D-0330).
+name: wiring
+
+on:
+  schedule:
+    # 09:10 KST. 정시를 피한다 — 그때가 가장 붐빈다
+    - cron: "10 0 * * *"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: core
+
+jobs:
+  wiring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --all-extras --all-groups
+        working-directory: core
+      # ci-only: mutate_gate.py 배선을 하나씩 끊어 본다. 25분이라 `make check`에 넣으면 사람이 검사를 끈다 (D-0129 · D-0353)
+      - name: Wiring
+        working-directory: .
+        run: make mutate WIRING=1

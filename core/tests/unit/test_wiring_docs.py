@@ -88,6 +88,8 @@ def test_통과줄이_문서_수를_말한다(
     assert "문서 0개" not in spoke
     assert f"코드 {len(cast('list[Any]', FSCK.counting_code()))}개" in spoke
     assert "코드 0개" not in spoke
+    # **세 번째 시야다** (D-0364). 추적 안 되는 규칙의 수도 같은 줄에 선다.
+    assert f"규칙 {len(cast('list[Any]', FSCK.unenforced_rules()))}개" in spoke
 
 
 def test_살아_있는_문서가_셋_이상이다() -> None:
@@ -275,3 +277,49 @@ def test_두_셈이_다른_이름을_쓴다() -> None:
 
     assert not hasattr(mutate, "gate_tools"), "이름이 다시 겹쳤다"
     assert len(mutate.invoked_tools()) > len(counts.gate_tools())
+
+
+def test_추적_안_되는_규칙의_수가_못과_같다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**강제자 없는 규칙은 글로 후퇴한다** (D-0364 · 세샤트/토트 세션의 지적).
+
+    `DECISIONS`는 절마다 `강제자`를 요구하는데 **`MASTER`에는 그 요구가 없고 운영
+    규칙은 `MASTER`에 산다.** 저쪽은 그 틈에서 문서가 **과거형으로** *"고쳤다"*고
+    적은 규칙이 **고쳐지지 않은 채** 몇 주를 돌았다.
+
+    전부에 강제자를 달라는 뜻이 아니다 — **이 수가 자라는 것**을 막는다. 양방향이다.
+    """
+    bare = cast("list[str]", FSCK.unenforced_rules())
+
+    assert FSCK.check_enforcers() == [], f"추적 안 되는 규칙이 {len(bare)}개다: {bare}"
+    assert len(bare) == FSCK.UNENFORCED_CEILING
+
+    monkeypatch.setattr(FSCK, "UNENFORCED_CEILING", len(bare) - 1)
+    assert FSCK.check_enforcers(), "늘어난 것을 못 본다"
+    monkeypatch.setattr(FSCK, "UNENFORCED_CEILING", len(bare) + 1)
+    assert FSCK.check_enforcers(), "줄어든 것을 안 박는다"
+
+
+def test_강제자_검사가_입구에_배선돼_있다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**부품은 재고 배선은 안 쟀다** — D-0364를 쓰면서 내가 또 저질렀다 (D-0365).
+
+    위의 시험은 `check_enforcers()`를 **직접** 부른다. 그래서 `main()`에서 그 줄을
+    지워도 아무도 안 울었고 `make mutate WIRING=1`이 그 자리를 세웠다 — 천장 0이
+    제 일을 했다.
+    """
+    monkeypatch.setattr(FSCK, "check_enforcers", lambda: ["심은 문제"])
+    monkeypatch.setattr("sys.argv", ["doc_fsck.py", "--check"])
+
+    assert FSCK.main() == 1
+    spoke = capsys.readouterr()
+    assert "심은 문제" in spoke.out + spoke.err
+
+
+def test_규칙을_하나도_못_읽으면_막는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**그물이 비면 「추적 안 되는 규칙 0개」가 거짓으로 참이 된다** (D-0230)."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "MASTER.md").write_text("규칙이 없다\n", encoding="utf-8")
+    monkeypatch.setattr(FSCK, "ROOT", tmp_path)
+
+    assert FSCK.check_enforcers(), "GR을 0개 읽고 통과했다"
