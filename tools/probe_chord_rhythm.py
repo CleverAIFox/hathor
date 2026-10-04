@@ -38,9 +38,9 @@
 O-25 (4) — 판정 규칙을 적었으면 **귀무 자료에서 먼저 돌려 본다.** 안 돌렸다.
 
 사용법:
-    python tools/probe_chord_rhythm.py                 # 저장된 시계열 전부
-    python tools/probe_chord_rhythm.py --stem-set mix
-    python tools/probe_chord_rhythm.py --self-test     # 합성으로 회수되는지
+    cd core && uv run python ../tools/probe_chord_rhythm.py                 # 저장된 시계열 전부
+    cd core && uv run python ../tools/probe_chord_rhythm.py --stem-set mix
+    cd core && uv run python ../tools/probe_chord_rhythm.py --self-test     # 합성으로 회수되는지
 """
 
 from __future__ import annotations

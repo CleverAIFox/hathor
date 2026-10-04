@@ -4,8 +4,16 @@
 수는 낡는다 (GR-0.7). 지금은 이 도구가 `docs/measured.toml`의 `[id3.counts]`를 직접
 쓰고, `tools/measured.py`가 거기서 표를 찍어 낸다.
 
-    python3 tools/probe_id3.py            # 사람이 읽는 전수 히스토그램
-    python3 tools/probe_id3.py --emit     # 정본의 counts를 갈아 넣는다
+    cd core && uv run python ../tools/probe_id3.py          # 사람이 읽는 전수
+    cd core && uv run python ../tools/probe_id3.py --emit    # 정본의 counts를 갈아 넣는다
+
+**맨 `python3`로는 안 돈다** — `mutagen`이 프로젝트 묶음에 있다. 작성자가 독스트링에
+맨 `python3`를 적었고 **사용자가 그 줄을 그대로 쳐서 터졌다** (D-0367). 이제
+`check_args`가 그 갈림을 막는다.
+
+**경로는 `.env`가 진다.** `HATHOR_LIBRARY_ROOT` 한 줄이고 셸에 치지 않는다 (D-0066) —
+없으면 **막는다.** 예전엔 `/mnt/d/노래/노래`를 코드에 박아 두고 조용히 그것을 봤고,
+드라이브 글자가 바뀌자 *«경로 없음»*만 찍혔다.
 
 **기기에서만 돈다** — 1004곡 원본이 필요하고 오디오는 기기를 떠나지 않는다 (D-0015).
 """
@@ -13,13 +21,17 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import unicodedata
 from collections import Counter
 from pathlib import Path
 
-from mutagen.id3 import ID3, ID3NoHeaderError
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "core"))
+
+from mutagen.id3 import ID3, ID3NoHeaderError  # noqa: E402
+
+from hathor.shared.config.paths import library_root, load_dotenv  # noqa: E402
 
 DATE_FRAMES = ("TDRC", "TDRL", "TDOR", "TYER", "TDAT", "TORY")
 
@@ -28,10 +40,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="ID3 프레임 전수 (D-0366)")
     parser.add_argument("--emit", action="store_true", help="실측 정본의 counts를 다시 쓴다")
     args = parser.parse_args()
-    root = Path(os.environ.get("HATHOR_LIBRARY_ROOT", "/mnt/d/노래/노래"))
+    # **정본 해결기를 쓴다** (D-0367 · D-0066). 제 손으로 환경변수를 읽으면 `.env`가
+    # 안 읽히고, 기본값을 박으면 **드라이브가 바뀌어도 조용히 그것을 본다.**
+    load_dotenv()
+    root = library_root()
+    if root is None:
+        print(
+            "`HATHOR_LIBRARY_ROOT`가 없다. `.env`에 한 줄 적는다 (`make setup`) — "
+            "셸에 치지 않는다 (D-0066)",
+            file=sys.stderr,
+        )
+        return 2
     if not root.is_dir():
-        print(f"경로 없음: {root}")
-        return 1
+        print(f"라이브러리가 없다: {root} — 드라이브가 안 붙었거나 경로가 틀렸다", file=sys.stderr)
+        return 2
 
     files = sorted(p for p in root.rglob("*.mp3") if p.is_file())
     frame_counter: Counter[str] = Counter()

@@ -67,6 +67,7 @@ WIDENS = ("SKIP", "ALLOW", "IGNORE", "EXCLUDE")
 PINNED = {
     "build_proposal.TBL_PR_ORDER": 17,
     "check_args.FLOOR": 4,
+    "check_args.OWN_ENV_ALLOWED": 2,
     "check_args.SKIP_FLAGS": 1,
     "check_artifacts.REQUIRED": 6,
     "check_artifacts.TRANSIENT_ALLOWED": 1,

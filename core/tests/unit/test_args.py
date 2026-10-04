@@ -343,3 +343,108 @@ def test_디렉터리_검사가_배선돼_있다(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(CHECKER, "check_workflow_dirs", lambda: ["심은 것"])
 
     assert "심은 것" in cast("list[str]", CHECKER.check())
+
+
+def test_묶음이_필요한_도구는_uv_run으로_적는다() -> None:
+    """**사용자가 그 줄을 그대로 쳤고 터졌다** (D-0367).
+
+    `probe_id3.py`의 독스트링이 `python3 tools/probe_id3.py --emit`이라 적고 있었고
+    `mutagen`은 프로젝트 묶음에 있다 — 그의 터미널에서 `ModuleNotFoundError`가 났다.
+    작성자는 제 컨테이너에서 `uv run`으로 돌려 보고 **그 차이를 안 적었다.**
+
+    `check_usage`는 쓰임새의 `make` 타깃이 실재하는지만 봤다 — *«그 인터프리터가
+    임포트를 할 수 있는지»*는 아무도 안 봤다.
+    """
+    assert CHECKER.check_venv_usage() == []
+
+
+def test_늦게_들여오는_것은_안_센다() -> None:
+    """**`--dry-run`은 맨 `python3`로 정말 돈다** — 그것을 세면 거짓 경보다 (GR-0.8)."""
+    local = frozenset({"측정"})
+    import ast as _ast
+
+    late = _ast.parse("def go():\n    import mlflow\n    return mlflow\n")
+    top = _ast.parse("import mlflow\n")
+
+    assert CHECKER.top_level_third_party(late, local) == set()
+    assert CHECKER.top_level_third_party(top, local) == {"mlflow"}
+
+
+def test_표준_라이브러리를_바깥_묶음으로_안_센다() -> None:
+    """**`sys`가 들고 있다** — 손으로 적으면 파이썬 판마다 어긋난다."""
+    import ast as _ast
+
+    tree = _ast.parse("import tomllib\nimport argparse\nfrom pathlib import Path\n")
+
+    assert CHECKER.top_level_third_party(tree, frozenset()) == set()
+    assert "tomllib" in CHECKER.STDLIB
+
+
+def test_환경변수를_제_손으로_읽는_자리가_선언과_같다() -> None:
+    """**정본 해결기를 건너뛰면 `.env`가 안 읽힌다** (D-0367 · D-0066).
+
+    `probe_id3`가 세 번째였고 `.env`를 **아예 안 읽었다** — 그가 `.env`에 경로를
+    적어도 아무 일도 안 일어났을 것이다. `paths.py`가 적어 둔 네 아픔 중 셋째가
+    그대로 재발했다.
+    """
+    assert CHECKER.check_own_env() == []
+    assert set(CHECKER.OWN_ENV_ALLOWED) == {"sync_artifacts", "tidy"}
+
+
+def test_상수를_거쳐_읽는_것도_센다() -> None:
+    """**첫 자가 둘을 못 봤다.** `os.environ.get(STORE_ENV)`는 글자가 아니다.
+
+    허락 목록에 둘을 넣어 둔 채 자가 둘을 못 보면 **「좋아졌으니 허락을 빼라」가
+    거짓으로 뜬다** — 실제로 그렇게 떴다.
+    """
+    assert CHECKER.ENV_LITERAL.search('os.environ.get("HATHOR_LIBRARY_ROOT")')
+    assert not CHECKER.ENV_LITERAL.search("os.environ.get(STORE_ENV)")
+    assert CHECKER.ENV_NAME.search('STORE_ENV = "HATHOR_ARTIFACT_STORE"')
+
+
+def test_허락이_비어_가는_것도_잡는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**양방향이다** (D-0363). 안 읽게 됐으면 허락을 빼야 한다."""
+    monkeypatch.setattr(CHECKER, "OWN_ENV_ALLOWED", ("tidy",))
+    said = CHECKER.check_own_env()
+    assert len(said) == 1 and "sync_artifacts" in said[0]
+
+    monkeypatch.setattr(CHECKER, "OWN_ENV_ALLOWED", ("sync_artifacts", "tidy", "없는도구"))
+    said = CHECKER.check_own_env()
+    assert len(said) == 1 and "없는도구" in said[0]
+
+
+def test_라이브러리_경로가_없으면_막는다() -> None:
+    """`probe_id3`가 **기본값을 안 든다** (D-0367).
+
+    예전엔 `/mnt/d/노래/노래`를 박아 두고 조용히 그것을 봤다. 드라이브 글자가 D에서
+    F로 바뀌자 *«경로 없음»*만 찍혔고 **어디를 봐야 하는지는 안 적혔다.**
+    """
+    import ast as _ast
+
+    probe = (ROOT / "tools" / "probe_id3.py").read_text(encoding="utf-8")
+    tree = _ast.parse(probe)
+    # **산문과 코드를 가른다.** 이 도구의 독스트링이 옛 경로를 인용하고, 그것을
+    # 「박혔다」로 세면 거짓 경보다 (GR-0.8 · D-0361의 `doc_fsck: ok`와 같은 자리).
+    planted = [
+        node.value
+        for node in _ast.walk(tree)
+        if isinstance(node, _ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.startswith("/mnt/")
+    ]
+
+    assert planted == [], f"기기 경로가 코드에 박혔다: {planted}"
+    assert "load_dotenv()" in probe and "library_root()" in probe
+    assert "`make setup`" in probe, "어디에 적는지를 화면에 안 적는다"
+
+
+@pytest.mark.parametrize("part", ["check_venv_usage", "check_own_env"])
+def test_새_검사_둘이_check에_배선돼_있다(part: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**부품은 재고 배선은 안 쟀다** (D-0359). 위의 시험들은 그 함수를 직접 부른다.
+
+    D-0365가 같은 자리를 겪었다 — 새 함수를 입구에 걸 때 그것을 기억하는 것이 사람
+    몫이고, **나는 두 판 연속 잊었다.**
+    """
+    monkeypatch.setattr(CHECKER, part, lambda: ["심은 문제"])
+
+    assert "심은 문제" in CHECKER.check()

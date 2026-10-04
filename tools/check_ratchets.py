@@ -346,6 +346,7 @@ BASELINE: dict[str, int] = {
     "check_args.FLOOR[도구 호출]": 40,
     "check_args.FLOOR[바깥 파일]": 10,
     "check_args.FLOOR[쓰임새 주석]": 10,
+    "check_args.OWN_ENV_ALLOWED": 2,
     "check_artifacts.QUARANTINE_CEILING": 0,
     "check_artifacts.TRANSIENT_ALLOWED": 1,
     "check_artifacts.UNDER_STUDY_ALLOWED": 1,

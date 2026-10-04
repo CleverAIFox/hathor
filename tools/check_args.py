@@ -138,6 +138,109 @@ USAGE = re.compile(r"(?m)^#\s+make ([a-z][a-z0-9-]*)([^\n]*)")
 """
 
 
+DOC_RUN = re.compile(r"(?m)^\s{4}(python3?) (\S+\.py)([^\n]*)$")
+"""도구 독스트링의 **쓰임새 명령 줄**. 사람이 그대로 치는 줄이다 (D-0367)."""
+
+VENV_FREE = 0
+"""맨 `python3`로 적어 두고 **묶음이 없으면 못 도는** 도구의 천장 (D-0367).
+
+### 사용자가 그 줄을 그대로 쳤고 터졌다
+
+`probe_id3.py`의 독스트링이 `python3 tools/probe_id3.py --emit`이라 적고 있었다.
+`mutagen`은 프로젝트 묶음에 있고 맨 `python3`에는 없다 — **`ModuleNotFoundError`가
+그의 터미널에서 났다.** 작성자는 제 컨테이너에서 `uv run`으로 돌려 보고 그 차이를
+독스트링에 안 적었다.
+
+`check_usage`는 쓰임새 주석의 **`make` 타깃이 실재하는지**만 봤다 — *«그 인터프리터가
+임포트를 할 수 있는지»*는 아무도 안 봤다. **0이 못이다.**
+
+**최상위 임포트만 센다.** `mlflow_sync --dry-run`·`prefect_flow --plan`은 묶음을
+늦게 들여오므로 맨 `python3`로 정말 돈다 — 그 둘을 세면 거짓 경보다 (GR-0.8).
+"""
+
+OWN_ENV_ALLOWED = ("sync_artifacts", "tidy")
+"""`HATHOR_*`를 **제 손으로** 읽어도 되는 도구 — 수가 아니라 이름이다 (D-0367 · D-0363).
+
+정본 해결기는 `hathor.shared.config.paths`다 — `.env`를 읽고 셸 값을 덮지 않는다
+(D-0066). 도구가 제 손으로 `os.environ`을 보면 **`.env`가 안 읽힌다.**
+
+둘은 사유가 있다: **맨 `python3`로 돌아야 해서** `hathor`를 못 들여온다 (D-0256과 같은
+자리 — `tomllib`은 표준이라 괜찮지만 `hathor`는 설치가 필요하다). 그래서 각자 작은
+`.env` 독자를 든다.
+
+`probe_id3`가 세 번째였고 **`.env`를 아예 안 읽었다.** 그가 `.env`에 경로를 적어도
+아무 일도 안 일어났을 것이다 — `paths.py` 독스트링이 적어 둔 네 아픔 중 셋째가
+**그대로 재발했다.** `uv run`으로 도는 도구이므로 정본 해결기를 쓰게 고쳤다.
+"""
+
+STDLIB = frozenset(sys.stdlib_module_names)
+"""표준 라이브러리. **`sys`가 들고 있다** — 손으로 적으면 파이썬 판마다 어긋난다."""
+
+
+def top_level_third_party(tree: ast.Module, local: frozenset[str]) -> set[str]:
+    """그 모듈이 **최상위에서** 들여오는 바깥 묶음."""
+    found: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            found |= {one.name.split(".")[0] for one in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            found.add(node.module.split(".")[0])
+    return found - STDLIB - local - {"__future__"}
+
+
+ENV_NAME = re.compile(r'(?m)^[A-Z_]+ = "(HATHOR_[A-Z_]+)"')
+"""도구가 **제 이름으로** 든 `HATHOR_*` 상수. 상수를 거쳐 읽는 자리를 잡는다.
+
+첫 자는 `os.environ.get("HATHOR_…")` **글자 그대로**만 찾았고 **`sync_artifacts`도
+`tidy`도 못 봤다** — 둘은 `os.environ.get(STORE_ENV)`처럼 상수를 거친다. 둘을 허락
+목록에 넣어 둔 채 자가 둘을 못 보면 **「좋아졌으니 허락을 빼라」가 거짓으로 뜬다.**
+"""
+
+ENV_LITERAL = re.compile(r'os\.(?:environ(?:\.get)?[(\[]|getenv\()\s*"(HATHOR_[A-Z_]+)"')
+"""글자 그대로 읽는 자리. 상수를 안 두고 바로 읽는 쪽이다 — `probe_id3`가 그랬다."""
+
+
+def check_own_env() -> list[str]:
+    """정본 해결기를 건너뛰고 환경변수를 직접 읽는 자리 (D-0367). **양방향이다.**"""
+    seen = set()
+    for path in sorted((ROOT / "tools").glob("*.py")):
+        body = path.read_text(encoding="utf-8")
+        if ENV_LITERAL.search(body) or (ENV_NAME.search(body) and "os.environ" in body):
+            seen.add(path.stem)
+    extra = sorted(seen - set(OWN_ENV_ALLOWED))
+    gone = sorted(set(OWN_ENV_ALLOWED) - seen)
+    return [
+        f"tools/{name}.py가 `HATHOR_*`를 제 손으로 읽는다 — `.env`가 안 읽힌다. "
+        f"`hathor.shared.config.paths`를 쓰거나 `OWN_ENV_ALLOWED`에 사유와 함께 적는다 "
+        f"(D-0367 · D-0066)"
+        for name in extra
+    ] + [
+        f"`OWN_ENV_ALLOWED`의 {name}이 더 이상 환경변수를 직접 안 읽는다. "
+        f"**좋아졌으면 박는다** — 허락을 빼지 않으면 비어 있는 허가증이다 (D-0363)"
+        for name in gone
+    ]
+
+
+def check_venv_usage() -> list[str]:
+    """바깥 묶음을 쓰는 도구가 맨 `python3`로 쓰임새를 적었나 (D-0367)."""
+    tools = sorted((ROOT / "tools").glob("*.py"))
+    local = frozenset({one.stem for one in tools} | {"hathor", "tests"})
+    problems: list[str] = []
+    for path in tools:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        third = top_level_third_party(tree, local)
+        if not third:
+            continue
+        doc = ast.get_docstring(tree) or ""
+        for found in DOC_RUN.finditer(doc):
+            problems.append(
+                f"tools/{path.name}: 쓰임새가 `{found.group(1)} {found.group(2)}`인데 "
+                f"{sorted(third)}를 최상위에서 들여온다 — 묶음이 없으면 못 돈다. "
+                f"`cd core && uv run python ../{found.group(2)}`로 적는다 (D-0367)"
+            )
+    return problems
+
+
 def recipes(text: str) -> dict[str, list[str]]:
     """타깃 → 그 레시피 줄들. **들여쓴 줄만 센다.**"""
     found: dict[str, list[str]] = {}
@@ -412,6 +515,7 @@ def check() -> list[str]:
         problems += check_any_calls(text, where)
         problems += check_make_calls(text, where, made)
         problems += check_usage(text, where, made)
+    problems += check_venv_usage() + check_own_env()
     return problems + check_passthrough(make) + check_advice() + check_workflow_dirs()
 
 
