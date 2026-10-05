@@ -210,23 +210,36 @@ def test_세_곳에_다_걸려_있다(where: str) -> None:
     assert "tools/check_patch.py" in (ROOT / where).read_text(encoding="utf-8")
 
 
-def test_CI가_부모를_받는다() -> None:
-    """**얕은 클론에서는 뽑아 볼 수 없다.** 검사를 약하게 하는 대신 깊이를 올렸다."""
-    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+@pytest.mark.parametrize("name", ["ci.yml", "wiring.yml"])
+def test_CI가_부모를_받는다(name: str) -> None:
+    """**얕은 클론에서는 뽑아 볼 수 없다.** 검사를 약하게 하는 대신 깊이를 올렸다.
+
+    `wiring.yml`도 같이 본다 (D-0369). 그 잡만 깊이를 안 줘서 **같은 시험이 다른
+    판정을 냈다** — 배선 둘이 CI에서만 「안 울었다」였다. 재는 환경이 갈리면 못이
+    가리키는 수가 둘이 된다 (D-0043).
+    """
+    workflow = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
     first = workflow.index("- uses: actions/checkout@v7")
 
-    assert "fetch-depth: 2" in workflow[first : first + 120]
+    assert "fetch-depth: 2" in workflow[first : first + 320], name
 
 
 # ------------------------------------------------------------------ 배선 (심은 결함)
 
 
 @pytest.mark.parametrize("part", ["check_heads", "check_floor", "pull_once"])
-def test_부품이_main에_배선돼_있다(part: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_부품이_main에_배선돼_있다(
+    part: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """**부품을 재고 배선을 안 쟀다** (D-0352).
 
     심은 결함으로 재니 `main()`에서 `check_heads()`와 `pull_once()`를 빼도 아무 시험이
     안 울었다 — 시험이 그 함수를 **직접** 부르고 있었다. 여기는 `main()`을 거친다.
+
+    **종료코드만 보면 안 된다** (D-0369). 첫 판은 `main() == 1`만 봤고, 얕은 클론에서는
+    `pull_once()`가 **제 문제로** 1을 내므로 `check_heads()` 호출을 끊어도 1이었다 —
+    CI(`fetch-depth` 없음)에서 이 자리 둘이 **「안 울었다」로 세어졌다.** 심은 글자가
+    **화면에 닿는지**를 보면 깊이와 무관하다.
     """
     # **`has_parent`를 손에 쥔다** — 환경에 묻지 않으면 건너뛸 일이 없다 (D-0353).
     monkeypatch.setattr(CHECKER, "has_parent", lambda: True)
@@ -234,3 +247,4 @@ def test_부품이_main에_배선돼_있다(part: str, monkeypatch: pytest.Monke
     monkeypatch.setattr("sys.argv", ["check_patch.py", "--check"])
 
     assert CHECKER.main() == 1
+    assert "심은 것" in capsys.readouterr().err, "심은 것이 화면에 안 닿았다"

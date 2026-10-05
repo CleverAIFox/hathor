@@ -77,3 +77,51 @@ def test_그림을_제목_자리에_넣는다(tmp_path: Path, monkeypatch: pytes
     placed = BODY.place_figures(body, {"x": picture})
     assert "```" not in placed
     assert placed.count("![") == 2
+
+
+# ------------------------------------------------- 그림 도구의 배선 (D-0369)
+#
+# **D-0369가 배포 잡에 이 둘을 걸면서 「불리는 도구」가 됐다.** 그전에는 아무 사슬에도
+# 없어서 `make mutate WIRING=1`이 안 봤고, `main()`의 배선 한 곳이 비어 있었다.
+# 그리는 일 자체는 graphviz · matplotlib · 글꼴이 있어야 해서 **여기서는 안 그린다**
+# (D-0129) — 그린 수가 **화면까지 닿는지**만 본다.
+
+FIGURE_TOOLS = (("render_figures", "구조도"), ("render_charts", "수치 그림"))
+
+
+@pytest.mark.parametrize(("name", "word"), FIGURE_TOOLS)
+def test_그린_수가_화면에_오른다(
+    name: str,
+    word: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`render_all()` 자리 (D-0369). **0장을 그려도 조용하면 배포가 빈 그림을 올린다.**"""
+    tool = _load(name)
+    monkeypatch.setattr(
+        tool, "render_all", lambda out: {"가": out / "가.png", "나": out / "나.png"}
+    )
+    monkeypatch.setattr("sys.argv", [f"{name}.py", "--out", str(tmp_path)])
+
+    assert tool.main() == 0
+    assert f"{word} 2장" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("name", "_word"), FIGURE_TOOLS)
+def test_낼_곳을_받는다(
+    name: str, _word: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**`--out`이 안 닿으면 배포가 `var/`에 그리고 `_site/`는 빈 채로 올라간다** (D-0369)."""
+    tool = _load(name)
+    seen: list[Path] = []
+
+    def noted(out: Path) -> dict[str, Path]:
+        seen.append(out)
+        return {}
+
+    monkeypatch.setattr(tool, "render_all", noted)
+    monkeypatch.setattr("sys.argv", [f"{name}.py", "--out", str(tmp_path / "낸다")])
+
+    assert tool.main() == 0
+    assert seen == [tmp_path / "낸다"]

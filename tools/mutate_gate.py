@@ -383,9 +383,12 @@ def cut_wiring() -> int:
         print("**천장은 전수로만 판정한다.** `ONLY=` 없이 다시 돌린다.")
         return 0
 
+    # **두 목록을 각자 찍는다** (D-0369). 전에는 `{survived or unaimed}` 하나였고,
+    # 살아남은 자리가 있는 날에는 **겨눔 불명의 이름이 안 찍혔다** — CI가 빨개졌는데
+    # 로그에 이름이 없어 어디가 어긋났는지 손으로 못 봤다 (D-0269).
     print(
-        f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}) · "
-        f"겨눔 불명 {len(unaimed)}곳 (천장 {UNAIMED_CEILING}): {survived or unaimed}"
+        f"\n안 운 배선 {len(survived)}곳 (천장 {WIRING_CEILING}): {survived}\n"
+        f"겨눔 불명 {len(unaimed)}곳 (천장 {UNAIMED_CEILING}): {unaimed}"
     )
     if poisoned:
         # **미리 빨간 시험은 그 자리를 겨눈 시험일 수 있다** (D-0359). 그 시험을 빼고

@@ -111,6 +111,9 @@ jobs:
       - name: Screen script
         working-directory: .
         run: python3 tools/check_script.py --check
+      - name: Workflow paths
+        working-directory: .
+        run: python3 tools/check_workflow_paths.py --check
 
       - name: Doc reality check
         working-directory: .

@@ -58,6 +58,7 @@ docs:          ## 기록 · 표기 · 비밀정보 · 레이아웃 · 실물 대
 	python3 tools/check_model_licenses.py --check
 	python3 tools/render_proposal.py --check
 	python3 tools/check_script.py --check
+	python3 tools/check_workflow_paths.py --check
 	python3 tools/doc_fsck.py --check
 	python3 tools/measured.py --check
 	python3 tools/encoding_check.py --check

@@ -42,7 +42,9 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}proposal.html
+      # `site/index.html`이 `proposal.html`로 넘긴다. 뒤에 경로를 붙이면 배포가
+      # 실패한 날 `page_url`이 비어 **「proposal.html은 http(s) URL이 아니다」**가 뜬다.
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -64,7 +66,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libreoffice-writer fonts-noto-cjk poppler-utils
+            libreoffice-writer fonts-noto-cjk poppler-utils graphviz
       - name: Bake PDF
         # **목차에 쪽 번호를 박는다** (D-0246). 두 판을 굽고 쪽이 밀리지 않았는지 확인한다.
         working-directory: core
@@ -83,11 +85,17 @@ jobs:
       # **화면도 생성물이다** (D-0368). 예전엔 `site/proposal.html`이 PDF를 끼워 보여
       # 주는 34줄이었고 **손으로 쓴 것**이었다 (D-0229). 지금은 docx와 **같은
       # 마크다운**에서 나온다 — 두 벌이 될 자리가 없다.
+      # **그림은 `var/`에 있고 git은 그것을 안 나른다** (D-0369). 복사하려다 CI에서만
+      # 터졌다 — 사본을 옮기는 대신 **같은 정본에서 다시 그린다** (D-0368).
+      - name: Draw figures
+        working-directory: core
+        run: |
+          uv run --no-sync python ../tools/render_figures.py --out ../_site/figures
+          uv run --no-sync python ../tools/render_charts.py --out ../_site/figures
       - name: Stage site
         run: |
           cp site/proposal.html site/index.html _site/
           cp docs/proposal.docx _site/
-          mkdir -p _site/figures && cp var/proposal/figures/*.png _site/figures/
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

@@ -319,6 +319,7 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/deadcheck.py` | 검사가 죽었는가 — 프로브 6종 · 양방향 래칫 |
 | `tools/encoding_check.py` | BOM · CRLF · 비 UTF-8 · 끝 개행 (`--fix`) |
 | `tools/release_notes.py` | 결정 기록에서 태그 · 릴리스 본문 |
+| `tools/check_workflow_paths.py` | 워크플로가 읽는 자리를 git이 나르나 |
 | `tools/proposal_source.py` | 기획서 정본 구간 · 표 읽기 · 지문 |
 | `tools/proposal_body.py` | 기획서 본문 조립 — 정본 + 그림 → 마크다운 |
 | `tools/build_proposal.py` | 기획서 docx 쓰기 (pandoc · python-docx) |

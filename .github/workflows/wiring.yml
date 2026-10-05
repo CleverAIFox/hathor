@@ -28,7 +28,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
+      # **`ci.yml`과 같은 깊이를 받는다** (D-0369). 여기만 얕았고, 얕은 클론에서는
+      # `check_patch`의 `pull_once()`가 제 문제로 1을 내 **배선 둘이 「안 울었다」로
+      # 세어졌다.** 재는 환경이 다르면 **같은 저장소에서 다른 수가 나온다.**
       - uses: actions/checkout@v7
+        with: { fetch-depth: 2 }
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"

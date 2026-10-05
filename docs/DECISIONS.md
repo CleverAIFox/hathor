@@ -28980,6 +28980,9 @@ D-0351은 *"나간 350판에는 머리가 없고 소급해 넣지 않는다"*고
     `core/tests/unit/test_patch_gate.py::test_부품이_main에_배선돼_있다`
     `core/tests/unit/test_patch_gate.py::test_얕은_클론을_통과로_안_적는다`
     `core/tests/unit/test_patch_gate.py::test_CI가_부모를_받는다`
+    `core/tests/unit/test_workflow_paths.py::test_목록이_읽는_자리와_만드는_자리를_찍는다`
+    `core/tests/unit/test_proposal_build.py::test_그린_수가_화면에_오른다`
+    `core/tests/unit/test_proposal_build.py::test_낼_곳을_받는다`
     `core/tests/unit/test_ratchets.py::test_사라진_못은_늘_느슨하다`
     `core/tests/unit/test_ratchets.py::test_강제_시작이_오르면_느슨하다`
     `core/tests/unit/test_ratchets.py::test_내려_박으려면_기록이_같은_변경에_있어야_한다`
@@ -30433,3 +30436,149 @@ pandoc · python-docx가 있어야 돈다. 그 선에서 갈랐다: `proposal_bo
       흡수 전후 시험 11 → 18 · 사라진 강제자 3건(`check_decisions`가 잡음) ·
       내 거짓 주장 1건 · 상한 초과 1건(616 → 443 + 200) ·
       **배선 전수 2판(안 운 자리 9 → 0 · 겨눔 불명 4 → 0)** · 심은 결함 5건
+
+---
+
+## D-0369. 두 곳에서 재니 수가 달랐다 — **관문이 도는 곳은 CI인데 나는 내 컨테이너에서 쟀다**
+
+> **갱신**: D-0368 — 그 판이 배포에 `cp var/...`를 심었고 **로컬에서는 안 보였다.**
+> D-0362 — `wiring.yml`을 만들며 `fetch-depth`를 안 줬다. D-0352 — 그때 붙인 배선
+> 시험이 **종료코드만** 봤다. D-0257 — 내가 못을 **한 환경의 실측으로** 박았다.
+
+- **배경**: D-0368을 올린 뒤 `make ship`이 **CI 빨강 `wiring`**을 들었고, 사용자가
+  배포 화면도 보냈다 — `deploy` 빨강 · *«Environment URL 'proposal.html' is not a valid
+  http(s) URL»* 경고. **내 기기에서는 셋 다 초록이었다.**
+
+### 하나. 배포는 내가 심었다 — `var/`는 git이 안 나른다
+
+D-0368의 `Stage site`가 이렇게 끝났다:
+
+```text
+mkdir -p _site/figures && cp var/proposal/figures/*.png _site/figures/
+```
+
+`var/`는 `.gitignore` 19행이다. **내 기기에는 그림 28장이 있고 러너에는 없다.**
+`make check`은 그 줄을 안 보고, 로컬에서는 영원히 초록이다.
+
+고친 꼴: **복사하지 않고 같은 정본에서 다시 그린다.** `render_figures.py` ·
+`render_charts.py`에 `--out ../_site/figures`를 준다. apt에 `graphviz`를 더했다 —
+그것이 없으면 `render_figures`가 *«graphviz가 없다»*로 막는다. D-0368이 적은 그 문장이
+여기도 그대로다: **사본을 옮기는 것보다 다시 만드는 것이 싸다.**
+
+### 둘. 얕은 클론이 배선 둘을 「안 울었다」로 만들었다
+
+| 재는 곳 | `check_patch:check_heads` · `check_floor` |
+|---|---|
+| 내 컨테이너 (전체 이력 146판) | **울었다** |
+| CI `wiring.yml` (`fetch-depth` 없음 = 1) | **안 울었다** |
+
+까닭은 시험 하나다. `test_부품이_main에_배선돼_있다`는 `has_parent`를 `True`로 쥐고
+`check_heads`를 심은 값으로 바꾼 뒤 **`main() == 1`만** 봤다. 얕은 클론에서는
+`pull_once()`가 **제 문제로** 1을 낸다 — 그래서 `check_heads()` 호출을 끊어도 1이고,
+시험은 통과하고, 쓸기는 **「안 울었다」**로 센다.
+
+**종료코드는 누가 울렸는지 안 알려 준다.** 고친 꼴: **심은 글자가 화면에 닿는지**를
+본다. 깊이와 무관해진다.
+
+그리고 **환경을 맞췄다** — `wiring.yml`에 `fetch-depth: 2`. `ci.yml`은 D-0222부터
+그것을 받고 있었고 **거기만 빠져 있었다.** `test_CI가_부모를_받는다`가 이제 워크플로
+둘을 본다.
+
+### 셋. 로그에 이름이 안 찍혀 손으로 못 봤다
+
+쓸기의 판정 줄이 이랬다:
+
+```text
+안 운 배선 2곳 (천장 0) · 겨눔 불명 3곳 (천장 3): ['check_patch:check_floor', ...]
+```
+
+`{survived or unaimed}` 하나였다 — **살아남은 자리가 있는 날에는 겨눔 불명의 이름이
+안 찍힌다.** CI가 「겨눔 불명 3곳」이라 했는데 그 셋이 무엇인지 로그에 없었다. 둘을
+각자 찍는다 (D-0269).
+
+**이것 때문에 못을 잘못 박았다.** D-0368에서 내 전수가 겨눔 불명 1을 냈고 `UNAIMED_CEILING`을
+1로 내렸다 — **같은 날 CI는 3이었다.** 수가 다른 줄을 몰랐다. 1을 **그대로 둔다**:
+깊이를 맞췄으니 두 곳이 같은 수를 내야 하고, 아니면 **다음 밤 전수가 그것을 든다.**
+이제 이름이 찍히므로 그때는 손으로 볼 수 있다.
+
+### 넷. 유병률을 쟀다 — 워크플로가 읽는 안 날아가는 자리
+
+| 자 | 수 |
+|---|---|
+| `.gitignore`가 덮는 최상위 | **16개** |
+| 워크플로 | 6개 |
+| 덮인 자리를 읽는 잡 | **1개** (`proposal.yml:deploy`) |
+| 그중 **같은 잡이 만들지 않는 것** | 고치기 전 **1곳** · 고친 뒤 **0곳** |
+
+`_site/`도 덮이지만 **그 잡이 짓고 그 잡이 읽는다** — 그것을 세면 거짓 경보다
+(GR-0.8). 그래서 **같은 잡이 만드는가**를 같이 본다. 잡이 다르면 안 센다 —
+**잡이 다르면 러너가 다르고 디스크가 다르다.**
+
+### 다섯. 사슬에 걸자 **도구 둘이 처음으로 재어졌다** — 그리고 배선이 비어 있었다
+
+배포 잡에 `render_figures` · `render_charts`를 걸었더니 `invoked_tools()`가 **39 →
+42개**가 됐다. 그 둘은 **어느 사슬에도 없어서** 쓸기가 한 번도 안 봤고, 재 보니
+`main()`의 `render_all()` 자리가 **안 울었다.** 0장을 그려도 조용했다 — 배포가 **빈
+`_site/figures`를 올려도** 아무도 안 운다는 뜻이다.
+
+내 새 도구도 넷이 비어 있었다. 전부 **`--list` 길**이다 — `check()`를 거는 시험만
+있었고 `--list`는 아무도 안 밟았다. **D-0368과 같은 모양이고 같은 판에서 또 했다.**
+
+| 쓸기 | 안 운 배선 | 겨눔 불명 |
+|---|---|---|
+| 고치기 전 | **6곳** (`check_workflow_paths` 4 · 그림 도구 2) | 4곳 |
+| 고친 뒤 (세 도구 부분 측정) | **0곳** | **0곳** |
+
+**새 판정 줄이 바로 값을 했다.** 겨눔 불명의 이름이 찍히므로 셋이 무엇인지 그 자리에서
+보였다 — 전에는 수만 있었다.
+
+### 여섯. 경고 하나는 결과였다
+
+*«Environment URL 'proposal.html' is not a valid http(s) URL»* — `environment.url`이
+`${{ steps.deployment.outputs.page_url }}proposal.html`이었고, 배포 스텝이 **그 앞에서
+죽어** `page_url`이 비었다. 원인이 아니라 **결과다.** 그래도 고쳤다 —
+`site/index.html`이 `proposal.html`로 넘기므로 뒤를 붙일 까닭이 없다. 이 줄은
+D-0222부터 있었다.
+
+- **결과**:
+  - `.github/workflows/proposal.yml` — `var/` 복사를 지우고 **`_site/figures`에 다시
+    그린다.** apt에 `graphviz`. `environment.url`은 `page_url` 하나.
+  - `.github/workflows/wiring.yml` — `fetch-depth: 2`. `ci.yml`과 같은 깊이다.
+  - `tools/check_workflow_paths.py` — **워크플로가 git이 안 나르는 자리를 읽나.**
+    `FLOOR_ROOTS = 5`(실측 16). 세 사슬에 걸었다.
+  - `test_부품이_main에_배선돼_있다`가 **심은 글자가 화면에 닿는지** 본다.
+  - `test_CI가_부모를_받는다`가 `ci.yml` · `wiring.yml` **둘을** 본다.
+  - `mutate_gate`가 **안 운 자리와 겨눔 불명을 각자** 찍는다.
+  - `test_proposal_build.py`에 그림 도구 둘의 배선 시험 넷. 그리지는 않는다 (D-0129).
+  - `test_workflow_paths.py`에 `--list` 길과 `reads`/`writes`/`covered` 시험.
+
+- **남기는 것**:
+  - **CI와 로컬이 또 어디서 갈리는지는 안 쟀다.** 이 판은 두 자리(얕은 클론 · 안
+    날아가는 경로)를 막았을 뿐이고, **환경 차이를 전수로 세는 자는 없다.**
+  - `UNAIMED_CEILING = 1`은 **한 환경의 실측이다.** 다음 밤 전수가 두 번째 측정이다.
+  - 쓸기는 **`make check`에 없다** — 25분이라 넣으면 사람이 끈다 (D-0129). 그래서
+    이 부류는 **하루 늦게 발견된다.**
+  - 배포 잡이 그림을 다시 그리므로 **배포가 1~2분 길어진다.** 안 쟀다.
+  - PLAN 열린 질문 29 · 그의 기기에서만 되는 셋.
+
+재현
+    python3 tools/check_workflow_paths.py --check
+    python3 tools/check_workflow_paths.py --list
+    cd core && uv run pytest tests/unit/test_workflow_paths.py tests/unit/test_patch_gate.py -q
+    WIRING=1 ONLY="check_patch" python3 tools/mutate_gate.py
+
+강제자
+    `core/tests/unit/test_workflow_paths.py::test_안_날아가는_자리를_읽으면_운다`
+    `core/tests/unit/test_workflow_paths.py::test_같은_잡이_만들면_통과한다`
+    `core/tests/unit/test_workflow_paths.py::test_다른_잡이_만든_것은_안_센다`
+    `core/tests/unit/test_workflow_paths.py::test_세_곳에_다_걸려_있다`
+    `core/tests/unit/test_patch_gate.py::test_부품이_main에_배선돼_있다`
+    `core/tests/unit/test_patch_gate.py::test_CI가_부모를_받는다`
+    `core/tests/unit/test_workflow_paths.py::test_목록이_읽는_자리와_만드는_자리를_찍는다`
+    `core/tests/unit/test_proposal_build.py::test_그린_수가_화면에_오른다`
+    `core/tests/unit/test_proposal_build.py::test_낼_곳을_받는다`
+
+자료  실물 이 저장소 — CI 실행 2건(`wiring` 30m57s · `proposal` deploy) ·
+      워크플로 전수 6개(덮인 자리를 읽는 잡 1 → 0) · `.gitignore` 최상위 16개 ·
+      같은 배선을 두 환경에서 잰 2판(울었다 ↔ 안 울었다) · 심은 결함 5건 ·
+      **배선 전수 2판(안 운 자리 6 → 0 · 불리는 도구 39 → 42)**
