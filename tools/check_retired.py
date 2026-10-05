@@ -7,8 +7,9 @@ D-0189가 색인을 없애며 *"같은 목록이 두 곳에 사는 구조"*라 �
 뒤에도** 「부록 A. 결정 기록 색인」을 들고 *"`docs/DECISIONS.md`가 자기 색인을 든다"*고
 적고 있었다. `make check` 목록에도 「색인 일치」가 남아 **없는 검사를 광고했다.**
 
-`docx_check.RETIRED`가 **같은 일을 기획서에만** 하고 있었다. 기획서는 `MASTER` Part
-I ~ III에서 빌드되므로 **그 밖의 자리는 아무도 안 봤다.**
+그때 `docx_check.RETIRED`(D-0368에 `render_proposal`로 흡수)가 **같은 일을 기획서에만**
+하고 있었다. 기획서는 `MASTER` Part I ~ III에서 빌드되므로 **그 밖의 자리는 아무도
+안 봤다.**
 
 ### 왜 따로 사나
 
@@ -23,7 +24,7 @@ I ~ III에서 빌드되므로 **그 밖의 자리는 아무도 안 봤다.**
 기각했다"*고 적었고 여기도 같다: **번호가 붙어 있으면 이력을 따라갈 수 있다.**
 
 과거 축(`docs/DECISIONS.md`)은 **안 본다** — 그때는 살아 있던 말이고 소급 수정이
-금지다 (D-0081). 기획서는 `docx_check`가 제 목록으로 본다.
+금지다 (D-0081). 기획서는 `render_proposal`이 제 목록으로 본다 (D-0368에 흡수).
 
     python3 tools/check_retired.py            # 검사한다
     python3 tools/check_retired.py --list     # 지운 말을 찍는다
@@ -48,7 +49,7 @@ RETIRED_WORDS: tuple[tuple[str, str, str], ...] = (
     ("전체 색인", "D-0189", "같은 목록이 두 곳에 살면 반드시 어긋난다"),
     ("자기 색인", "D-0189", "같은 목록이 두 곳에 살면 반드시 어긋난다"),
     ("색인 일치", "D-0189", "그런 검사가 없다"),
-    # deadcheck: ok 없어야 할 말이라 실물이 없는 것이 맞다 (`docx_check.RETIRED`와 같다)
+    # deadcheck: ok 없어야 할 말이라 실물이 없는 것이 맞다 (그때 `docx_check.RETIRED`와 같다)
     ("docs/archive", "D-0186", "보관소를 없앴다"),
     # deadcheck: ok 같음
     ("docs/DESIGN.md", "D-0189", "`docs/MASTER.md`가 흡수했다"),
@@ -65,8 +66,9 @@ D-0189가 색인을 없애며 *"같은 목록이 두 곳에 사는 구조"*라 �
 **160판 뒤에도** 「부록 A. 결정 기록 색인」을 들고 *"`docs/DECISIONS.md`가 자기 색인을
 든다"*고 적고 있었다. `make check` 목록에도 「색인 일치」가 남아 **없는 검사를 광고했다.**
 
-`docx_check.RETIRED`가 **같은 일을 기획서에만** 하고 있었다. 기획서는 `MASTER` Part
-I ~ III에서 빌드되므로 **그 밖의 자리는 아무도 안 봤다.**
+그때 `docx_check.RETIRED`(D-0368에 `render_proposal`로 흡수)가 **같은 일을 기획서에만**
+하고 있었다. 기획서는 `MASTER` Part I ~ III에서 빌드되므로 **그 밖의 자리는 아무도
+안 봤다.**
 
 ### 지운 말을 「지웠다」고 쓰는 것은 정상이다
 

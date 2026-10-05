@@ -1,7 +1,7 @@
 """**부품은 재고 배선은 안 쟀다** — 한 곳씩 남은 것들 (D-0359).
 
 `bake_proposal` · `build_proposal` · `check_decisions` · `check_doc_style` ·
-`check_model_licenses` · `check_patch` · `check_secrets` · `docx_check` · `var_fsck`.
+`check_model_licenses` · `check_patch` · `check_secrets` · `render_proposal` · `var_fsck`.
 
 **한 곳이라 가볍게 보이지만 그 한 곳이 입구다.** 끊으면 도구가 통째로 조용해진다.
 """
@@ -21,7 +21,7 @@ STYLE = tool_module("check_doc_style")
 LICENSES = tool_module("check_model_licenses")
 PATCH = tool_module("check_patch")
 SECRETS = tool_module("check_secrets")
-DOCX = tool_module("docx_check")
+RENDER = tool_module("render_proposal")
 VAR = tool_module("var_fsck")
 
 PLANTED = "심은 문제"
@@ -130,13 +130,16 @@ def test_비밀정보_검사가_추적_목록을_거친다(
 def test_정본_대조_건수가_화면에_오른다(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`truths()` 자리 (D-0220). **대조 0건이면 기획서는 아무것과도 안 맞춰진 것이다.**"""
-    monkeypatch.setattr(DOCX, "check", list)
-    monkeypatch.setattr(DOCX, "truths", lambda _: ["가", "나", "다"])
-    monkeypatch.setattr("sys.argv", ["docx_check.py", "--check"])
+    """`truths()` 자리 (D-0220 → D-0368). **대조 0건이면 기획서는 아무것과도 안 맞춰진 것이다.**"""
+    monkeypatch.setattr(RENDER, "check", list)
+    monkeypatch.setattr(RENDER, "truths", lambda: ["가", "나", "다"])
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--check"])
 
-    assert DOCX.main() == 0
-    assert "정본 대조 3건" in _spoke(capsys)
+    assert RENDER.main() == 0
+    spoke = _spoke(capsys)
+    assert "정본 대조 3건" in spoke
+    # `index()` 자리도 같은 줄에 오른다 — 칸 수가 빠지면 화면이 몇 쪽인지 안 적힌다.
+    assert f"칸 {len(dict.fromkeys(RENDER.index().values()))}개" in spoke
 
 
 def test_산출물_판정이_래칫_여부를_그대로_받는다(

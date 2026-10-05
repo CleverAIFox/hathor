@@ -18,6 +18,7 @@ from tests.conftest import tool_module as _tool
 SMOKE = _tool("gpu_smoke")
 STEP0 = _tool("step0_check")
 BUILD = _tool("build_proposal")
+BODY = _tool("proposal_body")
 
 
 # ------------------------------------------------------------------ gpu_smoke
@@ -123,7 +124,7 @@ COVER = """표지 한 줄
 
 def test_표지와_본문을_가른다() -> None:
     """표지 줄은 **문단째로 한 줄에 접힌다** — 표지에서는 줄바꿈이 뜻을 안 가진다."""
-    lines, body = BUILD.split_cover(COVER)
+    lines, body = BODY.split_cover(COVER)
 
     assert lines == ["표지 한 줄 또 한 줄"]
     assert body.startswith("# Part I.")
@@ -132,7 +133,7 @@ def test_표지와_본문을_가른다() -> None:
 
 def test_Part가_없으면_전부_표지가_되지_않는다() -> None:
     """**`partition`은 못 찾으면 조용히 전부를 앞에 넣는다.** 그러면 본문이 사라진다."""
-    lines, body = BUILD.split_cover("제목만 있다\n")
+    lines, body = BODY.split_cover("제목만 있다\n")
 
     assert body == "" or "제목만" in body or lines, "둘 중 하나는 내용을 들어야 한다"
 
@@ -145,4 +146,4 @@ def test_목차를_제목에서_뽑는다() -> None:
 
 def test_가로선을_걷어낸다() -> None:
     """`---`가 남으면 Word에서 **빈 단락이 페이지를 민다.**"""
-    assert "---" not in BUILD.clean("가\n\n---\n\n나\n")
+    assert "---" not in BODY.clean("가\n\n---\n\n나\n")

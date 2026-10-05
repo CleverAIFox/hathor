@@ -249,11 +249,15 @@ def test_배포는_검사를_지난다(name: str) -> None:
 
 
 def test_기획서_배포는_지문을_본다() -> None:
-    assert "tools/docx_check.py" in PAGES.read_text(encoding="utf-8")
+    assert "tools/render_proposal.py" in PAGES.read_text(encoding="utf-8")
 
 
 def test_배포는_정본을_옮기기만_한다() -> None:
-    """**사본을 커밋하지 않는다.** `site/`에 docx나 PDF가 있으면 두 벌이 된다."""
+    """**사본을 커밋하지 않는다.** `site/`에 docx나 PDF가 있으면 두 벌이 된다.
+
+    `site/proposal.html`은 예외다 — 손으로 쓴 사본이 아니라 **재생성해서 바이트로
+    대조하는 생성물**이고, 어긋나면 `render_proposal --check`이 운다 (D-0368).
+    """
     for name in ("proposal.docx", "proposal.pdf"):
         assert not (ROOT / "site" / name).exists()
     viewer = (ROOT / "site" / "proposal.html").read_text(encoding="utf-8")

@@ -18,26 +18,27 @@ ROOT = Path(__file__).resolve().parents[3]
 
 SOURCE = _load("proposal_source")
 BUILD = _load("build_proposal")
+BODY = _load("proposal_body")
 
 
 def test_그림_자리가_전부_정본에_있다() -> None:
     """**제목을 바꾸면 그림이 조용히 빠진다** — 그래서 제목 줄로 건다."""
     # deadcheck: ok `_span`이 제목을 못 찾으면 던진다 — 예외가 판정이다
     lines = SOURCE.source().splitlines()
-    for heading, _name, _caption, _where in BUILD.FIGURES:
-        BUILD._span(lines, heading)
+    for heading, _name, _caption, _where in BODY.FIGURES:
+        BODY._span(lines, heading)
 
 
 def test_바꿀_자리에는_코드_블록이_있다() -> None:
     lines = SOURCE.source().splitlines()
-    for heading, _name, _caption, where in BUILD.FIGURES:
+    for heading, _name, _caption, where in BODY.FIGURES:
         if where == "replace":
-            start, end = BUILD._span(lines, heading)
+            start, end = BODY._span(lines, heading)
             assert any(lines[i].startswith("```") for i in range(start, end)), heading
 
 
 def test_표지와_본문을_가른다() -> None:
-    cover, body = BUILD.split_cover(SOURCE.source())
+    cover, body = BODY.split_cover(SOURCE.source())
     assert cover[0].startswith("## 취향 잠재 표현")
     assert any(line.startswith("**※ 데이터 경계 전제**") for line in cover)
     assert body.startswith("# Part I.")
@@ -72,7 +73,7 @@ def test_그림을_제목_자리에_넣는다(tmp_path: Path, monkeypatch: pytes
     image.new("RGB", (400, 200), "white").save(picture)
     body = "## 가\n\n문단\n\n```text\n그림\n```\n\n## 나\n\n끝\n"
     places = [("## 가", "x", "캡션", "replace"), ("## 나", "x", "둘", "end")]
-    monkeypatch.setattr(BUILD, "FIGURES", places)
-    placed = BUILD.place_figures(body, {"x": picture})
+    monkeypatch.setattr(BODY, "FIGURES", places)
+    placed = BODY.place_figures(body, {"x": picture})
     assert "```" not in placed
     assert placed.count("![") == 2

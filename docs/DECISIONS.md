@@ -17454,9 +17454,9 @@ thoth는 그것을 보고 첫 판에 붙였다. **여기도 첫 판에 붙인다
 - **검사는 사건에 건다.** 매 커밋 움직이는 수에 걸면 검사가 소음이 된다.
 
 재현
-    python3 tools/docx_check.py
+    python3 tools/render_proposal.py --check
 
-강제자  `core/tests/unit/test_docx_check.py::test_저장소_기획서가_정본과_맞는다`
+강제자  `core/tests/unit/test_render_proposal.py::test_화면이_정본과_같다`
 
 자료  실물 문서
 
@@ -17538,9 +17538,9 @@ thoth는 그것을 보고 첫 판에 붙였다. **여기도 첫 판에 붙인다
 - **밖에 내는 문서를 빌드 산출물로 두면 낡는 순간을 기계가 안다.**
 
 재현
-    make proposal && python3 tools/docx_check.py
+    make proposal && python3 tools/render_proposal.py --check
 
-강제자  `core/tests/unit/test_docx_check.py::test_지문이_다르면_낡았다고_말한다`
+강제자  `core/tests/unit/test_render_proposal.py::test_지문이_다르면_낡았다고_말한다`
 
 자료  실물 저장소 문서
 
@@ -26646,7 +26646,7 @@ O-14 자체는 **안 닫는다** — 조건을 하나 치웠을 뿐이다.
     python3 tools/check_issue_mentions.py --check
 
 강제자
-    `core/tests/unit/test_docx_check.py::test_운영_장부는_기획서_밖에_있다`
+    `core/tests/unit/test_render_proposal.py::test_운영_장부는_기획서_밖에_있다`
 
 자료  실물 이 저장소의 기획서 구간
 
@@ -30274,3 +30274,162 @@ D-0367이 났고, 고친 명령으로 **처음 재었다.** 자리를 만든 판
 자료  실물 이 저장소 — 쓰임새 전수 2판(6 → 2 · 자 교정) · 환경변수 독자 전수 2판
       (자 교정 1회) · 심은 결함 4건 · 사용자 기기 실패 2건 ·
       **그의 기기 1004곡 전수 1판(복원값과 전 항목 일치)**
+
+---
+
+## D-0368. 기획서를 화면으로도 낸다 — **틀을 와꾸로 쓰고 생성물을 커밋해 바이트로 맞댄다**
+
+> **뒤집음**: D-0229 — *«뷰어는 브라우저 것을 쓴다»*로 `site/proposal.html`을 **PDF를
+> 끼워 보여 주는 34줄**로 두었다. 사용자가 뒤집었다:
+> *«새로운 리팩 방향 모방해라 그게 트렌드야»* · *«템플릿 만들고 html로 배포해»* ·  <!--voice-ok-->
+> *«그래야 할 수있는 폭이 넓어지는거야»*
+> **갱신**: D-0220 · D-0221 — `docx_check.py`를 지우고 렌더러가 흡수한다.
+> D-0117 — 가르다 상한을 넘겨 `build_proposal`을 둘로 쪼갰다.
+
+- **배경**: 사용자가 fire-lane의 협업 방침을 꾸러미로 보냈다 — *«보면 바로 이해가 될거임
+  백문이불여일견»*. 나는 그 전에 **유병률을 들어 틀을 거절했었다.** 그가 짚었다:  <!--voice-ok-->
+  *«아니 뭔소리야? 너 파이어레인 운영방침 어떻게 배포했는지 모르나»* — 맞다. **집 방침의**  <!--voice-ok-->
+  **일관성에 유병률은 틀린 자다.** 나는 그 방침을 본 적이 없이 기각했다.
+
+### 하나. fire-lane의 네 토막을 그대로 가져왔다
+
+| 토막 | fire-lane | hathor에 옮긴 꼴 |
+|---|---|---|
+| 사본 | *«사본을 대조로 지키는 것보다 사본을 만들지 않는 것이 싸다»* | 손글씨 HTML을 안 둔다 |
+| 와꾸 | 렌더러가 틀을 들고 **칸은 정본 안의 색인표가 정한다** | `site/proposal.template.html` + `MASTER`의 「기획서 화면 색인」 |
+| 대조 | 생성물 HTML을 **커밋하고** `--check`가 재생성과 바이트 비교 | `site/proposal.html` 377줄을 커밋한다 |
+| 도킹 | **양방향** — `index()` · `audit()` · `slots()` | 색인에 없는 절 · 절이 없는 색인 **둘 다** 죽는다 |
+
+### 둘. 서식으로 가르면 조용히 옮겨 간다 — **쟀다**
+
+색인표를 왜 두는가. 제목의 서식(번호 · `□`)만으로 칸을 정하면 되는 것처럼 보인다.
+**22절을 전수로 재 보면 안 된다.**
+
+| 자 | 수 | 무엇이 걸리나 |
+|---|---|---|
+| 번호가 **두 칸에 걸친 것** | **3개** (`1.` `2.` `3.`) | `1. 프로젝트 개요`는 「무엇을 만드나」 · `1. 시스템 아키텍처`는 「어떻게 만드나」 |
+| 번호만으로 못 가르는 절 | **6개 / 22** | 위 셋이 각각 두 번 나온다 |
+| 이어지는 번호 `10·11·12` | 칸 **둘**로 갈린다 | 「무엇을 쟀나」 → 「어디서 도나」 |
+| `□` 표식이 가리키는 칸 | **1개** (6절) | 한 칸만 맞는다 — 나머지 넷은 못 가른다 |
+
+그래서 **칸은 사람이 정본에 적고 코드가 그것을 읽는다.** 서식을 자로 쓰면 절 하나를
+`1.`에서 `2.`로 바꾼 날 **아무 말 없이 다른 칸으로 간다.**
+
+### 셋. 그 결함의 유병률은 **0이다** — 틀은 결함 수리가 아니다
+
+| 자 | 수 |
+|---|---|
+| `MASTER`를 건드린 판 | **137** |
+| 그중 **지문 구간의 2단 절 집합이 바뀐 판** | **0** |
+| 그중 docx를 다시 안 낸 판 | **0** |
+
+**절 뼈대는 한 번도 안 바뀌었다.** `index()`가 막는 「조용한 이동」은 **아직 한 번도
+일어나지 않았다.** 그래도 박은 까닭은 D-0364와 같다 — 유병률 0을 **재고** 수를 못으로
+박는다. 이 판은 **결함 수리가 아니라 집 방침의 일관성**이고, 기록에 그렇게 적는다
+(GR-0.5 · GR-0.8).
+
+### 넷. JS를 썼다 — fire-lane이 안 쓴 까닭이 여기선 사라졌다
+
+fire-lane은 *«스크립트를 보는 검사가 없으므로 검사 밖에서 자란다»*고 적었다. 사용자가
+말했다: *«JS를 써야해 기획서는 훨씬 고도화 문서니까 … 근데 뭐 억지로 쓸필요는 없고»*  <!--voice-ok-->
+
+**관문을 먼저 만들고 썼다.** `check_script.py` — `node --check`로 문법을 재고, 그 글자가
+`site/proposal.html` 안에 **실제로 박혀 있는지** 본다. `node`가 없으면 *«문법 안 쟀다»*로
+찍는다 (GR-0.5). 쓴 것은 두 가지뿐이다 — **절 단위 검색**(`h2`와 그 뒤 형제를 같이 숨겨
+표가 안 깨진다)과 **보는 절을 길잡이에 표시**(`IntersectionObserver`). 89줄이다.
+
+처음엔 `@pytest.mark.skipif(node 없음)`을 달았고 **`deadcheck`의 「건너뛴 시험」이 15에서
+16으로 올랐다.** 건너뛰기를 지우고 **`node`가 없는 길도 시험이 돌게** 고쳤다.
+
+### 다섯. 내가 붙인 시험이 **초록 상태만 확인하고 있었다** — 배선 쓸기가 잡았다
+
+처음 붙인 `check_script` 시험은 `missing() == []` · `embedded() == []`를 확인했다.
+**끊어도 `[]`라서 통과한다.** 전수 쓸기가 **안 운 배선 9곳**을 찍었고 **전부 이 판에서
+내가 만든 자리**였다.
+
+| 자리 | 처음 붙인 시험이 본 것 | 바꾼 것 |
+|---|---|---|
+| `check_script:missing` `embedded` | **초록 상태** (`== []`) | 없는 파일 · 안 박힌 화면을 **심는다** |
+| `check_script:targets` `syntax` | `syntax()`를 직접 불렀다 | `main()`까지 **닿는지** 본다 (판정기는 가짜로) |
+| `render_proposal:short` ×3 | 「없다」·「정본과 다르다」만 | `short()`가 **낸 경로가 글에 있는지** |
+| `render_proposal:truths` | `check() == []` | 제출본을 **비우고** 대조가 도는지 |
+| `render_proposal:build` | `--check` 길만 | `--check` **없는 길**로 파일이 써지는지 |
+
+**초록을 확인하는 시험은 배선을 붙잡지 못한다** — D-0353 · D-0359가 적은 그 교훈을
+**만든 당사자가 같은 판에서 또 범했다.** 고친 뒤 14곳 전부 울고 겨눔 불명 0이다.
+
+고치는 길에 **겨눔**도 적었다 — 「없다」가 아니라 `short()`가 낸 경로를, 「문법이
+깨졌다」 한 줄이 아니라 `targets()`가 든 수만큼을 본다. 전수에서 **겨눔 불명이 3에서
+1로 줄었고** `UNAIMED_CEILING`을 1로 내려 박았다 (D-0257 · D-0360). 남은 하나는
+`check_model_licenses:found_models`로 **이 판과 무관하다.**
+
+### 여섯. 지우자 강제자 셋이 조용히 사라졌다 — **`check_decisions`가 잡았다**
+
+`docx_check.py`(162줄)와 그 시험(162줄 · 시험 11개)을 지웠다. 그러자 D-0220 · D-0221 ·
+**D-0332**의 강제자 줄이 **없는 파일을 가리켰다.** D-0332의 관문은 그렇게 **말없이
+없어질 수 있었다.** `check_decisions`가 그 자리에서 빨개졌고, 시험 셋을
+`test_render_proposal.py`로 되살리고 강제자 · 재현 줄을 **소급해 맞췄다** (GR-0.2).
+
+흡수한 뒤 시험은 **11개 → 18개**다.
+
+### 일곱. 내가 거짓을 하나 말했다
+
+나는 *«운영 장부가 기획서 안에 산다»*고 적었다. **아니다** — D-0332가 이미 밖으로 뺐고
+`test_운영_장부는_기획서_밖에_있다`가 그것을 지키고 있었다. 내가 본 것은 `MASTER:522`의
+**산문 한 줄**이었다. 자리를 만들기 전에 **이미 있는 관문을 먼저 세었어야 했다.**
+
+### 여덟. 가르다 상한을 넘겼고 이음매에서 쪼갰다
+
+화면을 붙이며 `build_proposal.py`가 **616줄**이 되어 `code` 상한 600을 넘었다 (D-0117).
+이음매는 **조립(마크다운)과 쓰기(docx)**다 — 윗동은 표준 라이브러리만 쓰고 아랫동은
+pandoc · python-docx가 있어야 돈다. 그 선에서 갈랐다: `proposal_body.py` 200줄 ·
+`build_proposal.py` 443줄.
+
+**화면은 그 윗동도 안 쓴다.** `render_proposal`은 `proposal_source.source()`를 직접 읽어
+칸으로 가른다 — pandoc이 없는 CI에서 `--check`가 돌아야 하기 때문이다 (D-0256).
+
+- **결과**:
+  - `site/proposal.template.html` 137줄 — 와꾸. CSS 토큰 · 밝음/어둠 · 붙는 길잡이 ·
+    CSS 라디오 탭. 자리 표식 일곱(`{title} {stamp} {slots} {tabs} {toc} {panes} {script}`).
+  - `tools/render_proposal.py` 411줄 — `index()` · `classify()` · `audit()` · `build()` ·
+    `truths()` · `check()`. **맨 `python3`로 돈다.**
+  - `site/proposal.js` 89줄 + `tools/check_script.py` 104줄 (`node --check` · 박힘 대조).
+  - `tools/proposal_body.py` 200줄 — 조립을 떼어냈다. `PAGE_WIDTH_IN`도 여기 하나뿐이다.
+  - `mutate_gate.UNAIMED_CEILING` **3 → 1** (전수 실측).
+  - `MASTER`의 「기획서 화면 색인」 — **운영 장부 안**이라 지문 구간 밖이다 (D-0332).
+  - `site/proposal.html` 377줄(164KB)을 **커밋한다.** 어긋나면 `--check`가 운다.
+  - `.github/workflows/proposal.yml`이 화면 · docx · PDF · 그림을 같이 올린다.
+  - 지운 것: `tools/docx_check.py` · `core/tests/unit/test_docx_check.py` ·
+    **PDF를 끼워 보여 주던 `site/proposal.html` 34줄** (D-0229).
+
+- **남기는 것**:
+  - **제출본은 칸을 안 쓴다.** 심사 서식의 순서를 지켜야 해서 docx는 `MASTER` 순서
+    그대로다. 칸으로 가르는 것은 **화면 쪽만**이고 `test_제출본은_칸을_안_쓴다`가 지킨다.
+  - **손으로 적힌 기획서 표가 아직 남았다** — 지표 · 레이어 곡선 · G0 실측 · 청취 판정 ·
+    추진 일정 · 요구사항 변경 이력. D-0366이 세 블록을 정본으로 내렸고 **나머지는
+    상류가 없다.**
+  - `probe_artist.py --emit`이 없다 — `artist` 집계 6개는 아직 상류가 없다 (D-0366).
+  - 화면의 **보임**은 아무도 안 본다 — 문법 · 박힘 · 바이트까지다. 스크린샷을 찍는
+    검사는 `make check`에 못 넣는다 (D-0129).
+  - `.env`의 경로 표기가 WSL인지 윈도우인지는 아무도 안 본다 (D-0367).
+  - PLAN 열린 질문 29 · 그의 기기에서만 되는 셋.
+
+재현
+    python3 tools/render_proposal.py --check
+    python3 tools/check_script.py --check
+    make proposal && python3 tools/render_proposal.py && python3 tools/render_proposal.py --check
+    cd core && uv run pytest tests/unit/test_render_proposal.py -q
+
+강제자
+    `core/tests/unit/test_render_proposal.py::test_화면이_정본과_같다`
+    `core/tests/unit/test_render_proposal.py::test_색인에_없는_절이_생기면_죽는다`
+    `core/tests/unit/test_render_proposal.py::test_색인이_든_절이_화면에_다_담긴다`
+    `core/tests/unit/test_render_proposal.py::test_제출본은_칸을_안_쓴다`
+    `core/tests/unit/test_render_proposal.py::test_스크립트가_화면에_박혀_있다`
+    `core/tests/unit/test_render_proposal.py::test_node가_없으면_안_쟀다고_적는다`
+
+자료  실물 이 저장소 — 절 전수 22개(번호 충돌 3 · 못 가르는 절 6) ·
+      **`MASTER` 판 전수 137(2단 절 집합이 바뀐 판 0)** · fire-lane 꾸러미 1벌 ·
+      흡수 전후 시험 11 → 18 · 사라진 강제자 3건(`check_decisions`가 잡음) ·
+      내 거짓 주장 1건 · 상한 초과 1건(616 → 443 + 200) ·
+      **배선 전수 2판(안 운 자리 9 → 0 · 겨눔 불명 4 → 0)** · 심은 결함 5건

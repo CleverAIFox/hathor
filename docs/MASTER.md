@@ -49,7 +49,8 @@
 
 **※ 문서 체계**: 넷이다 (D-0186 ~ D-0189). 본 문서는 **현재 · 단일 진실 공급원**으로 "무엇이 참인가"를 쓴다. `docs/PLAN.md`가 미래,
 `docs/DECISIONS.md`가 과거(추가 전용), `README.md`가 진입이다. **밖에 내는 기획서는 `docs/proposal.docx`** — 시제 밖이며
-본 문서 Part I ~ III에서 `make proposal`로 빌드한다. 정본 지문을 `tools/docx_check.py`가 대조한다 (D-0221).
+본 문서 Part I ~ III에서 `make proposal`로 빌드한다. 화면은 `make screen`이 내고,
+정본 지문과 두 생성물을 `tools/render_proposal.py`가 대조한다 (D-0221 · D-0368).
 
 **※ 명칭**: HATHOR는 이집트 신화에서 음악·춤·사랑을 관장한 여신 하토르에서 따왔다. 도구가 아니라 창작의 동반자를 지향한다는 의미를 담는다.
 
@@ -1795,7 +1796,7 @@ make patch                     머리 셋을 커밋에서 뽑고 **기준 위에
 
 ### □ 검사 체계
 
-**관문 도구 17개**가 `--check`를 받는다. **이 표는 도구 이름을 든다** — 이름을 안 들면
+**관문 도구 18개**가 `--check`를 받는다. **이 표는 도구 이름을 든다** — 이름을 안 들면
 도구가 늘어도 표가 안 따라오고, 실제로 넷이 빠져 있었다 (D-0350). 지금은
 `doc_fsck`가 **실물 ↔ 이 표**를 양방향으로 본다.
 
@@ -1818,7 +1819,9 @@ make patch                     머리 셋을 커밋에서 뽑고 **기준 위에
 | `tools/check_artifacts.py` | 산출물 대장 ↔ 실물 · **충족된 미투입** | D-0265 · D-0349 |
 | `tools/check_model_licenses.py` | 표에 없는 가중치 · 상업 불가 집합 | D-0217 |
 | `tools/check_test_types.py` | 시험 코드 타입 오류 래칫 | D-0264 |
-| `tools/docx_check.py` | 기획서와 정본의 어긋남 · 폐기어 | D-0220 · D-0221 |
+| `tools/render_proposal.py` | 기획서 화면 생성 · 정본 ↔ docx ↔ 화면의 어긋남 · 폐기어 | D-0220 · D-0221 · D-0368 |
+| `tools/check_script.py` | 화면 스크립트 문법. `node`가 없으면 **안 쟀다고 적는다** | D-0368 |
+| `tools/proposal_body.py` | 기획서 본문 조립 — 조립과 docx 쓰기를 가른 윗동 | D-0368 |
 | `tools/doc_fsck.py` | 문서가 없는 것을 가리키기 · **적은 수 ↔ 실물** · **거꾸로 보는 눈** | D-0189 · D-0263 · D-0350 |
 | `tools/encoding_check.py` | BOM · CRLF · 비 UTF-8 · 끝 개행 없음 | D-0230 |
 | `tools/deadcheck.py` | **검사가 죽었는가** — 프로브 6종 래칫. 생사는 합성 트리에서 묻는다 | D-0230 · D-0349 |
@@ -1921,8 +1924,8 @@ make patch                     머리 셋을 커밋에서 뽑고 **기준 위에
 **`CONTRIBUTING.md`에서 흡수했다** (D-0186). `fire-lane` · `thoth`가 규약을 마스터
 안에 두고, 규약과 현재 상태를 따로 두면 **한 항목이 두 문서에 산다.**
 
-**`GR-` 번호는 그대로다.** 살아 있는 문서와 코드에서 **저장소 안에서 277곳**이 그 ID를
-부르고, 결정 기록에 **194곳이 더 있다** — 번호를 다시 매기는 것은 값이 없고 참조만 깬다.
+**`GR-` 번호는 그대로다.** 살아 있는 문서와 코드에서 **저장소 안에서 281곳**이 그 ID를
+부르고, 결정 기록에 **198곳이 더 있다** — 번호를 다시 매기는 것은 값이 없고 참조만 깬다.
 **과거 축은 축에서 뺐다** (D-0350) — 기록에 `GR-`을 한 번 적을 때마다 수가 흔들려
 **매 판 뜨는 경보**가 됐다 (GR-0.8).
 
@@ -2259,6 +2262,37 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 지문 구간은 `## 취향 잠재 표현…`부터 `## 부록 A.` 앞까지다 (`tools/proposal_source.py`).
 여기는 그 뒤이므로 **이 표를 고쳐도 기획서는 안 움직인다.**
 
+### □ 기획서 화면 색인
+
+**이 표가 기획서 화면의 인터페이스다** (D-0368 · fire-lane `§12-0`에서 가져왔다).
+`tools/render_proposal.py`가 여기를 읽어 **어느 절을 어느 칸에 놓을지** 정한다.
+
+**서식으로 가르지 않는다.** 들여쓴 블록이면 그림, `|`로 시작하면 표로 갈랐던 판이
+fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 선언한 적이 없었다»* —
+누가 표를 목록으로 바꾸면 그 절이 **조용히 다른 칸으로 옮겨갔다.** 가르는 축은 이
+표가 들고, 서식은 **그리는 방법**에만 쓴다.
+
+**제출본(docx)은 이 표를 안 본다.** 심사 서식의 순서를 지켜야 하므로 `MASTER` 순서
+그대로 간다 — 칸을 나누는 것은 **화면 쪽만**이다. fire-lane의 `workflow.html`은
+제출물이 아니라 그 제약이 없었다.
+
+<!-- proposal-index:begin -->
+
+| 칸 | 절 |
+|---|---|
+| `0` 한눈에 | 취향 잠재 표현 기반 종단간 AI 음악 창작 시스템 |
+| `1` 무엇을 만드나 | 1. 프로젝트 개요 · 2. 아이디어 도출 과정 · 3. 시장현황 및 유사 서비스 분석 |
+| `2` 무엇이 필요한가 | □ REQ-HATHOR 요구사항 체계도 · □ 요구사항 ID 체계 정의 · □ 세부 기능 요구사항 정의서 · □ 비기능 요구사항 (NFR) · □ 제약사항 및 전제 · □ 요구사항 변경 이력 |
+| `3` 어떻게 만드나 | 1. 시스템 아키텍처 · 2. 데이터 설계 · 3. 인제스트 상세 설계 · 4. 4축 특징 설계 · 5. 취향 모델 설계 · 6. 생성 파이프라인 설계 · 7. 가창 및 안전 게이트 설계 · 8. 로컬 에이전트 설계 · 9. 서빙 API 명세 (개요) |
+| `4` 무엇을 쟀나 | 10. 평가 설계 |
+| `5` 어디서 도나 | 11. 개발 환경 및 배포 설계 · 12. 산출물 목록 |
+
+<!-- proposal-index:end -->
+
+**강제자** — `tools/render_proposal.py`의 `index()`. 색인에 없는 구간 내 2단 절이
+있으면 **렌더가 죽는다.** 반대 방향은 `audit()`이 본다 — 색인이 든 절이 화면에 다
+담겼는가. 둘이 있어야 도킹이 닫힌다.
+
 ### □ 닫힌 미해결
 
 **판단의 근거는 결정 기록에 있다.** 여기 남기는 것은 "이미 답이 나온 질문"이라는
@@ -2520,8 +2554,8 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0216 | 대중성 라벨을 접는다 | `core/tests/unit/test_resolve_identities.py::test_끊긴_조회는_정본_이름을_못_받는다` | 실물 ListenBrainz 3곡 |
 | D-0217 | 엔진 후보를 서류로 거른다 | `core/tests/unit/test_model_licenses.py::test_상업_불가는_MERT_하나다` | 실물 문서 7종 |
 | D-0219 | 관문 대조를 클래스 가드로 바꾼다 | `core/tests/unit/test_ci_parity.py::test_세_관문이_선언과_맞는다` | 실물 저장소 |
-| D-0220 | 기획서를 docx로 다시 낸다 | `core/tests/unit/test_docx_check.py::test_저장소_기획서가_정본과_맞는다` | 실물 문서 |
-| D-0221 | 기획서를 `MASTER.md`에서 빌드한다 | `core/tests/unit/test_docx_check.py::test_지문이_다르면_낡았다고_말한다` | 실물 저장소 문서 |
+| D-0220 | 기획서를 docx로 다시 낸다 | `core/tests/unit/test_render_proposal.py::test_화면이_정본과_같다` | 실물 문서 |
+| D-0221 | 기획서를 `MASTER.md`에서 빌드한다 | `core/tests/unit/test_render_proposal.py::test_지문이_다르면_낡았다고_말한다` | 실물 저장소 문서 |
 | D-0222 | 기획서를 Pages로 배포한다 | `core/tests/unit/test_ci_parity.py::test_배포는_검사를_지난다` | 실물 저장소 문서 |
 | D-0223 | 커버리지 래칫 · 결정 번호 릴리스 · 의존성 갱신 · 데브 컨테이너 | `core/tests/unit/test_release_and_ratchet.py::test_커버리지_바닥은_한_곳에만_산다` | 실물 저장소 |
 | D-0224 | MLflow · Prefect를 연결하고 러너를 손으로만 건다 | `core/tests/unit/test_ci_parity.py::test_셀프호스티드는_손으로만_돈다` | 실물 기기 |
@@ -2629,7 +2663,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0329 | 같은 화면이 「빚 없다」와 「35」를 함께 찍었다 | `core/tests/unit/test_debts.py::test_보안_설정을_파일로_센다` | 실물 이 저장소의 보안 설정 |
 | D-0330 | 재현성 관문이 안 고정된 러너 위에 서 있었다 | `core/tests/unit/test_hygiene.py::test_러너를_고정한다` | 실물 GitHub Actions 주석 · Dependabot PR #10 |
 | D-0331 | CodeQL 0건이 예측을 확인해 주지 않았다 | `core/tests/unit/test_artifact_paths.py::test_곡_이름이_경로를_못_만든다` | 실물 CodeQL 첫 실행 0건 · 적대 입력 일곱 |
-| D-0332 | 기획서 안에 운영 장부가 살고 있었다 | `core/tests/unit/test_docx_check.py::test_운영_장부는_기획서_밖에_있다` | 실물 이 저장소의 기획서 구간 |
+| D-0332 | 기획서 안에 운영 장부가 살고 있었다 | `core/tests/unit/test_render_proposal.py::test_운영_장부는_기획서_밖에_있다` | 실물 이 저장소의 기획서 구간 |
 | D-0333 | 날퍼짐이 아니라 잔차를 본다 | `core/tests/unit/test_cell_novelty.py::test_온음계로_설명되면_잔차가_줄어든다` | 합성 · 실물 1004곡 (D-0334 확인) |
 | D-0334 | 사전엔 정보가 있고 출력엔 안 실린다 | `core/tests/unit/test_cell_novelty.py::test_읽는_법이_셋을_가른다` | 합성 · 실물 1004곡 |
 | D-0335 | 경보 다섯이 떴고 화면은 「합계 35」를 찍었다 | `core/tests/unit/test_debts.py::test_안_갚은_행을_센다` | 실물 Dependabot 경보 5건 · 이 저장소의 잠금 |
@@ -2661,6 +2695,7 @@ exp(lyrics): M0 분할 규칙 대조 12조건 (label: o12-random-8192)
 | D-0365 | 천장 0이 **기계로** 그 결함을 처음 잡았다 | `core/tests/unit/test_wiring_docs.py::test_강제자_검사가_입구에_배선돼_있다` | 실물 이 저장소 — 전수 1판(2곳) · 메운 뒤 부분 1판(0곳) · 전수 재측정 1판 |
 | D-0366 | 실측 집계의 정본을 내렸다 | `core/tests/unit/test_measured.py::test_거울을_손으로_고치면_운다` | 실물 이 저장소 — 기획서 숫자 전수 3판(자 교정 2회: 817 → 518 → 표 432·산문 86) · |
 | D-0367 | 독스트링의 명령을 그대로 쳤더니 터졌다 | `core/tests/unit/test_args.py::test_묶음이_필요한_도구는_uv_run으로_적는다` | 실물 이 저장소 — 쓰임새 전수 2판(6 → 2 · 자 교정) · 환경변수 독자 전수 2판 |
+| D-0368 | 기획서를 화면으로도 낸다 | `core/tests/unit/test_render_proposal.py::test_화면이_정본과_같다` | 실물 이 저장소 — 절 전수 22개(번호 충돌 3 · 못 가르는 절 6) · |
 
 <!-- decision-ledger:end -->
 

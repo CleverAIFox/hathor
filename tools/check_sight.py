@@ -104,6 +104,7 @@ PINNED = {
     "check_requirements.MVP_EXEMPT": 9,
     "check_requirements.STATES": 9,
     "check_retired.LIVING": 3,
+    "check_script.SCRIPTS": 1,
     "check_secrets.FORBIDDEN": 1,
     "check_secrets.PLACEHOLDER_PREFIXES": 6,
     "check_secrets.SKIP_FILES": 1,

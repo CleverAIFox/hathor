@@ -94,7 +94,7 @@ def test_정본_구간만_자른다(tmp_path: Path) -> None:
 
 
 def test_지문이_내용을_따라간다(tmp_path: Path) -> None:
-    """**지문이 안 바뀌면 `docx_check`가 낡은 기획서를 통과시킨다.**"""
+    """**지문이 안 바뀌면 `render_proposal --check`이 낡은 기획서를 통과시킨다.**"""
     (tmp_path / "docs").mkdir()
     master = tmp_path / "docs" / "MASTER.md"
     master.write_text(MASTER, encoding="utf-8")

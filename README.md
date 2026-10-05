@@ -116,7 +116,7 @@ make proposal                                            # MASTER Part I ~ III �
 ```
 
 **`MASTER.md` Part I ~ III를 고치면 다시 빌드한다.** 빌드가 정본 지문을 docx에 적고
-`docx_check.py`가 맞대므로, 안 하면 `make check`이 멈춘다. main에 푸시하면
+`render_proposal.py --check`이 맞대므로, 안 하면 `make check`이 멈춘다. main에 푸시하면
 `.github/workflows/proposal.yml`이 **CI를 먼저 통과시키고** GitHub Pages에 올린다.
 배포는 docx를 **PDF로 구워** 웹에 보여 주고 docx도 같이 올린다 — 브라우저가 docx를 직접 그리면
 표와 글꼴이 무너진다 (D-0229). Pages 켜기와 첫 배포는 `make gh-setup`이 한다.
@@ -306,7 +306,8 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/check_doc_style.py` | 문서 레이아웃 · 여섯 번째 문서 |
 | `tools/check_egress.py` | 망 접점 — 허용 목록 4곳 (밖 2 · 로컬 2) |
 | `tools/check_model_licenses.py` | 모델 가중치 라이선스 · 상업 불가 집합 |
-| `tools/docx_check.py` | 기획서 ↔ 정본 지문 · 숫자 · 폐기어 |
+| `tools/render_proposal.py` | 기획서 화면을 낸다 · 정본 ↔ docx ↔ 화면 대조 |
+| `tools/check_script.py` | 화면 스크립트 문법 (`node --check`) |
 | `tools/doc_fsck.py` | 문서가 가리키는 것이 실물로 있는가 |
 | `tools/check_file_size.py` | 파일 길이 래칫 · 양방향 |
 | `tools/check_test_types.py` | 시험 코드 타입 오류 래칫 |
@@ -319,7 +320,8 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/encoding_check.py` | BOM · CRLF · 비 UTF-8 · 끝 개행 (`--fix`) |
 | `tools/release_notes.py` | 결정 기록에서 태그 · 릴리스 본문 |
 | `tools/proposal_source.py` | 기획서 정본 구간 · 표 읽기 · 지문 |
-| `tools/build_proposal.py` | 기획서 빌드 (pandoc) |
+| `tools/proposal_body.py` | 기획서 본문 조립 — 정본 + 그림 → 마크다운 |
+| `tools/build_proposal.py` | 기획서 docx 쓰기 (pandoc · python-docx) |
 | `tools/render_figures.py` | 기획서 구조도 (graphviz) |
 | `tools/render_charts.py` | 기획서 수치 그림 (matplotlib) |
 | `tools/apply_patch.sh` | `make apply` — 패치 적용 · 기준 대조 · 선언 대조 · 커밋 |

@@ -4,16 +4,17 @@
 ### 왜 따로 두나
 
 기획서는 `MASTER.md` Part I ~ III를 **그대로** 밖에 내는 판이다. 빌드 도구
-(`build_proposal.py`) · 그림 도구(`render_figures.py` · `render_charts.py`) · 대조 검사
-(`docx_check.py`)가 **같은 자리를 같은 방식으로** 읽어야 한다. 네 곳이 제각기 자르면 한
+(`build_proposal.py` · `proposal_body.py`) · 그림 도구(`render_figures.py` ·
+`render_charts.py`) · 화면과 대조 검사(`render_proposal.py`)가 **같은 자리를 같은
+방식으로** 읽어야 한다. 네 곳이 제각기 자르면 한
 곳만 경계를 바꾸는 날이 온다 — 그래서 자르는 법을 여기 한 곳에 둔다.
 
-**표준 라이브러리만 쓴다.** `docx_check.py`가 CI에서 이것을 부르고, CI에는 pandoc ·
+**표준 라이브러리만 쓴다.** `render_proposal.py`가 CI에서 이것을 부르고, CI에는 pandoc ·
 graphviz · matplotlib이 없다.
 
 ### 지문
 
-빌드가 정본 구간의 sha256을 docx 속성에 적는다. `docx_check.py`가 지금 구간의 지문과
+빌드가 정본 구간의 sha256을 docx 속성에 적는다. `render_proposal.py`가 지금 구간의 지문과
 맞대어 **기획서가 `MASTER.md`보다 낡았는지** 본다. 숫자 몇 개가 아니라 **Part I ~ III
 전체**가 대조 대상이 된다.
 """

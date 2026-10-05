@@ -57,7 +57,8 @@ run "compose"    python3 tools/check_compose.py --check
 run "산출물 대장" python3 tools/check_artifacts.py --check
 run "비밀정보"   python3 tools/check_secrets.py --check
 run "모델 라이선스" python3 tools/check_model_licenses.py --check
-run "기획서"    python3 tools/docx_check.py --check
+run "기획서"    python3 tools/render_proposal.py --check
+run "화면 각본"  python3 tools/check_script.py --check
 run "실물 대조"   python3 tools/doc_fsck.py --check
 run "실측 정본"   python3 tools/measured.py --check
 run "글자·개행"   python3 tools/encoding_check.py --check

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="hathor render_proposal (D-0368)">
+<meta name="hathor-fingerprint" content="{stamp}">
+<title>{title}</title>
+<style>
+  /* **색과 치수를 한 곳에 둔다** — docx 쪽 `NAVY`·`RUST`와 같은 값이다 (D-0221). */
+  :root{
+    --ink:#e6ebf2; --dim:#8b97a8; --bg:#0e1116; --panel:#141a22; --line:#232a35;
+    --navy:#7aa7d9; --rust:#d98b6f; --measure:46rem;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --ink:#1a2028; --dim:#5a6672; --bg:#fbfcfd; --panel:#fff; --line:#dde3ea;
+      --navy:#1f4f85; --rust:#9c4a25;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.75 "Noto Sans KR",system-ui,sans-serif;
+  }
+  .wrap{display:grid;grid-template-columns:17rem minmax(0,1fr);gap:0;align-items:start}
+  nav{
+    position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:1.5rem 1rem;
+    border-right:1px solid var(--line);font-size:13px;line-height:1.5;
+  }
+  nav h2{font-size:12px;letter-spacing:.08em;color:var(--dim);margin:0 0 .75rem}
+  nav ul{list-style:none;margin:0;padding:0}
+  nav ul ul{padding-left:.8rem}
+  nav a{color:var(--dim);text-decoration:none;display:block;padding:.15rem 0}
+  nav a:hover{color:var(--navy)}
+  main{padding:2.5rem max(1rem,calc((100% - var(--measure)) / 2)) 6rem}
+  main > *{max-width:var(--measure)}
+  h1,h2,h3,h4{line-height:1.3;margin:2.2em 0 .6em;font-weight:700}
+  h1{font-size:1.9rem;color:var(--navy);margin-top:0}
+  h2{font-size:1.4rem;border-bottom:1px solid var(--line);padding-bottom:.3em}
+  h3{font-size:1.1rem}
+  h4{font-size:1rem;color:var(--dim)}
+  p,li{overflow-wrap:break-word}
+  strong{color:var(--rust)}
+  code{
+    font:0.88em/1.5 "JetBrains Mono",ui-monospace,monospace;
+    background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:.1em .35em;
+  }
+  pre{
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:1rem;overflow-x:auto;
+  }
+  pre code{background:none;border:0;padding:0}
+  /* **표는 넘치면 가로로 민다** — 줄이면 숫자가 겹친다 */
+  table{border-collapse:collapse;width:100%;margin:1.2em 0;font-size:.92em;display:block;overflow-x:auto}
+  th,td{border:1px solid var(--line);padding:.45em .6em;text-align:left;vertical-align:top}
+  th{background:var(--panel);font-weight:600;white-space:nowrap}
+  figure{margin:1.8em 0;max-width:100%}
+  figure img{width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:4px}
+  figcaption{color:var(--dim);font-size:.85em;margin-top:.5em;text-align:center}
+  blockquote{
+    margin:1.2em 0;padding:.6em 1em;border-left:3px solid var(--rust);
+    background:var(--panel);color:var(--dim);
+  }
+  hr{border:0;border-top:1px solid var(--line);margin:2.5em 0}
+  .head{border-bottom:1px solid var(--line);padding:1.1rem 1.5rem;background:var(--panel)}
+  .head h1{font-size:1.15rem;margin:0;color:var(--ink)}
+  .head .sub{color:var(--dim);font-size:12.5px;margin-top:.35rem}
+  .head a{color:var(--navy)}
+  /* **탭은 CSS 라디오다** — 고르는 일에 JS를 안 쓴다 (D-0368). */
+  .tabs{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 1.5rem;border-bottom:1px solid var(--line);padding-bottom:.8rem}
+  .tabs input{position:absolute;opacity:0;pointer-events:none}
+  .tabs label{
+    cursor:pointer;padding:.35rem .8rem;border:1px solid var(--line);border-radius:999px;
+    font-size:13px;color:var(--dim);background:var(--panel);user-select:none;
+  }
+  .tabs label:hover{color:var(--ink)}
+  .pane{display:none}
+  /* 라디오 여섯 개 · 칸 여섯 개를 순서로 짝짓는다 */
+  #s0:checked ~ label[for="s0"], #s1:checked ~ label[for="s1"], #s2:checked ~ label[for="s2"],
+  #s3:checked ~ label[for="s3"], #s4:checked ~ label[for="s4"], #s5:checked ~ label[for="s5"]
+    {color:var(--bg);background:var(--navy);border-color:var(--navy);font-weight:600}
+  .tabs:has(#s0:checked) ~ .pane:nth-of-type(1),
+  .tabs:has(#s1:checked) ~ .pane:nth-of-type(2),
+  .tabs:has(#s2:checked) ~ .pane:nth-of-type(3),
+  .tabs:has(#s3:checked) ~ .pane:nth-of-type(4),
+  .tabs:has(#s4:checked) ~ .pane:nth-of-type(5),
+  .tabs:has(#s5:checked) ~ .pane:nth-of-type(6){display:block}
+  .find{display:block;margin:.2rem 0 .5rem}
+  .find span{display:block;font-size:11px;letter-spacing:.06em;color:var(--dim);margin-bottom:.25rem}
+  .find input{
+    width:100%;padding:.4rem .55rem;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:4px;font:inherit;font-size:13px;
+  }
+  .found{font-size:11.5px;color:var(--rust);min-height:1.2em;margin-bottom:.6rem}
+  .toc a[aria-current]{color:var(--navy);font-weight:600}
+  [hidden]{display:none !important}
+  @media (max-width:900px){
+    .wrap{grid-template-columns:1fr}
+    nav{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line)}
+    main{padding:1.5rem 1rem 4rem}
+  }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>{title}</h1>
+  <div class="sub">
+    정본은 <b>docs/MASTER.md</b> Part I ~ III · 실측은 <b>docs/measured.toml</b>이다.
+    이 화면과 제출본(docx)은 <b>같은 마크다운</b>에서 나온다 (D-0368).
+    <a href="./proposal.pdf" target="_blank" rel="noopener">PDF</a> ·
+    <a href="./proposal.docx" download>docx</a> ·
+    <a href="https://github.com/CleverAIFox/hathor">저장소</a>
+  </div>
+</div>
+<div class="wrap">
+<nav>
+  <h2>목차 · {slots}칸</h2>
+  <label class="find"><span>찾기</span>
+    <input id="find" type="search" placeholder="절 · 표 · 산문" autocomplete="off">
+  </label>
+  <div id="found" class="found"></div>
+  <div class="toc">{toc}</div>
+</nav>
+<main>
+  <div class="tabs">
+{tabs}
+  </div>
+{panes}
+</main>
+</div>
+<script>
+{script}
+</script>
+</body>
+</html>
