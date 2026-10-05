@@ -17,18 +17,27 @@
 # 임베딩 · 곡별 행이 없다. 그 경계는 **사람이 지킨다**: 이 파일에 문자열 목록을 넣는
 # 순간 검사가 아니라 사람이 막아야 하는 것이 된다.
 #
-# ### 이 수는 **재어진 수**다 (D-0366 → D-0367)
+# ### 어느 블록이 재어졌나 (D-0366 → D-0367 → D-0371)
 #
 # 처음 넣은 값은 MASTER에 남아 있던 **백분율에서 거꾸로 푼 것**이었다 — 전수가 1004곡
 # 이므로 각 백분율을 내는 정수는 대개 하나다(`62.8%` → 631 하나). 작성자가 그 자리에서
 # 한 번 틀렸다(630 → 62.7%).
 #
-# **2026-10-04에 그의 기기에서 `--emit`을 돌렸고 「바뀐 수가 없다」가 나왔다** — 복원이
-# 한 자리도 안 틀렸다. 그 전까지 이 수는 「복원」이었고 이제 「실측」이다.
+# | 블록 | 상류 | 마지막 실측 |
+# |---|---|---|
+# | `id3` | `probe_id3 --emit` | **2026-10-04** — 복원값과 전 항목 일치 |
+# | `corpus` | `probe_id3 --emit` (D-0371) | **아직** — 복원값이다 |
+# | `artist` | `probe_artist --emit` (D-0371) | **아직** — 복원값이다 |
 #
-#     python3 tools/probe_id3.py --emit      # 기기에서. counts만 다시 쓴다
+# D-0366은 *«artist 집계 6개는 아직 상류가 없다»*라고 적었다. **`corpus` 여덟도
+# 없었다** — 세 블록 중 둘이었고 세어 보지 않고 적은 수다 (GR-0.5 · D-0371).
+# 이제 `measured.check_upstream()`이 **양방향**으로 본다: 아무도 안 세는 수와
+# 세고도 버리는 수를 둘 다 잡는다.
+#
+#     cd core && uv run python ../tools/probe_id3.py --emit     # id3 + corpus
+#     cd core && uv run python ../tools/probe_artist.py --emit  # artist
 #     python3 tools/measured.py --fix        # MASTER 거울을 다시 쓴다
-#     python3 tools/measured.py --check      # 정본 ↔ 거울
+#     python3 tools/measured.py --check      # 정본 ↔ 거울 ↔ 상류
 
 [corpus]
 stamp = "2025-09-19"

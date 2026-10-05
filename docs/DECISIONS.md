@@ -30674,3 +30674,114 @@ proposal_body.place_figures(body, figures, image=…)   ← 자리 고르기. �
 자료  실물 배포본 1판(사용자 `curl` 4줄 — 칸 6 · 그림 **0** · PNG 200 · 스크립트 1) ·
       고친 뒤 화면 전수(`<figure>` 28 · 이름 28) · 심은 결함 1건(시험 넷이 운다) ·
       같은 모양의 재발 3판
+
+---
+
+## D-0371. 상류 없는 집계가 **여섯이 아니라 열넷**이었다 — 「남은 빚」을 세어 보지 않고 적었다
+
+> **갱신**: D-0366 — 실측 정본을 내리며 *«artist 집계 6개는 아직 상류가 없다»*라고
+> 남겼다. **`corpus` 여덟도 없었다.** D-0367 — 그 뒤 `id3`만 실측으로 바뀌었다.
+> D-0363 — 양방향 자의 꼴을 여기서 다시 쓴다.
+
+- **배경**: D-0370까지 갚고 남은 빚을 열었다. 기록에 적힌 것은 *«`artist` 집계 6개»*
+  하나였다. **갚으러 가서 세어 보니 둘이었다.**
+
+```text
+$ grep -rn "measured.emit" tools/
+tools/probe_id3.py:132:   measured.emit("id3", …)
+                          ← 끝이다. corpus · artist 를 쓰는 자가 없다
+```
+
+| 블록 | 수 | 상류 | D-0366의 기록 |
+|---|---|---|---|
+| `id3` | 20 | `probe_id3 --emit` | 맞다 |
+| `corpus` | **8** | **없었다** | **안 적혔다** |
+| `artist` | **6** | 없었다 | 적혔다 |
+
+**세어 보지 않고 「남은 빚」을 적으면 그 빚이 반만 보인다** (GR-0.5). 이 기록을 쓰기
+전에 `grep` 한 줄이면 됐다.
+
+### 하나. `artist`의 상류 — 입력이 다르다
+
+`probe_id3`는 **원본 음원**을 걷고 이쪽은 **스캔 산출물**(`var/ingest/scan-*.jsonl`)을
+읽는다. 그래서 먼저 한 번 스캔해야 하고, 없으면 **막고 그 명령을 찍는다** (D-0367의
+*«없다»*만 찍던 그 자리).
+
+그리고 **세는 법을 수와 같이 찍는다.** `counts`가 바뀐 날 *"자가 바뀐 것인지 음원이
+바뀐 것인지"*를 가르는 것은 그 문장이다 — 수만 찍으면 다음 사람이 못 가른다 (D-0269).
+
+```text
+=== 정본에 넣는 수와 그 정의 ===
+  unique                 8  고유 아티스트 문자열의 개수
+  plain                  2  어느 구분자도 없는 곡
+  bracket                3  괄호 또는 대괄호를 품은 곡
+  …
+```
+
+### 둘. `corpus`의 상류 — 같은 걸음에서 센다
+
+여덟 개(`seconds` · `bytes` · 샘플레이트 둘 · `mp3` · `read_failures` · `nfd_names` ·
+`filename_convention`)는 전부 **파일을 걷다 보면 나오는 수**다. `probe_id3`가 이미
+1004개를 걷고 있으므로 거기서 같이 센다 — **두 번 걷지 않는다.**
+
+`MP3.info`가 `None`이거나 터지면 **길이를 0으로 더하지 않는다.** 그러면 합이 조용히
+줄고 그 줄어듦을 아무도 못 본다 (GR-0.5). 실패는 ID3 열기와 **같은 이름 집합**에
+넣는다 — 한 파일이 둘 다 실패해도 하나로 센다.
+
+### 셋. 그래서 못을 박았다 — **양방향**
+
+| 방향 | 무엇이 보이나 | 안 보면 |
+|---|---|---|
+| 정본 → 도구 | 정본에만 있는 키 | **아무도 안 세는 수**가 눌러앉는다 (이 판의 열넷) |
+| 도구 → 정본 | 도구만 내는 키 | **센 수를 버린다** — 표는 멀쩡해 보인다 |
+
+도구를 **임포트하지 않는다.** `probe_id3`가 `mutagen`을 끌어오고 CI에 없다 (D-0256).
+`EMITS` 상수를 **글자로 읽는다** — `check_args`가 환경변수 이름을 읽는 그 꼴이다.
+
+### 넷. 수는 아직 복원값이다
+
+**이 판은 상류를 붙였을 뿐 재지 않았다.** `corpus` 여덟 · `artist` 여섯은 여전히
+백분율에서 거꾸로 푼 수이고, 그의 기기에서 `--emit`을 돌려야 실측이 된다. 정본의
+주석에 **블록별 「마지막 실측」 표**를 넣었다 — 어느 것이 재어졌는지 거기 한 곳에 있다.
+
+`id3`가 그랬듯 **복원값과 실측이 전부 맞을 수도 있고 틀릴 수도 있다.** 맞는다고 적지
+않는다 (GR-0.5).
+
+- **결과**:
+  - `probe_artist.py` — `--emit` · `tally()` · `COUNTED`(정규식과 정의) · `EMITS` ·
+    산출물이 없으면 **2로 막고 스캔 명령을 찍는다**. `cwd`에 안 기댄다.
+  - `probe_id3.py` — `CORPUS_EMITS` 여덟을 같은 걸음에서 세고 `emit("corpus", …)`.
+  - `measured.SOURCES` · `emitted()` · `check_upstream()` — **양방향**. `make check`에
+    이미 걸린 `measured --check`이 부른다.
+  - 시험 열하나 — 심은 결함 다섯(고아 키 · 버린 키 · 선언 실종 · 산출물 없음 ·
+    `--emit`이 정본 글자를 바꾸는가).
+  - `docs/measured.toml` 주석에 **블록별 마지막 실측 표**.
+  - `check_sight.PINNED` 못 넷(`measured.SOURCES` 3 · `probe_artist.EMITS` 6 ·
+    `probe_id3.ID3_EMITS` 20 · `CORPUS_EMITS` 8) — **상수 71 → 75**. 선언이 줄면
+    `check_upstream`이 「아무도 안 센다」로 울고, 늘면 여기가 운다 (D-0349).
+
+- **남기는 것**:
+  - **`corpus`·`artist` 열넷은 아직 복원값이다.** 그의 기기에서 `--emit` 두 번.
+  - `corpus.seconds`는 **반올림 합**이다. 곡마다 소수점을 버리므로 1004곡이면
+    최대 수백 초가 움직인다 — 「총 재생시간」은 시간 단위로 보여 그 오차가 안 보인다.
+  - **스캔 산출물이 낡으면 `artist` 수도 낡는다.** 그 신선도를 보는 자는 없다.
+  - 손으로 적힌 기획서 표 여섯 묶음(지표 · 레이어 곡선 · G0 실측 · 청취 판정 ·
+    추진 일정 · 요구사항 변경 이력)은 **상류가 없다.** 이 판과 같은 부류이고 더 크다.
+  - PLAN 열린 질문 29 · 그의 기기에서만 되는 셋.
+
+재현
+    python3 tools/measured.py --check
+    cd core && uv run pytest tests/unit/test_probe_artist.py tests/unit/test_measured.py -q
+    cd core && uv run python ../tools/probe_artist.py --emit    # 기기에서
+    cd core && uv run python ../tools/probe_id3.py --emit       # 기기에서
+
+강제자
+    `core/tests/unit/test_measured.py::test_정본의_수마다_세는_도구가_있다`
+    `core/tests/unit/test_measured.py::test_아무도_안_세는_수를_잡는다`
+    `core/tests/unit/test_measured.py::test_센_수를_버리는_것을_잡는다`
+    `core/tests/unit/test_measured.py::test_상류_선언이_사라지면_막는다`
+    `core/tests/unit/test_probe_artist.py::test_emit이_정본까지_닿는다`
+    `core/tests/unit/test_probe_artist.py::test_산출물이_없으면_막고_명령을_찍는다`
+
+자료  실물 이 저장소 — `measured.emit` 호출 전수 1곳(블록 3개 중) · 정본 집계 34개
+      (상류 있음 20 · 없음 **14**) · 심은 결함 5건 · 아티스트 표본 9곡으로 센 법 검증

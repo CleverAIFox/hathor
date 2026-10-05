@@ -239,3 +239,84 @@ def test_표식_이름이_정본과_같은_말을_쓴다() -> None:
     for name in TOOL.BLOCKS:
         assert name in data, f"{name} 블록이 정본에 없다"
         assert TOOL.begin(name) == f"<!-- measured:{name}:begin -->"
+
+
+# ------------------------------------------------- 상류 (D-0371)
+#
+# **D-0366은 블록 셋을 내리고 `--emit`을 하나만 붙였다.** `corpus` 여덟 · `artist`
+# 여섯, 모두 **열넷**이 「백분율에서 거꾸로 푼 수」로 섰고 그 기록은 *«artist 집계 6개는
+# 아직 상류가 없다»*라고 적었다 — **세 블록 중 둘이었다.** 세어 보지 않고 적은 수다.
+#
+# 여기 자는 **양방향**이다 (D-0363). 한쪽만 보면 아무도 안 세는 수가 눌러앉고,
+# 반대쪽만 보면 센 수를 버리는 것이 안 보인다.
+
+
+def test_정본의_수마다_세는_도구가_있다() -> None:
+    """`make check`이 보는 그 판정."""
+    assert TOOL.check_upstream(TOOL.canon()) == []
+
+
+def test_블록마다_상류가_선언돼_있다() -> None:
+    """**선언이 빠지면 그 블록은 아무도 안 본다** (D-0126)."""
+    assert set(TOOL.SOURCES) == set(TOOL.BLOCKS), "표는 있는데 상류 선언이 없다"
+
+
+def test_아무도_안_세는_수를_잡는다() -> None:
+    """**심은 결함** (D-0069). 정본에만 있고 도구가 안 내는 키."""
+    data = TOOL.canon()
+    data["artist"]["counts"] = {**data["artist"]["counts"], "심은것": 7}
+
+    problems = TOOL.check_upstream(data)
+
+    assert len(problems) == 1, problems
+    assert "아무도 안 센다" in problems[0]
+    assert "심은것" in problems[0]
+
+
+def test_센_수를_버리는_것을_잡는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069). 도구는 내는데 정본이 안 받는 키.
+
+    이쪽이 더 조용하다 — 표는 멀쩡해 보이고 **새로 센 것만 사라진다.**
+    """
+    data = TOOL.canon()
+    want = set(data["artist"]["counts"]) | {"버려진것"}
+    monkeypatch.setattr(TOOL, "emitted", lambda _t, _c: want)
+    monkeypatch.setattr(TOOL, "SOURCES", {"artist": TOOL.SOURCES["artist"]})
+
+    problems = TOOL.check_upstream(data)
+
+    assert len(problems) == 1, problems
+    assert "센 수를 버린다" in problems[0] and "버려진것" in problems[0]
+
+
+def test_상류_선언이_사라지면_막는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
+    monkeypatch.setattr(TOOL, "emitted", lambda _t, _c: set())
+
+    problems = TOOL.check_upstream(TOOL.canon())
+
+    assert len(problems) == len(TOOL.SOURCES), problems
+    assert all("상류 선언이 사라졌다" in one for one in problems), problems
+
+
+def test_도구의_선언을_글자로_읽는다() -> None:
+    """**임포트하지 않는다** — `probe_id3`가 `mutagen`을 끌어오고 CI에 없다 (D-0256)."""
+    assert "TSSE" in TOOL.emitted("probe_id3", "ID3_EMITS")
+    assert "seconds" in TOOL.emitted("probe_id3", "CORPUS_EMITS")
+    assert "unique" in TOOL.emitted("probe_artist", "EMITS")
+    assert TOOL.emitted("probe_id3", "없는상수") == set()
+
+
+def test_상류_판정이_입구까지_닿는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**심은 결함** (D-0069 · D-0352). `check()`에서 빼도 아무 시험이 안 울었다.
+
+    위의 시험들이 `check_upstream()`을 **직접** 불렀기 때문이다 — 그 함수가 멀쩡해도
+    `make check`이 안 부르면 아무 일도 안 일어난다. 여기는 `main()`을 거친다.
+    """
+    monkeypatch.setattr(TOOL, "check_upstream", lambda _data: ["심은 것"])
+    monkeypatch.setattr("sys.argv", ["measured.py", "--check"])
+
+    assert TOOL.main() == 1
+    assert "심은 것" in capsys.readouterr().err

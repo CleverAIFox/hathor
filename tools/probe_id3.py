@@ -30,14 +30,33 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "core"))
 
 from mutagen.id3 import ID3, ID3NoHeaderError  # noqa: E402
+from mutagen.mp3 import MP3  # noqa: E402
 
 from hathor.shared.config.paths import library_root, load_dotenv  # noqa: E402
 
 DATE_FRAMES = ("TDRC", "TDRL", "TDOR", "TYER", "TDAT", "TORY")
 
 
+ID3_EMITS = (
+    "TIT2", "TPE1", "TALB", "USLT", "APIC", "POPM", "TSSE", "TSOA", "TSOP", "TSOT",
+    "TDRC", "TDRL", "TYER", "TDAT", "TSRC", "SYLT", "TRCK", "TPE2", "TCON", "TPOS",
+)  # fmt: skip
+"""`[id3.counts]`에 넣는 프레임. **히스토그램은 이보다 많이 세고 정본은 이만큼만 든다.**"""
+
+CORPUS_EMITS = (
+    "seconds", "bytes", "44.1kHz", "48kHz", "mp3",
+    "read_failures", "nfd_names", "filename_convention",
+)  # fmt: skip
+"""`[corpus.counts]`에 넣는 수 (D-0371).
+
+**D-0366이 이 블록도 상류 없이 뒀다.** 여덟 개가 「백분율에서 거꾸로 푼 수」로 서
+있었고 `artist`만 남은 줄 알았다 — 세 블록 중 **둘**이었다. 파일을 한 번만 걷도록
+여기서 같이 센다.
+"""
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="ID3 프레임 전수 (D-0366)")
+    parser = argparse.ArgumentParser(description="ID3 프레임 · 코퍼스 전수 (D-0366 · D-0371)")
     parser.add_argument("--emit", action="store_true", help="실측 정본의 counts를 다시 쓴다")
     args = parser.parse_args()
     # **정본 해결기를 쓴다** (D-0367 · D-0066). 제 손으로 환경변수를 읽으면 `.env`가
@@ -57,6 +76,7 @@ def main() -> int:
 
     files = sorted(p for p in root.rglob("*.mp3") if p.is_file())
     frame_counter: Counter[str] = Counter()
+    corpus: Counter[str] = Counter()
     date_counter: Counter[str] = Counter()
     nfd_names = 0
     has_isrc = 0
@@ -69,6 +89,26 @@ def main() -> int:
         name = path.name
         if unicodedata.normalize("NFC", name) != name:
             nfd_names += 1
+        # **코퍼스 수도 같은 걸음에서 센다** (D-0371). 1004개를 두 번 걷지 않는다.
+        corpus["mp3"] += 1
+        corpus["bytes"] += path.stat().st_size
+        if "-" in path.stem:
+            corpus["filename_convention"] += 1
+        # **못 읽은 파일은 길이·샘플레이트를 안 더한다.** 0으로 더하면 합이 조용히
+        # 줄고 그 줄어듦을 아무도 못 본다 (GR-0.5). 실패는 아래 ID3 열기와 **같은
+        # 이름 집합**에 넣는다 — 한 파일이 둘 다 실패해도 하나로 센다.
+        try:
+            info = MP3(path).info  # type: ignore[no-untyped-call]
+        except Exception as exc:  # mutagen이 내는 예외가 한 종류가 아니다
+            failures.append((name, f"MP3.info {type(exc).__name__}: {exc}"))
+        else:
+            if info is None:
+                failures.append((name, "MP3.info가 없다"))
+            else:
+                corpus["seconds"] += round(info.length)
+                rate = {44100: "44.1kHz", 48000: "48kHz"}.get(info.sample_rate)
+                if rate:
+                    corpus[rate] += 1
         try:
             # mutagen의 `ID3`는 상류에서 주석이 없다. 우리가 고칠 수 없으므로
             # **여기 한 줄에만 선언하고 넘긴다** (D-0219 · D-0263).
@@ -129,7 +169,10 @@ def main() -> int:
         import measured
 
         print()
+        corpus["read_failures"] = len({name for name, _why in failures})
+        corpus["nfd_names"] = nfd_names
         changed = measured.emit("id3", {name: count for name, count in frame_counter.items()})
+        changed += measured.emit("corpus", {name: count for name, count in corpus.items()})
         for line in changed or ["바뀐 수가 없다"]:
             print(f"  {line}")
         print(f"정본 {measured.CANON.relative_to(measured.ROOT)} · 곡 {total}")

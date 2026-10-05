@@ -45,6 +45,65 @@ FLOOR_ROWS = 20
 """세 블록의 행 합계 **바닥** (D-0230). 실측 26행 — 정본이 비면 빈 표가 조용히 들어간다."""
 
 
+SOURCES = {
+    "corpus": ("probe_id3", "CORPUS_EMITS"),
+    "id3": ("probe_id3", "ID3_EMITS"),
+    "artist": ("probe_artist", "EMITS"),
+}
+"""블록 → (그 수를 세는 도구, 그 도구가 내는 키를 든 상수) (D-0371).
+
+**D-0366은 블록 셋을 내리고 상류를 하나만 붙였다.** `id3`만 `--emit`이 있었고
+`corpus`·`artist` **열넷**은 「백분율에서 거꾸로 푼 수」로 섰다. 기록은 `artist`만
+남았다고 적었다 — **세어 보지 않고 적은 수다** (GR-0.5).
+
+여기 적힌 상수를 **글자로 읽는다.** 도구를 임포트하면 `mutagen`이 딸려 와 `make check`에
+못 넣는다 (D-0256과 같은 자리).
+"""
+
+DECLARED = re.compile(r"(?ms)^(\w+)\s*=\s*\(\s*(.*?)\)")
+NAME = re.compile(r'"([^"]+)"')
+
+
+def emitted(tool: str, const: str) -> set[str]:
+    """그 도구가 **낸다고 선언한** 키. 없으면 비어 있고, 그것이 곧 문제가 된다."""
+    text = (ROOT / "tools" / f"{tool}.py").read_text(encoding="utf-8")
+    for found in DECLARED.finditer(text):
+        if found.group(1) == const:
+            return set(NAME.findall(found.group(2)))
+    return set()
+
+
+def check_upstream(data: dict[str, dict[str, object]]) -> list[str]:
+    """**정본의 수마다 그것을 세는 도구가 있나** — 양방향 (D-0371 · D-0363).
+
+    한쪽만 보면 **아무도 안 세는 수**가 조용히 눌러앉고, 반대쪽만 보면 **센 수를
+    버리는 것**이 안 보인다. 둘 다 사람 눈에만 보이는 종류다.
+    """
+    problems: list[str] = []
+    for name, (tool, const) in SOURCES.items():
+        counts = data.get(name, {}).get("counts")
+        if not isinstance(counts, dict):
+            problems.append(f"정본에 `[{name}.counts]`가 없다")
+            continue
+        declared = emitted(tool, const)
+        if not declared:
+            problems.append(f"`{tool}.{const}`을 못 읽었다 — 상류 선언이 사라졌다 (D-0230)")
+            continue
+        orphan = sorted(set(counts) - declared)
+        dropped = sorted(declared - set(counts))
+        if orphan:
+            problems.append(
+                f"`[{name}.counts]`의 {orphan}을 **아무도 안 센다** — "
+                f"`{tool}`이 내거나 정본에서 뺀다 (D-0371)"
+            )
+        if dropped:
+            problems.append(
+                f"`{tool}`이 내는 {dropped}이 `[{name}.counts]`에 없다 — "
+                "**센 수를 버린다.** `display`와 함께 더한다 (D-0366)"
+            )
+    return problems
+
+
 def begin(name: str) -> str:
     return f"<!-- measured:{name}:begin -->"
 
@@ -183,7 +242,7 @@ def check() -> list[str]:
             )
     if total < FLOOR_ROWS:
         problems.append(f"정본의 행이 {total}개다(바닥 {FLOOR_ROWS}). **그물이 비었다** (D-0230)")
-    return problems
+    return problems + check_upstream(data)
 
 
 def fix() -> list[str]:
