@@ -23,16 +23,21 @@
 # 이므로 각 백분율을 내는 정수는 대개 하나다(`62.8%` → 631 하나). 작성자가 그 자리에서
 # 한 번 틀렸다(630 → 62.7%).
 #
-# | 블록 | 상류 | 마지막 실측 |
-# |---|---|---|
-# | `id3` | `probe_id3 --emit` | **2026-10-04** — 복원값과 전 항목 일치 |
-# | `corpus` | `probe_id3 --emit` (D-0371) | **아직** — 복원값이다 |
-# | `artist` | `probe_artist --emit` (D-0371) | **아직** — 복원값이다 |
+# **마지막 실측일은 블록마다 `stamp`에 있다.** 여기 표로 또 적지 않는다 — D-0371이
+# 그렇게 적었고 그것이 **옮겨 적기**였다 (GR-0.7 · D-0373). `--emit`이 날짜를 쓰고
+# `measured.py`가 그것을 MASTER 표 아래에 찍는다.
 #
 # D-0366은 *«artist 집계 6개는 아직 상류가 없다»*라고 적었다. **`corpus` 여덟도
 # 없었다** — 세 블록 중 둘이었고 세어 보지 않고 적은 수다 (GR-0.5 · D-0371).
 # 이제 `measured.check_upstream()`이 **양방향**으로 본다: 아무도 안 세는 수와
 # 세고도 버리는 수를 둘 다 잡는다.
+#
+# ### 2026-10-05 전수에서 바뀐 수는 **하나**다
+#
+# `corpus.seconds` 230616 → 230626. **`bytes`는 안 바뀌었다** — 파일이 그대로라는
+# 뜻이고, 따라서 **음원이 아니라 자가 바뀐 것**이다. 1004곡에 10초, 곡당 0.01초이고
+# 「총 재생시간」은 시간 단위(64.1h)라 **표에서는 안 보인다.** 옛 수가 어떻게 나왔는지는
+# 기록이 없다 — 지금 자는 `round(MP3.info.length)`의 합이다 (D-0373).
 #
 #     cd core && uv run python ../tools/probe_id3.py --emit     # id3 + corpus
 #     cd core && uv run python ../tools/probe_artist.py --emit  # artist
@@ -40,11 +45,11 @@
 #     python3 tools/measured.py --check      # 정본 ↔ 거울 ↔ 상류
 
 [corpus]
-stamp = "2025-09-19"
+stamp = "2026-10-05"
 tracks = 1004
 
 [corpus.counts]
-seconds = 230616
+seconds = 230626
 bytes = 9286565870
 "44.1kHz" = 771
 "48kHz" = 233
@@ -97,8 +102,7 @@ kind = "nfc"
 of = "nfd_names"
 
 [id3]
-# 2025-09-19 첫 전수 · 2026-10-04 재측정(일치)
-stamp = "2026-10-04"
+stamp = "2026-10-05"
 tracks = 1004
 
 [id3.counts]
@@ -188,7 +192,7 @@ frames = ["TRCK", "TPE2", "TCON", "TPOS"]
 use = "필드 미정의"
 
 [artist]
-stamp = "2025-09-19"
+stamp = "2026-10-05"
 tracks = 1004
 
 [artist.counts]

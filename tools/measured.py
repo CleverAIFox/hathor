@@ -25,6 +25,7 @@ D-0361이 기획서 캡션의 «계약 5종»에서 같은 꼴을 잡았다.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import re
 import sys
 import tomllib
@@ -198,6 +199,12 @@ def table(name: str, section: dict[str, object]) -> str:
         if len(row) != len(head):
             raise LookupError(f"{name}의 행이 {len(row)}칸인데 머리는 {len(head)}칸이다")
         lines.append("| " + " | ".join(row) + " |")
+    # **언제 잰 수인지 표와 함께 둔다** (D-0373 · D-0269). 전에는 정본의 `stamp`를
+    # 아무도 안 쓰고 아무도 안 봤다 — 주석에 「마지막 실측」표를 **손으로** 적었다.
+    stamp, tracks = section.get("stamp"), section.get("tracks")
+    if not isinstance(stamp, str) or not isinstance(tracks, int):
+        raise LookupError(f"{name}에 `stamp`나 `tracks`가 없다 — 언제 잰 수인지 모른다")
+    lines += ["", f"<small>{tracks}곡 전수 · {stamp} 실측</small>"]
     return "\n".join(lines)
 
 
@@ -275,6 +282,29 @@ COUNT_LINE = re.compile(r'(?m)^([A-Za-z_][\w.]*|"[^"]+")( = )(\d+)$')
 """`counts` 표의 한 줄. **값만 간다** — 주석도 순서도 그대로 둔다 (D-0288과 같은 규율)."""
 
 
+STAMP_LINE = re.compile(r'(?m)^(stamp = ")(\d{4}-\d{2}-\d{2})(")')
+
+
+def restamp(text: str, section: str, today: str | None = None) -> str:
+    """그 블록의 `stamp`를 **오늘로** 바꿔 돌려준다 (D-0373).
+
+    **`--emit`이 수를 쓰면서 날짜를 안 썼다.** 그래서 `[artist]`가 2025-09-19로
+    남아 있었고, 「마지막 실측」을 **주석에 손으로** 적게 됐다 — 이 정본이 막으려던
+    바로 그 꼴이다 (GR-0.7). 날짜도 도구가 쓴다.
+    """
+    when = today or dt.date.today().isoformat()
+    head = f"[{section}]"
+    if head not in text:
+        raise LookupError(f"정본에 `{head}`가 없다")
+    start = text.index(head) + len(head)
+    stop = text.find("\n[", start)
+    block = text[start : stop if stop != -1 else len(text)]
+    fixed = STAMP_LINE.sub(lambda m: f"{m.group(1)}{when}{m.group(3)}", block, count=1)
+    if fixed == block and STAMP_LINE.search(block) is None:
+        raise LookupError(f"`{head}`에 `stamp`가 없다 — 언제 잰 수인지 적을 자리가 없다")
+    return text[:start] + fixed + text[start + len(block) :]
+
+
 def emit(section: str, counts: dict[str, int]) -> list[str]:
     """정본의 `[<section>.counts]`를 **센 수로 갈아 넣는다** (D-0366). 바뀐 키를 낸다.
 
@@ -285,6 +315,7 @@ def emit(section: str, counts: dict[str, int]) -> list[str]:
     조용히 자라는 정본은 아무도 안 읽는 정본이 된다.
     """
     text = CANON.read_text(encoding="utf-8")
+    text = restamp(text, section)
     head = f"[{section}.counts]"
     if head not in text:
         raise LookupError(f"정본에 `{head}`가 없다")
@@ -301,8 +332,9 @@ def emit(section: str, counts: dict[str, int]) -> list[str]:
         return f"{found.group(1)}{found.group(2)}{counts[key]}"
 
     fixed = COUNT_LINE.sub(swap, block)
-    if changed:
-        CANON.write_text(text[:start] + fixed + text[start + len(block) :], encoding="utf-8")
+    # **수가 안 바뀌어도 쓴다** — 날짜는 바뀌었다. 「다시 쟀다」는 사실이 수의
+    # 변화와 같지 않다 (D-0373). 그래야 *«바뀐 수가 없다»*도 기록에 남는다.
+    CANON.write_text(text[:start] + fixed + text[start + len(block) :], encoding="utf-8")
     missing = sorted(set(counts) - {m.group(1).strip('"') for m in COUNT_LINE.finditer(block)})
     if missing:
         changed.append(f"**정본에 없는 키 {len(missing)}개는 안 더했다**: {missing}")

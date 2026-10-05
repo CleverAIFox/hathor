@@ -320,3 +320,68 @@ def test_상류_판정이_입구까지_닿는다(
 
     assert TOOL.main() == 1
     assert "심은 것" in capsys.readouterr().err
+
+
+# ------------------------------------------------- 실측일 (D-0373)
+#
+# **`--emit`이 수를 쓰면서 날짜를 안 썼다.** 그래서 `[artist]`가 2025-09-19로 남았고,
+# D-0371은 「마지막 실측」을 **주석에 손으로** 적었다 — 이 정본이 막으려던 바로 그
+# 꼴이다 (GR-0.7). 날짜도 도구가 쓰고, 거울이 그것을 들고 다닌다.
+
+
+def test_표가_언제_잰_수인지_말한다() -> None:
+    """**수만 있고 날짜가 없으면 낡았는지 알 수 없다** (D-0269)."""
+    data = TOOL.canon()
+
+    for name in TOOL.BLOCKS:
+        body = TOOL.table(name, data[name])
+        assert f"{data[name]['stamp']} 실측" in body, name
+        assert f"{data[name]['tracks']}곡 전수" in body, name
+
+
+def test_날짜가_없으면_막는다() -> None:
+    """**심은 결함** (D-0069 · D-0230). 날짜 없는 표는 **언제 잰 수인지 모르는 표**다."""
+    data = TOOL.canon()
+    broken = {**data["artist"]}
+    broken.pop("stamp")
+
+    with pytest.raises(LookupError, match="언제 잰 수인지"):
+        TOOL.table("artist", broken)
+
+
+def test_다시_재면_날짜가_바뀐다() -> None:
+    """`restamp()` — **`--emit`이 부른다.** 수가 안 바뀌어도 날짜는 바뀐다."""
+    text = '[artist]\nstamp = "2020-01-01"\ntracks = 8\n\n[artist.counts]\nunique = 1\n'
+
+    fixed = TOOL.restamp(text, "artist", today="2026-10-05")
+
+    assert 'stamp = "2026-10-05"' in fixed
+    assert "unique = 1" in fixed, "수를 건드렸다"
+
+
+def test_다른_블록의_날짜는_안_건드린다() -> None:
+    """**블록 하나를 재면 그 블록만 바뀐다.** 안 그러면 안 잰 것이 재어진 척한다."""
+    text = '[corpus]\nstamp = "2020-01-01"\n\n[artist]\nstamp = "2020-01-01"\ntracks = 8\n'
+
+    fixed = TOOL.restamp(text, "artist", today="2026-10-05")
+
+    assert fixed.count('"2020-01-01"') == 1, fixed
+    assert fixed.index("[corpus]") < fixed.index('stamp = "2020-01-01"')
+
+
+def test_적을_자리가_없으면_막는다() -> None:
+    """**조용히 안 적는 것보다 막는 것이 낫다** (GR-0.5)."""
+    with pytest.raises(LookupError, match="stamp"):
+        TOOL.restamp("[artist]\ntracks = 8\n", "artist", today="2026-10-05")
+
+
+def test_주석이_날짜를_또_적지_않는다() -> None:
+    """**D-0371이 범한 그 자리** (GR-0.7 · D-0043).
+
+    정본 주석에 「마지막 실측」표를 손으로 적었다. 같은 날짜가 두 곳에 살면 한쪽만
+    고쳐지고, **그 한쪽이 주석이라 아무도 안 본다.**
+    """
+    body = TOOL.CANON.read_text(encoding="utf-8")
+    head = body[: body.index("[corpus]")]
+
+    assert "마지막 실측 |" not in head, "주석이 실측일 표를 또 든다"
