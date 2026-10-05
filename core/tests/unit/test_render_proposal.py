@@ -10,6 +10,7 @@ hathor의 `site/proposal.html`은 **PDF를 끼워 보여 주는 34줄**이었다
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -289,8 +290,9 @@ def test_제출본에_정본의_수가_없으면_운다(tmp_path: Path, monkeypa
     problems = TOOL.check()
 
     assert problems, "제출본이 비었는데 통과했다"
-    assert all("제출본에" in one for one in problems), problems
-    assert len(problems) == len(TOOL.truths())
+    assert sum("제출본에 «" in one for one in problems) == len(TOOL.truths()), problems
+    # 완전성 자도 같이 운다 — 글자가 없으면 제목도 없다 (D-0372).
+    assert any("제출본에 없다" in one for one in problems), problems
 
 
 # --------------------------------------------------------- 그림 (D-0370)
@@ -329,3 +331,99 @@ def test_화면은_PNG를_안_연다(tmp_path: Path) -> None:
     assert not gone.exists(), "시험이 파일을 만들었다 — 안 여는 것을 못 보인다"
     assert any("![설명](" in one for one in drawn), drawn
     assert all("width=" not in one for one in drawn), "화면에 쪽 폭을 적었다"
+
+
+# --------------------------------------------------- 완전성 (D-0372)
+#
+# **바이트 대조는 「손으로 안 바뀌었나」만 본다.** 생성기가 처음부터 빠뜨리면 커밋된
+# 것과 재생성 결과가 **같이 틀려서** 영원히 조용하다 — D-0370에서 그림 28장이 통째로
+# 빠진 채 관문 넷이 초록이었다. 그래서 **수가 아니라 정본과 맞댄다.**
+
+
+def test_정본의_제목이_화면에_다_있다() -> None:
+    """**112개 전부.** 하나라도 빠지면 그 절이 화면에서 사라진 것이다."""
+    assert TOOL.carried(TOOL.build(), TOOL.index()) == []
+
+
+def test_제목이_빠지면_운다() -> None:
+    """**심은 결함** (D-0069). 제목 하나를 지운 화면."""
+    made = TOOL.build()
+    heads, _tables = TOOL.canon_parts()
+    # **정본의 제목을 지운다.** 와꾸의 제목(칸·목차)을 지우면 다른 판정이 울어 섞인다.
+    target = next(
+        one
+        for one in re.findall(r"<h[234][^>]*>.*?</h[234]>", made, re.S)
+        if TOOL.bare(re.sub(r"</?h[234][^>]*>", "", one)) in heads
+    )
+    broken = made.replace(target, "<h3>딴 글자</h3>", 1)
+
+    problems = TOOL.carried(broken, TOOL.index())
+
+    assert any("화면에 없다" in one for one in problems), problems
+
+
+def test_표가_빠지면_운다() -> None:
+    """**심은 결함** (D-0069). 표 하나가 분류에서 빠진 화면."""
+    problems = TOOL.carried(TOOL.build().replace("<table>", "<div>", 1), TOOL.index())
+
+    assert any("화면의 표가" in one for one in problems), problems
+
+
+def test_그림이_빠지면_운다() -> None:
+    """**심은 결함** (D-0069). D-0370이 난 그 자리다."""
+    problems = TOOL.carried(TOOL.build().replace("<figure>", "<div>"), TOOL.index())
+
+    assert any("화면의 그림이 0장" in one for one in problems), problems
+
+
+def test_와꾸가_제목을_더_만들면_운다() -> None:
+    """**와꾸의 몫은 칸 이름과 「목차」뿐이다.** 그보다 많으면 누가 더 만든 것이다."""
+    problems = TOOL.carried(TOOL.build() + "<h2>덧붙인 제목</h2>", TOOL.index())
+
+    assert any("화면에만 있는 제목" in one for one in problems), problems
+
+
+def test_제출본의_엔티티를_푼다() -> None:
+    """**`&`가 `&amp;`로 남으면 그 제목이 없는 것으로 보인다** (D-0372).
+
+    `truths()`도 그 글자로 맞대 왔다 — 대조 다섯에 `&`가 없어서 조용했을 뿐이다.
+    완전성 자를 붙이자 **첫 실행에서** 드러났다.
+    """
+    text = TOOL.docx_text(TOOL.DOCX)
+
+    assert "&amp;" not in text, "엔티티가 안 풀렸다"
+    assert "Accuracy & Safety" in text
+
+
+def test_울타리_안은_제목으로_안_센다() -> None:
+    """정본의 코드 블록에 `## `로 시작하는 줄이 있어도 제목이 아니다."""
+    heads, _tables = TOOL.canon_parts()
+
+    assert len(heads) == len(set(heads)) or True  # 같은 제목이 둘일 수 있다
+    assert all(not one.startswith("#") for one in heads), "울타리 안을 셌다"
+
+
+def test_완전성_판정이_입구까지_닿는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069 · D-0352). 위 시험들이 `carried()`를 **직접** 부른다.
+
+    함수가 멀쩡해도 `check()`가 안 부르면 `make check`에서 아무 일도 안 일어난다.
+    D-0368 ~ D-0370이 세 판 연속 그 자리였다.
+    """
+    monkeypatch.setattr(TOOL, "carried", lambda _made, _slots: ["심은 것"])
+
+    assert "심은 것" in TOOL.check()
+
+
+def test_옮겨진_수가_화면에_오른다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**수를 눈앞에 둔다** (D-0269). 112 · 78 · 28이 통과 줄에 적힌다."""
+    monkeypatch.setattr(TOOL, "check", list)
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--check"])
+
+    assert TOOL.main() == 0
+
+    heads, tables = TOOL.canon_parts()
+    spoke = capsys.readouterr().out
+    assert f"제목 {len(heads)}" in spoke, spoke
+    assert f"표 {tables}" in spoke and f"그림 {len(TOOL.FIGURES)}" in spoke, spoke

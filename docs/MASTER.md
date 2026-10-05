@@ -2701,6 +2701,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0369 | 두 곳에서 재니 수가 달랐다 | `core/tests/unit/test_workflow_paths.py::test_안_날아가는_자리를_읽으면_운다` | 실물 이 저장소 — CI 실행 2건(`wiring` 30m57s · `proposal` deploy) · |
 | D-0370 | 화면에 그림이 **0장**이었다 | `core/tests/unit/test_render_proposal.py::test_화면이_그림을_전부_든다` | 실물 배포본 1판(사용자 `curl` 4줄 — 칸 6 · 그림 **0** · PNG 200 · 스크립트 1) · |
 | D-0371 | 상류 없는 집계가 **여섯이 아니라 열넷**이었다 | `core/tests/unit/test_measured.py::test_정본의_수마다_세는_도구가_있다` | 실물 이 저장소 — `measured.emit` 호출 전수 1곳(블록 3개 중) · 정본 집계 34개 |
+| D-0372 | 바이트 대조는 **빠뜨린 것을 못 본다** | `core/tests/unit/test_render_proposal.py::test_정본의_제목이_화면에_다_있다` | 실물 이 저장소 — 정본 전수(제목 112 · 표 78 · 그림 28) · 세 꼴 대조 |
 
 <!-- decision-ledger:end -->
 

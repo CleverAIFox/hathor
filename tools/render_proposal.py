@@ -259,6 +259,66 @@ def audit(groups: dict[str, list[tuple[str, str, str]]], slots: dict[str, str]) 
         )
 
 
+FRAME_HEADS = 1
+"""와꾸가 제 몫으로 더하는 제목 수 — 「목차」 하나. 칸 이름은 색인이 센다 (D-0372)."""
+
+ROW = re.compile(r"^\|[\s:|-]+\|$")
+HEAD = re.compile(r"<h([234])[^>]*>(.*?)</h\1>", re.S)
+
+
+def bare(text: str) -> str:
+    """태그를 걷어낸 글자. 제목을 정본과 맞대려면 같은 꼴이어야 한다."""
+    return re.sub(r"<[^>]+>", "", _html.unescape(text)).strip()
+
+
+def canon_parts() -> tuple[list[str], int]:
+    """정본이 든 `(제목, 표 수)`. **울타리 안은 제목이 아니다.**"""
+    heads, tables, fence = [], 0, False
+    for line in lines():
+        if line.startswith("```"):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        found = re.match(r"^#{2,4} (.+)$", line)
+        if found:
+            heads.append(found.group(1).strip())
+        elif ROW.match(line.strip()):
+            tables += 1
+    return heads, tables
+
+
+def carried(made: str, slots: dict[str, str]) -> list[str]:
+    """**정본이 든 것을 생성물이 다 담았나** (D-0372).
+
+    바이트 대조는 「손으로 안 바뀌었나」만 본다. 생성기가 **처음부터** 빠뜨리면 커밋된
+    것과 재생성 결과가 **같이 틀려서** 영원히 조용하다 — D-0370에서 그림 28장이 통째로
+    빠진 채 관문 넷이 전부 초록이었다. 그래서 **수가 아니라 정본과 맞댄다.**
+    """
+    heads, tables = canon_parts()
+    problems: list[str] = []
+
+    seen = [bare(text) for _level, text in HEAD.findall(made)]
+    lost = [one for one in heads if one not in seen]
+    if lost:
+        problems.append(f"정본의 제목 {len(lost)}개가 화면에 없다: {lost[:5]}")
+    want = len(dict.fromkeys(slots.values())) + FRAME_HEADS
+    extra = [one for one in seen if one not in heads]
+    if len(extra) != want:
+        problems.append(
+            f"화면에만 있는 제목이 {len(extra)}개다(와꾸의 몫 {want}): {extra[:8]} — "
+            "와꾸가 제목을 더 만들거나 정본의 제목이 다른 글자로 나왔다"
+        )
+
+    drawn = made.count("<figure>")
+    if drawn != len(FIGURES):
+        problems.append(f"화면의 그림이 {drawn}장이다(정본의 자리 {len(FIGURES)}). (D-0370)")
+    shown = made.count("<table>")
+    if shown != tables:
+        problems.append(f"화면의 표가 {shown}개다(정본 {tables}). 분류에서 빠진 덩이가 있다")
+    return problems
+
+
 def build() -> str:
     """화면 한 장. **정본에서만 나온다.**"""
     slots = index()
@@ -323,8 +383,15 @@ def short(path: Path) -> str:
 
 
 def docx_text(path: Path) -> str:
+    """제출본의 글자. **엔티티를 푼다** (D-0372).
+
+    안 풀면 `&`가 `&amp;`로 남는다. 「(Accuracy & Safety)」 같은 제목이 **없는 것으로
+    보이고**, `truths()`도 그 글자로 맞대 왔다 — 대조 다섯에 `&`가 없어서 조용했을
+    뿐이다. 완전성 자를 붙이자 그 자리에서 드러났다.
+    """
     with zipfile.ZipFile(path) as archive:
-        return re.sub(r"<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
+        body = archive.read("word/document.xml").decode("utf-8")
+    return _html.unescape(re.sub(r"<[^>]+>", "", body))
 
 
 def stamped_docx(path: Path) -> str | None:
@@ -392,6 +459,15 @@ def check() -> list[str]:
         for name, body in (("제출본", text), ("화면", screen)):
             if value not in body:
                 problems.append(f"{name}에 «{value}»가 없다 ({where})")
+    problems += carried(made, index())
+    heads, tables = canon_parts()
+    lost = [one for one in heads if one not in text]
+    if lost:
+        problems.append(f"정본의 제목 {len(lost)}개가 제출본에 없다: {lost[:5]} (D-0372)")
+    with zipfile.ZipFile(DOCX) as archive:
+        inside = archive.read("word/document.xml").decode("utf-8").count("<w:tbl>")
+    if inside != tables:
+        problems.append(f"제출본의 표가 {inside}개다(정본 {tables}). 빌드가 빠뜨렸다 (D-0372)")
     return problems
 
 
@@ -415,9 +491,11 @@ def main() -> int:
             for text in problems:
                 print(f"  - {text}", file=sys.stderr)
             return 1
+        heads, tables = canon_parts()
         print(
             f"기획서 검사 통과 · 정본 대조 {len(truths())}건 · "
-            f"칸 {len(dict.fromkeys(index().values()))}개 · 생성물 2개"
+            f"칸 {len(dict.fromkeys(index().values()))}개 · 생성물 2개 · "
+            f"옮겨진 것 제목 {len(heads)} · 표 {tables} · 그림 {len(FIGURES)}"
         )
         return 0
 
