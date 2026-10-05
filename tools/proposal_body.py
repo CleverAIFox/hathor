@@ -21,6 +21,7 @@ MASTER Part I~III (정본)
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from proposal_source import SourceError, source
@@ -138,25 +139,35 @@ def _image(path: Path, caption: str) -> list[str]:
     return ["", f"![{caption}]({path.resolve().as_posix()}){{width={inches:.2f}in}}", ""]
 
 
-def place_figures(body: str, figures: dict[str, Path]) -> str:
+Drawn = Callable[[Path, str], list[str]]
+
+
+def place_figures(body: str, figures: dict[str, Path], image: Drawn = _image) -> str:
+    """그림을 제목 자리에 박는다. **그리는 법은 밖에서 준다** (D-0370).
+
+    제출본은 쪽 폭(`{width=…in}`)을 적어야 하고 **그러려면 PNG를 열어야 한다.**
+    화면은 그 폭이 필요 없고(CSS가 맡는다) `--check`이 pandoc도 그림도 없는 CI에서
+    돌아야 하므로 **파일을 안 연다.** 자리를 고르는 법은 하나다 (D-0043).
+    """
+
     lines = body.splitlines()
     for heading, name, caption, where in FIGURES:
         start, end = _span(lines, heading)
-        image = _image(figures[name], caption)
+        drawn_lines = image(figures[name], caption)
         if where == "replace":
             fence = next((i for i in range(start, end) if lines[i].startswith("```")), None)
             if fence is None:
                 raise SourceError(f"`{heading}`에 바꿀 코드 블록이 없다")
             close = next(i for i in range(fence + 1, end) if lines[i].startswith("```"))
-            lines[fence : close + 1] = image
+            lines[fence : close + 1] = drawn_lines
         elif where == "intro":
             first = next(i for i in range(start + 1, end) if lines[i].strip())
             blank = next((i for i in range(first, end) if not lines[i].strip()), end)
-            lines[blank:blank] = image
+            lines[blank:blank] = drawn_lines
         else:
             while end > start and not lines[end - 1].strip():
                 end -= 1
-            lines[end:end] = image
+            lines[end:end] = drawn_lines
     return "\n".join(lines) + "\n"
 
 

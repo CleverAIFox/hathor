@@ -291,3 +291,41 @@ def test_제출본에_정본의_수가_없으면_운다(tmp_path: Path, monkeypa
     assert problems, "제출본이 비었는데 통과했다"
     assert all("제출본에" in one for one in problems), problems
     assert len(problems) == len(TOOL.truths())
+
+
+# --------------------------------------------------------- 그림 (D-0370)
+#
+# **D-0368의 화면에는 그림이 0장이었다.** `inline()`은 `![](…)`을 `<figure>`로 잘
+# 바꿨고 그것을 보는 시험도 있었는데, **정본에 `![](…)`이 없다** — 그림은
+# `place_figures()`가 박고 **제출본 쪽만 그것을 불렀다.** 관문 넷이 전부 초록이었다.
+# 함수를 재고 **먹이가 오는지는 안 쟀다** (D-0352 · D-0359 · D-0368과 같은 모양).
+
+BODY = tool_module("proposal_body")
+
+
+def test_화면이_그림을_전부_든다() -> None:
+    """**제출본 28장 · 화면 0장이었다** (D-0370)."""
+    made = TOOL.build()
+
+    assert made.count("<figure>") == len(BODY.FIGURES), "제출본과 장수가 다르다"
+    for _heading, name, _caption, _where in BODY.FIGURES:
+        assert f'src="{TOOL.FIGURE_DIR}/{name}.png"' in made, name
+
+
+def test_제출본과_화면이_같은_목록을_쓴다() -> None:
+    """**두 곳에 적으면 어긋난다** (D-0043). 자리 표는 `proposal_body` 하나다."""
+    assert set(TOOL.plan()) == {name for _h, name, _c, _w in BODY.FIGURES}
+
+
+def test_화면은_PNG를_안_연다(tmp_path: Path) -> None:
+    """**`--check`은 그림 없는 CI에서 돈다** (D-0369 · `var/`는 git이 안 나른다).
+
+    제출본은 쪽 폭을 적느라 파일을 열어야 한다 — 화면은 CSS가 맡으므로 안 연다.
+    """
+    gone = tmp_path / "없는것.png"
+
+    drawn = TOOL.pictured(gone, "설명")
+
+    assert not gone.exists(), "시험이 파일을 만들었다 — 안 여는 것을 못 보인다"
+    assert any("![설명](" in one for one in drawn), drawn
+    assert all("width=" not in one for one in drawn), "화면에 쪽 폭을 적었다"

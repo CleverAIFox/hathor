@@ -2698,6 +2698,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0367 | 독스트링의 명령을 그대로 쳤더니 터졌다 | `core/tests/unit/test_args.py::test_묶음이_필요한_도구는_uv_run으로_적는다` | 실물 이 저장소 — 쓰임새 전수 2판(6 → 2 · 자 교정) · 환경변수 독자 전수 2판 |
 | D-0368 | 기획서를 화면으로도 낸다 | `core/tests/unit/test_render_proposal.py::test_화면이_정본과_같다` | 실물 이 저장소 — 절 전수 22개(번호 충돌 3 · 못 가르는 절 6) · |
 | D-0369 | 두 곳에서 재니 수가 달랐다 | `core/tests/unit/test_workflow_paths.py::test_안_날아가는_자리를_읽으면_운다` | 실물 이 저장소 — CI 실행 2건(`wiring` 30m57s · `proposal` deploy) · |
+| D-0370 | 화면에 그림이 **0장**이었다 | `core/tests/unit/test_render_proposal.py::test_화면이_그림을_전부_든다` | 실물 배포본 1판(사용자 `curl` 4줄 — 칸 6 · 그림 **0** · PNG 200 · 스크립트 1) · |
 
 <!-- decision-ledger:end -->
 

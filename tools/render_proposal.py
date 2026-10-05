@@ -56,6 +56,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 import measured  # noqa: E402
+from proposal_body import FIGURES, place_figures  # noqa: E402
 from proposal_source import FINGERPRINT, SourceError, fingerprint, source  # noqa: E402
 
 OUT = ROOT / "site" / "proposal.html"
@@ -100,9 +101,28 @@ def index() -> dict[str, str]:
     return slots
 
 
+def pictured(path: Path, caption: str) -> list[str]:
+    """화면에 박을 그림 한 줄. **PNG를 안 연다** (D-0370).
+
+    제출본은 쪽 폭을 적느라 파일을 열어야 하는데, `--check`은 pandoc도 그림도 없는
+    CI에서 돌고 **`var/`는 git이 안 나른다** (D-0369). 폭은 CSS가 맡는다.
+    """
+    return ["", f"![{caption}]({path.as_posix()})", ""]
+
+
+def plan() -> dict[str, Path]:
+    """그림 이름 → 화면에서 가리킬 자리. **제출본과 같은 목록을 쓴다** (D-0043)."""
+    return {name: Path(FIGURE_DIR) / f"{name}.png" for _, name, _, _ in FIGURES}
+
+
 def lines() -> list[str]:
-    """기획서 구간의 줄. **울타리 안은 제목으로 안 읽는다.**"""
-    return source().split("\n")
+    """기획서 구간의 줄. **그림이 박힌 뒤다** (D-0370) · 울타리 안은 제목으로 안 읽는다.
+
+    D-0368은 정본을 **그대로** 읽었다. 정본에는 그림이 없고 `place_figures()`가 박는데
+    **제출본 쪽만 그것을 불렀다** — 화면에 28장이 전부 빠졌고, 배포는 아무도 안 가리키는
+    PNG 28장을 올리고 있었다. `inline()`은 멀쩡했고 **먹이가 안 왔다.**
+    """
+    return place_figures(source(), plan(), image=pictured).split("\n")
 
 
 def headings() -> list[str]:
