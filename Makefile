@@ -141,6 +141,11 @@ ship:          ## 내보내도 되는가. make ship [PUSH=1] [FIX=1] (D-0147)
 proposal:      ## 기획서를 MASTER Part I ~ III에서 빌드한다. graphviz · 한글 글꼴 필요 (D-0221)
 	cd core && uv run --group docs python ../tools/build_proposal.py
 
+measure:       ## 실측 정본을 기기에서 다시 잰다. 음원 1004곡 · var/ingest 필요 (D-0374)
+	cd core && uv run python ../tools/probe_id3.py --emit
+	cd core && uv run python ../tools/probe_artist.py --emit
+	$(MAKE) docs-fix
+
 load:          ## 관문 전부를 부하 아래서 돌려 거짓 실패를 잡는다. 1분 (D-0355)
 	python3 tools/check_under_load.py --check $(if $(ROUNDS),--rounds $(ROUNDS),)
 

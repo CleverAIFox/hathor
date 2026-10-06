@@ -6,6 +6,7 @@
 
     cd core && uv run python ../tools/probe_id3.py          # 사람이 읽는 전수
     cd core && uv run python ../tools/probe_id3.py --emit    # 정본의 counts를 갈아 넣는다
+    make measure                                              # 둘 다 + 거울 (D-0374)
 
 **맨 `python3`로는 안 돈다** — `mutagen`이 프로젝트 묶음에 있다. 작성자가 독스트링에
 맨 `python3`를 적었고 **사용자가 그 줄을 그대로 쳐서 터졌다** (D-0367). 이제
@@ -37,11 +38,22 @@ from hathor.shared.config.paths import library_root, load_dotenv  # noqa: E402
 DATE_FRAMES = ("TDRC", "TDRL", "TDOR", "TYER", "TDAT", "TORY")
 
 
+ID3_RULER = "2026-10-04"
+"""`[id3.counts]`를 낸 자의 이름 (D-0374). 프레임 보유 여부는 첫 판부터 같다."""
+
 ID3_EMITS = (
     "TIT2", "TPE1", "TALB", "USLT", "APIC", "POPM", "TSSE", "TSOA", "TSOP", "TSOT",
     "TDRC", "TDRL", "TYER", "TDAT", "TSRC", "SYLT", "TRCK", "TPE2", "TCON", "TPOS",
 )  # fmt: skip
 """`[id3.counts]`에 넣는 프레임. **히스토그램은 이보다 많이 세고 정본은 이만큼만 든다.**"""
+
+CORPUS_RULER = "2026-10-06"
+"""`[corpus.counts]`를 낸 자의 이름 (D-0374).
+
+**2026-10-06에 바뀌었다** — `filename_convention`이 「하이픈이 있나」에서 「태그의
+아티스트로 시작하나」가 됐다. 전자는 전수가 1004/1004라 **아무것도 안 재는 자**였다
+(D-0230). 그래서 이 블록은 **다시 재야 한다.**
+"""
 
 CORPUS_EMITS = (
     "seconds", "bytes", "44.1kHz", "48kHz", "mp3",
@@ -53,6 +65,22 @@ CORPUS_EMITS = (
 있었고 `artist`만 남은 줄 알았다 — 세 블록 중 **둘**이었다. 파일을 한 번만 걷도록
 여기서 같이 센다.
 """
+
+
+def artist_of(tags: object) -> str:
+    """`TPE1`의 글자. 없으면 빈 문자열."""
+    frame = getattr(tags, "get", lambda _k: None)("TPE1")
+    return str(frame).strip() if frame is not None else ""
+
+
+def named(stem: str, tags: object) -> bool:
+    """파일명이 `<TPE1>-…` 꼴인가 (D-0374).
+
+    **이름 안의 하이픈과 안 싸운다.** 첫 하이픈에서 자르면 `G-DRAGON`이 `G`가 되고
+    `probe_artist`가 그것을 **불일치 16곡**으로 찍었다 — 거짓 경보다 (GR-0.8).
+    """
+    artist = artist_of(tags)
+    return bool(artist) and stem.startswith(f"{artist}-")
 
 
 def main() -> int:
@@ -92,8 +120,6 @@ def main() -> int:
         # **코퍼스 수도 같은 걸음에서 센다** (D-0371). 1004개를 두 번 걷지 않는다.
         corpus["mp3"] += 1
         corpus["bytes"] += path.stat().st_size
-        if "-" in path.stem:
-            corpus["filename_convention"] += 1
         # **못 읽은 파일은 길이·샘플레이트를 안 더한다.** 0으로 더하면 합이 조용히
         # 줄고 그 줄어듦을 아무도 못 본다 (GR-0.5). 실패는 아래 ID3 열기와 **같은
         # 이름 집합**에 넣는다 — 한 파일이 둘 다 실패해도 하나로 센다.
@@ -119,6 +145,12 @@ def main() -> int:
         except Exception as exc:
             failures.append((name, f"{type(exc).__name__}: {exc}"))
             continue
+
+        # **파일명 규칙은 태그로 본다** (D-0374). 「하이픈이 있나」는 `G-DRAGON-무제.mp3`도
+        # 통과시키고 **전수가 1004/1004가 된다** — 늘 100%인 자는 아무것도 안 재는 자다
+        # (D-0230). 태그의 아티스트로 시작하는지 보면 이름 안의 하이픈과 안 싸운다.
+        if named(path.stem, tags):
+            corpus["filename_convention"] += 1
 
         keys = set(tags.keys())  # type: ignore[no-untyped-call]
         prefixes = {k.split(":")[0] for k in keys}

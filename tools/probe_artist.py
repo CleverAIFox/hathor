@@ -6,6 +6,7 @@ D-0366이 `docs/measured.toml`을 정본으로 내리며 세 블록을 넣었고
 
     cd core && uv run python ../tools/probe_artist.py          # 사람이 읽는 전수
     cd core && uv run python ../tools/probe_artist.py --emit   # 정본의 counts를 갈아 넣는다
+    make measure                                             # 둘 다 + 거울 (D-0374)
 
 ### 입력이 다르다
 
@@ -71,6 +72,14 @@ COUNTED: dict[str, tuple[str, str]] = {
 ALL_SEPARATORS = "(?i)(" + ")|(".join(p.replace("(?i)", "") for p in SEPARATORS.values()) + ")"
 """**어느 구분자도 없는 곡**을 가리기 위한 합집합. `analyze()`가 쓰던 식 그대로다 (D-0043)."""
 
+
+RULER = "2026-10-05"
+"""**이 수를 낸 자의 이름** (D-0374). 세는 법을 바꾸면 여기를 바꾼다.
+
+그러면 `measured`가 *«자가 바뀐 뒤 다시 안 쟀다»*로 운다. `seconds`가 10초 움직였을
+때 **옛 수가 어떤 자로 나왔는지 기록이 없어서** 음원인지 자인지 가르는 데 `bytes`를
+봐야 했다 (D-0373). 자에 이름이 있으면 그 자리에서 안다.
+"""
 
 EMITS = ("unique", "plain", "bracket", "comma", "ampersand", "separator_words")
 """이 도구가 정본에 넣는 키. **`measured`가 양방향으로 맞댄다** (D-0371).
@@ -141,8 +150,18 @@ def analyze(records: list[dict[str, object]]) -> None:
         print(f"  {count:3d}회  {content!r}")
 
 
+def matches(stem: str, artist: str) -> bool:
+    """파일명이 `<아티스트>-…` 꼴인가 (D-0374 · D-0006).
+
+    **첫 하이픈에서 자르지 않는다.** 그러면 `G-DRAGON-무제`의 아티스트가 `G`가 되고
+    태그와 영원히 어긋난다 — 실측으로 **불일치 18곡 중 16곡이 그 한 이름**이었다.
+    거짓 경보는 진짜 경보를 죽인다 (GR-0.8).
+    """
+    return bool(artist) and stem.startswith(f"{artist}-")
+
+
 def cross_check_filenames(records: list[dict[str, object]]) -> None:
-    """파일명 `아티스트-제목.mp3`와 TPE1 태그를 대조한다(D-0006)."""
+    """파일명 `아티스트-제목.mp3`와 TPE1 태그를 대조한다 (D-0006 · D-0374)."""
     print()
     print("=== 파일명 대 태그 교차검증 ===")
     mismatched: list[tuple[str, str]] = []
@@ -154,18 +173,18 @@ def cross_check_filenames(records: list[dict[str, object]]) -> None:
         if "-" not in stem:
             no_hyphen += 1
             continue
-        from_name = stem.split("-", 1)[0].strip()
         from_tag = str(record["tags"]["artist"]).strip()  # type: ignore[index]
-        if from_name != from_tag:
-            mismatched.append((from_name, from_tag))
+        if not matches(stem, from_tag):
+            mismatched.append((stem, from_tag))
 
     total = len(records)
     print(f"  하이픈 없는 파일명: {no_hyphen}곡")
     print(f"  불일치: {len(mismatched)}곡 ({len(mismatched) / total * 100:.1f}%)")
+    print("  **첫 하이픈에서 자르지 않는다** — 이름 안의 하이픈과 안 싸운다 (D-0374)")
     print()
     print("  불일치 표본 (최대 20):")
-    for from_name, from_tag in mismatched[:20]:
-        print(f"    파일명={from_name!r}  태그={from_tag!r}")
+    for stem, from_tag in mismatched[:20]:
+        print(f"    파일명={stem!r}  태그={from_tag!r}")
 
 
 def scripts(value: str) -> set[str]:

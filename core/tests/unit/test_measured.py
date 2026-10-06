@@ -17,10 +17,21 @@ from tests.conftest import tool_module
 
 TOOL = tool_module("measured")
 
+RERUN = "다시 안 쟀다"
+"""**자가 바뀐 블록은 다시 재야 한다** (D-0374) — 그의 기기에서만 된다.
+
+그 판정은 **열려 있을 수 있다.** 여기 시험은 *«그것 말고 다른 문제가 없나»*를 본다 —
+수를 못으로 박으면 그가 `make measure`를 돌린 날 **고친 쪽이 빨개진다.**
+"""
+
+
+def _other(problems: list[str]) -> list[str]:
+    return [one for one in problems if RERUN not in one]
+
 
 def test_거울이_정본과_같다() -> None:
     """`make check`이 보는 그 판정. **두 곳에 적으면 어긋난다** (D-0043)."""
-    assert TOOL.check() == []
+    assert _other(TOOL.check()) == []
 
 
 def test_세_블록이_다_거울이다() -> None:
@@ -39,7 +50,7 @@ def test_거울을_손으로_고치면_운다(tmp_path: Path, monkeypatch: pytes
     fake.write_text(master.replace("| 곡 수 | 1,004 |", "| 곡 수 | 9,999 |", 1), encoding="utf-8")
     monkeypatch.setattr(TOOL, "MASTER", fake)
 
-    problems = TOOL.check()
+    problems = _other(TOOL.check())
 
     assert len(problems) == 1, f"손으로 고친 수를 못 봤다: {problems}"
     assert "개발 코퍼스" in problems[0]
@@ -52,7 +63,7 @@ def test_fix가_거울을_되돌린다(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(TOOL, "MASTER", fake)
 
     assert TOOL.fix() == ["corpus"]
-    assert TOOL.check() == []
+    assert _other(TOOL.check()) == []
     assert "9,999" not in fake.read_text(encoding="utf-8")
 
 
@@ -64,7 +75,7 @@ def test_표식이_없으면_거울이_아니라고_한다(
     fake.write_text("### □ 개발 코퍼스 실측\n\n| 항목 | 값 |\n", encoding="utf-8")
     monkeypatch.setattr(TOOL, "MASTER", fake)
 
-    problems = TOOL.check()
+    problems = _other(TOOL.check())
 
     assert len(problems) == len(TOOL.BLOCKS)
     assert all("거울이 아니다" in one for one in problems)
@@ -253,7 +264,7 @@ def test_표식_이름이_정본과_같은_말을_쓴다() -> None:
 
 def test_정본의_수마다_세는_도구가_있다() -> None:
     """`make check`이 보는 그 판정."""
-    assert TOOL.check_upstream(TOOL.canon()) == []
+    assert _other(TOOL.check_upstream(TOOL.canon())) == []
 
 
 def test_블록마다_상류가_선언돼_있다() -> None:
@@ -266,7 +277,7 @@ def test_아무도_안_세는_수를_잡는다() -> None:
     data = TOOL.canon()
     data["artist"]["counts"] = {**data["artist"]["counts"], "심은것": 7}
 
-    problems = TOOL.check_upstream(data)
+    problems = _other(TOOL.check_upstream(data))
 
     assert len(problems) == 1, problems
     assert "아무도 안 센다" in problems[0]
@@ -385,3 +396,40 @@ def test_주석이_날짜를_또_적지_않는다() -> None:
     head = body[: body.index("[corpus]")]
 
     assert "마지막 실측 |" not in head, "주석이 실측일 표를 또 든다"
+
+
+# ------------------------------------------------- 자의 이름 (D-0374)
+#
+# **`seconds`가 10초 움직였을 때 옛 수가 어떤 자로 나왔는지 기록이 없었다.** 음원인지
+# 자인지 가르려고 `bytes`를 봐야 했다 (D-0373). 자에 이름이 있으면 그 자리에서 안다.
+
+
+def test_자가_바뀌면_다시_재라고_운다() -> None:
+    """**심은 결함** (D-0069). 도구의 자와 정본의 자가 다르면 그 수는 **없는 자의 것**이다."""
+    data = TOOL.canon()
+    data["artist"] = {**data["artist"], "ruler": "옛날자"}
+
+    problems = TOOL.check_upstream(data)
+
+    assert any("옛날자" in one and RERUN in one for one in problems), problems
+
+
+def test_자에_이름이_없으면_막는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
+    monkeypatch.setattr(TOOL, "ruler_of", lambda _t, _c: "")
+
+    problems = TOOL.check_upstream(TOOL.canon())
+
+    assert len(problems) == len(TOOL.SOURCES), problems
+    assert all("자에 이름이 없다" in one for one in problems), problems
+
+
+def test_자_이름을_정본에_넣는다() -> None:
+    """`reruler()` — **`--emit`이 부른다.** 없으면 `stamp` 아래에 만든다."""
+    without = '[artist]\nstamp = "2026-10-05"\ntracks = 8\n'
+    made = TOOL.reruler(without, "artist", "새자")
+    assert 'ruler = "새자"' in made
+
+    again = TOOL.reruler(made, "artist", "더새자")
+    assert 'ruler = "더새자"' in again
+    assert again.count("ruler =") == 1, "자 이름이 두 벌이 됐다"

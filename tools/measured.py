@@ -47,11 +47,11 @@ FLOOR_ROWS = 20
 
 
 SOURCES = {
-    "corpus": ("probe_id3", "CORPUS_EMITS"),
-    "id3": ("probe_id3", "ID3_EMITS"),
-    "artist": ("probe_artist", "EMITS"),
+    "corpus": ("probe_id3", "CORPUS_EMITS", "CORPUS_RULER"),
+    "id3": ("probe_id3", "ID3_EMITS", "ID3_RULER"),
+    "artist": ("probe_artist", "EMITS", "RULER"),
 }
-"""블록 → (그 수를 세는 도구, 그 도구가 내는 키를 든 상수) (D-0371).
+"""블록 → (세는 도구, 내는 키를 든 상수, **자의 이름**을 든 상수) (D-0371 · D-0374).
 
 **D-0366은 블록 셋을 내리고 상류를 하나만 붙였다.** `id3`만 `--emit`이 있었고
 `corpus`·`artist` **열넷**은 「백분율에서 거꾸로 푼 수」로 섰다. 기록은 `artist`만
@@ -63,6 +63,14 @@ SOURCES = {
 
 DECLARED = re.compile(r"(?ms)^(\w+)\s*=\s*\(\s*(.*?)\)")
 NAME = re.compile(r'"([^"]+)"')
+RULER_LINE = re.compile(r'(?m)^ruler = "([^"]*)"')
+
+
+def ruler_of(tool: str, const: str) -> str:
+    """그 도구가 **제 자에 붙인 이름.** 없으면 빈 문자열이고 그것이 곧 문제가 된다."""
+    text = (ROOT / "tools" / f"{tool}.py").read_text(encoding="utf-8")
+    found = re.search(rf'(?m)^{re.escape(const)} = "([^"]*)"', text)
+    return found.group(1) if found else ""
 
 
 def emitted(tool: str, const: str) -> set[str]:
@@ -81,7 +89,7 @@ def check_upstream(data: dict[str, dict[str, object]]) -> list[str]:
     버리는 것**이 안 보인다. 둘 다 사람 눈에만 보이는 종류다.
     """
     problems: list[str] = []
-    for name, (tool, const) in SOURCES.items():
+    for name, (tool, const, ruler_const) in SOURCES.items():
         counts = data.get(name, {}).get("counts")
         if not isinstance(counts, dict):
             problems.append(f"정본에 `[{name}.counts]`가 없다")
@@ -101,6 +109,15 @@ def check_upstream(data: dict[str, dict[str, object]]) -> list[str]:
             problems.append(
                 f"`{tool}`이 내는 {dropped}이 `[{name}.counts]`에 없다 — "
                 "**센 수를 버린다.** `display`와 함께 더한다 (D-0366)"
+            )
+        # **자가 바뀌었는데 안 재면, 수는 없는 자가 낸 것이다** (D-0374).
+        now, was = ruler_of(tool, ruler_const), data.get(name, {}).get("ruler")
+        if not now:
+            problems.append(f"`{tool}.{ruler_const}`을 못 읽었다 — 자에 이름이 없다")
+        elif was != now:
+            problems.append(
+                f"`[{name}]`의 수는 자 «{was}»가 냈는데 `{tool}`의 자는 «{now}»다 — "
+                f"**세는 법이 바뀌었고 다시 안 쟀다.** `{tool} --emit`을 돌린다 (D-0374)"
             )
     return problems
 
@@ -285,6 +302,24 @@ COUNT_LINE = re.compile(r'(?m)^([A-Za-z_][\w.]*|"[^"]+")( = )(\d+)$')
 STAMP_LINE = re.compile(r'(?m)^(stamp = ")(\d{4}-\d{2}-\d{2})(")')
 
 
+RULER_IN = re.compile(r'(?m)^(ruler = ")([^"]*)(")')
+
+
+def reruler(text: str, section: str, ruler: str) -> str:
+    """그 블록의 `ruler`를 지금 자의 이름으로 바꾼다. 없으면 `stamp` 아래에 만든다."""
+    head = f"[{section}]"
+    if head not in text:
+        raise LookupError(f"정본에 `{head}`가 없다")
+    start = text.index(head) + len(head)
+    stop = text.find("\n[", start)
+    block = text[start : stop if stop != -1 else len(text)]
+    if RULER_IN.search(block):
+        fixed = RULER_IN.sub(lambda m: f"{m.group(1)}{ruler}{m.group(3)}", block, count=1)
+    else:
+        fixed = STAMP_LINE.sub(lambda m: f'{m.group(0)}\nruler = "{ruler}"', block, count=1)
+    return text[:start] + fixed + text[start + len(block) :]
+
+
 def restamp(text: str, section: str, today: str | None = None) -> str:
     """그 블록의 `stamp`를 **오늘로** 바꿔 돌려준다 (D-0373).
 
@@ -316,6 +351,8 @@ def emit(section: str, counts: dict[str, int]) -> list[str]:
     """
     text = CANON.read_text(encoding="utf-8")
     text = restamp(text, section)
+    tool, _emits, ruler_const = SOURCES[section]
+    text = reruler(text, section, ruler_of(tool, ruler_const))
     head = f"[{section}.counts]"
     if head not in text:
         raise LookupError(f"정본에 `{head}`가 없다")

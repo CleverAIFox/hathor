@@ -111,12 +111,14 @@ def test_emit이_정본까지_닿는다(
     monkeypatch.setattr(TOOL, "INGEST", ingest)
     monkeypatch.setattr(MEASURED, "CANON", canon)
     monkeypatch.setattr(MEASURED, "ROOT", tmp_path)
+    monkeypatch.setattr(MEASURED, "ruler_of", lambda _t, _c: "심은자")
     monkeypatch.setattr("sys.argv", ["probe_artist.py", "--emit"])
 
     assert TOOL.main() == 0
 
     written = canon.read_text(encoding="utf-8")
     assert "unique = 8" in written, written
+    assert 'ruler = "심은자"' in written, "자 이름을 안 썼다 (D-0374)"
     assert "bracket = 3" in written
     assert "plain = 2" in written
     spoke = capsys.readouterr().out
@@ -141,3 +143,32 @@ def test_emit을_안_주면_정본을_안_건드린다(tmp_path: Path, monkeypat
 
     assert TOOL.main() == 0
     assert canon.read_text(encoding="utf-8") == before
+
+
+# ------------------------------------------------- 파일명 ↔ 태그 (D-0374)
+#
+# 그의 기기 전수가 **불일치 18곡(1.8%)**을 찍었고 그중 **16곡이 `G-DRAGON`** 하나였다.
+# 자가 첫 하이픈에서 잘라 아티스트를 `G`로 읽은 탓이다 — **거짓 경보는 진짜 경보를
+# 죽인다** (GR-0.8). 태그로 시작하는지 보면 이름 안의 하이픈과 안 싸운다.
+
+MATCHES = (
+    ("G-DRAGON-무제", "G-DRAGON", True),
+    ("Anne-Marie-2002", "Anne-Marie", True),
+    ("아이유-밤편지", "아이유", True),
+    ("디핵(D-Hack)-OHAYO MY NIGHT", "디핵(D-Hack), PATEKO(파테코)", False),
+    ("딴사람-노래", "아이유", False),
+    ("아이유", "", False),
+)
+
+
+@pytest.mark.parametrize(("stem", "artist", "same"), MATCHES)
+def test_이름_안의_하이픈과_안_싸운다(stem: str, artist: str, same: bool) -> None:
+    """**그날 실물에 있던 이름 그대로다.** 넷째는 **진짜 불일치**다 — 태그가 둘인데
+    파일명은 하나다. 거짓 경보 열여섯이 그것을 덮고 있었다."""
+    assert TOOL.matches(stem, artist) is same
+
+
+def test_자에_이름이_있다() -> None:
+    """**세는 법이 바뀌면 여기가 바뀐다** (D-0374). `measured`가 정본과 맞댄다."""
+    assert TOOL.RULER
+    assert MEASURED.ruler_of("probe_artist", "RULER") == TOOL.RULER

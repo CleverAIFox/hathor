@@ -39,13 +39,19 @@
 # 「총 재생시간」은 시간 단위(64.1h)라 **표에서는 안 보인다.** 옛 수가 어떻게 나왔는지는
 # 기록이 없다 — 지금 자는 `round(MP3.info.length)`의 합이다 (D-0373).
 #
-#     cd core && uv run python ../tools/probe_id3.py --emit     # id3 + corpus
-#     cd core && uv run python ../tools/probe_artist.py --emit  # artist
-#     python3 tools/measured.py --fix        # MASTER 거울을 다시 쓴다
-#     python3 tools/measured.py --check      # 정본 ↔ 거울 ↔ 상류
+#     make measure                           # 기기에서. 둘 다 다시 재고 거울을 맞춘다
+#     python3 tools/measured.py --check      # 정본 ↔ 거울 ↔ 상류 ↔ **자의 이름**
+#
+# ### 자에도 이름이 있다 (D-0374)
+#
+# `ruler`는 **그 수를 낸 자의 이름**이다. 세는 법을 바꾸면 도구의 `*_RULER`를 바꾸고,
+# 그러면 `measured --check`이 *«세는 법이 바뀌었고 다시 안 쟀다»*로 운다. 2026-10-05에
+# `seconds`가 10초 움직였을 때 **옛 수가 어떤 자로 나왔는지 기록이 없어서** 음원인지
+# 자인지 가르는 데 `bytes`를 봐야 했다 (D-0373).
 
 [corpus]
-stamp = "2026-10-05"
+stamp = "2026-10-06"
+ruler = "2026-10-06"
 tracks = 1004
 
 [corpus.counts]
@@ -102,7 +108,8 @@ kind = "nfc"
 of = "nfd_names"
 
 [id3]
-stamp = "2026-10-05"
+stamp = "2026-10-06"
+ruler = "2026-10-04"
 tracks = 1004
 
 [id3.counts]
@@ -192,7 +199,8 @@ frames = ["TRCK", "TPE2", "TCON", "TPOS"]
 use = "필드 미정의"
 
 [artist]
-stamp = "2026-10-05"
+stamp = "2026-10-06"
+ruler = "2026-10-05"
 tracks = 1004
 
 [artist.counts]
