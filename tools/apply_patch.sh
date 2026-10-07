@@ -230,7 +230,18 @@ fi
 
 # 검증했으므로 선언된 목록으로만 담는다. 떠난 곳을 담아야 삭제가 커밋에 들어간다.
 declared_paths "$PATCH" | while IFS= read -r file; do git add -- "$file"; done
-git commit -q -m "$MESSAGE"
+# **훅이 막을 수 있다** (D-0375). 패치가 들고 온 관문이 **사람이 아직 안 한 일**
+# 때문에 빨간 경우다 — 실측처럼 기기에서만 되는 것. 그때 훅은 옳고, 막힌 사람에게는
+# **빠져나갈 길이 안 보인다.** 그래서 여기서 적는다. 패치는 이미 붙어 있다.
+if ! git commit -q -m "$MESSAGE"; then
+  echo
+  echo "훅이 커밋을 막았다. **패치는 이미 붙어 있다** — 위 판정이 말한 일을 하고 담는다:"
+  echo "    <훅이 가리킨 일>                       # 예: make measure"
+  echo "    make check"
+  echo "    git add -A && git commit -m '${MESSAGE}'"
+  echo "되돌리려면:  git apply -R '${PATCH}'"
+  exit 1
+fi
 ok "커밋: ${MESSAGE}"
 printf "  파일 %s개 · 패치 선언과 일치\n" "$(echo "$EXPECTED" | wc -l)"
 

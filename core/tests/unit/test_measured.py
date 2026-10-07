@@ -433,3 +433,20 @@ def test_자_이름을_정본에_넣는다() -> None:
     again = TOOL.reruler(made, "artist", "더새자")
     assert 'ruler = "더새자"' in again
     assert again.count("ruler =") == 1, "자 이름이 두 벌이 됐다"
+
+
+def test_measure가_제출본까지_다시_낸다() -> None:
+    """**`make measure`가 지문 구간을 고친다** (D-0375).
+
+    `docs-fix`가 MASTER의 거울을 다시 쓰고 그 거울은 **기획서 지문 구간 안**이다.
+    그래서 docx가 낡고 `render_proposal --check`이 운다 — 실측을 돌린 그 자리에서
+    막혔다. 재는 것과 다시 내는 것은 **한 번에** 끝나야 한다.
+    """
+    recipe = (TOOL.ROOT / "Makefile").read_text(encoding="utf-8")
+    start = recipe.index("\nmeasure:")
+    block = recipe[start : recipe.index("\n\n", start)]
+
+    assert "probe_id3.py --emit" in block
+    assert "probe_artist.py --emit" in block
+    assert "docs-fix" in block
+    assert "proposal" in block, "거울을 고치고 제출본을 안 낸다 (D-0375)"

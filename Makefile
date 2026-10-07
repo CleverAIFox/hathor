@@ -145,6 +145,7 @@ measure:       ## 실측 정본을 기기에서 다시 잰다. 음원 1004곡 ·
 	cd core && uv run python ../tools/probe_id3.py --emit
 	cd core && uv run python ../tools/probe_artist.py --emit
 	$(MAKE) docs-fix
+	$(MAKE) proposal
 
 load:          ## 관문 전부를 부하 아래서 돌려 거짓 실패를 잡는다. 1분 (D-0355)
 	python3 tools/check_under_load.py --check $(if $(ROUNDS),--rounds $(ROUNDS),)

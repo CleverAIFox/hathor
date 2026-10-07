@@ -420,3 +420,35 @@ def test_기준이_없는_옛_패치는_막지_않는다(tmp_path: Path) -> None
     _tiny_repo(tmp_path / "repo", "하나")
 
     assert _base("# hathor-commit: 무언가\n", tmp_path / "repo").returncode == 0
+
+
+# ------------------------------------------------- 훅이 막을 때 (D-0375)
+#
+# D-0374가 **빨간 관문을 들고 오는 패치**였다 — `[corpus]`의 수가 없는 자의 것이라
+# `measured --check`이 운다. 그런데 **훅이 `make apply`의 커밋을 막는다.** 패치는
+# 이미 붙었는데 화면에는 *«커밋을 중단한다»*만 뜨고, 빠져나갈 길은 안 적혔다.
+#
+# **훅은 옳다** — 트리가 진짜 나쁘다. 적어야 할 것은 *«그래서 뭘 하나»*다.
+
+
+def test_훅이_막으면_빠져나갈_길을_적는다() -> None:
+    """**막힌 사람에게 다음 한 줄이 보여야 한다** (D-0375 · D-0269)."""
+    body = SCRIPT.read_text(encoding="utf-8")
+
+    assert "if ! git commit" in body, "커밋 실패를 안 본다"
+    assert "패치는 이미 붙어 있다" in body, "붙었는지 아닌지를 안 적는다"
+    assert "git apply -R" in body, "되돌리는 법이 없다"
+
+
+def test_훅이_막으면_0을_안_낸다() -> None:
+    """**`&&`로 이어 붙인 명령이 멈춰야 한다** (D-0375).
+
+    0을 내면 그 뒤의 `make check`·`make ship`이 **붙기만 하고 안 담긴 트리** 위에서
+    돈다. 세어 보니 이 스크립트에는 붙인 채로 끝나는 길이 **넷**이고 넷 다 되돌리는
+    법을 찍는다 — 수를 못으로 박지는 않는다. 새 길이 생기면 늘어도 맞다.
+    """
+    body = SCRIPT.read_text(encoding="utf-8")
+    block = body[body.index("if ! git commit") : body.index('ok "커밋: ${MESSAGE}"')]
+
+    assert "exit 1" in block, "훅이 막았는데 0을 낸다"
+    assert "git apply -R" in block

@@ -172,3 +172,59 @@ def test_자에_이름이_있다() -> None:
     """**세는 법이 바뀌면 여기가 바뀐다** (D-0374). `measured`가 정본과 맞댄다."""
     assert TOOL.RULER
     assert MEASURED.ruler_of("probe_artist", "RULER") == TOOL.RULER
+
+
+# ------------------------------------------------- 배선 (D-0376)
+#
+# **D-0375가 `make measure`를 만들며 이 도구를 사슬에 넣었다.** 그 전에는 어느 사슬에도
+# 없어서 `make mutate WIRING=1`이 안 봤고, 재 보니 `main()`의 **네 자리가 비어 있었다** —
+# 세 절을 통째로 안 찍어도 아무 시험이 안 울었다. D-0368 ~ D-0370과 같은 모양이다.
+
+
+def _planted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """심은 스캔 산출물 하나. `latest_jsonl()`이 이것을 고르고 `load_records()`가 읽는다."""
+    ingest = tmp_path / "ingest"
+    ingest.mkdir()
+    (ingest / "scan-20260101T000000Z.jsonl").write_text(
+        "\n".join(json.dumps(one, ensure_ascii=False) for one in _records(ARTISTS)),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(TOOL, "INGEST", ingest)
+    return ingest
+
+
+def test_세_절이_전부_화면에_오른다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`analyze()` · `cross_check_filenames()` · `check_bracket_script()` 자리 (D-0376).
+
+    **절 하나를 통째로 안 찍어도 조용했다.** 사람이 읽는 전수인데 읽을 것이 사라진다.
+    """
+    _planted(tmp_path, monkeypatch)
+    monkeypatch.setattr("sys.argv", ["probe_artist.py"])
+
+    assert TOOL.main() == 0
+
+    spoke = capsys.readouterr().out
+    assert "구분자 출현 빈도" in spoke, "analyze()가 안 닿았다"
+    assert "파일명 대 태그 교차검증" in spoke, "cross_check_filenames()가 안 닿았다"
+    assert "괄호 표기 체계 대조" in spoke, "check_bracket_script()가 안 닿았다"
+
+
+def test_고른_산출물과_읽은_줄이_화면에_오른다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`latest_jsonl()` · `load_records()` 자리 (D-0376 · D-0360).
+
+    **어느 파일을 읽었는지 안 적으면** 낡은 스캔을 보고도 모른다 (D-0269).
+    """
+    ingest = _planted(tmp_path, monkeypatch)
+    monkeypatch.setattr("sys.argv", ["probe_artist.py"])
+
+    assert TOOL.main() == 0
+
+    spoke = capsys.readouterr().out
+    picked = TOOL.latest_jsonl(ingest)
+    assert picked is not None
+    assert picked.name in spoke, "고른 산출물의 이름이 화면에 없다"
+    assert f"총 {len(TOOL.load_records(picked))}곡" in spoke, "읽은 줄 수가 화면에 없다"
