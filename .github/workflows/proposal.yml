@@ -20,6 +20,14 @@ on:
       - 'site/**'
       - 'tools/render_proposal.py'
       - 'tools/proposal_source.py'
+      # **생성기가 바뀌면 제출본이 낡는다** (D-0376). 제출본을 다시 안 낸 판은
+      # `docs/proposal.docx`가 그대로라 예전에는 이 워크플로가 **안 돌았다** —
+      # 막을 자리에 닿지도 못했다. 자물쇠가 보는 것을 여기서도 본다.
+      - 'tools/build_proposal.py'
+      - 'tools/proposal_body.py'
+      - 'tools/render_figures.py'
+      - 'tools/render_charts.py'
+      - 'docs/proposal.lock.json'
       - '.github/workflows/proposal.yml'
   workflow_dispatch:
 
@@ -58,8 +66,11 @@ jobs:
         run: uv sync --all-extras --all-groups
 
       # `render_proposal --check`는 `zipfile`만 쓴다 — 맨 `python3`으로 둔다 (D-0368).
+      # **`--deploy`가 자물쇠를 문다** (D-0376). 생성기를 고치고 제출본을 다시 안 낸
+      # 판은 `make check`과 `gate`를 지나지만 **여기서 멈춘다** — 커밋을 막으면
+      # `make apply`가 제가 만든 커밋에 걸린다 (D-0374).
       - name: Proposal vs sources
-        run: python3 tools/render_proposal.py --check
+        run: python3 tools/render_proposal.py --check --deploy
       # D-0229. 브라우저가 docx를 직접 그리던 판은 웹에서 표와 글꼴이 무너졌다.
       # 여기서 한 번 구워 PDF로 보여 준다. 제출본(docx)은 그대로 같이 올린다.
       - name: Install converter

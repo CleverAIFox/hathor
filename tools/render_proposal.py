@@ -57,7 +57,14 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import measured  # noqa: E402
 from proposal_body import FIGURES, place_figures  # noqa: E402
-from proposal_source import FINGERPRINT, SourceError, fingerprint, source  # noqa: E402
+from proposal_source import (  # noqa: E402
+    FINGERPRINT,
+    GENERATORS,
+    SourceError,
+    fingerprint,
+    source,
+    stale,
+)
 
 OUT = ROOT / "site" / "proposal.html"
 DOCX = ROOT / "docs" / "proposal.docx"
@@ -454,6 +461,14 @@ def check() -> list[str]:
     elif written != want:
         problems.append("docs/proposal.docx의 지문이 정본과 다르다 — 다시 빌드하지 않았다")
     text = docx_text(DOCX)
+    # **표지는 「언제 명령을 쳤나」가 아니라 「어느 판인가」를 적는다** (D-0376).
+    # 예전 라벨은 `dt.date.today()`라 아무것도 안 고치고 다시 빌드해도 움직였고,
+    # 그 움직임이 docx 바이트를 흔들어 **기준 트리 대조를 거짓으로 빨갛게** 했다.
+    if f"정본 {want[:12]}" not in text:
+        problems.append(
+            f"제출본 표지에 «정본 {want[:12]}»가 없다 — 날짜 라벨로 돌아갔거나 "
+            "다시 빌드하지 않았다 (D-0376)"
+        )
     screen = re.sub(r"<[^>]+>", " ", made)
     for value, where in truths():
         for name, body in (("제출본", text), ("화면", screen)):
@@ -474,11 +489,22 @@ def check() -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="기획서 화면 생성물 (D-0368)")
     parser.add_argument("--check", action="store_true", help="재생성 대조 · 정본 ↔ 생성물")
+    parser.add_argument(
+        "--deploy",
+        action="store_true",
+        help="자물쇠가 낡으면 **막는다**. 배포 잡이 쓴다 (D-0376)",
+    )
     args = parser.parse_args()
 
     try:
         if args.check:
             problems = check()
+            # **자물쇠는 따로 센다** (D-0376). 정본은 맞는데 생성기가 앞서 간 경우가
+            # 있고, 그것으로 **커밋을 막으면** `make apply`가 제가 만든 커밋에 걸려
+            # 멈춘다 (D-0374에서 겪었다). 그래서 **배포만** 막는다.
+            rotten = stale()
+            if args.deploy:
+                problems += rotten
         else:
             made = build()
     except (SourceError, LookupError, KeyError, zipfile.BadZipFile) as error:
@@ -487,15 +513,25 @@ def main() -> int:
 
     if args.check:
         if problems:
-            print(f"기획서가 정본과 {len(problems)}곳 어긋난다.", file=sys.stderr)
+            print(f"기획서가 {len(problems)}곳 어긋난다.", file=sys.stderr)
             for text in problems:
                 print(f"  - {text}", file=sys.stderr)
             return 1
+        if rotten:
+            # **통과했지만 초록이 아니다.** 사람이 읽는 자리에 적고 배포에서 막힌다.
+            print(
+                f"기획서는 정본과 맞다. 그러나 **배포는 막힌다** — {len(rotten)}곳:",
+                file=sys.stderr,
+            )
+            for text in rotten:
+                print(f"  - {text}", file=sys.stderr)
+            print("  → `make proposal`로 제출본을 다시 낸다 (D-0376)", file=sys.stderr)
         heads, tables = canon_parts()
+        lock = f"자물쇠 **낡았다** {len(rotten)}곳" if rotten else f"자물쇠 {len(GENERATORS)}개"
         print(
             f"기획서 검사 통과 · 정본 대조 {len(truths())}건 · "
             f"칸 {len(dict.fromkeys(index().values()))}개 · 생성물 2개 · "
-            f"옮겨진 것 제목 {len(heads)} · 표 {tables} · 그림 {len(FIGURES)}"
+            f"옮겨진 것 제목 {len(heads)} · 표 {tables} · 그림 {len(FIGURES)} · {lock}"
         )
         return 0
 

@@ -1,0 +1,11 @@
+{
+  "적는이": "tools/build_proposal.py",
+  "생성기": {
+    "tools/build_proposal.py": "d470c0738df51014",
+    "tools/proposal_body.py": "bb30d51f09215ba4",
+    "tools/proposal_source.py": "ae65efe62048ba12",
+    "tools/render_figures.py": "ceec1273f07bf67e",
+    "tools/render_charts.py": "b841da088aee675f",
+    "site/proposal.template.html": "be43f8109e708d2f"
+  }
+}

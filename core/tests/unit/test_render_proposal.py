@@ -427,3 +427,94 @@ def test_옮겨진_수가_화면에_오른다(
     spoke = capsys.readouterr().out
     assert f"제목 {len(heads)}" in spoke, spoke
     assert f"표 {tables}" in spoke and f"그림 {len(TOOL.FIGURES)}" in spoke, spoke
+
+
+# ------------------------------------------------ 자물쇠와 배포 (D-0376)
+#
+# **커밋은 안 막고 배포를 막는다.** 막는 자리를 커밋에 두면 `make apply`가 **제가 만든
+# 커밋**에 걸려 멈춘다 — D-0374에서 겪었고 D-0375가 빠져나갈 길을 적었다. 그러나 길을
+# 적는 것과 **길을 안 막는 것**은 다르다. 자물쇠가 거는 것은 배포다.
+
+
+def test_자물쇠가_낡아도_커밋은_안_막는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**심은 결함** (D-0069). 0을 내되 **조용하지 않다.**"""
+    monkeypatch.setattr(TOOL, "check", list)
+    monkeypatch.setattr(TOOL, "stale", lambda: ["심은 낡음"])
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--check"])
+
+    assert TOOL.main() == 0
+
+    spoke = capsys.readouterr()
+    assert "배포는 막힌다" in spoke.err and "심은 낡음" in spoke.err, spoke.err
+    assert "make proposal" in spoke.err, "다음 한 줄이 없다 (D-0269)"
+    assert "자물쇠 **낡았다** 1곳" in spoke.out, spoke.out
+
+
+def test_배포에서는_자물쇠가_막는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069). `--deploy`가 없으면 자물쇠는 아무것도 안 막는다."""
+    monkeypatch.setattr(TOOL, "check", list)
+    monkeypatch.setattr(TOOL, "stale", lambda: ["심은 낡음"])
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--check", "--deploy"])
+
+    assert TOOL.main() == 1
+
+
+def test_자물쇠가_맞으면_수를_적는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**수를 눈앞에 둔다** (D-0269). 0곳을 「없다」로 적으면 안 센 것과 구분이 안 간다."""
+    monkeypatch.setattr(TOOL, "check", list)
+    monkeypatch.setattr(TOOL, "stale", list)
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--check"])
+
+    assert TOOL.main() == 0
+    assert f"자물쇠 {len(TOOL.GENERATORS)}개" in capsys.readouterr().out
+
+
+def test_자물쇠가_깨지면_2를_낸다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**못 쟀으면 통과도 실패도 아니다** (GR-0.5 · D-0367)."""
+    broken = tmp_path / "build.lock.json"
+    broken.write_text("{", encoding="utf-8")
+    monkeypatch.setattr(TOOL, "check", list)
+    monkeypatch.setattr(tool_module("proposal_source"), "LOCK", broken)
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--check"])
+
+    assert TOOL.main() == 2
+
+
+def test_표지_지문이_없으면_운다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069 · D-0376). 표지가 날짜로 돌아가면 여기서 운다.
+
+    *«빌드라는 게 현재 판이 마지막으로 언제 수정됐는지를 말하는 게 아니냐»* — 아니었다.
+    `dt.date.today()`는 **명령을 친 날**이라 아무것도 안 고쳐도 움직였고, 그 움직임이
+    docx 바이트를 흔들어 **기준 트리 대조를 거짓으로 빨갛게** 했다.
+    """
+    real = TOOL.docx_text(TOOL.DOCX)
+    monkeypatch.setattr(TOOL, "docx_text", lambda _path: real.replace("정본 ", "빌드 "))
+
+    problems = TOOL.check()
+
+    assert any("표지" in one for one in problems), problems
+
+
+def test_배포_잡이_deploy를_준다() -> None:
+    """**플래그를 만들고 안 꽂으면 아무것도 안 막는다** (D-0352 · D-0359).
+
+    세 판 연속 *«부품을 재고 배선을 안 쟀다»*였다. 여기는 **워크플로의 글자**를 본다 —
+    `mutate_gate`는 YAML을 안 돌린다.
+    """
+    flow = (ROOT / ".github" / "workflows" / "proposal.yml").read_text(encoding="utf-8")
+
+    assert "tools/render_proposal.py --check --deploy" in flow
+
+    # **생성기를 고치고 제출본을 다시 안 낸 판은 `docs/proposal.docx`가 그대로다** —
+    # 예전에는 이 워크플로가 **안 돌았고**, 막을 자리에 닿지도 못했다.
+    listed = re.findall(r"^\s+- '([^']+)'", flow, re.M)
+    for name in TOOL.GENERATORS:
+        covered = any(
+            name == one or (one.endswith("/**") and name.startswith(one.removesuffix("**")))
+            for one in listed
+        )
+        assert covered, f"{name}을 고쳐도 배포가 안 돌면 막을 자리에 못 닿는다"

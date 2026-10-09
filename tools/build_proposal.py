@@ -15,6 +15,9 @@ fire-lane 기획서가 62쪽 · 그림 24장 · 표 56개인 것은 **설계 문
 빌드가 정본 구간의 지문을 docx 속성에 적는다. `render_proposal.py --check`이 CI에서
 지금 지문과 맞댄다 — Part I ~ III를 고치고 다시 빌드하지 않으면 **검사가 멈춘다.**
 
+정본이 그대로여도 **이 도구들이 바뀌면 제출본은 낡는다.** 그 구멍은 `seal()`이 적는
+`docs/proposal.lock.json`이 막고, 어긋나면 **배포가 멈춘다** (D-0376).
+
 ### 필요한 것
 
 `make sync`(docs 묶음 — matplotlib · python-docx · pandoc 동봉) · graphviz(`dot`) · 한글 글꼴.
@@ -27,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import re
 import shutil
 import subprocess
@@ -37,7 +41,14 @@ from pathlib import Path
 from typing import Any
 
 from proposal_body import FIGURES, PAGE_WIDTH_IN, body_markdown
-from proposal_source import FINGERPRINT, ROOT, SourceError, fingerprint
+from proposal_source import (
+    FINGERPRINT,
+    LOCK,
+    ROOT,
+    SourceError,
+    fingerprint,
+    generator_marks,
+)
 
 OUT = "docs/proposal.docx"
 FONT = "맑은 고딕"
@@ -297,7 +308,10 @@ def cover(document: Any, lines: list[str], parts: list[str], stamp: str) -> None
     notes = [line for line in lines[1:] if line.startswith("**※")]
     for line in (line for line in lines[1:] if not line.startswith("**※")):
         add(line.replace("`", "").replace(" | ", "\n"), 10.5, color="555555", after=6)
-    add(f"빌드 {stamp} · 정본 docs/MASTER.md Part I ~ III", 8.5, color="888888", before=30)
+    # **「빌드 날짜」가 아니라 「어느 판인가」다** (D-0376). `today()`는 *«명령을 언제
+    # 쳤나»*를 적었고, 아무것도 안 고치고 다시 빌드해도 움직였다 — 라벨이 제 뜻을 안
+    # 지켰다. 정본 지문은 **내용이 바뀔 때만** 바뀐다.
+    add(f"정본 {stamp} · docs/MASTER.md Part I ~ III", 8.5, color="888888", before=30)
     breaker = document.add_paragraph()
     breaker.add_run().add_break(WD_BREAK.PAGE)
     made.append(breaker)
@@ -404,7 +418,7 @@ def build(out: Path, figures_dir: Path) -> dict[str, int]:
             cwd=ROOT,
         )
         document = Document(str(raw))
-    stamp = dt.date.today().isoformat()
+    stamp = fingerprint()[:12]
     tables = polish_tables(document)
     count = number_figures(document)
     cover(document, cover_lines, outline(markdown), stamp)
@@ -420,13 +434,33 @@ def build(out: Path, figures_dir: Path) -> dict[str, int]:
     out.parent.mkdir(parents=True, exist_ok=True)
     document.save(str(out))
     freeze(out)
+    seal()
     if count != len(FIGURES):
         raise SourceError(f"그림 {len(FIGURES)}장을 넣었는데 캡션이 {count}개다")
     return {"figures": count, "tables": tables}
 
 
+def seal() -> None:
+    """**생성기의 지문을 산출물 옆에 적는다** (D-0376).
+
+    제출본은 zip이라 같은 입력에서 같은 바이트가 안 나온다 — graphviz 판이 기기마다
+    다르다. 그래서 바이트가 아니라 **입력**을 봉인한다. `render_proposal --check`이
+    이것을 지금 생성기와 견주고, 어긋나면 **배포를 막는다.**
+    """
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    LOCK.write_text(
+        json.dumps(
+            {"적는이": "tools/build_proposal.py", "생성기": generator_marks()},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="기획서 빌드 (D-0221)")
+    parser = argparse.ArgumentParser(description="기획서 빌드 (D-0221 · D-0376)")
     parser.add_argument("--out", type=Path, default=ROOT / OUT)
     parser.add_argument("--figures", type=Path, default=ROOT / "var" / "proposal" / "figures")
     args = parser.parse_args()

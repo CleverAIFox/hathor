@@ -157,14 +157,43 @@ fi
 if [[ -n "$BASE" ]]; then
   HERE="$(git rev-parse 'HEAD^{tree}')"
   if [[ "$BASE" != "$HERE" ]]; then
-    echo >&2
-    printf '\033[31m기준이 다르다 (D-0351).\033[0m\n' >&2
-    printf '  이 패치가 서는 트리: %s\n' "$BASE" >&2
-    printf '  네 HEAD의 트리:      %s\n' "$HERE" >&2
-    echo >&2
-    echo "  트리 해시는 내용이라 저장소가 달라도 같다 — 같은 번호의 다른 판을 붙이려는 것이다." >&2
-    echo "  이 두 줄을 그대로 보내면 어느 판인지 가른다. 아무것도 붙이지 않았다." >&2
-    exit 1
+    # **트리 전체로 견주면 패치와 무관한 파일 하나가 전부를 막는다** (D-0376).
+    # 실측: `make measure`가 그의 기기에서 `docs/proposal.docx`를 다시 냈고 — docx는
+    # zip이라 같은 입력에서도 바이트가 다르다(graphviz 2.43.0 ↔ 14.1.2) — 다음 패치가
+    # «기준이 다르다»로 막혔다. **그 패치는 그 파일을 건드리지도 않았다.**
+    #
+    # 그래서 **패치가 건드리는 경로만** 다시 본다. 패치의 `index <옛>..<새>` 줄이
+    # 경로마다 blob 해시를 들고 있다 — 트리 해시와 같은 성질(내용만으로 정해진다)이고
+    # 범위만 좁다. 전부 맞으면 어긋난 것은 **패치 밖**이므로 적고 지나간다.
+    # **하나라도 틀리면 D-0351 그대로 막는다** — 거기가 진짜 «다른 판»이다.
+    DRIFT=""
+    while read -r want path; do
+      [[ -n "$path" ]] || continue
+      have="$(git rev-parse --quiet --verify "HEAD:${path}" 2>/dev/null || true)"
+      short="${have:0:${#want}}"
+      [[ -n "$short" ]] || short="없다"
+      if [[ "$want" =~ ^0+$ ]]; then
+        [[ -z "$have" ]] || DRIFT+="    ${path} — 패치는 새로 만드는데 네 트리에 이미 있다"$'\n'
+      elif [[ "$short" != "$want" ]]; then
+        DRIFT+="    ${path} — 기준 ${want} ↔ 네 것 ${short}"$'\n'
+      fi
+    done < <(awk '/^diff --git /{ p = $3; sub(/^a\//, "", p); next }
+                  /^index [0-9a-f]+\.\.[0-9a-f]+/ && p != "" { print substr($2, 1, index($2, "..") - 1), p; p = "" }' "$PATCH")
+    if [[ -z "$DRIFT" ]]; then
+      printf '\033[33m기준 트리가 다르다. 그러나 패치가 건드리는 경로는 전부 맞다 (D-0376).\033[0m\n' >&2
+      printf '  어긋난 것은 이 패치 밖이다 — 그대로 붙인다.\n' >&2
+    else
+      echo >&2
+      printf '\033[31m기준이 다르다 (D-0351).\033[0m\n' >&2
+      printf '  이 패치가 서는 트리: %s\n' "$BASE" >&2
+      printf '  네 HEAD의 트리:      %s\n' "$HERE" >&2
+      printf '  패치가 건드리는 경로에서 어긋난 것:\n' >&2
+      printf '%s' "$DRIFT" >&2
+      echo >&2
+      echo "  같은 번호의 다른 판을 붙이려는 것이다. 아무것도 붙이지 않았다." >&2
+      echo "  이 줄들을 그대로 보내면 어느 판인지 가른다." >&2
+      exit 1
+    fi
   fi
 fi
 

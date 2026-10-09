@@ -383,7 +383,7 @@ PAST = "docs/DECISIONS.md"
 AXES = ("PLAN.md", "MASTER.md", "DECISIONS.md")
 """`docs/` 바로 아래에 허용되는 문서. **미래·현재·과거 세 시제가 다 찼다** (D-0130)."""
 
-OUTSIDE_TENSE = ("measured.toml", "proposal.docx")
+OUTSIDE_TENSE = ("measured.toml", "proposal.docx", "proposal.lock.json")
 """`docs/` 바로 아래의 **시제 밖** 파일. 밖에 내는 기획서와 **실측 집계의 정본**이다.
 
 축이 아니다 — 안에서 무엇이 참인지는 셋이 정하고, 기획서는 그것을 밖에 옮겨 적은 판이다
@@ -392,7 +392,12 @@ OUTSIDE_TENSE = ("measured.toml", "proposal.docx")
 `measured.toml`은 **넷째 축이 아니다** (D-0366). 시제를 안 든다 — *«지금 무엇이 참인가»*는
 `MASTER`가 들고, 이 파일은 그중 **1004곡 전수에서 센 수**만 든다. `MASTER`의 표는 그것을
 찍어 낸 거울이고 `tools/measured.py`가 대조한다. 마크다운이 아니므로 **읽는 축으로
-자랄 수 없다** — `proposal.docx`를 넷째 축 밖에 둔 것과 같은 까닭이다."""
+자랄 수 없다** — `proposal.docx`를 넷째 축 밖에 둔 것과 같은 까닭이다.
+
+`proposal.lock.json`은 제출본의 **생성기 지문**이다 (D-0376). 빌드가 쓰고 검사가 읽는다 —
+사람이 읽는 글이 아니므로 축이 될 수 없다. **하위 폴더를 안 만든다** (D-0187): thoth는
+`docs/proposal/`을 두지만 여기서는 폴더 하나가 이 시험을 깨고, 깨진 뒤에 고치면 폴더가
+남는다."""
 
 ALLOWED_TREES: tuple[str, ...] = ()
 """허용하는 하위 폴더. **하나도 없다** (D-0187).

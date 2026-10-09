@@ -339,10 +339,10 @@ def _tiny_repo(folder: Path, content: str) -> str:
     return run("git", "rev-parse", "HEAD^{tree}").stdout.strip()
 
 
-def _base(declared: str, folder: Path) -> subprocess.CompletedProcess[str]:
-    """기준 선언을 주고 관문을 그 저장소에서 돌린다."""
+def _base(declared: str, folder: Path, body: str = "") -> subprocess.CompletedProcess[str]:
+    """기준 선언을 주고 관문을 그 저장소에서 돌린다. `body`는 패치의 diff 본문."""
     patch = folder / "x.patch"
-    patch.write_text(declared, encoding="utf-8")
+    patch.write_text(declared + body, encoding="utf-8")
     return subprocess.run(
         [
             "bash",
@@ -375,12 +375,15 @@ def test_기준이_다르면_막고_둘_다_찍는다(tmp_path: Path) -> None:
     other = _tiny_repo(tmp_path / "다른곳", "둘")
     assert tree != other
 
-    done = _base(f"# hathor-base: {other}\n", tmp_path / "repo")
+    # **패치가 `a.txt`를 건드리고, 그 `a.txt`가 다르다** (D-0376). 트리만 다르고
+    # 패치가 건드리는 것은 다 맞는 경우는 이제 지나간다 — 아래 시험이 그것을 본다.
+    done = _base(f"# hathor-base: {other}\n", tmp_path / "repo", _diff("a.txt", "0" * 7))
 
     assert done.returncode != 0
     assert "기준이 다르다" in done.stderr
     assert other in done.stderr, "이 패치가 서는 트리를 찍는다"
     assert tree in done.stderr, "네 트리도 찍는다 — 없으면 또 손으로 좇는다"
+    assert "a.txt" in done.stderr, "**어느 경로가 어긋났는지** 찍는다 (D-0376)"
 
 
 def test_트리_해시는_이력과_무관하다(tmp_path: Path) -> None:
@@ -452,3 +455,95 @@ def test_훅이_막으면_0을_안_낸다() -> None:
 
     assert "exit 1" in block, "훅이 막았는데 0을 낸다"
     assert "git apply -R" in block
+
+
+# --------------------------------------------- 기준을 패치의 경로로 좁힌다 (D-0376)
+#
+# **트리 전체로 견주면 패치와 무관한 파일 하나가 전부를 막는다.** 실측: `make measure`가
+# 그의 기기에서 `docs/proposal.docx`를 다시 냈다 — docx는 zip이라 같은 입력에서도 바이트가
+# 다르다(graphviz 2.43.0 ↔ 14.1.2). 다음 패치는 그 파일을 **건드리지도 않았는데** 막혔다.
+# D-0351의 뜻(어느 판 위에 서는가)은 그대로 두고 **범위만 좁힌다.**
+
+
+def _git(folder: Path, *args: str) -> str:
+    return subprocess.run(
+        ("git", *args), cwd=folder, capture_output=True, text=True, timeout=60, check=True
+    ).stdout
+
+
+def _diff(path: str, old: str) -> str:
+    """`index <옛>..<새>`를 가진 최소 diff. 관문은 **그 `<옛>`만** 본다."""
+    return (
+        f"diff --git a/{path} b/{path}\n"
+        f"index {old}..{'1' * 7} 100644\n"
+        f"--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@\n-옛\n+새\n"
+    )
+
+
+def _drifted(folder: Path) -> tuple[str, str]:
+    """`a.txt`는 그대로 두고 `b.txt`만 바꾼 저장소. (a.txt의 blob, 지금 트리)를 낸다."""
+    _tiny_repo(folder, "하나")
+    (folder / "b.txt").write_text("무관", encoding="utf-8")
+    _git(folder, "add", "-A")
+    _git(folder, "commit", "-q", "-m", "둘")
+    blob = _git(folder, "rev-parse", "HEAD:a.txt").strip()
+    (folder / "b.txt").write_text("딴것", encoding="utf-8")
+    _git(folder, "add", "-A")
+    _git(folder, "commit", "-q", "-m", "셋")
+    return blob, _git(folder, "rev-parse", "HEAD^{tree}").strip()
+
+
+def test_패치_밖이_달라도_붙인다(tmp_path: Path) -> None:
+    """**그날의 꼴이다** (D-0376). 기준 트리는 다르지만 `a.txt`는 그대로다.
+
+    예전에는 여기서 막혔고, 막은 까닭은 **패치와 아무 상관 없는 `b.txt`**였다.
+    """
+    folder = tmp_path / "repo"
+    blob, tree = _drifted(folder)
+    other = _tiny_repo(tmp_path / "다른곳", "둘")
+    assert tree != other
+
+    done = _base(f"# hathor-base: {other}\n", folder, _diff("a.txt", blob[:7]))
+
+    assert done.returncode == 0, done.stderr
+    assert "패치 밖이다" in done.stderr, "**조용히 지나가지 않는다** — 적고 지나간다"
+
+
+def test_패치_안이_다르면_좁혀도_막는다(tmp_path: Path) -> None:
+    """**좁히는 것이 푸는 것은 아니다.** 진짜 «다른 판»은 그대로 막힌다."""
+    folder = tmp_path / "repo"
+    _, tree = _drifted(folder)
+    other = _tiny_repo(tmp_path / "다른곳", "둘")
+    assert tree != other
+
+    done = _base(f"# hathor-base: {other}\n", folder, _diff("a.txt", "abc1234"))
+
+    assert done.returncode != 0
+    assert "a.txt — 기준 abc1234" in done.stderr, done.stderr
+
+
+def test_새로_만드는_파일이_이미_있으면_막는다(tmp_path: Path) -> None:
+    """**빈 blob은 「없어야 한다」는 뜻이다** (D-0376).
+
+    `index 0000000..abc`는 새 파일이다. 그 자리에 이미 파일이 있으면 같은 번호의
+    **다른 판**이 들어가 있는 것이고, `git apply`는 *"이미 있다"*만 말한다.
+    """
+    folder = tmp_path / "repo"
+    _drifted(folder)
+    other = _tiny_repo(tmp_path / "다른곳", "둘")
+
+    done = _base(f"# hathor-base: {other}\n", folder, _diff("b.txt", "0" * 7))
+
+    assert done.returncode != 0
+    assert "네 트리에 이미 있다" in done.stderr, done.stderr
+
+
+def test_좁힌_뒤에도_같은_트리는_아무_말을_안_한다(tmp_path: Path) -> None:
+    """**거짓 경보를 안 만든다** (GR-0.8). 트리가 같으면 경로를 볼 일이 없다."""
+    folder = tmp_path / "repo"
+    tree = _tiny_repo(folder, "하나")
+
+    done = _base(f"# hathor-base: {tree}\n", folder, _diff("a.txt", "0" * 7))
+
+    assert done.returncode == 0
+    assert done.stderr == "", done.stderr

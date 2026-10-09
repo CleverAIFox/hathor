@@ -17,11 +17,17 @@ graphviz · matplotlib이 없다.
 빌드가 정본 구간의 sha256을 docx 속성에 적는다. `render_proposal.py`가 지금 구간의 지문과
 맞대어 **기획서가 `MASTER.md`보다 낡았는지** 본다. 숫자 몇 개가 아니라 **Part I ~ III
 전체**가 대조 대상이 된다.
+
+### 자물쇠
+
+지문은 **정본**만 본다. 정본이 그대로여도 **생성기가 바뀌면 제출본은 낡는다** — 그 구멍은
+`LOCK`(`docs/proposal/build.lock.json`)이 막는다 (D-0376).
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -143,6 +149,84 @@ def number(cell: str) -> float:
     if not match:
         raise SourceError(f"`{cell}`에 수가 없다")
     return float(match.group(0).replace(",", ""))
+
+
+LOCK_NAME = "docs/proposal.lock.json"
+LOCK = ROOT / LOCK_NAME
+"""제출본 옆의 **자물쇠** (D-0376). 생성기의 지문을 적어 둔다.
+
+`docs/` 바로 아래, 제출본 옆이다. **하위 폴더를 만들지 않는다** (D-0187) — thoth는
+`docs/proposal/build.lock.json`에 두지만 이쪽 `docs/`는 축 셋과 시제 밖 파일만 받는다.
+
+이름을 따로 두는 까닭: 판정 글에 **저장소 기준 경로**를 적어야 사람이 그 자리를 찾는다.
+`LOCK.relative_to(ROOT)`는 시험이 다른 자리를 물릴 때 터진다 — 그 예외는 판정이 아니다.
+"""
+
+GENERATORS = (
+    "tools/build_proposal.py",
+    "tools/proposal_body.py",
+    "tools/proposal_source.py",
+    "tools/render_figures.py",
+    "tools/render_charts.py",
+    "site/proposal.template.html",
+)
+"""**제출본을 만드는 것 전부** (D-0376).
+
+정본(`MASTER` Part I ~ III)이 안 바뀌어도 **이것들이 바뀌면 제출본은 낡는다.** 지문은
+정본만 보므로 그 낡음을 아무도 못 봤다 — 실측으로 생성기를 건드린 판 11 중 **1판**이
+docx를 다시 안 내고 지나갔다.
+
+**바이트로 견주지 않는다.** docx는 zip이라 같은 입력에서 같은 바이트가 안 나온다
+(graphviz 판이 기기마다 다르다: 2.43.0 ↔ 14.1.2). 그래서 **입력의 지문**을 적는다 —
+thoth가 제 §126에서 같은 결론에 닿았고, 그 말을 그대로 빌린다:
+*«docx 를 바이트로 견주지 않는다 … 그래서 입력의 지문을 적는다. 봉인과 같은 꼴이다.»*
+"""
+
+
+def generator_marks() -> dict[str, str]:
+    """생성기마다 sha256 앞 16자. **없는 파일은 「없다」** — 조용히 빠지지 않는다."""
+    marks = {}
+    for name in GENERATORS:
+        path = ROOT / name
+        marks[name] = (
+            hashlib.sha256(path.read_bytes()).hexdigest()[:16] if path.is_file() else "없다"
+        )
+    return marks
+
+
+def locked() -> dict[str, str]:
+    """자물쇠에 적힌 지문. 파일이 없으면 **빈 것** — `stale()`이 그것을 문제로 든다."""
+    if not LOCK.is_file():
+        return {}
+    try:
+        kept = json.loads(LOCK.read_text(encoding="utf-8"))["생성기"]
+        return {str(name): str(mark) for name, mark in kept.items()}
+    except (json.JSONDecodeError, AttributeError, TypeError, KeyError) as error:
+        raise SourceError(f"{LOCK_NAME}가 깨졌다: {error}") from error
+
+
+def stale() -> list[str]:
+    """**제출본이 생성기보다 낡았나** (D-0376). 빈 목록이 초록이다.
+
+    **양방향으로 본다** (D-0363). 지문이 어긋난 것만 보면 `GENERATORS`에서 이름을
+    빼는 날 자물쇠에 남은 줄이 조용히 죽는다.
+    """
+    want = generator_marks()
+    have = locked()
+    if not have:
+        return [f"{LOCK_NAME}가 없다 — `make proposal`이 적는다"]
+    problems = [
+        f"`{name}`이 바뀌었는데 제출본을 다시 안 냈다 "
+        f"(자물쇠 {have.get(name, '없다')} ↔ 지금 {mark})"
+        for name, mark in want.items()
+        if have.get(name) != mark
+    ]
+    problems += [
+        f"자물쇠에 `{name}`이 남아 있다 — 생성기 목록에서 빠졌다"
+        for name in sorted(have)
+        if name not in want
+    ]
+    return problems
 
 
 if __name__ == "__main__":
