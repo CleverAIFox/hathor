@@ -18,7 +18,7 @@ D-0372가 *«345줄»*이라 적었고 **둘 다 안 센 수**였다. 345는 `RE
 | 상류 | 누가 답하나 |
 |---|---|
 | 거울 | `measured.present()` — 그 표식 안의 줄 |
-| 요구사항 | `check_requirements.ROW` — 그 정규식이 무는 줄 |
+| 축 | `doc_counts.COUNTED` — 그 정규식이 무는 줄 (`doc_fsck`가 실물과 맞댄다) |
 | 기록 | 줄이 — 또는 **그 표의 머리말이** — `D-XXXX`를 들고, 그 표제가 대장에 있다 |
 
 머리말까지 보는 까닭: 표 한 장의 상류는 보통 **그 표 위 제목**에 한 번 적힌다
@@ -49,7 +49,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-import check_requirements  # noqa: E402
+import doc_counts  # noqa: E402
 import measured  # noqa: E402
 from proposal_source import source  # noqa: E402
 
@@ -69,7 +69,7 @@ NUMBER = re.compile(r"(?<![A-Za-z0-9])-?\d[\d,]*(?:\.\d+)*%?")
 그대로 센다(`44.1kHz`는 한 건) — 앞이 글자냐 뒤가 글자냐로 가른다.
 """
 
-UNSOURCED_CEILING = 52
+UNSOURCED_CEILING = 35
 """상류가 없는 수치 **건수**의 천장 (D-0378).
 
 실측으로 박는다. 늘면 빨개진다 — 새 표를 손으로 적으면 여기서 걸린다.
@@ -160,7 +160,9 @@ def tally(lines: list[str]) -> int:
 
 def claims(table_rows: list[str]) -> list[str]:
     """수치를 **주장하는** 줄. 코드 조각과 식별자를 지우고도 수가 남는 것."""
-    return [line for line in table_rows if re.search(r"\d", stripped(line))]
+    # **`claims()`와 `tally()`가 같은 자를 쓴다** (D-0381). 갈려 있던 동안 `mp3`의 3을
+    # 주장으로 세고 건수는 0으로 세서, 목록에 **0건짜리 줄 셋**이 떠 있었다.
+    return [line for line in table_rows if NUMBER.search(stripped(line))]
 
 
 def mirrored() -> set[str]:
@@ -175,10 +177,18 @@ def mirrored() -> set[str]:
     return inside
 
 
-def required() -> set[str]:
-    """`check_requirements`의 정규식이 무는 줄. 그 자가 ID·우선순위·상태를 본다."""
-    text = MASTER.read_text(encoding="utf-8")
-    return {match.group(0).strip() for match in check_requirements.ROW.finditer(text)}
+def axled() -> set[str]:
+    """`doc_fsck`의 축이 무는 줄. **그 자가 수를 실물과 맞댄다.**
+
+    `check_requirements`는 덮는 자가 **아니다** (D-0381). 그것은 ID·우선순위·상태를
+    보고 **수는 안 본다** — `REQ-ANL-006`의 `해시 8192`도 `REQ-ING-008`의 `78.5%`도
+    그 자의 눈 밖이다. 덮개로 세었더니 **열 건을 과대 신용**했다.
+    """
+    return {
+        line.strip()
+        for line in rows()
+        if any(pattern.search(line) for _name, pattern, _count in doc_counts.COUNTED)
+    }
 
 
 def recorded() -> set[str]:
@@ -188,10 +198,10 @@ def recorded() -> set[str]:
 
 def sort(found: list[str]) -> dict[str, list[str]]:
     """주장마다 상류를 묻는다. **먼저 무는 자가 가져간다** — 한 줄은 한 번만 센다."""
-    mirror, rule, ledger, heads = mirrored(), required(), recorded(), captions()
+    mirror, rule, ledger, heads = mirrored(), axled(), recorded(), captions()
     out: dict[str, list[str]] = {
         "거울": [],
-        "요구사항": [],
+        "축": [],
         "기록": [],
         "상류 없음": [],
         "헛인용": [],
@@ -202,7 +212,7 @@ def sort(found: list[str]) -> dict[str, list[str]]:
         if bare in mirror:
             out["거울"].append(line)
         elif bare in rule:
-            out["요구사항"].append(line)
+            out["축"].append(line)
         elif cited and all(one in ledger for one in cited):
             out["기록"].append(line)
         elif cited:
@@ -263,7 +273,7 @@ def main() -> int:
     said = sum(len(one) for one in groups.values())
     print(
         f"기획서 수치 검사 통과 · 표 줄 {len(table)} · 주장 {said} · "
-        f"거울 {len(groups['거울'])} · 요구사항 {len(groups['요구사항'])} · "
+        f"거울 {len(groups['거울'])} · 축 {len(groups['축'])} · "
         f"기록 {len(groups['기록'])} · "
         f"**상류 없음 {loose}건**/{len(groups['상류 없음'])}줄(천장 {UNSOURCED_CEILING})"
     )

@@ -97,7 +97,7 @@ def test_없는_결정을_인용하면_헛인용이다(monkeypatch: pytest.Monke
     monkeypatch.setattr(TOOL, "recorded", set)
     monkeypatch.setattr(TOOL, "captions", dict)
     monkeypatch.setattr(TOOL, "mirrored", set)
-    monkeypatch.setattr(TOOL, "required", set)
+    monkeypatch.setattr(TOOL, "axled", set)
 
     groups = cast("dict[str, list[str]]", TOOL.sort(["| 임베딩 | 20.4배 (D-0027) |"]))
 
@@ -151,7 +151,7 @@ def test_수를_눈앞에_둔다(
     assert TOOL.main() == 0
 
     spoke = capsys.readouterr().out
-    for word in ("거울", "요구사항", "기록", "상류 없음"):
+    for word in ("거울", "축", "기록", "상류 없음"):
         assert word in spoke, spoke
     assert f"천장 {TOOL.UNSOURCED_CEILING}" in spoke
 
@@ -204,3 +204,26 @@ def test_판_번호는_한_건이다() -> None:
     """**거짓 경보를 안 만든다** (GR-0.8). `8.0.1`을 둘로 세면 천장이 부푼다."""
     assert TOOL.tally(["| 시스템 바이너리 | ffmpeg 8.0.1 |"]) == 1
     assert TOOL.tally(["| 임베딩 | 0.0699 · 0.0034 |"]) == 2
+
+
+# ------------------------------------------------- 덮개를 바꿨다 (D-0381)
+#
+# `check_requirements`를 덮는 자로 세었던 것이 **과대 신용**이었다. 그 자는 ID·우선순위·
+# 상태를 보고 **수는 안 본다** — `REQ-ANL-006`의 `해시 8192`도 `REQ-ING-008`의 `78.5%`도
+# 눈 밖이다. 떼고 나니 정직한 바닥이 52가 아니라 **62건**이었다.
+
+
+def test_요구사항_자는_덮개가_아니다() -> None:
+    """**그 자가 보는 것과 수는 다르다** (D-0381). 이름만 겹친다고 덮이지 않는다."""
+    assert not hasattr(TOOL, "required"), "ID만 보는 자를 다시 덮개로 달았다"
+
+    checker = tool_module("check_requirements")
+    assert "8192" not in checker.__doc__ if checker.__doc__ else True
+
+
+def test_축이_덮는다() -> None:
+    """`doc_fsck`의 축은 **수를 실물과 맞댄다** — 그것이 덮개의 조건이다."""
+    covered = cast("set[str]", TOOL.axled())
+
+    assert covered, "축이 무는 줄이 하나도 없다"
+    assert any("계약" in one for one in covered), "import-linter 계약 줄을 안 문다"

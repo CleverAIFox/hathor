@@ -318,6 +318,23 @@ def gate_tools() -> list[str]:
     return found
 
 
+AXIS_TABLE = re.compile(r"(?m)^## 4\. 4축 특징 설계\n\n(?:\|.*\n)+")
+"""`MASTER` §4의 축 표. **그 표가 정본이고 「4축」이라는 말은 거울이다** (D-0381)."""
+
+
+def taste_axes() -> int:
+    """취향 축의 수. **§4 표의 본문 줄을 센다** — 머리와 구분선은 뺀다.
+
+    *«4축»*은 기획서 곳곳에 아홉 번 나오고 **아무도 그 4를 안 봤다.** 다섯째 축이
+    생기는 날 그 아홉 자리가 전부 거짓이 된다.
+    """
+    found = AXIS_TABLE.search((ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8"))
+    if not found:
+        return 0
+    rows = [one for one in found.group(0).splitlines() if one.startswith("|")]
+    return len([one for one in rows[2:] if one.strip()])
+
+
 def outside_tense_count() -> int:
     """`docs/`에 사는 **시제 밖** 파일 수 (D-0378).
 
@@ -367,6 +384,10 @@ COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("요구사항 행", re.compile(rf"요구사항\s*{BOLD}행"), requirement_rows),
     ("관문 도구", re.compile(rf"관문 도구\s*{BOLD}개"), gate_count),
     ("docs 시제 밖", re.compile(rf"시제 밖\s*{BOLD}개"), outside_tense_count),
+    # **「축」 하나로는 문서 축과 부딪힌다** (D-0381). `문서 체계를 3축으로`가 걸렸고,
+    # 면제를 달자 그 칸을 읽는 다른 축(`해당없음 판단`)이 흔들렸다 — **면제가 옆을
+    # 깨면 그 면제가 틀린 것이다.** 뜻이 하나뿐인 `N축 특징`으로 좁힌다. 충돌 0.
+    ("취향 축", re.compile(rf"(?<![\w.]){BOLD}축 특징"), taste_axes),
     ("형식 면제 기록", re.compile(rf"형식 면제\s*{BOLD}건"), grandfathered_records),
     ("재현 불명", re.compile(rf"재현 불명\s*{BOLD}건"), unknown_reproductions),
 )
