@@ -2725,6 +2725,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0379 | 비교를 넓히고 **담기를 잊었다** | `core/tests/unit/test_apply_patch.py::test_담는_목록이_검증한_목록과_같다` | 실물 그의 기기 — `make apply` 1판이 제출본을 뺀 커밋을 냄(`make check` 초록, |
 | D-0380 | 관문 스물다섯이 전부 **작업 트리**를 읽었다 | `core/tests/unit/test_committed.py::test_제출본만_낡은_커밋을_잡는다` | 실물 이 저장소 — 꺼내 도는 관문 5개 · 실측 3.8초 · 배관으로 심은 「제출본만 낡은 |
 | D-0381 | 덮개 하나가 **과대 신용**이었다 | `core/tests/unit/test_claims.py::test_요구사항_자는_덮개가_아니다` | 실물 이 저장소 — 덮개를 뗀 정직한 바닥 62건 · 갚고 남은 35건(27건 상환) · |
+| D-0382 | **사흘에 세 번** 같은 죄 | `core/tests/unit/test_hygiene.py::test_시험이_얕은_클론보다_깊이_안_판다` | 실물 CI — `3f359ed`에서 워크플로 셋(ci · release · proposal) 전부 빨감 · |
 
 <!-- decision-ledger:end -->
 

@@ -62,20 +62,27 @@ def test_지금_HEAD는_스스로_맞는다() -> None:
     assert TOOL.check() == []
 
 
-def test_제출본만_낡은_커밋을_잡는다() -> None:
+def test_제출본만_낡은_커밋을_잡는다(tmp_path: Path) -> None:
     """**심은 결함** (D-0069 · D-0379). 그날의 꼴 그대로를 만들어 재 본다.
 
-    `HEAD`의 트리에서 `docs/proposal.docx`만 옛 blob으로 바꾼 커밋을 **배관으로** 짓는다
-    — 작업 트리는 건드리지 않는다. 그 커밋은 **작업 트리가 초록인 채로** 어긋나 있다.
+    `HEAD`의 트리에서 **정본만 한 줄 바꾼** 커밋을 배관으로 짓는다 — 작업 트리는
+    안 건드린다. 그러면 커밋된 제출본이 커밋된 정본보다 낡고, **작업 트리는 초록인
+    채로** 그 커밋만 어긋난다.
+
+    **이력을 안 판다** (D-0382). 첫 판은 `HEAD~3`의 blob을 썼고 CI는 `fetch-depth: 2`라
+    거기서만 빨갰다 — **같은 시험이 기기마다 다른 길을 돈** 세 번째 판이다.
     """
-    old = _git("rev-parse", "HEAD~3:docs/proposal.docx")
+    master = tmp_path / "MASTER.md"
+    body = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    master.write_text(body.replace("\n## 부록 A.", "\n심은 결함 한 줄 (D-0382).\n\n## 부록 A.", 1))
+    old = _git("hash-object", "-w", "--path", "docs/MASTER.md", str(master))
     index = Path(
         subprocess.run(["mktemp"], capture_output=True, text=True, check=True).stdout.strip()
     )
     env = {"GIT_INDEX_FILE": str(index)}
     for args in (
         ("read-tree", "HEAD"),
-        ("update-index", "--cacheinfo", f"100644,{old},docs/proposal.docx"),
+        ("update-index", "--cacheinfo", f"100644,{old},docs/MASTER.md"),
     ):
         subprocess.run(("git", *args), cwd=ROOT, env={**_environ(), **env}, timeout=120, check=True)
     tree = subprocess.run(
@@ -87,11 +94,11 @@ def test_제출본만_낡은_커밋을_잡는다() -> None:
         timeout=120,
         check=True,
     ).stdout.strip()
-    planted = _git("commit-tree", tree, "-p", "HEAD", "-m", "심은 결함: 제출본만 낡은 커밋")
+    planted = _git("commit-tree", tree, "-p", "HEAD", "-m", "심은 결함: 정본만 바뀐 커밋")
 
     problems = cast("list[str]", TOOL.check(planted))
 
-    assert problems, "제출본이 낡은 커밋을 통과시켰다"
+    assert problems, "정본보다 낡은 제출본을 담은 커밋을 통과시켰다"
     assert any("render_proposal" in one for one in problems), problems
 
 

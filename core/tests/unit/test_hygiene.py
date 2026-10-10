@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 import sys
@@ -398,3 +399,60 @@ def test_하한이_없으면_수를_지어내지_않는다(tmp_path: Path) -> No
     )
     with pytest.raises(ValueError, match="하한이 없다"):
         deadcheck.python_floor(tmp_path)
+
+
+# ------------------------------------------------- 얕은 클론 (D-0382)
+
+DEEP = re.compile(r"HEAD(?:~(\d+)|(\^+)(?!\{))")
+"""저장소 이력을 거슬러 가는 꼴. `HEAD^{tree}`처럼 **껍질 벗기기는 아니다.**"""
+
+SHALLOW_OK = "shallow: ok"
+"""제 저장소를 따로 짓는 시험의 면제 선언. **까닭을 같이 적는다.**"""
+
+
+def _ci_depth() -> int:
+    """CI가 pytest를 도는 잡의 **받는 깊이**. 정본은 워크플로다 (D-0043)."""
+    flow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    found = [int(one) for one in re.findall(r"fetch-depth:\s*(\d+)", flow) if one != "0"]
+    assert found, "ci.yml에서 fetch-depth를 못 읽었다 — 깊이를 모르면 판정하지 않는다"
+    return min(found)
+
+
+def _spoken(tree: ast.Module) -> set[int]:
+    """독스트링인 문자열. **산문은 안 센다** — 이 시험의 설명에도 `HEAD~3`이 적혀 있다."""
+    return {
+        id(node.body[0].value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef)
+        and node.body
+        and isinstance(node.body[0], ast.Expr)
+        and isinstance(node.body[0].value, ast.Constant)
+    }
+
+
+def test_시험이_얕은_클론보다_깊이_안_판다() -> None:
+    """**같은 시험이 기기마다 다른 길을 돌면 판정이 둘이 된다** (D-0353 · D-0382).
+
+    CI는 `fetch-depth: 2`로 받는다 — 내 기기에는 이력이 다 있고 거기엔 둘뿐이다.
+    세 칸을 판 시험이 **내 기기에서만 초록**이었고 CI에서 셋이 빨갰다. 이 죄가
+    **사흘에 세 번**이다: `dot`이 깔렸나 · `HEAD`가 뭘 건드렸나 · 이력이 얼마나 깊나.
+
+    제 저장소를 따로 짓는 시험은 `# shallow: ok <사유>`로 면제한다 — 그 깊이는 제가
+    만든 것이라 환경과 무관하다.
+    """
+    depth = _ci_depth()
+    guilty = []
+    for path in sorted((ROOT / "core" / "tests").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        docs = _spoken(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                continue
+            if id(node) in docs or SHALLOW_OK in node.value:
+                continue
+            for tilde, carets in DEEP.findall(node.value):
+                back = int(tilde) if tilde else len(carets)
+                if back >= depth:
+                    guilty.append(f"{path.name}:{node.lineno} 이력 {back}칸 (CI는 {depth})")
+
+    assert guilty == [], "제 저장소를 짓거나 `# shallow: ok <사유>`를 적는다 (D-0382)"
