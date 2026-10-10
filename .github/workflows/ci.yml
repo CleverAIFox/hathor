@@ -108,6 +108,9 @@ jobs:
       - name: Proposal vs sources
         working-directory: .
         run: python3 tools/render_proposal.py --check
+      - name: Proposal numbers have an upstream
+        working-directory: .
+        run: python3 tools/check_claims.py --check
       - name: Screen script
         working-directory: .
         run: python3 tools/check_script.py --check

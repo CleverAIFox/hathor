@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -320,18 +321,20 @@ def test_렌더러가_없는_기기에서는_없다고_적는다(monkeypatch: py
 
 
 def test_판을_못_읽으면_그렇게_적는다(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`dot -V`의 글이 바뀌는 날 **조용히 빈 값이 들어가면** 못이 늘 운다 (GR-0.8)."""
-    monkeypatch.setattr(BUILD, "re", _Blind())
+    """`dot -V`의 글이 바뀌는 날 **조용히 빈 값이 들어가면** 못이 늘 운다 (GR-0.8).
+
+    **환경을 손에 쥔다** (D-0353 · D-0378). 첫 판은 `re`만 눈멀게 했고 `dot`이 깔린
+    기기에서만 이 길을 지났다 — CI에는 graphviz가 없어 `OSError`가 먼저 나고 「없다」가
+    돌아왔다. **같은 시험이 기기마다 다른 길을 돌면 판정이 둘이 된다.**
+    """
+    monkeypatch.setattr(
+        BUILD.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(stdout="알 수 없는 글", stderr="", returncode=0),
+    )
 
     assert BUILD.drew()["dot"] == "못 읽었다"
-
-
-class _Blind:
-    """아무것도 못 찾는 가짜 `re`."""
-
-    @staticmethod
-    def search(*_args: object) -> None:
-        return None
+    assert BUILD.drew()["pandoc"] == "못 읽었다"
 
 
 def test_자물쇠가_렌더러를_담는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -350,6 +350,8 @@ BASELINE: dict[str, int] = {
     "check_artifacts.QUARANTINE_CEILING": 0,
     "check_artifacts.TRANSIENT_ALLOWED": 1,
     "check_artifacts.UNDER_STUDY_ALLOWED": 1,
+    "check_claims.IDENT_FLOOR": 5,
+    "check_claims.UNSOURCED_CEILING": 52,
     "check_compose.CEILING[core]": 2816,
     "check_compose.CEILING[ml]": 2304,
     "check_compose.CEILING[obs]": 768,

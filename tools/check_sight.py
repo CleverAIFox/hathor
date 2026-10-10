@@ -72,6 +72,7 @@ PINNED = {
     "check_artifacts.REQUIRED": 6,
     "check_artifacts.TRANSIENT_ALLOWED": 1,
     "check_artifacts.UNDER_STUDY_ALLOWED": 1,
+    "check_claims.IDENTS": 6,
     "check_compose.CEILING": 3,
     "check_decisions.REQUIRED_SECTIONS": 2,
     "check_doc_style.AXES": 3,

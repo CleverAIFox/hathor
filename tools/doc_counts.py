@@ -53,6 +53,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+import check_doc_style
 from decision_ledger import evidence_base
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -317,6 +318,15 @@ def gate_tools() -> list[str]:
     return found
 
 
+def outside_tense_count() -> int:
+    """`docs/`에 사는 **시제 밖** 파일 수 (D-0378).
+
+    축 셋 말고도 실측 정본·제출본·자물쇠가 거기 산다. 디렉터리만 보면 여섯이라
+    *«문서 체계가 무너졌나»*로 읽힌다 — **문서가 수를 들고 여기가 실물을 센다.**
+    """
+    return len(check_doc_style.OUTSIDE_TENSE)
+
+
 def gate_count() -> int:
     return len(gate_tools())
 
@@ -356,6 +366,7 @@ COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("MVP 예외", re.compile(rf"예외가\s*{BOLD}이고"), mvp_exemptions),
     ("요구사항 행", re.compile(rf"요구사항\s*{BOLD}행"), requirement_rows),
     ("관문 도구", re.compile(rf"관문 도구\s*{BOLD}개"), gate_count),
+    ("docs 시제 밖", re.compile(rf"시제 밖\s*{BOLD}개"), outside_tense_count),
     ("형식 면제 기록", re.compile(rf"형식 면제\s*{BOLD}건"), grandfathered_records),
     ("재현 불명", re.compile(rf"재현 불명\s*{BOLD}건"), unknown_reproductions),
 )
