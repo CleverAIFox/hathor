@@ -187,6 +187,23 @@ def has_parent() -> bool:
     return done.returncode == 0
 
 
+def touched_by_head() -> list[str]:
+    """`HEAD`가 건드린 경로. **시험이 손에 쥘 수 있게 함수로 뗀다** (D-0379).
+
+    이것을 `pull_once()` 안에 박아 두면 시험이 **그날의 `HEAD`에 매인다** — 실제로
+    그랬다: D-0378의 커밋이 제출본을 안 담은 판에서 시험 둘이 빨개졌고, **시험이
+    아니라 그 커밋이 틀렸는데** 판정은 시험을 가리켰다.
+    """
+    return subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    ).stdout.split()
+
+
 def pull_once() -> list[str]:
     """**`HEAD`를 실제로 뽑아 본다.** 뽑기 자신이 기준 위에서 붙여 보고 트리까지 맞춘다."""
     with tempfile.TemporaryDirectory() as box:
@@ -214,16 +231,9 @@ def pull_once() -> list[str]:
         ]
         # **뒤처리가 걸리는 커밋이면 그 머리가 있어야 한다** (D-0377). 없으면 받는 쪽은
         # 「다시 만들라」는 말을 못 듣고, 산출물이 낡은 채로 커밋된다.
-        touched = subprocess.run(
-            ["git", "show", "--name-only", "--format=", "HEAD"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-        ).stdout.split()
         problems += [
-            f"뽑은 패치의 {one}" for one in after_drift(touched, heads.get("hathor-after", ""))
+            f"뽑은 패치의 {one}"
+            for one in after_drift(touched_by_head(), heads.get("hathor-after", ""))
         ]
         return problems
 

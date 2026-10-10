@@ -626,3 +626,83 @@ def test_허용_목록을_제_손으로_안_적는다() -> None:
     assert "proposal" not in body[body.index('AFTER="$(grep -m1') : body.index("NOCOMMIT")], (
         "목표 이름을 셸에 베꼈다"
     )
+
+
+# ------------------------------------------------- 담은 것과 커밋 (D-0379)
+#
+# **비교를 넓히고 담기를 잊었다.** D-0377이 뒤처리 산출물을 `EXPECTED`에만 더하고
+# `git add` 목록에는 안 넣었다. 그래서 `make apply`가 제출본을 다시 만들고도 **그것을
+# 뺀 커밋**을 냈다 — 작업 트리는 맞고 커밋만 낡았다. 그 자리의 `make check`은 **작업
+# 트리를 보므로 초록이었고**, 빨개진 것은 두 판 뒤 `HEAD`를 읽는 시험 둘이었다.
+
+
+def test_한글_경로를_8진수로_안_읽는다() -> None:
+    """**`core.quotepath`가 기본이면 `"\\353…"`가 나온다** (D-0379).
+
+    그 글자는 선언의 어떤 줄과도 안 맞아 **영원히 «다른 작업이 섞였다»**가 된다.
+    이 저장소에는 아직 한글 경로가 없어 **안 터졌을 뿐이다** — 유병률 0에 못을 박는다
+    (D-0364와 같은 꼴).
+    """
+    body = SCRIPT.read_text(encoding="utf-8")
+
+    for line in body.splitlines():
+        if "git status --porcelain" in line and not line.lstrip().startswith("#"):
+            assert "core.quotepath=false" in line, line
+
+
+def test_담는_목록이_검증한_목록과_같다() -> None:
+    """**둘이 갈리면 커밋이 트리보다 낡는다** (D-0379).
+
+    대조는 `EXPECTED`로 하고 담기는 `declared_paths`로 하면, 그 차집합이 **조용히
+    빠진다.** 차집합이 바로 뒤처리가 만든 산출물이었다.
+    """
+    body = SCRIPT.read_text(encoding="utf-8")
+    staging = body[body.index('ACTUAL="$(git -c') : body.index("if ! git commit")]
+
+    assert "printf '%s\\n' \"$EXPECTED\" | while" in staging, "담기가 `EXPECTED`를 안 쓴다"
+    assert "declared_paths" not in staging, "담기와 대조가 다른 목록을 본다"
+
+
+def _clean_gate() -> str:
+    return _slice('LEFT="$(git -c')
+
+
+def _clean(folder: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", "-c", f'die() {{ echo "$1" >&2; exit 1; }}\n{_clean_gate()}'],
+        cwd=folder,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def test_커밋_뒤_트리가_깨끗하면_지나간다(tmp_path: Path) -> None:
+    """**거짓 경보를 안 만든다** (GR-0.8). 정상 적용은 아무 말이 없다."""
+    folder = tmp_path / "repo"
+    _tiny_repo(folder, "하나")
+
+    done = _clean(folder)
+
+    assert done.returncode == 0, done.stderr
+    assert done.stderr == ""
+
+
+def test_담기에서_빠진_것이_있으면_막는다(tmp_path: Path) -> None:
+    """**이 못은 비교를 넓혀도 안 속는다** (D-0379).
+
+    위 대조는 *«바뀐 것이 선언과 같은가»*만 본다 — **담겼는지는 안 본다.** 여기는
+    결과만 본다: 담을 것을 다 담았으면 트리는 비어 있다.
+    """
+    folder = tmp_path / "repo"
+    _tiny_repo(folder, "하나")
+    (folder / "뒤처리가_만든것.bin").write_text("안 담겼다", encoding="utf-8")
+
+    done = _clean(folder)
+
+    assert done.returncode == 1
+    assert "커밋이 네 트리보다 낡았다" in done.stderr, done.stderr
+    assert "commit --amend" in done.stderr, "고치는 한 줄이 없다 (D-0269)"
+    # **한글 경로가 8진수로 나오면 사람도 대조도 못 읽는다** (D-0379).
+    assert "뒤처리가_만든것.bin" in done.stderr, "무엇이 빠졌는지 안 찍는다"

@@ -185,11 +185,13 @@ def test_머리를_안_쓰는_뽑기를_잡는다(tmp_path: Path, monkeypatch: p
         '#!/usr/bin/env bash\nprintf "diff --git a/x b/x\\n" > "$OUT"\n', encoding="utf-8"
     )
     monkeypatch.setattr(CHECKER, "MAKER", silent)
+    # **그날의 `HEAD`에 안 매인다** (D-0379). 첫 판은 매여 있었고, 제출본을 안 담은
+    # 커밋 하나에 시험 둘이 빨개졌다 — 틀린 것은 커밋인데 판정은 시험을 가리켰다.
+    monkeypatch.setattr(CHECKER, "touched_by_head", list)
 
     problems = _problems("pull_once")
 
-    # 머리 셋 + **뒤처리도 안 썼다** (D-0377). `HEAD`가 docx를 건드렸다.
-    assert len(problems) == len(CHECKER.HEADS) + 1
+    assert len(problems) == len(CHECKER.HEADS)
 
 
 def test_얕은_클론을_통과로_안_적는다(
@@ -297,7 +299,8 @@ def test_머리와_경로가_갈리면_운다() -> None:
 def test_뒤처리를_빠뜨린_뽑기를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """**심은 결함** (D-0069). 머리 셋만 쓰고 넷째를 안 쓰는 뽑기는 통과하면 안 된다.
 
-    `HEAD`(D-0376)가 `docs/proposal.docx`를 건드렸으므로 `proposal`을 불러야 한다.
+    **건드린 경로를 손에 쥔다** (D-0379 · D-0353). `HEAD`에 물으면 그날 커밋이
+    제출본을 건드렸느냐에 따라 판정이 갈린다.
     """
     blind = tmp_path / "make_patch.sh"
     blind.write_text(
@@ -309,6 +312,7 @@ def test_뒤처리를_빠뜨린_뽑기를_잡는다(tmp_path: Path, monkeypatch:
         encoding="utf-8",
     )
     monkeypatch.setattr(CHECKER, "MAKER", blind)
+    monkeypatch.setattr(CHECKER, "touched_by_head", lambda: ["docs/proposal.docx"])
 
     problems = _problems("pull_once")
 

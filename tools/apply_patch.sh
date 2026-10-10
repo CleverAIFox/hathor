@@ -202,7 +202,7 @@ if [[ -n "$BASE" ]]; then
 fi
 
 # **작업 트리가 깨끗해야 한다.** 되돌리기를 git에 맡기는 대가다.
-if [[ -n "$(git status --porcelain)" ]]; then
+if [[ -n "$(git -c core.quotepath=false status --porcelain)" ]]; then
   git status --short
   die "커밋되지 않은 변경이 있다. 커밋하거나 stash한 뒤 다시 실행한다"
 fi
@@ -271,7 +271,12 @@ print("\n".join(f"{p}\t{t}" for p, t in check_patch.AFTER_RULES))')
 fi
 # **새 폴더는 폴더 하나로 접혀 나온다** — `site/`가 생기면 `site/proposal.html` 대신
 # `site/`가 찍혀 선언과 어긋났다 (D-0222). 추적 안 된 파일을 전부 펼친다.
-ACTUAL="$(git status --porcelain --untracked-files=all | sed 's/^...//' | tr -d '"' | sort)"
+#
+# **`core.quotepath=false`가 없으면 한글 경로가 8진수로 나온다** (D-0379) —
+# `"\353\222\244…"`는 선언의 어떤 줄과도 안 맞아 **영원히 «다른 작업이 섞였다»**가
+# 된다. 이 저장소에는 아직 그런 경로가 없어 안 터졌을 뿐이다 (유병률 0에 못을 박는다).
+ACTUAL="$(git -c core.quotepath=false status --porcelain --untracked-files=all \
+  | sed 's/^...//' | tr -d '"' | sort)"
 
 if [[ "$EXPECTED" != "$ACTUAL" ]]; then
   echo
@@ -301,8 +306,16 @@ if [[ -n "$TOOLCHAIN" ]] && ! grep -qx 'docs/DECISIONS.md' <<<"$EXPECTED"; then
   exit 1
 fi
 
-# 검증했으므로 선언된 목록으로만 담는다. 떠난 곳을 담아야 삭제가 커밋에 들어간다.
-declared_paths "$PATCH" | while IFS= read -r file; do git add -- "$file"; done
+# **검증한 목록 그대로 담는다** (D-0379). 떠난 곳을 담아야 삭제가 커밋에 들어가고,
+# **뒤처리가 만든 것도 담아야 커밋이 트리와 같아진다.**
+#
+# D-0377은 뒤처리 산출물을 `EXPECTED`에만 더하고 **담지는 않았다.** 그래서 `make apply`가
+# 제출본을 다시 만들고도 **그것을 뺀 커밋**을 냈다 — 작업 트리는 맞고 커밋만 낡았다.
+# 그 자리의 `make check`은 **작업 트리를 보므로 초록이었다.** 실측으로 한 판 나갔다.
+printf '%s\n' "$EXPECTED" | while IFS= read -r file; do
+  [[ -n "$file" ]] || continue
+  git add -A -- "$file"
+done
 # **훅이 막을 수 있다** (D-0375). 패치가 들고 온 관문이 **사람이 아직 안 한 일**
 # 때문에 빨간 경우다 — 실측처럼 기기에서만 되는 것. 그때 훅은 옳고, 막힌 사람에게는
 # **빠져나갈 길이 안 보인다.** 그래서 여기서 적는다. 패치는 이미 붙어 있다.
@@ -315,8 +328,22 @@ if ! git commit -q -m "$MESSAGE"; then
   echo "되돌리려면:  git apply -R '${PATCH}'"
   exit 1
 fi
+# **커밋 뒤 트리가 깨끗한가** (D-0379). 위 대조는 *«바뀐 것이 선언과 같은가»*만 보고
+# **담겼는지는 안 본다** — 비교를 넓히고 담기를 잊으면 조용히 어긋난다. 여기는 결과만
+# 본다: 담을 것을 다 담았으면 트리는 비어 있다. **넓혀도 못 속인다.**
+LEFT="$(git -c core.quotepath=false status --porcelain --untracked-files=all)"
+if [[ -n "$LEFT" ]]; then
+  echo >&2
+  printf '\033[31m커밋했는데 트리가 안 깨끗하다 (D-0379).\033[0m\n' >&2
+  printf '%s\n' "$LEFT" | sed 's/^/  /' >&2
+  echo >&2
+  echo "  **커밋이 네 트리보다 낡았다.** 담기에서 빠진 것이 있다." >&2
+  echo "  고치려면:  git add -A && git commit --amend --no-edit" >&2
+  exit 1
+fi
+
 ok "커밋: ${MESSAGE}"
-printf "  파일 %s개 · 패치 선언과 일치\n" "$(echo "$EXPECTED" | wc -l)"
+printf "  파일 %s개 · 패치 선언과 일치 · 트리 깨끗\n" "$(echo "$EXPECTED" | wc -l)"
 
 echo
 echo "다음:  make check  &&  git push"
