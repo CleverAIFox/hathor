@@ -51,6 +51,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import check_committed
 import debts
 import tidy
 
@@ -465,6 +466,20 @@ def main() -> int:
     else:
         ahead = _git("rev-list", "--count", "@{upstream}..HEAD")
         print(f"{GREEN}   통과{OFF}  미푸시 커밋 {ahead or '0'}개")
+
+    # **커밋을 직접 본다** (D-0380). 위의 `make check`은 **작업 트리**를 읽었다 —
+    # D-0379에서 커밋만 낡은 판이 그 자리에서 초록이었다. 여기는 `HEAD`를 꺼내 돈다.
+    print(f"{DIM}── 커밋된 트리{OFF}")
+    committed = check_committed.check()
+    for line in committed:
+        print(f"{RED}   막힘{OFF}  {line}")
+    if committed:
+        print("   **작업 트리는 초록이다.** 커밋에 안 담긴 것이 있다 (D-0380)")
+        if args.push:
+            print("\n커밋을 먼저 고친다:  git add -A && git commit --amend --no-edit")
+            return 1
+    else:
+        print(f"{GREEN}   통과{OFF}  관문 {len(check_committed.GATES)}개를 HEAD에서 다시 돌렸다")
 
     print(f"{DIM}── 기록{OFF}")
     print(f"   마지막 결정  {last_decision()}")

@@ -325,6 +325,7 @@ if ! git commit -q -m "$MESSAGE"; then
   echo "    <훅이 가리킨 일>                       # 예: make measure"
   echo "    make check"
   echo "    git add -A && git commit -m '${MESSAGE}'"
+  echo "    make ship PUSH=1                        # git push 가 아니다 (D-0380)"
   echo "되돌리려면:  git apply -R '${PATCH}'"
   exit 1
 fi
@@ -346,5 +347,7 @@ ok "커밋: ${MESSAGE}"
 printf "  파일 %s개 · 패치 선언과 일치 · 트리 깨끗\n" "$(echo "$EXPECTED" | wc -l)"
 
 echo
-echo "다음:  make check  &&  git push"
+# **`git push`를 권하지 않는다** (D-0380). 그 길은 `ship`을 건너뛰고, 그러면 더러운
+# 트리 검사도 **커밋된 트리 검사도** 안 돈다 — D-0379가 샌 자리가 거기다.
+echo "다음:  make check  &&  make ship PUSH=1"
 echo "되돌리려면:  git reset --hard HEAD~1"

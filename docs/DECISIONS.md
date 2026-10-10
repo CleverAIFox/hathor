@@ -31681,3 +31681,97 @@ D-0377은 뒤처리 산출물을 `EXPECTED`(선언 ↔ 실제 대조)에 더했�
 자료  실물 그의 기기 — `make apply` 1판이 제출본을 뺀 커밋을 냄(`make check` 초록,
       시험 둘이 두 판 뒤 적발) · 담기와 대조의 차집합 1개 · `git status` 자리 전수 3곳 ·
       심은 결함 4건 전수 반증
+
+---
+
+## D-0380. 관문 스물다섯이 전부 **작업 트리**를 읽었다 — `HEAD`를 꺼내 다시 돈다
+
+> **갱신**: D-0379가 *«커밋을 직접 보는 관문은 여전히 없다»*를 남기는 것에 적었다.
+> **남긴 그 판에 고친다.** D-0126 · D-0129 — 안 걸면 안 돌고, 늘 빨가면 사람이 끈다.
+
+- **배경**: D-0379에서 `make apply`가 제출본을 다시 만들고 **커밋에 안 담았다.** 작업
+  트리는 맞고 커밋만 낡았는데 `make check`은 **초록이었다.** 고치고 나서도 *«커밋된
+  산출물이 커밋된 정본과 맞는가»*를 보는 자리는 **하나도 없었다.**
+
+### 하나. 더러운 트리를 막는 것으로는 모자라다
+
+`ship.check_git()`이 커밋 안 된 변경을 막는다. 그래서 **트리가 깨끗하면 트리 = 커밋**이고
+`make check`의 판정이 커밋에도 그대로 간다 — 그 길은 이미 막혀 있었다. 안 막힌 길:
+
+| 길 | 왜 새나 |
+|---|---|
+| `apply_patch`가 권하던 `git push` | **`ship`을 건너뛴다** — 더러운 트리 검사조차 안 돈다 |
+| `git commit --no-verify` | 훅을 건너뛰고 아무거나 담는다 |
+| `git add -p` · 부분 담기 | 트리는 깨끗한데 **담긴 조각만** 어긋난다 |
+| 머지·리베이스가 낸 트리 | 어느 쪽도 안 본 조합이 생긴다 |
+
+**첫 줄이 D-0379가 샌 자리다.** 내 스크립트가 *"다음: `make check && git push`"*라고
+적고 있었다 — 내가 만든 관문을 내가 우회하라고 적어 둔 셈이다. `make ship PUSH=1`로 고쳤다.
+
+### 둘. `HEAD`를 꺼내 거기서 돈다
+
+`tools/check_committed.py`. 임시 작업 트리에 커밋을 꺼내고 **그 트리의 도구로** 관문
+다섯을 돌린다(`render_proposal` · `check_claims` · `measured` · `doc_fsck` ·
+`check_decisions`). **실측 3.8초.**
+
+**꺼낸 트리의 도구를 쓴다** — 지금 도구로 옛 커밋을 보면 그 커밋이 몰랐던 규약으로
+판정하게 된다.
+
+목록에 못 넣는 것이 있다. `var/`를 읽는 관문은 git이 안 나르므로 꺼낸 트리에 없고
+(D-0369), 묶음이 필요한 것(ruff · mypy · pytest)도 못 돈다. **다섯이 바닥 넷 위에
+있고, 늘리는 것이 목표다** — 여기 들어온 관문만 커밋을 본다.
+
+### 셋. 그날의 꼴을 배관으로 다시 만들어 쟀다
+
+`HEAD`의 트리에서 `docs/proposal.docx`만 옛 blob으로 바꾼 커밋을 `commit-tree`로 짓고
+돌렸다 — **작업 트리는 안 건드린다.**
+
+```text
+커밋된 트리가 1곳 어긋난다.
+  - 커밋된 트리에서 `tools/render_proposal.py`가 운다: 제출본 표지에 «정본 …»가 없다
+  → **작업 트리는 초록일 수 있다.** 커밋에 안 담긴 것이 있다
+```
+
+### 넷. 사슬 시험이 **옳게** 막았다
+
+`test_check가_있는_도구는_전부_check_사슬에서_불린다`가 새 도구를 바로 잡았다 —
+*«`--check`를 달고 아무 데서도 안 돈다»*. 그 시험은 `make check` 레시피만 보고 있었는데,
+`CHAINS`는 이미 **`ship`도 사슬**이라 적고 있었고 `_imported_from_chain()`도 있었다.
+둘을 그 시험에 물렸다 — **사슬 도구가 들여오는 것도 「돈다」다** (D-0362).
+
+### 다섯. `make check`에는 **안 넣는다**
+
+`make check`은 **커밋 전에** 도는 것이 정상이고 그때 트리는 당연히 커밋과 다르다 —
+넣으면 늘 빨갛고, 늘 빨간 관문은 사람이 끈다 (D-0129). 내보내는 자리에 건다. CI는 이미
+커밋을 체크아웃해 돌므로 같은 일을 하지만, **밀기 전에** 같은 답을 주는 것이 값이다.
+
+- **결과**:
+  - `tools/check_committed.py` — `GATES`(5) · `FLOOR_GATES`(4) · `picked()` ·
+    `judged()` · `dropped()` · `check(rev)`.
+  - `tools/ship.py` — `── 커밋된 트리` 절. 막히면 **밀지 않는다.**
+  - `tools/apply_patch.sh` — `git push` 대신 `make ship PUSH=1`을 권한다. 두 자리.
+  - `core/tests/unit/test_gate_chain.py` — 사슬 판정이 `ship`과 임포트까지 본다.
+  - `docs/MASTER.md` §11 검사 체계 — 한 줄.
+  - 시험 여덟 · 심은 결함 넷 전수 반증.
+
+- **남기는 것**:
+  - **다섯만 본다.** ruff · mypy · pytest · 묶음이 필요한 관문은 커밋을 못 본다 —
+    그쪽은 CI가 유일한 눈이다.
+  - `docs/proposal.docx` · `proposal.lock.json`을 `site/`로 옮기는 일 · 수치 빚 **52건**
+    상환은 다음 판이다. **갚은 건 아직 0건이다.**
+  - 「X 대문자」 1곡 · `.env` 경로 표기 · PLAN 열린 질문 29.
+
+재현
+    python3 tools/check_committed.py --check
+    cd core && uv run pytest tests/unit/test_committed.py -q
+
+강제자
+    `core/tests/unit/test_committed.py::test_제출본만_낡은_커밋을_잡는다`
+    `core/tests/unit/test_committed.py::test_ship이_밀기_전에_본다`
+    `core/tests/unit/test_committed.py::test_붙이기가_git_push를_안_권한다`
+    `core/tests/unit/test_committed.py::test_막히면_밀지_않는다`
+    `core/tests/unit/test_committed.py::test_그물이_비면_운다`
+    `core/tests/unit/test_committed.py::test_못_꺼내면_통과로_안_적는다`
+
+자료  실물 이 저장소 — 꺼내 도는 관문 5개 · 실측 3.8초 · 배관으로 심은 「제출본만 낡은
+      커밋」 1건 적발 · `git push`를 권하던 자리 전수 2곳 · 심은 결함 4건 전수 반증

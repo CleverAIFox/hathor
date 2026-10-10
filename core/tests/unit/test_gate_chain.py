@@ -50,6 +50,8 @@ def test_check가_있는_도구는_전부_check_사슬에서_불린다():
 
     reachable = [line for name in targets["check"][0] for line in targets.get(name, ([], []))[1]]
     chain = "\n".join(reachable)
+    # **`ship`도 사슬이다** (`CHAINS`). 거기서 임포트로 닿는 것까지 센다 (D-0362).
+    imported = _imported_from_chain(root, _chain_and_flows()[0])
 
     # **CI가 도는 것도 「돈다」다** (D-0355). D-0121이 막으려던 것은 *달아 놓고 아무 데서도
     # 안 도는 것*이다. `check_under_load`는 관문 전부를 한 번 더 도는 것이라 `make check`에
@@ -67,9 +69,13 @@ def test_check가_있는_도구는_전부_check_사슬에서_불린다():
             continue
         where = f"tools/{path.name}"
         declared = f"# ci-only: {path.name}" in flows
-        assert where in chain or (where in flows and declared), (
+        # **임포트도 「돈다」다** (D-0362 · D-0380). `check_committed`는 `--check`를
+        # 받지만 `make check`에 안 건다 — 커밋 전에 도는 것이 정상이라 늘 빨갛고, 늘
+        # 빨간 관문은 사람이 끈다 (D-0129). `ship`이 들여와 **밀기 전에** 돌린다.
+        assert where in chain or path.stem in imported or (where in flows and declared), (
             f"{path.name}에 --check가 있는데 아무 데서도 안 돈다. "
-            "Makefile의 docs 타깃에 한 줄 더하거나, CI에 걸고 `# ci-only: <이름> <사유>`를 적는다"
+            "Makefile의 docs 타깃에 한 줄 더하거나, 사슬 도구가 들여오거나, "
+            "CI에 걸고 `# ci-only: <이름> <사유>`를 적는다"
         )
 
 
