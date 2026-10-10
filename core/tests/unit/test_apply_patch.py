@@ -547,3 +547,82 @@ def test_좁힌_뒤에도_같은_트리는_아무_말을_안_한다(tmp_path: Pa
 
     assert done.returncode == 0
     assert done.stderr == "", done.stderr
+
+
+# ------------------------------------------------- 붙인 뒤 할 일 (D-0377)
+#
+# **설명문에 적은 것은 관문이 아니다.** D-0376 패치가 docx를 안 담았고 「붙인 뒤
+# `make proposal`」이 내 메시지에만 있었다. 그는 경로 없이 `git apply`를 쳤고(패치는 안
+# 붙었다) 그다음 줄의 `make proposal`은 **옛 트리 위에서** 돌았다 — docx만 담긴 빈
+# 커밋이 남았고 두 단계 뒤 `ship`에서야 막혔다. 그 사이의 `make check`은 **초록이었다.**
+
+
+def _after_gate() -> str:
+    """붙인 뒤 할 일 블록의 **실제 줄**."""
+    return _slice('AFTER="$(grep -m1')
+
+
+def _after(
+    declared: str, folder: Path, fake_make: str = "exit 0"
+) -> subprocess.CompletedProcess[str]:
+    """머리를 주고 그 블록만 돌린다. `make`는 가짜로 세운다 — 진짜를 돌리면 분 단위다."""
+    patch = folder / "x.patch"
+    patch.write_text(declared, encoding="utf-8")
+    bin_dir = folder / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / "make").write_text(f'#!/usr/bin/env bash\necho "가짜 make $*"\n{fake_make}\n')
+    (bin_dir / "make").chmod(0o755)
+    env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+    return subprocess.run(
+        ["bash", "-c", f'die() {{ echo "$1" >&2; exit 1; }}\nPATCH="{patch}"\n{_after_gate()}'],
+        cwd=repo_root(),
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+        check=False,
+    )
+
+
+def test_머리가_없으면_아무것도_안_돈다(tmp_path: Path) -> None:
+    """**거짓 경보를 안 만든다** (GR-0.8). 뒤처리가 없는 패치가 대부분이다."""
+    done = _after("# hathor-commit: x\n", tmp_path)
+
+    assert done.returncode == 0
+    assert "가짜 make" not in done.stdout, done.stdout
+
+
+def test_선언한_목표를_돌린다(tmp_path: Path) -> None:
+    """**이것이 이 머리의 값이다.** 사람이 안 쳐도 돌아간다."""
+    done = _after("# hathor-after: proposal\n", tmp_path)
+
+    assert done.returncode == 0, done.stderr
+    assert "가짜 make proposal" in done.stdout, done.stdout
+
+
+def test_허용_목록_밖은_막는다(tmp_path: Path) -> None:
+    """**패치 머리에서 임의 셸이 돌면 그것이 구멍이다** (D-0377)."""
+    done = _after("# hathor-after: 아무거나\n", tmp_path)
+
+    assert done.returncode != 0
+    assert "허용 목록에 없다" in done.stderr, done.stderr
+    assert "가짜 make" not in done.stdout, "막기 전에 돌렸다"
+
+
+def test_뒤처리가_터지면_0을_안_낸다(tmp_path: Path) -> None:
+    """**붙인 채로 끝나는 길이 하나 늘었다** (D-0375). 되돌리는 법을 찍는다."""
+    done = _after("# hathor-after: proposal\n", tmp_path, fake_make="exit 3")
+
+    assert done.returncode == 1
+    assert "패치는 이미 붙어 있다" in done.stderr
+    assert "git apply -R" in done.stderr
+
+
+def test_허용_목록을_제_손으로_안_적는다() -> None:
+    """**두 곳에 적으면 어긋난다** (D-0043). 셸이 `check_patch`에서 읽는다."""
+    body = SCRIPT.read_text(encoding="utf-8")
+
+    assert "check_patch.AFTER_ALLOWED" in body
+    assert "proposal" not in body[body.index('AFTER="$(grep -m1') : body.index("NOCOMMIT")], (
+        "목표 이름을 셸에 베꼈다"
+    )

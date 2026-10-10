@@ -31,12 +31,14 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import platform
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import zipfile
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -440,17 +442,48 @@ def build(out: Path, figures_dir: Path) -> dict[str, int]:
     return {"figures": count, "tables": tables}
 
 
-def seal() -> None:
-    """**생성기의 지문을 산출물 옆에 적는다** (D-0376).
+def drew() -> dict[str, str]:
+    """**실제로 돈 렌더러의 판** (D-0377). 못 읽으면 「없다」 — 0이라 말하지 않는다 (GR-0.5).
 
-    제출본은 zip이라 같은 입력에서 같은 바이트가 안 나온다 — graphviz 판이 기기마다
-    다르다. 그래서 바이트가 아니라 **입력**을 봉인한다. `render_proposal --check`이
-    이것을 지금 생성기와 견주고, 어긋나면 **배포를 막는다.**
+    `dot`만 못이고(`proposal_source.RENDERERS`) 나머지는 **적어만 둔다** — `uv.lock`이
+    이미 박으므로 또 박으면 거짓 경보가 된다 (GR-0.8). 적어 두는 까닭은 어긋난 날
+    *«무엇이 달랐나»*를 손으로 좇지 않기 위해서다 (D-0269).
+    """
+    found = {"python": platform.python_version()}
+    for name, args, pattern in (
+        ("dot", ["dot", "-V"], r"version ([0-9][0-9.]*)"),
+        ("pandoc", ["pandoc", "--version"], r"pandoc ([0-9][0-9.]*)"),
+    ):
+        try:
+            done = subprocess.run(args, capture_output=True, text=True, timeout=60, check=False)
+        except OSError:
+            found[name] = "없다"
+            continue
+        said = re.search(pattern, done.stdout + done.stderr)
+        found[name] = said.group(1) if said else "못 읽었다"
+    for name in ("matplotlib", "python-docx"):
+        try:
+            found[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            found[name] = "없다"
+    return found
+
+
+def seal() -> None:
+    """**생성기와 렌더러의 지문을 산출물 옆에 적는다** (D-0376 · D-0377).
+
+    제출본은 zip이라 같은 입력에서 같은 바이트가 안 나온다 — `dot` 판이 기기마다
+    다르다. 그래서 바이트가 아니라 **입력**을 봉인하고, **누가 그렸는지**를 같이 적는다.
+    `render_proposal --check`이 둘을 선언과 견주고, 어긋나면 **배포를 막는다.**
     """
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     LOCK.write_text(
         json.dumps(
-            {"적는이": "tools/build_proposal.py", "생성기": generator_marks()},
+            {
+                "적는이": "tools/build_proposal.py",
+                "생성기": generator_marks(),
+                "렌더러": drew(),
+            },
             ensure_ascii=False,
             indent=2,
         )

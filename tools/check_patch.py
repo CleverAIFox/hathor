@@ -44,7 +44,37 @@ FIGURES = ROOT / "tools" / "render_figures.py"
 README = ROOT / "README.md"
 
 HEADS = ("hathor-commit", "hathor-needs", "hathor-base")
-"""패치 머리 셋. **늘면 네 곳이 같이 늘어야 한다** (D-0352)."""
+"""**모든 패치가 드는** 머리 셋. 늘면 네 곳이 같이 늘어야 한다 (D-0352)."""
+
+OPTIONAL_HEADS = ("hathor-after",)
+"""**걸릴 때만 드는** 머리 (D-0377). 네 곳에 적혀 있어야 하지만 모든 패치에 있지는 않다.
+
+`HEADS`에 넣으면 *«모든 패치가 들어야 한다»*가 되고, 그러면 아무것도 안 만드는 패치도
+`# hathor-after:`를 달아야 한다 — 거짓 선언이 늘고 아무도 안 읽는다 (GR-0.8).
+"""
+
+AFTER_RULES = (("docs/proposal.docx", "proposal"),)
+"""**패치에 안 싣고 받는 쪽이 다시 만드는 것** → 그것을 만드는 `make` 목표 (D-0377).
+
+docx는 zip이라 같은 입력에서 같은 바이트가 안 나오고, 그리는 `dot`의 판이 기기마다
+다르다 (D-0376). 그래서 **패치에 안 담는다** — 담으면 받는 쪽의 blob과 어긋나 `git
+apply`가 이진 전제에서 바로 터진다. 실측으로 **한 번 터졌다.**
+
+그 자리에 「붙인 뒤 할 일」을 적는다. D-0375가 *«이런 경우가 한 번이고, 한 번을 보고
+머리를 늘리지 않는다»*(D-0364)고 적었고 D-0376이 둘째였다. **셋째는 그 기록을 쓴 날
+왔다** — 내가 docx를 손으로 뺐고(GR-0.7), 그가 `git apply`를 경로 없이 쳐서 패치가 안
+붙은 채로 `make proposal`이 돌았다. 세 번이면 만든다.
+"""
+
+AFTER_ALLOWED = tuple(dict.fromkeys(target for _, target in AFTER_RULES))
+"""`# hathor-after:`가 가질 수 있는 값 전부.
+
+**패치 머리에서 임의 셸이 돌면 그것이 구멍이다.** 값은 `make` 목표 이름 하나씩이고,
+받는 쪽은 이 목록에 있는 것만 돌린다. 목록은 **여기 한 곳**이고 셸 둘이 읽는다 (D-0043).
+"""
+
+AFTER_FLOOR = 1
+"""규칙의 **바닥** (D-0230). 표가 비면 「아무 패치도 뒤처리가 필요 없다」가 거짓으로 참이 된다."""
 
 BASE_REQUIRED_FROM = 351
 """`# hathor-base:`를 **반드시** 갖는 첫 결정 번호 (D-0352).
@@ -74,12 +104,47 @@ def places() -> dict[str, str]:
 
 
 def check_heads() -> list[str]:
-    """머리 셋이 네 곳에 다 있나 (D-0043)."""
+    """머리가 네 곳에 다 있나 (D-0043). **걸릴 때만 드는 것도 적혀 있어야 한다.**"""
     return [
         f"{where}: `# {head}:`를 안 든다 — 네 곳이 어긋났다 (D-0043)"
         for where, text in places().items()
-        for head in HEADS
+        for head in (*HEADS, *OPTIONAL_HEADS)
         if f"# {head}:" not in text
+    ]
+
+
+def check_after_table() -> list[str]:
+    """규칙 표와 받는 쪽의 허용 목록이 같은가 (D-0043 · D-0230)."""
+    if len(AFTER_RULES) < AFTER_FLOOR:
+        return [f"뒤처리 규칙이 {len(AFTER_RULES)}개다(바닥 {AFTER_FLOOR}). **그물이 비었다**"]
+    taker = TAKER.read_text(encoding="utf-8")
+    problems = [
+        "tools/apply_patch.sh: 허용 목록을 `check_patch.AFTER_ALLOWED`에서 안 읽는다 (D-0043)"
+    ] * ("AFTER_ALLOWED" not in taker)
+    maker = MAKER.read_text(encoding="utf-8")
+    problems += ["tools/make_patch.sh: 규칙을 `check_patch.AFTER_RULES`에서 안 읽는다 (D-0043)"] * (
+        "AFTER_RULES" not in maker
+    )
+    return problems
+
+
+def after_for(paths: list[str]) -> list[str]:
+    """그 경로들이 부르는 뒤처리 목표. **선언이 정본이다** — 손으로 안 적는다 (GR-0.7)."""
+    return list(dict.fromkeys(target for trigger, target in AFTER_RULES if trigger in paths))
+
+
+def after_drift(touched: list[str], declared: str) -> list[str]:
+    """뽑힌 머리와 **건드린 경로가 부르는 것**이 같은가 (D-0377).
+
+    **양방향이다** (D-0363). 없어야 하는데 적힌 것도 든다 — 거짓 선언은 받는 쪽에서
+    쓸데없는 빌드를 돌리고, 그것이 쌓이면 아무도 그 줄을 안 읽는다 (GR-0.8).
+    """
+    want, got = sorted(after_for(touched)), sorted(declared.split())
+    if want == got:
+        return []
+    return [
+        f"`# hathor-after:`가 «{' '.join(got) or '없다'}»인데 "
+        f"건드린 경로는 «{' '.join(want) or '없다'}»를 부른다 (D-0377)"
     ]
 
 
@@ -138,16 +203,29 @@ def pull_once() -> list[str]:
         if done.returncode != 0:
             tail = (done.stderr or done.stdout).strip().splitlines()
             return [f"`HEAD`를 패치로 못 뽑는다 — {tail[-1] if tail else '까닭 모름'}"]
+        body = out.read_text(encoding="utf-8", errors="replace")
         heads = dict(
-            line[2:].split(": ", 1)
-            for line in out.read_text(encoding="utf-8", errors="replace").splitlines()
-            if line.startswith("# hathor-")
+            line[2:].split(": ", 1) for line in body.splitlines() if line.startswith("# hathor-")
         )
-        return [
+        problems = [
             f"뽑은 패치에 `# {head}:`가 없다 — 머리를 안 쓰고 있다"
             for head in HEADS
             if head not in heads
         ]
+        # **뒤처리가 걸리는 커밋이면 그 머리가 있어야 한다** (D-0377). 없으면 받는 쪽은
+        # 「다시 만들라」는 말을 못 듣고, 산출물이 낡은 채로 커밋된다.
+        touched = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        ).stdout.split()
+        problems += [
+            f"뽑은 패치의 {one}" for one in after_drift(touched, heads.get("hathor-after", ""))
+        ]
+        return problems
 
 
 def main() -> int:
@@ -156,7 +234,7 @@ def main() -> int:
     parser.add_argument("--no-live", action="store_true", help="뽑아 보기를 건너뛴다")
     args = parser.parse_args()
 
-    problems = check_heads() + check_floor()
+    problems = check_heads() + check_floor() + check_after_table()
     live = not args.no_live and has_parent()
     if live:
         problems += pull_once()
@@ -170,8 +248,8 @@ def main() -> int:
     # **못 잰 것을 통과로 적지 않는다** (GR-0.5). 안 돌렸으면 안 돌렸다고 찍는다.
     ran = "뽑기 실측 1판" if live else "뽑기 **안 돌렸다**(부모 없음 · 얕은 클론)"
     print(
-        f"패치 검사 통과 · 머리 {len(HEADS)}종 x 곳 {len(places())}개 · "
-        f"소급 바닥 D-{BASE_REQUIRED_FROM:04d} · {ran}"
+        f"패치 검사 통과 · 머리 {len(HEADS) + len(OPTIONAL_HEADS)}종 x 곳 {len(places())}개 · "
+        f"뒤처리 규칙 {len(AFTER_RULES)}개 · 소급 바닥 D-{BASE_REQUIRED_FROM:04d} · {ran}"
     )
     return 0
 

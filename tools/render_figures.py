@@ -343,6 +343,8 @@ dl [label="윈도 다운로드 폴더\\nHATHOR_PATCH_DIR (.env)", fillcolor="{GR
 apply [label="make apply\\n최신 패치 · 멱등 · 깨끗한 트리"];
 base [label="# hathor-base: = 내 HEAD의 트리?", shape=diamond, fillcolor="white"];
 needs [label="# hathor-needs: 표제가 대장에?", shape=diamond, fillcolor="white"];
+after [label="# hathor-after: 가 있나?\\n안 담은 산출물을 여기서 다시 만든다",
+       shape=diamond, fillcolor="white"];
 same [label="선언한 파일 = 바뀐 파일?", shape=diamond, fillcolor="white"];
 commit [label="커밋\\n메시지 = # hathor-commit:"]; check [label="make check\\n검사 전부"];
 push [label="git push → CI 3잡", fillcolor="{GREEN}"];
@@ -351,7 +353,8 @@ missing [label="멈춘다 — 선행을 먼저 붙인다", fillcolor="{ROSE}"];
 stop [label="멈춘다 — 다른 작업이 섞였다", fillcolor="{ROSE}"];
 mk -> dl -> apply -> needs;
 needs -> base [label="있다"]; needs -> missing [label="없다"];
-base -> same [label="같다"]; base -> wrong [label="다르다"];
+base -> after [label="같다 · 또는 패치 경로만 같다"]; base -> wrong [label="다르다"];
+after -> same;
 same -> commit [label="같다"]; same -> stop [label="다르다"];
 commit -> check -> push;
 """

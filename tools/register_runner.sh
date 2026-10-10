@@ -51,7 +51,7 @@ mkdir -p "$dir"
 cd "$dir"
 if [ ! -x ./config.sh ]; then
   version="$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest \
-    | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')"
+    | python3 -B -c 'import json, sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')"
   echo "actions/runner $version 을 $dir 에 받는다"
   curl -fsSL -o runner.tar.gz \
     "https://github.com/actions/runner/releases/download/v$version/actions-runner-linux-x64-$version.tar.gz"
@@ -71,7 +71,7 @@ if [ -f .runner ] && [ -n "${RUNNER_RECONFIGURE:-}" ]; then
   ./config.sh remove --token "$(api -X POST 'repos/{owner}/{repo}/actions/runners/remove-token' --jq .token)"
 fi
 
-field() { python3 -c "import json; print(json.load(open('.runner', encoding='utf-8-sig'))['$1'])"; }
+field() { python3 -B -c "import json; print(json.load(open('.runner', encoding='utf-8-sig'))['$1'])"; }
 if [ -f .runner ] && [ "$(field gitHubUrl)" != "$url" ]; then
   # D-0228 — 첫 판은 이 폴더를 이 저장소 것으로 여겼고 seshat 러너의 서비스를 올렸다.
   echo "$dir 는 다른 저장소($(field gitHubUrl))의 러너다. 건드리지 않는다." >&2

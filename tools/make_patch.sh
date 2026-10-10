@@ -11,9 +11,16 @@
 #   `# hathor-commit:`  커밋 제목 (적용 쪽이 커밋 메시지로 쓴다)
 #   `# hathor-needs:`   **부모의** 대장 마지막 결정 번호 (D-0287)
 #   `# hathor-base:`    **부모의 트리 해시** (D-0351)
+#   `# hathor-after:`   붙인 뒤 돌릴 `make` 목표. **건드린 경로에서 끌어낸다** (D-0377)
 #
 # **뽑고 나서 부모 위에서 정·역으로 붙여 본다.** 손으로 하던 일이고, 손으로 하면
 # 빼먹는다 — D-0350 패치가 틀린 부모 위에서 뽑혀 나갔고 아무것도 그것을 안 봤다.
+#
+# ── 안 싣는 것
+#
+# `check_patch.AFTER_RULES`가 **패치에 안 담을 산출물**과 그것을 다시 만드는 목표를
+# 든다 (D-0377). docx는 받는 기기의 blob과 달라 담으면 `git apply`가 터진다 — 실측으로
+# 한 번 터졌다. 빼는 대신 `# hathor-after:`에 적는다. **목록은 한 곳이다** (D-0043).
 
 set -euo pipefail
 
@@ -25,8 +32,11 @@ ok()  { printf '\033[32m%s\033[0m\n' "$1"; }
 # **부모를 꺼내 거기서 붙여 본다.** 지금 트리 위에서 역검사만 하면 「이미 붙어 있다」가
 # 통과로 보여 **틀린 부모를 못 잡는다** — D-0350이 정확히 그 꼴로 나갔다.
 #   $1 패치 · $2 부모 커밋 · $3 도달해야 하는 커밋(없으면 트리 대조를 건너뛴다)
+#   $4.. 트리가 달라도 되는 경로 — **패치에 일부러 안 담은 산출물**이다 (D-0377)
 verify_on_parent() {
-  local patch="$1" parent="$2" want="${3:-}" work code
+  local patch="$1" parent="$2" want="${3:-}" work code drift rest
+  shift 3 2>/dev/null || shift $#
+  local skipped=("$@")
   work="$(mktemp -d)"
   git worktree add -q --detach "${work}/v" "$parent" >/dev/null 2>&1 || {
     rm -rf "$work"
@@ -43,7 +53,13 @@ verify_on_parent() {
     git apply --binary "$patch" || exit 12
     [[ -z "$want" ]] && exit 0
     git add -A >/dev/null
-    git diff-index --quiet --cached "$want" || exit 14
+    git diff-index --quiet --cached "$want" && exit 0
+    # **안 담은 산출물만 어긋나면 통과다** (D-0377). 그것 말고 하나라도 다르면 14다.
+    # **파이프에 일찍 끝내는 소비자를 안 문다** (D-0354) — 변수로 받아 `<<<`로 넘긴다.
+    drift="$(git diff-index --cached --name-only "$want")"
+    rest="$(grep -vxF "$(printf '%s\n' "${skipped[@]+"${skipped[@]}"}")" <<<"$drift" || true)"
+    [[ -z "$rest" ]] || exit 14
+    exit 0
   ) || code=$?
   git worktree remove --force "${work}/v" >/dev/null 2>&1 || true
   rm -rf "$work"
@@ -161,6 +177,14 @@ if [[ -n "${VERIFY:-}" ]]; then
   exit 0
 fi
 
+# **선언이 정본이다** (GR-0.7 · D-0043). 경로와 목표를 셸에 베끼지 않는다.
+rules() {
+  python3 -B -c 'import sys
+sys.path.insert(0, "tools")
+import check_patch
+print("\n".join(f"{p}\t{t}" for p, t in check_patch.AFTER_RULES))'
+}
+
 REV="${REV:-HEAD}"
 git rev-parse --verify -q "${REV}^{commit}" >/dev/null || die "그런 커밋이 없다: ${REV}"
 git rev-parse --verify -q "${REV}^^{commit}" >/dev/null || die "${REV}에 부모가 없다 — 첫 커밋은 패치로 못 뽑는다"
@@ -190,29 +214,42 @@ NEEDS="$(git show "${PARENT}:docs/DECISIONS.md" | grep -oE '^## D-[0-9]{4}\.' | 
          | sed 's/^## //; s/\.$//')"
 [[ -n "$NEEDS" ]] || die "부모의 대장에서 선행 번호를 못 읽었다"
 
+# 건드린 경로에서 **뺄 것**과 **뒤처리 목표**를 끌어낸다 (D-0377).
+TOUCHED="$(git show --name-only --format= "$REV")"
+SKIP=()
+AFTER=""
+while IFS=$'\t' read -r trigger target; do
+  [[ -n "$trigger" ]] || continue
+  grep -qxF "$trigger" <<<"$TOUCHED" || continue
+  SKIP+=(":(exclude)${trigger}")
+  grep -qw "$target" <<<"$AFTER" || AFTER="${AFTER:+$AFTER }${target}"
+done < <(rules)
+
 OUT="${OUT:-${NUMBER//D-/D}.patch}"
 mkdir -p "$(dirname "$OUT")"
 {
   printf '# hathor-commit: %s\n' "$SUBJECT"
   printf '# hathor-needs: %s\n' "$NEEDS"
   printf '# hathor-base: %s\n' "$BASE"
+  [[ -n "$AFTER" ]] && printf '# hathor-after: %s\n' "$AFTER"
   # `--binary`가 아니면 docx가 *"binary files differ"* 한 줄로 나가고 못 붙는다.
   git format-patch --stdout --binary --no-signature --no-stat -1 "$REV" \
-    | sed -n '/^diff --git/,$p'
+    -- . "${SKIP[@]+"${SKIP[@]}"}" | sed -n '/^diff --git/,$p'
 } > "$OUT"
 OUT="$(cd "$(dirname "$OUT")" && printf '%s/%s' "$(pwd)" "$(basename "$OUT")")"
 
 grep -q '^diff --git' "$OUT" || die "뽑은 패치에 변경이 없다: ${OUT}"
 
 # ---------------------------------------------------------------- 뽑은 것을 붙여 본다
-verify_on_parent "$OUT" "$PARENT" "$REV"
+verify_on_parent "$OUT" "$PARENT" "$REV" "${SKIP[@]+"${SKIP[@]//:(exclude)/}"}"
 
 ok "$(basename "$OUT")"
 printf '  메시지  %s\n' "$SUBJECT"
 printf '  선행    %s\n' "$NEEDS"
 printf '  기준    %s  (부모 %s의 트리)\n' "$BASE" "${PARENT:0:7}"
 printf '  파일    %s개 · %s\n' "$(grep -c '^diff --git' "$OUT")" "$(du -h "$OUT" | cut -f1)"
-printf '  검증    부모 위에서 정방향 · 트리 일치\n'
+printf '  검증    부모 위에서 정방향 · 트리 일치%s\n' "${AFTER:+ · 안 담은 것 ${#SKIP[@]}개}"
+[[ -n "$AFTER" ]] && printf '  뒤처리  \033[33mmake %s\033[0m  ← 받는 쪽이 붙인 뒤 돌린다 (D-0377)\n' "$AFTER"
 printf '  경로    %s\n' "$OUT"
 
 if [[ -n "$(git status --porcelain)" ]]; then

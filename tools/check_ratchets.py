@@ -361,6 +361,7 @@ BASELINE: dict[str, int] = {
     "check_doc_style.UNKNOWN_UNTIL": 249,
     "check_issue_mentions.FLOOR[문서]": 3,
     "check_issue_mentions.FLOOR[코드]": 250,
+    "check_patch.AFTER_FLOOR": 1,
     "check_patch.BASE_REQUIRED_FROM": 351,
     "check_ratchets.FLOOR_NAILS": 25,
     "check_script.FLOOR": 1,

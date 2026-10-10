@@ -6,6 +6,10 @@
 #   make apply WHICH=1          # 무엇을 집을지만 찍고 끝낸다 (D-0249)
 #   make apply PATCH=... NOCOMMIT=1   # 붙이기만 하고 커밋하지 않는다
 #
+# `# hathor-after:`가 있으면 **붙인 뒤 커밋 전에** 그 `make` 목표를 돌린다 (D-0377).
+# 패치에 안 담은 산출물(docx)을 받는 기기에서 다시 만드는 자리다. 값은 **허용 목록**
+# 안의 목표 이름뿐이다 — 패치 머리에서 임의 셸이 돌면 그것이 구멍이다.
+#
 # 커밋 메시지는 패치 안의 `# hathor-commit:` 줄에서 읽는다. 없으면 파일 이름을 쓴다.
 # **그 줄은 표식도 겸한다** — 패치 폴더를 여러 저장소가 나눠 쓰므로 (D-0249).
 #
@@ -209,6 +213,34 @@ ok "적용 완료"
 
 python3 tools/check_decisions.py --check || die "결정 기록 검사가 어긋난다"
 
+# ------------------------------------------------- 붙인 뒤 할 일 (D-0377)
+# **사람 머리에 두면 빠진다.** 실측: D-0376 패치가 docx를 안 담았고, 「붙인 뒤
+# `make proposal`」이 내 설명문에만 있었다. 그가 경로를 빼고 `git apply`를 쳐서 패치가
+# 안 붙은 채 `make proposal`이 돌았고, **docx만 담긴 빈 커밋**이 생겼다. 제목은
+# D-0376인데 대장에는 없어서 `check_patch`가 ship에서 막았다 — 두 단계 뒤였다.
+AFTER="$(grep -m1 '^# hathor-after:' "$PATCH" 2>/dev/null | sed 's/^# hathor-after:[[:space:]]*//' || true)"
+if [[ -n "$AFTER" ]]; then
+  # **허용 목록은 `check_patch.AFTER_ALLOWED` 한 곳이다** (D-0043).
+  ALLOWED="$(python3 -B -c 'import sys
+sys.path.insert(0, "tools")
+import check_patch
+print("\n".join(check_patch.AFTER_ALLOWED))')"
+  read -ra TARGETS <<<"$AFTER"
+  for one in "${TARGETS[@]}"; do
+    grep -qxF "$one" <<<"$ALLOWED" || die "\`# hathor-after: ${one}\`은 허용 목록에 없다 (D-0377)"
+  done
+  for one in "${TARGETS[@]}"; do
+    printf '\033[33m붙인 뒤 할 일:\033[0m make %s (D-0377)\n' "$one"
+    make "$one" || {
+      echo >&2
+      echo "  \`make ${one}\`이 터졌다. **패치는 이미 붙어 있다.**" >&2
+      echo "  고치고 담는다:  make ${one} && make check && git add -A && git commit" >&2
+      echo "  되돌리려면:  git apply -R '${PATCH}'" >&2
+      exit 1
+    }
+  done
+fi
+
 if [[ -n "${NOCOMMIT:-}" ]]; then
   echo "NOCOMMIT이라 커밋하지 않았다. 되돌리려면: git apply -R '${PATCH}'"
   exit 0
@@ -225,6 +257,18 @@ MESSAGE="$(grep -m1 '^# hathor-commit:' "$PATCH" | sed 's/^# hathor-commit:[[:sp
 # 섞였다»며 막았다. 섞인 것이 없었다. 그래서 목록은 **패치의 `diff --git` 머리**에서 읽는다 —
 # 거기에는 떠난 곳(`a/`)과 간 곳(`b/`)이 둘 다 있다.
 EXPECTED="$(declared_paths "$PATCH")"
+# **뒤처리가 만든 것은 선언 밖이다** (D-0377). 패치가 일부러 안 담은 산출물이므로
+# `# hathor-after:`가 돌면 트리에 나타난다 — 섞인 작업이 아니다.
+if [[ -n "$AFTER" ]]; then
+  while IFS=$'\t' read -r trigger target; do
+    [[ -n "$trigger" ]] || continue
+    grep -qw "$target" <<<"$AFTER" || continue
+    EXPECTED="$(printf '%s\n%s' "$EXPECTED" "$trigger" | sort -u)"
+  done < <(python3 -B -c 'import sys
+sys.path.insert(0, "tools")
+import check_patch
+print("\n".join(f"{p}\t{t}" for p, t in check_patch.AFTER_RULES))')
+fi
 # **새 폴더는 폴더 하나로 접혀 나온다** — `site/`가 생기면 `site/proposal.html` 대신
 # `site/`가 찍혀 선언과 어긋났다 (D-0222). 추적 안 된 파일을 전부 펼친다.
 ACTUAL="$(git status --porcelain --untracked-files=all | sed 's/^...//' | tr -d '"' | sort)"

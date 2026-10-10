@@ -1,11 +1,18 @@
 {
   "적는이": "tools/build_proposal.py",
   "생성기": {
-    "tools/build_proposal.py": "d470c0738df51014",
+    "tools/build_proposal.py": "1159fa63ccb19109",
     "tools/proposal_body.py": "bb30d51f09215ba4",
-    "tools/proposal_source.py": "ae65efe62048ba12",
-    "tools/render_figures.py": "ceec1273f07bf67e",
+    "tools/proposal_source.py": "7336b35636a73d2e",
+    "tools/render_figures.py": "150f979d0c19539f",
     "tools/render_charts.py": "b841da088aee675f",
     "site/proposal.template.html": "be43f8109e708d2f"
+  },
+  "렌더러": {
+    "python": "3.12.14",
+    "dot": "14.1.2",
+    "pandoc": "없다",
+    "matplotlib": "3.11.2",
+    "python-docx": "1.2.0"
   }
 }

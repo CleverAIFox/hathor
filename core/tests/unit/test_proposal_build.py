@@ -140,9 +140,14 @@ def test_낼_곳을_받는다(
 
 
 def _lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, marks: dict[str, str]) -> Path:
+    """생성기만 보는 자물쇠. **렌더러는 못과 맞춰 둔다** — 한 번에 한 가지만 본다."""
     path = tmp_path / "build.lock.json"
     path.write_text(
-        json.dumps({"적는이": "시험", "생성기": marks}, ensure_ascii=False), encoding="utf-8"
+        json.dumps(
+            {"적는이": "시험", "생성기": marks, "렌더러": dict(SOURCE.RENDERERS)},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
     )
     monkeypatch.setattr(SOURCE, "LOCK", path)
     return path
@@ -249,3 +254,91 @@ def test_표지가_날짜가_아니라_지문이다() -> None:
     assert "stamp = fingerprint()[:12]" in body, "표지가 다시 날짜를 적는다"
     assert 'f"정본 {stamp} · docs/MASTER.md Part I ~ III"' in body
     assert "dt.date.today()" not in body, "날짜 라벨이 돌아왔다"
+
+
+# --------------------------------------------------------- 렌더러 (D-0377)
+#
+# 자물쇠는 **입력**만 봉인했다. 같은 입력에서 **두 기기가 다른 그림을 내고 둘 다
+# 통과한다** — 실측: 그의 `dot` 14.1.2와 내 컨테이너 2.43.0이 같은 입력에서 **높이가
+# 15~27% 다른** PNG를 냈다. *«빌더는 그의 기기다»*가 주장이었고 관문이 아니었다.
+#
+# 파이썬 쪽은 `uv.lock`이 이미 박는다. **안 박힌 하나(`dot`)만** 박는다.
+
+
+def test_못이_비지_않았다() -> None:
+    """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
+    assert SOURCE.RENDERERS
+    assert all(mark and mark[0].isdigit() for mark in SOURCE.RENDERERS.values())
+
+
+def test_다른_렌더러가_그리면_운다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069). 이것이 없으면 「빌더는 그의 기기다」는 글일 뿐이다."""
+    path = tmp_path / "build.lock.json"
+    path.write_text(
+        json.dumps(
+            {"생성기": SOURCE.generator_marks(), "렌더러": {"dot": "2.43.0"}}, ensure_ascii=False
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(SOURCE, "LOCK", path)
+
+    problems = SOURCE.stale()
+
+    assert len(problems) == 1, problems
+    assert "dot 2.43.0이 그렸다" in problems[0]
+    assert SOURCE.RENDERERS["dot"] in problems[0], "못을 안 찍으면 무엇으로 고칠지 모른다"
+
+
+def test_옛_자물쇠에_렌더러가_없으면_운다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**없는 것을 「맞다」로 읽지 않는다** (GR-0.5). D-0376이 낸 자물쇠가 그렇다."""
+    path = tmp_path / "build.lock.json"
+    path.write_text(
+        json.dumps({"생성기": SOURCE.generator_marks()}, ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(SOURCE, "LOCK", path)
+
+    assert any("안 적혔다" in one for one in SOURCE.stale())
+
+
+def test_빌드가_실제로_돈_판을_읽는다() -> None:
+    """**적는 것은 못이 아니라 실측이다** (GR-0.5). 거짓말하면 관문이 무의미해진다."""
+    found = BUILD.drew()
+
+    assert set(found) >= {"dot", "pandoc", "python", "matplotlib"}
+    assert found["python"][0].isdigit()
+
+
+def test_렌더러가_없는_기기에서는_없다고_적는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069). 못 읽은 것을 조용히 빼면 자물쇠가 짧아지고 못이 안 문다."""
+
+    def 터진다(*_args: object, **_kw: object) -> None:
+        raise OSError("없다")
+
+    monkeypatch.setattr(BUILD.subprocess, "run", 터진다)
+
+    assert BUILD.drew()["dot"] == "없다"
+
+
+def test_판을_못_읽으면_그렇게_적는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`dot -V`의 글이 바뀌는 날 **조용히 빈 값이 들어가면** 못이 늘 운다 (GR-0.8)."""
+    monkeypatch.setattr(BUILD, "re", _Blind())
+
+    assert BUILD.drew()["dot"] == "못 읽었다"
+
+
+class _Blind:
+    """아무것도 못 찾는 가짜 `re`."""
+
+    @staticmethod
+    def search(*_args: object) -> None:
+        return None
+
+
+def test_자물쇠가_렌더러를_담는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069 · D-0352). 재는 함수가 있어도 **안 적으면** 아무 일도 없다."""
+    path = tmp_path / "build.lock.json"
+    monkeypatch.setattr(BUILD, "LOCK", path)
+
+    BUILD.seal()
+
+    assert json.loads(path.read_text(encoding="utf-8"))["렌더러"] == BUILD.drew()

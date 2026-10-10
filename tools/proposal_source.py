@@ -183,6 +183,28 @@ thoth가 제 §126에서 같은 결론에 닿았고, 그 말을 그대로 빌린
 """
 
 
+RENDERERS = {"dot": "14.1.2"}
+"""제출본의 그림을 그리는 **렌더러의 못** (D-0377).
+
+### 왜 못을 박나
+
+D-0376이 **입력**에 자물쇠를 채웠다. 그런데 같은 입력에서 **두 기기가 다른 그림을 내고
+둘 다 통과한다** — 실측: 그의 `dot` 14.1.2와 내 컨테이너 2.43.0이 같은 `dot` 입력에서
+**그림 높이가 15~27% 다른** PNG를 냈다. *«빌더는 그의 기기다»*는 그때까지 **주장**이었고
+아무 관문도 그것을 안 봤다.
+
+### 왜 `dot` 하나인가
+
+파이썬 쪽(matplotlib 3.11.2 · python-docx · pandoc)은 **`uv.lock`이 이미 못으로 박는다** —
+두 기기에서 같은 판이 깔린다. `dot`은 운영체제 패키지라 **아무도 안 박는다.** 안 박힌
+하나만 박는다 (GR-0.5 — 안 센 것을 박지 않는다).
+
+자물쇠에는 **실제로 돈 판**을 적고, 여기 못과 다르면 **배포에서 막는다.** 내 컨테이너가
+낸 판은 2.43.0으로 적히고 배포가 멈춘다 → `# hathor-after: proposal`이 그의 기기에서
+14.1.2로 다시 낸다. 기기 의존이 **선언되고 관문이 문다.**
+"""
+
+
 def generator_marks() -> dict[str, str]:
     """생성기마다 sha256 앞 16자. **없는 파일은 「없다」** — 조용히 빠지지 않는다."""
     marks = {}
@@ -205,8 +227,16 @@ def locked() -> dict[str, str]:
         raise SourceError(f"{LOCK_NAME}가 깨졌다: {error}") from error
 
 
+def recorded_renderers() -> dict[str, str]:
+    """자물쇠에 적힌 **실제로 돈** 렌더러 판. 옛 자물쇠에는 없다 — 빈 것으로 읽는다."""
+    if not LOCK.is_file():
+        return {}
+    kept = json.loads(LOCK.read_text(encoding="utf-8")).get("렌더러", {})
+    return {str(name): str(mark) for name, mark in kept.items()}
+
+
 def stale() -> list[str]:
-    """**제출본이 생성기보다 낡았나** (D-0376). 빈 목록이 초록이다.
+    """**제출본이 선언보다 낡았나** (D-0376 · D-0377). 빈 목록이 초록이다.
 
     **양방향으로 본다** (D-0363). 지문이 어긋난 것만 보면 `GENERATORS`에서 이름을
     빼는 날 자물쇠에 남은 줄이 조용히 죽는다.
@@ -225,6 +255,13 @@ def stale() -> list[str]:
         f"자물쇠에 `{name}`이 남아 있다 — 생성기 목록에서 빠졌다"
         for name in sorted(have)
         if name not in want
+    ]
+    drawn = recorded_renderers()
+    problems += [
+        f"제출본을 {name} {drawn.get(name, '안 적혔다')}이 그렸다 — 못은 {pinned}다. "
+        "그 판이 깔린 기기에서 `make proposal`을 돌린다 (D-0377)"
+        for name, pinned in RENDERERS.items()
+        if drawn.get(name) != pinned
     ]
     return problems
 

@@ -532,3 +532,32 @@ def test_일찍_끝내는_소비자에_파이프를_안_물린다() -> None:
                 guilty.append(f"{path.name}:{number}  {line.strip()}")
 
     assert guilty == [], "파이프를 `<<<`나 변수로 바꾼다 (D-0354)"
+
+
+def test_도구를_임포트하는_셸은_바이트코드를_안_남긴다() -> None:
+    """**`.pyc`를 남기면 다음 시험이 거짓말한다** (D-0252 · D-0377).
+
+    D-0377이 `check_patch.AFTER_RULES`를 셸에서 읽게 만들며 `tools/__pycache__`를
+    남겼고, `test_도구_바이트코드를_안_남긴다`가 **증상**으로 잡았다 — 그 시험은 캐시가
+    그 순간 있어야 운다. 여기는 **원인**을 본다: 임포트하는 호출은 `-B`를 쓴다.
+    """
+    guilty = []
+    for path in sorted((ROOT / "tools").glob("*.sh")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            if re.search(r"python3 (?!-B)\S*\s*-c\b", line):
+                guilty.append(f"{path.name}:{number}  {line.strip()}")
+
+    assert guilty == [], "`python3 -B -c`로 바꾼다 (D-0252)"
+
+
+def test_뽑은_패치가_저장소에_안_담긴다() -> None:
+    """**`make patch`는 뿌리에 떨군다** (D-0377). `git add -A`가 집어 가면 커밋에 딸린다.
+
+    실측으로 한 번 들어갔다 — `D0376.patch` 52KB가 D-0377 커밋에 딸려 갔고 `--amend`로
+    뺐다. 사람이 매번 기억하는 대신 `.gitignore`가 든다.
+    """
+    ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+    assert "*.patch" in [line.strip() for line in ignored]

@@ -38,6 +38,7 @@ def test_저장소가_통과한다() -> None:
 def test_머리_셋과_곳_넷을_읽는다() -> None:
     """**그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
     assert len(CHECKER.HEADS) == 3
+    assert len(CHECKER.OPTIONAL_HEADS) == 1, "걸릴 때만 드는 머리 (D-0377)"
     where = cast("dict[str, str]", CHECKER.places())
 
     assert len(where) == 4
@@ -47,7 +48,7 @@ def test_머리_셋과_곳_넷을_읽는다() -> None:
 # ------------------------------------------------------------------ 네 곳 대조 (카나리아)
 
 
-@pytest.mark.parametrize("head", ["hathor-commit", "hathor-needs", "hathor-base"])
+@pytest.mark.parametrize("head", ["hathor-commit", "hathor-needs", "hathor-base", "hathor-after"])
 def test_한_곳이_머리를_빠뜨리면_운다(head: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """**그날의 꼴이다** — D-0287이 선행 관문을 세우고 그림·README는 안 따라왔다."""
     where = cast("dict[str, str]", CHECKER.places())
@@ -187,7 +188,8 @@ def test_머리를_안_쓰는_뽑기를_잡는다(tmp_path: Path, monkeypatch: p
 
     problems = _problems("pull_once")
 
-    assert len(problems) == len(CHECKER.HEADS)
+    # 머리 셋 + **뒤처리도 안 썼다** (D-0377). `HEAD`가 docx를 건드렸다.
+    assert len(problems) == len(CHECKER.HEADS) + 1
 
 
 def test_얕은_클론을_통과로_안_적는다(
@@ -227,7 +229,7 @@ def test_CI가_부모를_받는다(name: str) -> None:
 # ------------------------------------------------------------------ 배선 (심은 결함)
 
 
-@pytest.mark.parametrize("part", ["check_heads", "check_floor", "pull_once"])
+@pytest.mark.parametrize("part", ["check_heads", "check_floor", "check_after_table", "pull_once"])
 def test_부품이_main에_배선돼_있다(
     part: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -248,3 +250,106 @@ def test_부품이_main에_배선돼_있다(
 
     assert CHECKER.main() == 1
     assert "심은 것" in capsys.readouterr().err, "심은 것이 화면에 안 닿았다"
+
+
+# ------------------------------------------------- 붙인 뒤 할 일 (D-0377)
+#
+# **사람 머리에 두면 빠진다.** D-0376 패치가 docx를 안 담았고 「붙인 뒤 `make proposal`」이
+# 내 설명문에만 있었다. 그가 경로 없이 `git apply`를 쳐서 **패치가 안 붙은 채** 빌드가
+# 돌았고 docx만 담긴 빈 커밋이 생겼다 — `ship`에서야 막혔다, 두 단계 뒤였다.
+
+
+def test_규칙이_비면_운다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**그물이 비면 「아무 패치도 뒤처리가 필요 없다」가 거짓으로 참이 된다** (D-0230)."""
+    monkeypatch.setattr(CHECKER, "AFTER_RULES", ())
+
+    assert any("그물이 비었다" in one for one in _problems("check_after_table"))
+
+
+def test_받는_쪽이_목록을_안_읽으면_운다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**두 곳에 적으면 어긋난다** (D-0043). 셸이 제 목록을 들면 여기와 갈린다."""
+    fake = tmp_path / "apply_patch.sh"
+    fake.write_text("#!/usr/bin/env bash\nBASE_FROM=351\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "TAKER", fake)
+
+    assert any("AFTER_ALLOWED" in one for one in _problems("check_after_table"))
+
+
+def test_경로가_목표를_부른다() -> None:
+    """**선언이 정본이다** (GR-0.7). 셸이 경로를 베끼지 않는다."""
+    assert CHECKER.after_for(["docs/proposal.docx", "tools/x.py"]) == ["proposal"]
+    assert CHECKER.after_for(["tools/x.py"]) == []
+    assert set(CHECKER.AFTER_ALLOWED) == {"proposal"}
+
+
+def test_머리와_경로가_갈리면_운다() -> None:
+    """**양방향** (D-0363). 빠뜨린 것도, 없는데 적힌 것도 든다."""
+    assert CHECKER.after_drift(["docs/proposal.docx"], "proposal") == []
+    assert CHECKER.after_drift([], "") == []
+
+    missing = CHECKER.after_drift(["docs/proposal.docx"], "")
+    assert missing and "없다»인데" in missing[0], missing
+
+    extra = CHECKER.after_drift(["tools/x.py"], "proposal")
+    assert extra and "«proposal»인데" in extra[0], extra
+
+
+def test_뒤처리를_빠뜨린_뽑기를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069). 머리 셋만 쓰고 넷째를 안 쓰는 뽑기는 통과하면 안 된다.
+
+    `HEAD`(D-0376)가 `docs/proposal.docx`를 건드렸으므로 `proposal`을 불러야 한다.
+    """
+    blind = tmp_path / "make_patch.sh"
+    blind.write_text(
+        "#!/usr/bin/env bash\n"
+        'printf "# hathor-commit: x\\n" > "$OUT"\n'
+        'printf "# hathor-needs: D-0001\\n" >> "$OUT"\n'
+        'printf "# hathor-base: 0\\n" >> "$OUT"\n'
+        'printf "diff --git a/x b/x\\n" >> "$OUT"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(CHECKER, "MAKER", blind)
+
+    problems = _problems("pull_once")
+
+    assert any("hathor-after" in one for one in problems), problems
+
+
+def test_뽑은_패치가_산출물을_안_담는다(tmp_path: Path) -> None:
+    """**실물로 뽑아 안에 무엇이 들었는지 본다** (D-0377).
+
+    docx는 받는 기기의 blob과 달라 **담으면 `git apply`가 이진 전제에서 터진다** —
+    실측으로 한 번 터졌다. 빼는 것과 「뒤처리를 적는 것」은 **같이** 일어나야 한다:
+    빼고 안 적으면 산출물이 낡고, 적고 안 빼면 패치가 안 붙는다.
+    """
+    if not cast("bool", CHECKER.has_parent()):
+        return
+
+    out = tmp_path / "뽑은.patch"
+    done = subprocess.run(
+        ["bash", str(CHECKER.MAKER)],
+        cwd=CHECKER.ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+        env=dict(os.environ, OUT=str(out), REV="HEAD"),
+    )
+    assert done.returncode == 0, done.stderr
+
+    body = out.read_text(encoding="utf-8", errors="replace")
+    touched = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=CHECKER.ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    ).stdout.split()
+
+    for trigger, target in CHECKER.AFTER_RULES:
+        if trigger in touched:
+            assert f"diff --git a/{trigger}" not in body, f"{trigger}을 담았다 — 받는 쪽에서 터진다"
+            assert f"# hathor-after: {target}" in body, "빼고 **다시 만들라고 안 적었다**"
+        else:
+            assert f"# hathor-after: {target}" not in body, "안 건드렸는데 뒤처리를 적었다"

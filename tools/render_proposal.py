@@ -60,8 +60,10 @@ from proposal_body import FIGURES, place_figures  # noqa: E402
 from proposal_source import (  # noqa: E402
     FINGERPRINT,
     GENERATORS,
+    RENDERERS,
     SourceError,
     fingerprint,
+    recorded_renderers,
     source,
     stale,
 )
@@ -527,7 +529,13 @@ def main() -> int:
                 print(f"  - {text}", file=sys.stderr)
             print("  → `make proposal`로 제출본을 다시 낸다 (D-0376)", file=sys.stderr)
         heads, tables = canon_parts()
-        lock = f"자물쇠 **낡았다** {len(rotten)}곳" if rotten else f"자물쇠 {len(GENERATORS)}개"
+        drew = recorded_renderers()
+        lock = (
+            f"자물쇠 **낡았다** {len(rotten)}곳"
+            if rotten
+            else f"자물쇠 {len(GENERATORS)}개 · "
+            + " ".join(f"{name} {drew.get(name, '안 적혔다')}" for name in RENDERERS)
+        )
         print(
             f"기획서 검사 통과 · 정본 대조 {len(truths())}건 · "
             f"칸 {len(dict.fromkeys(index().values()))}개 · 생성물 2개 · "

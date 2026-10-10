@@ -29209,6 +29209,8 @@ git show "${REV}:docs/DECISIONS.md" | grep -q "^## ${NUMBER}\."
 강제자
     `core/tests/unit/test_make_patch.py::test_큰_대장에서도_뽑힌다`
     `core/tests/unit/test_make_patch.py::test_일찍_끝내는_소비자에_파이프를_안_물린다`
+    `core/tests/unit/test_make_patch.py::test_도구를_임포트하는_셸은_바이트코드를_안_남긴다`
+    `core/tests/unit/test_make_patch.py::test_뽑은_패치가_저장소에_안_담긴다`
 
 자료  실물 사용자 기기 `make check` 실패 1건 · 실물 이 저장소 — 재현 3/3(갈래 4) ·
       단독 0/3 · `pipefail` 파이프 전수 3곳 · 대장 29122줄 · 시험 2308건
@@ -31301,3 +31303,143 @@ awk에 `split($2, h, "..")`를 적었고 **아무 두 글자**로 잘려 빈 문
       어긋난 것 전수 17개(PNG 16 + `document.xml`) · graphviz 2.43.0 ↔ 14.1.2 ·
       **심은 결함 10건 전수 반증**(셸 3 · 파이썬 7) · 배선 전수 1판(안 운 자리 0 ·
       겨눔 불명 1 · 불리는 도구 44)
+
+---
+
+## D-0377. 「붙인 뒤 할 일」이 설명문에만 있었다 — 세 번 걸리고 나서 머리를 만든다
+
+> **갱신**: D-0375 — *«이런 경우가 한 번이고, 한 번을 보고 머리를 늘리지 않는다»*.
+> D-0376 — 둘째라고 적었다. **셋째는 그 기록을 쓴 날 왔다.** D-0351 · D-0364 · GR-0.7.
+
+- **배경**: D-0376을 보내며 같은 구멍에 **세 번** 걸렸다.
+
+| 언제 | 무엇 |
+|---|---|
+| 패치를 뽑을 때 | docx가 받는 기기의 blob과 달라 **내가 손으로 뺐다** (GR-0.7 위반) |
+| 보낼 때 | 「붙인 뒤 `make proposal`」을 **내 메시지에만** 적었다 |
+| 그가 칠 때 | 경로 없이 `git apply`를 쳐서 **패치가 안 붙었고**, 다음 줄의 `make proposal`이 **옛 트리 위에서** 돌았다 |
+
+결과는 **docx만 담긴 빈 커밋**이었다 — 제목은 D-0376인데 대장에는 없었다.
+그 사이 `make check`은 **초록이었다.** `ship`의 `check_patch`가 두 단계 뒤에 막았다.
+
+```text
+- `HEAD`를 패치로 못 뽑는다 — 실패: D-0376이 그 커밋의 대장에 없다. 기록을 같이 담는다 (D-0039)
+```
+
+**막은 것은 옳다. 늦은 것이 문제다.** 그리고 그가 그 자리에서 물었다 — *«패치가 선언하는
+길은 만들어야 하는 게 아닌지?»* 맞다.
+
+### 하나. `# hathor-after:` — 넷째 머리
+
+패치가 **안 담은 산출물을 받는 기기에서 다시 만드는 명령**을 제 머리에 적는다.
+
+- **손으로 안 적는다** (GR-0.7). `make patch`가 **커밋이 건드린 경로**에서 끌어낸다.
+  규칙은 `check_patch.AFTER_RULES` 한 곳이고 셸 둘이 거기서 읽는다 (D-0043).
+- **값은 허용 목록 안의 `make` 목표 이름뿐이다.** 패치 머리에서 임의 셸이 돌면 그것이
+  구멍이다 — 목록 밖이면 붙이지도 않고 막는다.
+- `apply_patch.sh`가 **붙인 뒤 커밋 전에** 돌린다. 터지면 1을 내고 되돌리는 법을 찍는다
+  (D-0375가 센 「붙인 채로 끝나는 길」이 넷에서 다섯이 됐다).
+- **양방향이다** (D-0363). 빠뜨린 것도, 안 건드렸는데 적힌 것도 운다 — 거짓 선언은
+  받는 쪽에서 쓸데없는 빌드를 돌리고 쌓이면 아무도 그 줄을 안 읽는다 (GR-0.8).
+
+`HEADS`에 안 넣었다. 넣으면 *«모든 패치가 들어야 한다»*가 되고 아무것도 안 만드는 패치도
+빈 선언을 달아야 한다. `OPTIONAL_HEADS`는 **네 곳에 적혀 있어야 하지만 모든 패치에
+있지는 않은** 머리다.
+
+### 둘. `make patch`가 산출물을 뺀다
+
+규칙 표의 경로를 `:(exclude)`로 뽑기에서 빼고, **부모 위 트리 대조도 그만큼만 느슨하게**
+한다 — 뺀 경로 말고 하나라도 다르면 그대로 14다. 내가 손으로 하던 일이 사라졌다.
+
+### 셋. 렌더러를 못으로 박는다 — 그의 둘째 질문
+
+*«graphviz 판 차이, 결국 기기만 의존하면 양방향 강제자는 아니지 않나»* — **맞다.**
+D-0376의 자물쇠는 **입력**만 봉인했고, 같은 입력에서 두 기기가 다른 그림을 내고 **둘 다
+통과했다.** *«빌더는 그의 기기다»*는 **주장**이었다.
+
+| 무엇 | 누가 박나 |
+|---|---|
+| matplotlib · python-docx · pandoc · python | **`uv.lock`이 이미 박는다** |
+| `dot` | **아무도 안 박는다** ← 여기만 박는다 |
+
+`proposal_source.RENDERERS = {"dot": "14.1.2"}`. 빌드는 **실제로 돈 판**을 자물쇠에 적고
+(거짓말하면 관문이 무의미하다 — GR-0.5), 검사가 못과 맞대어 **로컬에선 적고 배포에선
+막는다.** 내 컨테이너가 낸 판은 `dot 2.43.0`으로 적혀 배포가 멈추고,
+`# hathor-after: proposal`이 그의 기기에서 14.1.2로 다시 낸다. **기기 의존이 선언되고
+관문이 문다.**
+
+나머지 넷은 **적어만 둔다.** 또 박으면 거짓 경보가 된다 (GR-0.8). 적는 까닭은 어긋난 날
+*«무엇이 달랐나»*를 손으로 좇지 않기 위해서다 (D-0269) — 그 좇기가 D-0376을 낳았다.
+
+### 넷. 저장소가 나를 잡았다
+
+새 검증 블록에 `… | grep -q .`를 썼고 **D-0354가 제 시험으로 잡았다** — `pipefail` 아래서
+파이프에 일찍 끝내는 소비자를 물면 부하가 걸린 날 거짓 실패한다. 변수로 받아 `<<<`로
+바꿨다. D-0376의 awk `split($2, h, "..")`와 같은 부류다: **내가 쓴 한 줄이 조용히 틀렸고,
+먼저 박아 둔 못이 잡았다.**
+
+### 다섯. 또 저장소가 나를 잡았다 — `.pyc`
+
+셸이 `check_patch`를 임포트하자 `tools/__pycache__`가 생겼고 D-0252의 시험이 울었다.
+그 시험은 **증상**을 본다(캐시가 그 순간 있어야 운다). 그래서 **원인**에도 못을 박았다 —
+`tools/*.sh`의 `python3 -c`는 전부 `-B`다. `register_runner.sh`의 옛 두 줄도 같이 맞췄다.
+
+### 여섯. 뽑은 패치가 커밋에 딸려 갔다
+
+`make patch`는 `OUT=`이 없으면 **저장소 뿌리에** 떨구고, `.gitignore`에 `*.patch`가
+없었다. 이 판을 담는 `git add -A`가 `D0376.patch` 52KB를 집어 갔다 — `--amend`로 뺐고
+`.gitignore`에 한 줄을 넣었다. **사람이 매번 기억하는 자리를 하나 줄인다.**
+
+### 일곱. Dependabot — Mako
+
+`Mako: Path traversal via drive-letter URI on Windows in TemplateLookup` (Moderate,
+`core/uv.lock`). alembic이 끌고 오는 전이 의존이다. `uv lock --upgrade-package mako`로
+**1.4.1 → 1.4.3**, `pip-audit --strict` 실측 **취약점 0**.
+
+- **결과**:
+  - `tools/check_patch.py` — `OPTIONAL_HEADS` · `AFTER_RULES` · `AFTER_ALLOWED` ·
+    `AFTER_FLOOR` · `after_for()` · `after_drift()` · `check_after_table()`.
+  - `tools/make_patch.sh` — 규칙 경로를 빼고 머리를 쓴다. 트리 대조가 뺀 것을 안다.
+  - `tools/apply_patch.sh` — 허용 목록 대조 후 **커밋 전에** 돌린다. 선언 목록에 뒤처리
+    산출물을 더한다 (섞인 작업이 아니다).
+  - `tools/proposal_source.py` — `RENDERERS` 못 · `recorded_renderers()` · `stale()` 확장.
+  - `tools/build_proposal.py` — `drew()`가 다섯을 재고 `seal()`이 적는다.
+  - `README.md` · `render_figures.patch_pipe` — 넷째 머리를 적는다 (네 곳).
+  - `core/uv.lock` — mako 1.4.1 → 1.4.3.
+  - `tools/register_runner.sh` — `python3 -B`.
+  - `.gitignore` — `*.patch`.
+  - 시험 스물.
+
+- **남기는 것**:
+  - **배포 잡의 화면 그림은 러너의 `dot` 2.43.0이 그린다.** 제출본 PDF의 그림은 그의
+    14.1.2다 — **한 페이지의 두 산출물이 다른 렌더러**를 탄다. 고치려면 docx 안의 PNG를
+    꺼내 쓰거나 러너에 14.1.2를 세워야 한다. **안 쟀다** — 보이는 차이가 있는지 모른다.
+  - **순수 이름 바꾸기 패치**는 좁힌 기준 대조에 안 걸린다 (`index` 줄이 없다). D-0376에서
+    남긴 그대로다.
+  - `AFTER_RULES`는 **한 줄**이다. 규칙이 늘면 거기 적는다 — 바닥 1을 박았다 (D-0230).
+  - 손으로 적힌 기획서 표 **345줄** · 「X 대문자」 1곡 · `.env` 경로 표기 ·
+    PLAN 열린 질문 29.
+
+재현
+    cd core && uv run pytest tests/unit/test_patch_gate.py tests/unit/test_apply_patch.py tests/unit/test_proposal_build.py -q
+    make patch                              # 뒤처리 줄이 찍힌다
+
+강제자
+    `core/tests/unit/test_patch_gate.py::test_뽑은_패치가_산출물을_안_담는다`
+    `core/tests/unit/test_patch_gate.py::test_뒤처리를_빠뜨린_뽑기를_잡는다`
+    `core/tests/unit/test_patch_gate.py::test_머리와_경로가_갈리면_운다`
+    `core/tests/unit/test_patch_gate.py::test_규칙이_비면_운다`
+    `core/tests/unit/test_apply_patch.py::test_선언한_목표를_돌린다`
+    `core/tests/unit/test_apply_patch.py::test_허용_목록_밖은_막는다`
+    `core/tests/unit/test_apply_patch.py::test_뒤처리가_터지면_0을_안_낸다`
+    `core/tests/unit/test_proposal_build.py::test_다른_렌더러가_그리면_운다`
+    `core/tests/unit/test_proposal_build.py::test_자물쇠가_렌더러를_담는다`
+    `core/tests/unit/test_proposal_build.py::test_옛_자물쇠에_렌더러가_없으면_운다`
+    `core/tests/unit/test_make_patch.py::test_일찍_끝내는_소비자에_파이프를_안_물린다`
+    `core/tests/unit/test_make_patch.py::test_도구를_임포트하는_셸은_바이트코드를_안_남긴다`
+    `core/tests/unit/test_make_patch.py::test_뽑은_패치가_저장소에_안_담긴다`
+
+자료  실물 그의 기기 + 미러 — 같은 구멍 3회 · 빈 커밋 1건(`make check` 초록, ship에서 막힘) ·
+      **심은 결함 8건 전수 반증** · 머리 4종 x 곳 4개 · 뒤처리 규칙 1개 ·
+      `dot` 14.1.2(그) ↔ 2.43.0(내 컨테이너 · CI 러너) · mako 1.4.1 → 1.4.3 ·
+      pip-audit 실측 취약점 0

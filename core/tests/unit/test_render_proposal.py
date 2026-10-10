@@ -518,3 +518,22 @@ def test_배포_잡이_deploy를_준다() -> None:
             for one in listed
         )
         assert covered, f"{name}을 고쳐도 배포가 안 돌면 막을 자리에 못 닿는다"
+
+
+def test_렌더러가_통과_줄에_오른다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**수를 눈앞에 둔다** (D-0269 · D-0377).
+
+    어긋난 날 *«무엇이 달랐나»*를 손으로 좇지 않는다 — 그 좇기가 D-0376을 낳았다.
+    """
+    monkeypatch.setattr(TOOL, "check", list)
+    monkeypatch.setattr(TOOL, "stale", list)
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--check"])
+
+    assert TOOL.main() == 0
+
+    spoke = capsys.readouterr().out
+    drew = TOOL.recorded_renderers()
+    for name in TOOL.RENDERERS:
+        assert f"{name} {drew.get(name, '안 적혔다')}" in spoke, spoke
