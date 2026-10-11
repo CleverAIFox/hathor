@@ -49,6 +49,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import decision_evidence  # noqa: E402
 import decision_ledger  # noqa: E402
+import doc_counts  # noqa: E402
 
 OPEN_ISSUE = re.compile(r"^\| (O-\d+) \|", re.MULTILINE)
 DEBT_ROW = re.compile(r"^\| (D-\d{4}) \|", re.MULTILINE)
@@ -156,6 +157,19 @@ def plan_unblocked() -> Axis:
         "지금 할 수 있다" if rows else "",
         summed=False,
     )
+
+
+def plan_frozen() -> Axis:
+    """**얼린 질문** (D-0328 · D-0389). 「아직 못 한다」가 아니라 **「안 푼다」**다.
+
+    열린 질문 수에 섞여 있으면 둘이 같은 무게로 보인다 — 조건이 걸리기를 기다리는 것과
+    **일부러 동결한 것**은 다른 빚이고, 뒤쪽은 **갚을 것이 아니다.** 실측 28건 중 8건이
+    얼림이었고 화면에는 *«열린 질문 28»* 하나만 떴다.
+
+    세는 자는 `doc_counts`에 있다 — 두 벌로 두면 어긋난다 (D-0117 · D-0043).
+    """
+    # **합계에 안 더한다** (D-0342). 「열린 질문」과 같은 블록의 같은 줄이다.
+    return Axis("PLAN 얼린 질문", doc_counts.frozen_issues(), "안 푼다", summed=False)
 
 
 def plan_settled_rows() -> Axis:
@@ -328,6 +342,7 @@ def survey() -> list[Axis]:
         synthetic_only(),
         plan_open_issues(),
         plan_unblocked(),
+        plan_frozen(),
         plan_settled_rows(),
         plan_open_rows(),
         plan_closed_question_rows(),

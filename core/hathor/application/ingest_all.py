@@ -219,7 +219,7 @@ def _mono(signal: StereoWaveform) -> Waveform:
 
 
 def _silence(signal: Waveform) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
-    """창별 최대 진폭. **판정을 여기서 하지 않는다** (O-28).
+    """창별 최대 진폭. **판정을 여기서 하지 않는다** (O-28 닫힘 · D-0385).
 
     `SILENCE_FLOOR`를 걸어 0/1로 접으면 문턱을 바꿀 때마다 다시 뽑아야 한다.
     원값을 남기고 문턱은 읽을 때 건다.

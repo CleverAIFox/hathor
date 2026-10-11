@@ -243,3 +243,61 @@ def test_기획서는_신선도_축에_없다() -> None:
     assert "site/proposal.docx" not in debts.WATCHED
     assert "README.md" in debts.WATCHED, "입구 문서는 모든 결정과 견주는 것이 맞다"
     assert (ROOT / "tools" / "render_proposal.py").is_file(), "지문 대조가 그 자리를 맡는다"
+
+
+# --------------------------------- 「안 푼다」를 「못 한다」와 가른다 (D-0389)
+
+
+def test_얼린_질문을_따로_센다() -> None:
+    """**「못 한다」와 「안 푼다」는 다른 빚이다** (D-0328 · D-0389).
+
+    화면에는 *«열린 질문 28»* 하나만 떴고 그중 **여덟이 얼림**이었다. 조건이 걸리기를
+    기다리는 것과 **일부러 동결한 것**을 같은 무게로 보이면, 갚을 수 없는 수를 보고
+    *«빚이 많다»*고 읽게 된다 — 수가 틀리면 그 수를 안 믿는다 (GR-0.8).
+    """
+    debts = tool_module("debts")
+    axis = debts.plan_frozen()
+
+    assert axis.count > 0, "얼린 질문이 0이면 §1의 「얼린 것」과 어긋난다 (D-0328)"
+    assert not axis.summed, "합계에 더하면 같은 줄을 두 번 센다 (D-0342)"
+    assert axis.count <= debts.plan_open_issues().count, "얼림은 열린 것의 부분집합이다"
+
+
+def test_세는_자가_하나다() -> None:
+    """**정본은 `doc_counts`다** (D-0117 · D-0043). 두 벌로 두면 조용히 갈린다."""
+    debts = tool_module("debts")
+    counts = tool_module("doc_counts")
+
+    assert debts.plan_frozen().count == counts.frozen_issues()
+
+
+def test_빚_표가_셋을_다_든다() -> None:
+    """**부분집합을 안 드러내면 합계만 남는다** (D-0269). 사람이 내역을 봐야 고른다."""
+    debts = tool_module("debts")
+    names = [axis.name for axis in debts.survey()]
+
+    for wanted in ("PLAN 열린 질문", "PLAN 조건 걸린 질문", "PLAN 얼린 질문"):
+        assert wanted in names, names
+    assert names.index("PLAN 얼린 질문") > names.index("PLAN 열린 질문"), "부분집합이 위에 있다"
+
+
+def test_막는_것이_없다고_적었으면_표식을_단다() -> None:
+    """**본문과 표식이 어긋나면 그 축이 죽는다** (D-0336 · D-0126 · D-0389).
+
+    `plan_unblocked`는 D-0336부터 있었고 **0을 내고 있었다.** 본문 넷이
+    *«막고 있는 것 없음»* · *«막는 것은 없다»*라 적는데 아무도 `**조건 충족**`을
+    안 달았다 — *«영원히 잠긴다»*고 경고한 그 자리에서 그 자가 죽어 있었다.
+    """
+    debts = tool_module("debts")
+    plan = (ROOT / "docs" / "PLAN.md").read_text(encoding="utf-8")
+    block = plan.split("<!-- open-issues:begin -->")[1].split("<!-- open-issues:end -->")[0]
+
+    said = [
+        line
+        for line in block.splitlines()
+        if line.startswith("| O-") and ("막고 있는 것 없음" in line or "막는 것은 없다" in line)
+    ]
+
+    assert said, "본문에 「막는 것 없음」이 하나도 없다 — 문구가 바뀌었으면 여기도 고친다"
+    for line in said:
+        assert debts.CONDITION_MET in line, f"막는 것이 없는데 표식이 없다: {line[:60]}"

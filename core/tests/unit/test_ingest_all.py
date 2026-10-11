@@ -143,7 +143,7 @@ def test_음고는_단성_스템에만_건다(job: IngestAll) -> None:
 
 
 def test_무음은_판정하지_않고_원값을_남긴다(job: IngestAll) -> None:
-    """문턱을 걸어 0/1로 접으면 **문턱을 바꿀 때마다 다시 뽑아야 한다** (O-28)."""
+    """문턱을 걸어 0/1로 접으면 **문턱을 바꿀 때마다 다시 뽑아야 한다** (O-28 닫힘 · D-0385)."""
     bundle = next(iter(job.run([_track("가.mp3")])))
 
     silence = bundle.arrays["silence/mixture"]
