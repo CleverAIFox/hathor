@@ -2742,6 +2742,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0390 | *«내가 못 돌린다»*는 변명이었다 | `core/tests/unit/test_apply_end_to_end.py::test_붙이고_커밋하고_트리가_깨끗하다` | 실물 이 저장소 — 받는 쪽에서 터진 판 4건 · 끝까지 도는 시험 0 → 8개 · |
 | D-0391 | 웹의 그림과 PDF의 그림을 **다른 판이 그리고 있었다** | `core/tests/unit/test_render_proposal.py::test_한_장만_달라도_잡는다` | 실물 이 저장소 — 제출본 속 그림 28장 · 다시 그린 것과 바이트 일치 28/28 · |
 | D-0392 | 템포가 **참조곡에서 온다** | `core/tests/unit/test_reference_tempo.py::test_접기로_못_고치는_이상치에_안_끌린다` | 합성 · 실물 이 저장소 — 합성 박 여섯 꼴 · 심은 결함 4건에 운 시험 |
+| D-0393 | **두 판이 달랐다** | `core/tests/unit/test_render_proposal.py::test_이름_그대로_꺼낸다` | 실물 이 저장소 — 갈린 그림 16/28장(graphviz) · 같은 그림 12장(matplotlib) · |
 
 <!-- decision-ledger:end -->
 

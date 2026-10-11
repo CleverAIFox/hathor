@@ -68,6 +68,7 @@ from proposal_source import (  # noqa: E402
     redrawn,
     source,
     stale,
+    unpack,
 )
 
 OUT = ROOT / "site" / "proposal.html"
@@ -501,9 +502,25 @@ def main() -> int:
     parser.add_argument(
         "--figures",
         type=Path,
-        help="다시 그린 그림이 제출본 속 그림과 같은지 본다. 배포 잡이 쓴다 (D-0391)",
+        help="다시 그린 그림이 제출본 속 그림과 같은지 본다 (D-0391)",
+    )
+    parser.add_argument(
+        "--unpack",
+        type=Path,
+        help="제출본 속 그림을 이름 그대로 꺼낸다. 배포 잡이 쓴다 (D-0393)",
     )
     args = parser.parse_args()
+
+    if args.unpack is not None:
+        # **꺼낸 뒤 바로 견준다** (D-0391의 자를 그대로 쓴다). 동어반복처럼 보이지만
+        # **꺼내기가 깨지면 그 자가 운다** — 꺼낸 것을 안 보면 빈 폴더도 통과한다.
+        broken = unpack(args.unpack) or redrawn(args.unpack)
+        for text in broken:
+            print(f"  - {text}", file=sys.stderr)
+        if broken:
+            return 1
+        print(f"그림 꺼냄 · 제출본에서 {len(baked())}장 · {args.unpack}")
+        return 0
 
     if args.figures is not None:
         odd = redrawn(args.figures)

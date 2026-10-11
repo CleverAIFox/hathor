@@ -1,9 +1,9 @@
 {
   "적는이": "tools/build_proposal.py",
   "생성기": {
-    "tools/build_proposal.py": "696f028a08624267",
+    "tools/build_proposal.py": "5d4f2e934a97cee5",
     "tools/proposal_body.py": "f0a306f38a9d187c",
-    "tools/proposal_source.py": "7c32151cff249f2f",
+    "tools/proposal_source.py": "5f1586da2cc9792e",
     "tools/render_figures.py": "150f979d0c19539f",
     "tools/render_charts.py": "b841da088aee675f",
     "site/proposal.template.html": "be43f8109e708d2f"
@@ -14,5 +14,35 @@
     "pandoc": "없다",
     "matplotlib": "3.11.2",
     "python-docx": "1.2.0"
+  },
+  "그림": {
+    "artist_notation.png": "4c3c2ea8fcfdd05f996e7c4426f5f7262347770233a17b5ff9ae7604cf640496",
+    "axes.png": "f13cc384ed8b653688d63f9ae99ddcb62ceca6c51f373fd90cf774bbc8b544b0",
+    "concept.png": "c24e1c01e4b5f7cbd1a0017e0807cffa9b8dc630afe4e5ab282bf89b338e79ba",
+    "delta_states.png": "06c57e739650ac6ade5053740febd03f6c872382550bc3bc6bbf7916aa8c5199",
+    "documents.png": "8551ba7b0b0ff846e58f9218beb30685a8632c1dd6f4aabb19858773b3b92088",
+    "engine_funnel.png": "d260a0be6c44d1700f263f135baab4f27399d022059f4f4454ee31b8fc230bfe",
+    "engine_gates.png": "0e2ab82eec7c664d2cab0e7cce6ad679384efee7deb45dba5ccf41f40ba89082",
+    "erd.png": "f4f972321b11cce42901253eef1a12a4e9417be6e645d21a340d10b1917d32ae",
+    "g0_runs.png": "ce60bb85719af00187786027b7b33d88d4026c05cc0a5cd36edfb5f18b5edead",
+    "gantt.png": "d71da52ad9b3a1d4bf5bec5a65a5975c8df4448e62c51639f328513b9e8f87e0",
+    "gate_parity.png": "582d958df4fda19cfc580117f89e29a1bfad3833dfe4096a9cb8cea748a6dc67",
+    "harmony_layers.png": "df3550a560d06b0295311836b3acaf5a33d6041c71024a0835362b3220a2656b",
+    "id3_frames.png": "1c7329e87240231e500509beaa2ade8e81cbf69f14ce1173cf80073f2b3120f7",
+    "ingest_flow.png": "2060694166cf591d2c5085e8f5f3eb1719e576db08aad6ec24f3fb63ad1e9155",
+    "layer_curve.png": "000f2426df0e9eedeb85033c69c1dc35b921f1bc4671f370ceeb7531eaeed71a",
+    "layers.png": "d5bf76387658791efc78e86a75a53fa18afef668bb023dff1504a4e082016116",
+    "leak_gate.png": "5212d19069bf5d65d2ac9e46e160a43b74f08f917e22d375b67ba356c0cf15d1",
+    "listening.png": "b80d44e1ef5664eb2b794dcfe0e0358920090c2d2b63c1990ab90896a2dc9ff1",
+    "musicbrainz.png": "3ccf5cb01cdf2d41241621f12312d31f61d0a75c044ee612bd8c6f464acd1733",
+    "patch_pipe.png": "222a16e898fe061d54f7f0865a1b6da73cad6e10c0d31e2851e7c079a18ae61c",
+    "pipeline.png": "97e0da976e3ae4bc1e6acf5e55704f529dd0420472e92f1e56af714fb678f7cf",
+    "plan_render.png": "77910ea2467e71b5874e86439f0bda2132f704a049a334536b83f879b8daa196",
+    "requirement_status.png": "6e629df141558733f320162b195d9dcffba6194b9b5179083fbfb7a7b99df817",
+    "requirement_tree.png": "d428abf0c27f7a7af7467b76a2d01441aafa5deb3c9177268a262c8c2419b0e8",
+    "retrieval.png": "0bf41f6f7aa6b5c6c0ad2a67224de3b24f3367842f8eb813a3bce8d393189d3f",
+    "taste_layers.png": "644adfcc1f1a703eb66f410946fdb658d64f197ee7c1ae67d59cafa6482e0981",
+    "use_cases.png": "643a5d4eae059356ae797c9c995b901fc5de128ad249721b6ec48f14bb40cff9",
+    "voice_leading.png": "03e51d7466a69d7b78a1fd16514b9839b815c9cdeca457e61f80799929f7fd5b"
   }
 }

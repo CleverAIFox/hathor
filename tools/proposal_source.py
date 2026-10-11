@@ -228,6 +228,14 @@ def locked() -> dict[str, str]:
         raise SourceError(f"{LOCK_NAME}가 깨졌다: {error}") from error
 
 
+def recorded_figures() -> dict[str, str]:
+    """자물쇠에 적힌 **그림 이름표** — 이름 → sha256 (D-0393). 옛 자물쇠에는 없다."""
+    if not LOCK.is_file():
+        return {}
+    kept = json.loads(LOCK.read_text(encoding="utf-8")).get("그림", {})
+    return {str(name): str(mark) for name, mark in kept.items()}
+
+
 def recorded_renderers() -> dict[str, str]:
     """자물쇠에 적힌 **실제로 돈** 렌더러 판. 옛 자물쇠에는 없다 — 빈 것으로 읽는다."""
     if not LOCK.is_file():
@@ -288,6 +296,53 @@ def baked() -> dict[str, str]:
             for name in bundle.namelist()
             if name.startswith("word/media/")
         }
+
+
+def unpack(into: Path) -> list[str]:
+    """제출본 속 그림을 **이름 그대로** 꺼낸다 (D-0393). 문제를 낸다.
+
+    ### 왜 꺼내나 — 다시 그리면 갈린다
+
+    D-0391이 못 재던 것을 재는 자를 놓았고 **하루 만에 답이 왔다**: 러너가 다시 그린
+    **16장이 제출본과 달랐다.** `graphviz`로 그리는 것만 그랬고 `matplotlib` 차트
+    12장은 같았다 — **판을 박은 쪽은 멀쩡하고 안 박은 쪽만 갈렸다.**
+
+    러너에 `dot 14.1.2`를 깔 길이 없다(ubuntu-24.04 apt는 2.43.0). 그러나 **제출본
+    안에 그 판이 그린 PNG가 그대로 들어 있다** — `python-docx`가 재압축을 안 하므로
+    꺼내 쓰면 웹과 PDF가 **같은 바이트**를 본다. 따로 커밋할 것도(3.5MB), 러너가
+    다시 그릴 것도 없다.
+
+    ### 이름표는 자물쇠가 든다
+
+    zip 안의 이름은 `word/media/rId10.png`라 쓸모가 없다. `seal()`이 **이름 → sha256**
+    표를 적어 두므로 해시로 되찾는다 (실측 28/28).
+    """
+    marks = recorded_figures()
+    if not marks:
+        return ["자물쇠에 그림 이름표가 없다. `make proposal`로 다시 낸다 (D-0393)"]
+    inside = {digest: name for name, digest in baked().items()}
+    into.mkdir(parents=True, exist_ok=True)
+    missing: list[str] = []
+    with zipfile.ZipFile(DOCX) as bundle:
+        found = {
+            hashlib.sha256(bundle.read(one)).hexdigest(): one
+            for one in bundle.namelist()
+            if one.startswith("word/media/")
+        }
+        for name, digest in marks.items():
+            where = found.get(digest)
+            if where is None:
+                missing.append(name)
+                continue
+            (into / name).write_bytes(bundle.read(where))
+    if missing:
+        return [
+            f"제출본에서 그림 {len(missing)}장을 못 찾았다: {' '.join(sorted(missing)[:5])}"
+            f"{' …' if len(missing) > 5 else ''}. 자물쇠가 제출본보다 낡았다 (D-0393)"
+        ]
+    if len(marks) != len(inside):
+        return [f"자물쇠가 {len(marks)}장을 드는데 제출본에는 {len(inside)}장이 있다"]
+    return []
 
 
 def redrawn(where: Path) -> list[str]:

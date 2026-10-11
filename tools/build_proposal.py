@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import platform
 import re
@@ -436,7 +437,7 @@ def build(out: Path, figures_dir: Path) -> dict[str, int]:
     out.parent.mkdir(parents=True, exist_ok=True)
     document.save(str(out))
     freeze(out)
-    seal()
+    seal(figures_dir)
     if count != len(FIGURES):
         raise SourceError(f"그림 {len(FIGURES)}장을 넣었는데 캡션이 {count}개다")
     return {"figures": count, "tables": tables}
@@ -469,12 +470,29 @@ def drew() -> dict[str, str]:
     return found
 
 
-def seal() -> None:
-    """**생성기와 렌더러의 지문을 산출물 옆에 적는다** (D-0376 · D-0377).
+def drawn_marks(figures_dir: Path) -> dict[str, str]:
+    """그림 이름 → sha256 (D-0393).
+
+    **제출본 안의 PNG에는 이름이 없다** — `word/media/rId10.png`가 전부다. 그런데
+    `python-docx`가 재압축을 안 하므로 **해시가 곧 이름표**다. 이 표를 자물쇠에 적어
+    두면 배포 잡이 제출본에서 **이름 그대로** 꺼낼 수 있고, 그림을 따로 커밋할
+    까닭도 러너가 다시 그릴 까닭도 없어진다.
+    """
+    return {
+        one.name: hashlib.sha256(one.read_bytes()).hexdigest()
+        for one in sorted(figures_dir.glob("*.png"))
+    }
+
+
+def seal(figures_dir: Path) -> None:
+    """**생성기와 렌더러의 지문을 산출물 옆에 적는다** (D-0376 · D-0377 · D-0393).
 
     제출본은 zip이라 같은 입력에서 같은 바이트가 안 나온다 — `dot` 판이 기기마다
     다르다. 그래서 바이트가 아니라 **입력**을 봉인하고, **누가 그렸는지**를 같이 적는다.
     `render_proposal --check`이 둘을 선언과 견주고, 어긋나면 **배포를 막는다.**
+
+    **그림의 이름표도 여기 적는다** (D-0393). 러너가 제출본에서 꺼내 쓰므로 웹과
+    PDF가 **같은 바이트**를 본다 — 실측으로 둘이 16장 갈려 있었다.
     """
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     LOCK.write_text(
@@ -483,6 +501,7 @@ def seal() -> None:
                 "적는이": "tools/build_proposal.py",
                 "생성기": generator_marks(),
                 "렌더러": drew(),
+                "그림": drawn_marks(figures_dir),
             },
             ensure_ascii=False,
             indent=2,

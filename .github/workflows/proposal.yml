@@ -78,7 +78,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libreoffice-writer fonts-noto-cjk poppler-utils graphviz
+            libreoffice-writer fonts-noto-cjk poppler-utils
       - name: Bake PDF
         # **목차에 쪽 번호를 박는다** (D-0246). 두 판을 굽고 쪽이 밀리지 않았는지 확인한다.
         working-directory: core
@@ -99,19 +99,20 @@ jobs:
       # 마크다운**에서 나온다 — 두 벌이 될 자리가 없다.
       # **그림은 `var/`에 있고 git은 그것을 안 나른다** (D-0369). 복사하려다 CI에서만
       # 터졌다 — 사본을 옮기는 대신 **같은 정본에서 다시 그린다** (D-0368).
-      - name: Draw figures
-        working-directory: core
-        run: |
-          uv run --no-sync python ../tools/render_figures.py --out ../_site/figures
-          uv run --no-sync python ../tools/render_charts.py --out ../_site/figures
-
-      # **러너가 그린 것이 제출본 속 그림과 같은가** (D-0391). 위 단계의 전제가
-      # «같은 정본 + 같은 도구 = 같은 그림»인데 **도구 판은 안 맞췄다** — 러너는
-      # apt의 graphviz 2.43.0이고 제출본은 그의 14.1.2다 (D-0377의 못). 다르면
-      # 웹에서 보는 그림과 PDF 속 그림이 갈리므로 **여기서 멈춘다.**
-      - name: 그림 대조
+      # **다시 그리지 않는다 — 제출본에서 꺼낸다** (D-0393).
+      #
+      # D-0368은 *«사본을 옮기는 대신 같은 정본에서 다시 그린다»*를 골랐고 그 전제가
+      # «같은 정본 + 같은 도구 = 같은 그림»이었다. D-0391이 그것을 재는 자를 놓자
+      # **하루 만에 답이 왔다**: `graphviz`로 그리는 **16장이 갈렸다**(러너 2.43.0 ↔
+      # 그의 14.1.2). `matplotlib` 12장은 `uv.lock`이 판을 박아 같았다 — **판을 박은
+      # 쪽은 멀쩡하고 안 박은 쪽만 갈렸다.**
+      #
+      # 러너에 14.1.2를 깔 길이 없다(apt는 2.43.0이 끝). 그러나 **제출본 안에 그
+      # 판이 그린 PNG가 그대로 들어 있다** — 꺼내 쓰면 웹과 PDF가 같은 바이트를 본다.
+      # 꺼낸 뒤 제출본과 견주므로 꺼내기가 깨지면 **여기서 멈춘다.**
+      - name: 그림 꺼내기
         working-directory: .
-        run: python3 tools/render_proposal.py --figures _site/figures
+        run: python3 tools/render_proposal.py --unpack _site/figures
       - name: Stage site
         run: |
           cp site/proposal.html site/index.html _site/

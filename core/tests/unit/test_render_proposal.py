@@ -605,9 +605,11 @@ def test_배포_잡이_그_길로_돈다() -> None:
     """
     body = FIGURE_GATE.read_text(encoding="utf-8")
 
-    assert "render_proposal.py --figures _site/figures" in body
-    assert body.index("render_charts.py --out ../_site/figures") < body.index("--figures _site")
-    assert body.index("--figures _site") < body.index("upload-pages-artifact")
+    # **D-0393이 길을 바꿨다** — 다시 그리지 않고 제출본에서 꺼낸다. 꺼낸 뒤 같은
+    # 자(`redrawn`)로 견주므로 이 관문은 그대로 살아 있다.
+    assert "render_proposal.py --unpack _site/figures" in body
+    assert "redrawn" in (ROOT / "tools" / "render_proposal.py").read_text(encoding="utf-8")
+    assert body.index("--unpack _site") < body.index("upload-pages-artifact")
 
 
 def test_입구가_그림_인자를_받는다(
@@ -619,3 +621,65 @@ def test_입구가_그림_인자를_받는다(
 
     assert TOOL.main() == 1
     assert "심은 것" in capsys.readouterr().err
+
+
+# ------------------------- 다시 그리지 않고 제출본에서 꺼낸다 (D-0393)
+
+
+def test_자물쇠가_그림_이름표를_든다() -> None:
+    """**zip 안의 이름은 쓸모가 없다** — `word/media/rId10.png`가 전부다 (D-0393).
+
+    `seal()`이 **이름 → sha256**을 적어 두므로 해시로 되찾는다. 실측 28/28.
+    """
+    marks = SOURCE.recorded_figures()
+
+    assert len(marks) >= 20, f"이름표가 {len(marks)}장이다 — `make proposal`을 의심한다"
+    assert set(marks.values()) == set(SOURCE.baked().values()), "이름표와 제출본이 갈렸다"
+
+
+def test_이름_그대로_꺼낸다(tmp_path: Path) -> None:
+    """**이 판의 본체다.** 꺼낸 것이 제출본과 바이트가 같아야 웹과 PDF가 안 갈린다."""
+    assert SOURCE.unpack(tmp_path) == []
+
+    got = sorted(one.name for one in tmp_path.glob("*.png"))
+    assert got == sorted(SOURCE.recorded_figures()), got
+    assert SOURCE.redrawn(tmp_path) == [], "꺼낸 것이 제출본과 다르다"
+
+
+def test_이름표가_없으면_꺼내지_않는다(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """**빈 그물** (D-0230). 옛 자물쇠로 돌면 0장을 꺼내고 조용히 넘어간다."""
+    monkeypatch.setattr(SOURCE, "recorded_figures", dict)
+
+    said = SOURCE.unpack(tmp_path)
+
+    assert said and "이름표가 없다" in said[0], said
+    assert list(tmp_path.glob("*.png")) == []
+
+
+def test_제출본에_없는_이름표는_잡는다(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """**심은 결함** (D-0069). 자물쇠가 제출본보다 낡으면 그림이 빈다."""
+    marks = dict(SOURCE.recorded_figures())
+    marks["없는그림.png"] = "0" * 64
+    monkeypatch.setattr(SOURCE, "recorded_figures", lambda: marks)
+
+    said = SOURCE.unpack(tmp_path)
+
+    assert said and "없는그림.png" in said[0], said
+
+
+def test_배포_잡이_다시_안_그린다() -> None:
+    """**그리는 길이 남아 있으면 판 차이가 돌아온다** (D-0393 · D-0126).
+
+    실측으로 `graphviz` 16장이 갈렸다. 러너가 다시 그리는 줄을 지웠고, `graphviz`
+    설치도 뺐다 — 안 쓰는 것을 깔아 두면 **다음 사람이 다시 쓴다.**
+    """
+    body = FIGURE_GATE.read_text(encoding="utf-8")
+
+    assert "render_proposal.py --unpack _site/figures" in body
+    assert "render_figures.py --out ../_site" not in body, "러너가 다시 그린다"
+    assert "render_charts.py --out ../_site" not in body, "러너가 다시 그린다"
+
+    # **설치 줄만 본다.** 주석이 까닭을 적으며 이름을 들므로 통째로 찾으면 걸린다
+    # — 인용과 실물을 가르는 그 자리다 (D-0385 · D-0388).
+    apt = [one for one in body.splitlines() if "libreoffice-writer" in one]
+    assert apt and "graphviz" not in apt[0], f"안 쓰는 것을 깔아 둔다: {apt}"

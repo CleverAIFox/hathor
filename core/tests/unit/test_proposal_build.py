@@ -17,6 +17,7 @@ import pytest
 from tests.conftest import tool_module as _load
 
 ROOT = Path(__file__).resolve().parents[3]
+FIGURES_DIR = ROOT / "var" / "proposal" / "figures"
 
 
 SOURCE = _load("proposal_source")
@@ -215,11 +216,13 @@ def test_빌드가_자물쇠를_쓴다(tmp_path: Path, monkeypatch: pytest.Monke
     path = tmp_path / "깊은" / "자리" / "build.lock.json"
     monkeypatch.setattr(BUILD, "LOCK", path)
 
-    BUILD.seal()
+    BUILD.seal(FIGURES_DIR)
 
     written = json.loads(path.read_text(encoding="utf-8"))
     assert written["적는이"] == "tools/build_proposal.py"
     assert written["생성기"] == SOURCE.generator_marks()
+    # **그림 이름표도 적는다** (D-0393). 안 적으면 러너가 제출본에서 못 꺼낸다.
+    assert written["그림"] == BUILD.drawn_marks(FIGURES_DIR)
 
 
 def test_빌드가_자물쇠를_부른다() -> None:
@@ -342,6 +345,6 @@ def test_자물쇠가_렌더러를_담는다(tmp_path: Path, monkeypatch: pytest
     path = tmp_path / "build.lock.json"
     monkeypatch.setattr(BUILD, "LOCK", path)
 
-    BUILD.seal()
+    BUILD.seal(FIGURES_DIR)
 
     assert json.loads(path.read_text(encoding="utf-8"))["렌더러"] == BUILD.drew()
