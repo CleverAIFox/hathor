@@ -16,7 +16,7 @@
 `--updateFields` 같은 길은 막혀 있다. LibreOffice를 머리 없이 돌리면 Word의 목차 필드를
 **갱신하지 않고** 자리표시자를 그대로 인쇄한다 — 실측으로 확인했다.
 
-    python3 tools/bake_proposal.py --docx docs/proposal.docx --out _site/proposal.pdf
+    python3 tools/bake_proposal.py --docx site/proposal.docx --out _site/proposal.pdf
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ def bake(docx: Path, out: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="기획서 PDF 굽기 + 목차 쪽 번호 (D-0246)")
-    parser.add_argument("--docx", type=Path, default=ROOT / "docs" / "proposal.docx")
+    parser.add_argument("--docx", type=Path, default=ROOT / "site" / "proposal.docx")
     parser.add_argument("--out", type=Path, default=ROOT / "_site" / "proposal.pdf")
     args = parser.parse_args()
     if not args.docx.exists():

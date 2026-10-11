@@ -162,7 +162,7 @@ if [[ -n "$BASE" ]]; then
   HERE="$(git rev-parse 'HEAD^{tree}')"
   if [[ "$BASE" != "$HERE" ]]; then
     # **트리 전체로 견주면 패치와 무관한 파일 하나가 전부를 막는다** (D-0376).
-    # 실측: `make measure`가 그의 기기에서 `docs/proposal.docx`를 다시 냈고 — docx는
+    # 실측: `make measure`가 그의 기기에서 `site/proposal.docx`를 다시 냈고 — docx는
     # zip이라 같은 입력에서도 바이트가 다르다(graphviz 2.43.0 ↔ 14.1.2) — 다음 패치가
     # «기준이 다르다»로 막혔다. **그 패치는 그 파일을 건드리지도 않았다.**
     #

@@ -31941,3 +31941,98 @@ FAILED test_제출본만_낡은_커밋을_잡는다 -
       원인 1건(`HEAD~3` 대 `fetch-depth: 2`) · 같은 부류 전수 3판(D-0378 · D-0379 · 이 판) ·
       시험 전체에서 깊이 2 이상을 파는 자리 전수 1곳 · 심은 결함 2건 전수 반증 ·
       **깊이 2 클론(커밋 2개)에서 실측 재현 1판**
+
+---
+
+## D-0383. `docs/`에는 **문서만 둔다** — 제출본과 자물쇠를 `site/`로 옮긴다
+
+> **갱신**: D-0220이 제출본을 `docs/`에 두었고 D-0376이 자물쇠를 그 옆에 붙였다.
+> D-0187 — 하위 폴더는 만들지 않는다. D-0378 §다섯 — 그 사실을 문서가 들게 했다.
+
+- **배경**: 그가 `docs/`를 보고 물었다 — *«문서쪽도 4축으로 하자고 한 거 아니었나.
+  안 무너진 거면 현재의 디렉토리 구조가 무너진 거 아님? 애당초 폴더 구조를 잘못
+  짠 거 아님?»*
+
+내 첫 답은 *«체계는 안 무너졌다, 문서가 설명을 안 했을 뿐»*이었다. **절반만 맞다.**
+규약(`OUTSIDE_TENSE`)은 지켜지고 있었지만 **그 규약 자체가 틀렸다** — `docs/`라는
+이름은 문서를 뜻하는데 거기 **빌드 산출물 둘**이 살고 있었다.
+
+| 전 | 후 |
+|---|---|
+| `docs/` — 축 셋 + `measured.toml` + **`proposal.docx`** + **`proposal.lock.json`** | `docs/` — 축 셋 + `measured.toml` |
+| `site/` — 화면 · 틀 · 각본 | `site/` — 화면 · 틀 · 각본 + **제출본** + **자물쇠** |
+
+`site/`에는 이미 `proposal.html`이 있었다. **같은 빌드의 두 산출물이 다른 폴더에
+흩어져 있었던 것**이고, 그래서 디렉터리만 보면 축이 여섯으로 보였다.
+
+### 하나. 경로가 두 꼴로 적혀 있었다
+
+문자열(`"docs/proposal.docx"`)과 조각(`ROOT / "docs" / "proposal.docx"`)이 섞여 있었다.
+문자열만 바꾸자 **판정 글은 `site/`를 가리키는데 읽는 자리는 `docs/`**인 상태가 됐고
+`render_proposal`이 *«site/proposal.docx가 없다»*로 울었다 — **있는데 없다고 했다.**
+조각으로 지은 자리 둘(`render_proposal.DOCX` · `bake_proposal`의 기본값)을 같이 고쳤다.
+
+### 둘. 규약이 뒤집혔다
+
+`test_배포는_정본을_옮기기만_한다`는 *«`site/`에 docx가 있으면 두 벌이다»*였다. 지금은
+**거기가 유일한 자리다.** 보는 것을 「어디에 있나」에서 **「몇 벌인가」**로 바꿨다 —
+저장소 전체에서 `proposal.docx`를 찾아 **정확히 하나**인지 본다. 구운 PDF는 여전히
+커밋하지 않는다 (D-0229).
+
+### 셋. **이름 바꾸기가 제외를 빠져나갔다**
+
+뽑아 보니 패치가 **4.5MB**였다. D-0377이 제출본을 패치에서 빼는데, **간 곳만** 뺐다 —
+그러면 git이 그 짝을 **「떠난 곳의 삭제」**로 풀어 내보내고, 이진이면 원본 바이트가
+통째로 들어간다. 안 담으려던 것이 다른 이름으로 담겼다.
+
+떠난 곳도 같이 뺀다 (`git show --name-status -M`). 그리고 **자물쇠를 규칙에 넣었다** —
+D-0377이 거기에 실제로 돈 렌더러 판을 적으면서 **그 파일도 기기마다 달라졌는데**,
+텍스트라 조용히 지나갈 뻔했고 옮기는 판에서야 드러났다.
+
+### 넷. 그래서 이 판은 **옮기기를 패치가 못 한다**
+
+두 파일 다 기기마다 바이트가 다르다 — 이진 삭제도, 텍스트 삭제도 받는 쪽 내용과
+안 맞아 `git apply`가 거부한다. **패치는 코드만 나르고 옮기기는 손으로 한다.**
+한 번뿐인 구조 변경이라 길을 만들지 않았다 (D-0364).
+
+### 다섯. D-0354가 **세 번째로** 나를 잡았다
+
+떠난 곳을 찾는 고리에 `printf … | grep -qxF`를 썼고 `test_일찍_끝내는_소비자에_파이프를_
+안_물린다`가 바로 울었다. `pipefail` 아래서 파이프에 일찍 끝내는 소비자를 물면 부하가
+걸린 날 거짓 실패한다. 변수와 `<<<`로 바꿨다. **D-0377 · D-0379에 이어 세 번이다** —
+먼저 박아 둔 못이 매번 잡았다.
+
+### 여섯. 배포 경로가 글로브 하나로 줄었다
+
+`paths:`에 `site/proposal.docx` · `site/proposal.lock.json`을 따로 적던 것을 뺐다 —
+`site/**`가 이미 문다. **이름을 따로 적으면 옮길 때 한쪽만 고쳐진다** (D-0043).
+
+- **결과**:
+  - `site/proposal.docx` · `site/proposal.lock.json` — `git mv`.
+  - `tools/` 여섯 · `.github/workflows/proposal.yml` · `README.md` · `docs/MASTER.md` —
+    경로. `render_proposal.DOCX` · `bake_proposal`의 기본값은 **조각이라 따로** 고쳤다.
+  - `tools/check_doc_style.py` — `OUTSIDE_TENSE`가 `("measured.toml",)` 하나로.
+  - `core/tests/unit/test_ci_parity.py` — 「어디에」에서 「몇 벌」로.
+  - `tools/make_patch.sh` — 이름 바꾸기의 **떠난 곳**도 뺀다.
+  - `tools/check_patch.py` — `AFTER_RULES`에 자물쇠. 규칙 1 → 2.
+  - `docs/DECISIONS.md`는 **안 건드렸다** — 추가 전용이라 옛 기록의 경로는 그때 그대로다.
+
+- **남기는 것**:
+  - **옛 기록 수백 줄이 `docs/proposal.docx`를 가리킨다.** 그 자리는 그날 맞았고
+    소급해 고치지 않는다 — 추가 전용의 대가다. `check_retired`의 「지운 말」에도
+    안 넣었다: 넣으면 그 기록들이 전부 빨개진다.
+  - 수치 빚 **35건** · 「X 대문자」 1곡 · `.env` 경로 표기 · PLAN 열린 질문 29.
+
+재현
+    ls docs/        # DECISIONS.md MASTER.md PLAN.md measured.toml
+    ls site/        # index.html proposal.docx proposal.html proposal.js proposal.lock.json proposal.template.html
+    cd core && uv run pytest tests/unit/test_ci_parity.py tests/unit/test_doc_style.py -q
+
+강제자
+    `core/tests/unit/test_ci_parity.py::test_제출본은_저장소에_한_벌뿐이다`
+    `core/tests/unit/test_doc_style.py::test_폐기_보관소가_없다`
+    `core/tests/unit/test_render_proposal.py::test_화면이_정본과_같다`
+
+자료  실물 이 저장소 — 옮긴 파일 2 · 경로를 든 파일 18 · **조각으로 지어 문자열 치환에
+      안 걸린 자리 2곳** · `docs/` 6 → 4 · `OUTSIDE_TENSE` 3 → 1 ·
+      **이름 바꾸기가 제외를 빠져나가 패치 4.5MB** → 떠난 곳을 빼고 실측 재확인

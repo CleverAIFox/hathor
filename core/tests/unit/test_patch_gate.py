@@ -279,17 +279,17 @@ def test_받는_쪽이_목록을_안_읽으면_운다(tmp_path: Path, monkeypatc
 
 def test_경로가_목표를_부른다() -> None:
     """**선언이 정본이다** (GR-0.7). 셸이 경로를 베끼지 않는다."""
-    assert CHECKER.after_for(["docs/proposal.docx", "tools/x.py"]) == ["proposal"]
+    assert CHECKER.after_for(["site/proposal.docx", "tools/x.py"]) == ["proposal"]
     assert CHECKER.after_for(["tools/x.py"]) == []
     assert set(CHECKER.AFTER_ALLOWED) == {"proposal"}
 
 
 def test_머리와_경로가_갈리면_운다() -> None:
     """**양방향** (D-0363). 빠뜨린 것도, 없는데 적힌 것도 든다."""
-    assert CHECKER.after_drift(["docs/proposal.docx"], "proposal") == []
+    assert CHECKER.after_drift(["site/proposal.docx"], "proposal") == []
     assert CHECKER.after_drift([], "") == []
 
-    missing = CHECKER.after_drift(["docs/proposal.docx"], "")
+    missing = CHECKER.after_drift(["site/proposal.docx"], "")
     assert missing and "없다»인데" in missing[0], missing
 
     extra = CHECKER.after_drift(["tools/x.py"], "proposal")
@@ -312,7 +312,7 @@ def test_뒤처리를_빠뜨린_뽑기를_잡는다(tmp_path: Path, monkeypatch:
         encoding="utf-8",
     )
     monkeypatch.setattr(CHECKER, "MAKER", blind)
-    monkeypatch.setattr(CHECKER, "touched_by_head", lambda: ["docs/proposal.docx"])
+    monkeypatch.setattr(CHECKER, "touched_by_head", lambda: ["site/proposal.docx"])
 
     problems = _problems("pull_once")
 

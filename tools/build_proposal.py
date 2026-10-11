@@ -16,7 +16,7 @@ fire-lane 기획서가 62쪽 · 그림 24장 · 표 56개인 것은 **설계 문
 지금 지문과 맞댄다 — Part I ~ III를 고치고 다시 빌드하지 않으면 **검사가 멈춘다.**
 
 정본이 그대로여도 **이 도구들이 바뀌면 제출본은 낡는다.** 그 구멍은 `seal()`이 적는
-`docs/proposal.lock.json`이 막고, 어긋나면 **배포가 멈춘다** (D-0376).
+`site/proposal.lock.json`이 막고, 어긋나면 **배포가 멈춘다** (D-0376).
 
 ### 필요한 것
 
@@ -52,7 +52,7 @@ from proposal_source import (
     generator_marks,
 )
 
-OUT = "docs/proposal.docx"
+OUT = "site/proposal.docx"
 FONT = "맑은 고딕"
 MONO = "Consolas"
 NAVY = "1F4E79"

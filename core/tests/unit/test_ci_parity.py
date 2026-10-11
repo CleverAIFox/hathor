@@ -252,17 +252,25 @@ def test_기획서_배포는_지문을_본다() -> None:
     assert "tools/render_proposal.py" in PAGES.read_text(encoding="utf-8")
 
 
-def test_배포는_정본을_옮기기만_한다() -> None:
-    """**사본을 커밋하지 않는다.** `site/`에 docx나 PDF가 있으면 두 벌이 된다.
+def test_제출본은_저장소에_한_벌뿐이다() -> None:
+    """**사본을 커밋하지 않는다.** 두 벌이 되면 한쪽만 고쳐진다 (D-0043).
 
-    `site/proposal.html`은 예외다 — 손으로 쓴 사본이 아니라 **재생성해서 바이트로
-    대조하는 생성물**이고, 어긋나면 `render_proposal --check`이 운다 (D-0368).
+    D-0383이 제출본을 `docs/` → `site/`로 옮겼다. 그 전 규약은 *«`site/`에 docx가
+    있으면 두 벌»*이었는데, **지금은 거기가 유일한 자리다** — 보는 것이 「어디에
+    있나」에서 **「몇 벌인가」**로 바뀌었다.
+
+    구운 PDF는 커밋하지 않는다 — 배포가 굽는다 (D-0229).
     """
-    for name in ("proposal.docx", "proposal.pdf"):
-        assert not (ROOT / "site" / name).exists()
-    viewer = (ROOT / "site" / "proposal.html").read_text(encoding="utf-8")
-    assert "./proposal.docx" in viewer
-    assert "cp docs/proposal.docx _site/" in PAGES.read_text(encoding="utf-8")
+    found = sorted(
+        one.relative_to(ROOT).as_posix()
+        for one in ROOT.rglob("proposal.docx")
+        if ".git" not in one.parts and "_site" not in one.parts
+    )
+
+    assert found == ["site/proposal.docx"], found
+    assert not (ROOT / "site" / "proposal.pdf").exists(), "구운 PDF는 배포가 만든다"
+    assert "./proposal.docx" in (ROOT / "site" / "proposal.html").read_text(encoding="utf-8")
+    assert "cp site/proposal.docx _site/" in PAGES.read_text(encoding="utf-8")
 
 
 def test_웹은_구운_PDF를_보여_주고_구운_판을_검사한다() -> None:

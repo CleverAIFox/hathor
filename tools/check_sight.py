@@ -79,7 +79,7 @@ PINNED = {
     "check_doc_style.AXES": 3,
     "check_doc_style.DOCUMENTS": 4,
     "check_doc_style.NO_TOOL": 2,
-    "check_doc_style.OUTSIDE_TENSE": 3,
+    "check_doc_style.OUTSIDE_TENSE": 1,
     "check_doc_style.POLITE": 2,
     "check_doc_style.SECTION": 3,
     "check_egress.ALLOWED": 4,

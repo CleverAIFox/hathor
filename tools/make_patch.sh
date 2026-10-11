@@ -225,6 +225,17 @@ while IFS=$'\t' read -r trigger target; do
   grep -qw "$target" <<<"$AFTER" || AFTER="${AFTER:+$AFTER }${target}"
 done < <(rules)
 
+# **이름을 바꾼 판에서는 떠난 곳도 빼야 한다** (D-0383). 간 곳만 빼면 git이 그 짝을
+# **삭제 패치**로 풀어 내보낸다 — 이진이면 원본 바이트가 통째로 들어가고, 그것이 바로
+# 안 담으려던 것이다. 실측: 4.5MB가 들어갔고 받는 쪽 blob과 달라 못 붙는다.
+while IFS=$'\t' read -r status from to; do
+  [[ "$status" == R* && -n "$to" ]] || continue
+  # **파이프에 `grep -q`를 안 문다** (D-0354). 변수로 받아 `<<<`로 넘긴다.
+  listed="$(printf '%s\n' "${SKIP[@]+"${SKIP[@]}"}")"
+  grep -qxF ":(exclude)${to}" <<<"$listed" || continue
+  SKIP+=(":(exclude)${from}")
+done < <(git show --name-status -M --format= "$REV")
+
 OUT="${OUT:-${NUMBER//D-/D}.patch}"
 mkdir -p "$(dirname "$OUT")"
 {

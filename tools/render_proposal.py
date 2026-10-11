@@ -69,7 +69,7 @@ from proposal_source import (  # noqa: E402
 )
 
 OUT = ROOT / "site" / "proposal.html"
-DOCX = ROOT / "docs" / "proposal.docx"
+DOCX = ROOT / "site" / "proposal.docx"
 INDEX_BEGIN = "<!-- proposal-index:begin -->"
 INDEX_END = "<!-- proposal-index:end -->"
 TITLE = "HATHOR — 개인 취향 기반 AI 음악 창작 시스템"
@@ -456,12 +456,12 @@ def check() -> list[str]:
             "다시 낸다 — 손으로 고쳤다면 그 수정을 `MASTER`로 옮긴다 (D-0368)"
         )
     if not DOCX.is_file():
-        return [*problems, "docs/proposal.docx가 없다"]
+        return [*problems, "site/proposal.docx가 없다"]
     written = stamped_docx(DOCX)
     if written is None:
-        problems.append("docs/proposal.docx에 지문이 없다 — 빌드가 안 찍었다")
+        problems.append("site/proposal.docx에 지문이 없다 — 빌드가 안 찍었다")
     elif written != want:
-        problems.append("docs/proposal.docx의 지문이 정본과 다르다 — 다시 빌드하지 않았다")
+        problems.append("site/proposal.docx의 지문이 정본과 다르다 — 다시 빌드하지 않았다")
     text = docx_text(DOCX)
     # **표지는 「언제 명령을 쳤나」가 아니라 「어느 판인가」를 적는다** (D-0376).
     # 예전 라벨은 `dt.date.today()`라 아무것도 안 고치고 다시 빌드해도 움직였고,

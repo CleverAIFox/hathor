@@ -62,7 +62,7 @@ def test_과거_축은_안_본다() -> None:
     탈출구가 있다.
     """
     assert "docs/DECISIONS.md" not in CHECKER.LIVING
-    assert "docs/proposal.docx" not in CHECKER.LIVING
+    assert "site/proposal.docx" not in CHECKER.LIVING
     assert len(CHECKER.LIVING) == 3, CHECKER.LIVING
 
 

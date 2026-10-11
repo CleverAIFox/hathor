@@ -145,7 +145,7 @@ def test_부모_위에서_붙여_보고_트리까지_맞춘다(tmp_path: Path) -
 def test_이진_파일이_붙는다(tmp_path: Path) -> None:
     """**`--binary`가 없으면 docx가 *"binary files differ"* 한 줄로 나간다.**
 
-    실물 패치마다 `docs/proposal.docx` 3.2MB가 들어 있다 — 이 자리가 비면 매 판이
+    실물 패치마다 `site/proposal.docx` 3.2MB가 들어 있다 — 이 자리가 비면 매 판이
     받는 쪽에서 터진다.
     """
     where = _repo(tmp_path / "r")

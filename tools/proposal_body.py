@@ -9,7 +9,7 @@ D-0368에서 화면을 붙이며 `build_proposal.py`가 616줄이 되어 `code` 
 
 ```text
 MASTER Part I~III (정본)
-   ├─ 이 파일 → 그림 박은 마크다운 → build_proposal → docs/proposal.docx
+   ├─ 이 파일 → 그림 박은 마크다운 → build_proposal → site/proposal.docx
    └─ render_proposal ──────────────────────────────→ site/proposal.html
 ```
 

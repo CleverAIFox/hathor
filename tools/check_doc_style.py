@@ -383,7 +383,7 @@ PAST = "docs/DECISIONS.md"
 AXES = ("PLAN.md", "MASTER.md", "DECISIONS.md")
 """`docs/` 바로 아래에 허용되는 문서. **미래·현재·과거 세 시제가 다 찼다** (D-0130)."""
 
-OUTSIDE_TENSE = ("measured.toml", "proposal.docx", "proposal.lock.json")
+OUTSIDE_TENSE = ("measured.toml",)
 """`docs/` 바로 아래의 **시제 밖** 파일. 밖에 내는 기획서와 **실측 집계의 정본**이다.
 
 축이 아니다 — 안에서 무엇이 참인지는 셋이 정하고, 기획서는 그것을 밖에 옮겨 적은 판이다

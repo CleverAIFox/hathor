@@ -2,7 +2,7 @@
 
 취향 잠재 표현 기반 종단간 AI 음악 창작 시스템. **내 라이브러리로 내 취향의 곡을 만든다.**
 
-기획서 — [`docs/proposal.docx`](docs/proposal.docx) ·
+기획서 — [`site/proposal.docx`](site/proposal.docx) ·
 [웹에서 보기](https://cleveraifox.github.io/hathor/proposal.html) (D-0222)
 
 ## 문서 지도
@@ -15,7 +15,7 @@
 | **미래** | [`docs/PLAN.md`](docs/PLAN.md) | 다음에 무엇을 하는가 | 착수할 때 |
 | **결정** | [`docs/DECISIONS.md`](docs/DECISIONS.md) | 왜 그렇게 골랐는가 | "이건 왜 이렇게 됐지"가 나올 때 |
 | **진입** | 이 문서 | 지금 무엇을 할 수 있는가 | 처음 열었을 때, 명령이 필요할 때 |
-| **기획서** | [`docs/proposal.docx`](docs/proposal.docx) | 무엇을 왜 만드는가 — 밖에 내는 판. `MASTER.md` Part I ~ III에서 `make proposal`로 빌드한다 (D-0221) | 제출·면접·소개할 때 |
+| **기획서** | [`site/proposal.docx`](site/proposal.docx) | 무엇을 왜 만드는가 — 밖에 내는 판. `MASTER.md` Part I ~ III에서 `make proposal`로 빌드한다 (D-0221) | 제출·면접·소개할 때 |
 
 - `docs/MASTER.md`가 **설계의 단일 진실 공급원**이다. 뿌리의 `MASTER.md`는 **없다** — D-0189가 흡수했다.
 - `DECISIONS.md`는 **추가 전용**이다. 판단이 바뀌면 고쳐 쓰지 않고 새 번호로 정정한다.
@@ -112,7 +112,7 @@ M1 · M2를 안 낸다 (D-0023). 리포트는 `var/ingest/eval/<시각>-<라벨>
 ```bash
 sudo apt install graphviz fonts-noto-cjk                 # 한 번
 make sync                                                # 한 번 (docs 묶음 포함)
-make proposal                                            # MASTER Part I ~ III → docs/proposal.docx
+make proposal                                            # MASTER Part I ~ III → site/proposal.docx
 ```
 
 **`MASTER.md` Part I ~ III를 고치면 다시 빌드한다.** 빌드가 정본 지문을 docx에 적고

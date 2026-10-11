@@ -257,7 +257,7 @@ def test_제출본이_없으면_그것만_말한다(tmp_path: Path, monkeypatch:
 
     problems = TOOL.check()
 
-    assert problems == ["docs/proposal.docx가 없다"], problems
+    assert problems == ["site/proposal.docx가 없다"], problems
 
 
 def test_화면을_낼_때_어디에_몇_칸을_냈는지_적는다(
@@ -509,7 +509,7 @@ def test_배포_잡이_deploy를_준다() -> None:
 
     assert "tools/render_proposal.py --check --deploy" in flow
 
-    # **생성기를 고치고 제출본을 다시 안 낸 판은 `docs/proposal.docx`가 그대로다** —
+    # **생성기를 고치고 제출본을 다시 안 낸 판은 `site/proposal.docx`가 그대로다** —
     # 예전에는 이 워크플로가 **안 돌았고**, 막을 자리에 닿지도 못했다.
     listed = re.findall(r"^\s+- '([^']+)'", flow, re.M)
     for name in TOOL.GENERATORS:

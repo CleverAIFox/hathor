@@ -1,6 +1,7 @@
 # 기획서를 GitHub Pages로 배포한다 (D-0222).
 #
-# 정본은 docs/MASTER.md Part I ~ III이고 docs/proposal.docx는 그것을 빌드한 판이다 (D-0221).
+# 정본은 docs/MASTER.md Part I ~ III이고 site/proposal.docx는 그것을 빌드한 판이다
+# (D-0221). 산출물은 `site/`에 산다 — `docs/`에는 문서만 둔다 (D-0383).
 # 사본을 커밋하지 않고 배포 직전에 _site/로 옮긴다 — 두 벌이 커밋되면 한쪽만 고쳐진다.
 # 웹에서 보여 주는 것은 여기서 구운 PDF다 (D-0229). 구운 판이 깨졌는지는 쪽수와 본문 글자로 본다.
 #
@@ -15,19 +16,19 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/proposal.docx'
-      - 'docs/MASTER.md'
+      # **`site/`가 제출본·자물쇠·화면을 다 든다** (D-0383). 셋 다 거기로 옮겼으므로
+      # 글로브 하나가 전부를 문다 — 이름을 따로 적으면 옮길 때 한쪽만 고쳐진다.
       - 'site/**'
+      - 'docs/MASTER.md'
       - 'tools/render_proposal.py'
       - 'tools/proposal_source.py'
       # **생성기가 바뀌면 제출본이 낡는다** (D-0376). 제출본을 다시 안 낸 판은
-      # `docs/proposal.docx`가 그대로라 예전에는 이 워크플로가 **안 돌았다** —
-      # 막을 자리에 닿지도 못했다. 자물쇠가 보는 것을 여기서도 본다.
+      # 제출본 파일이 그대로라 예전에는 이 워크플로가 **안 돌았다** — 막을 자리에
+      # 닿지도 못했다. 자물쇠가 보는 것을 여기서도 본다.
       - 'tools/build_proposal.py'
       - 'tools/proposal_body.py'
       - 'tools/render_figures.py'
       - 'tools/render_charts.py'
-      - 'docs/proposal.lock.json'
       - '.github/workflows/proposal.yml'
   workflow_dispatch:
 
@@ -83,7 +84,7 @@ jobs:
         working-directory: core
         run: >
           uv run --no-sync python ../tools/bake_proposal.py
-          --docx ../docs/proposal.docx --out ../_site/proposal.pdf
+          --docx ../site/proposal.docx --out ../_site/proposal.pdf
       - name: PDF is not broken
         run: |
           pages=$(pdfinfo _site/proposal.pdf | awk '/^Pages/ {print $2}')
@@ -106,7 +107,7 @@ jobs:
       - name: Stage site
         run: |
           cp site/proposal.html site/index.html _site/
-          cp docs/proposal.docx _site/
+          cp site/proposal.docx _site/
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

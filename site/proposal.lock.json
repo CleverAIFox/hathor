@@ -1,9 +1,9 @@
 {
   "적는이": "tools/build_proposal.py",
   "생성기": {
-    "tools/build_proposal.py": "1159fa63ccb19109",
-    "tools/proposal_body.py": "bb30d51f09215ba4",
-    "tools/proposal_source.py": "7336b35636a73d2e",
+    "tools/build_proposal.py": "696f028a08624267",
+    "tools/proposal_body.py": "f0a306f38a9d187c",
+    "tools/proposal_source.py": "fd0fed9742bb02b6",
     "tools/render_figures.py": "150f979d0c19539f",
     "tools/render_charts.py": "b841da088aee675f",
     "site/proposal.template.html": "be43f8109e708d2f"

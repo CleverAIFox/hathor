@@ -151,7 +151,7 @@ def number(cell: str) -> float:
     return float(match.group(0).replace(",", ""))
 
 
-LOCK_NAME = "docs/proposal.lock.json"
+LOCK_NAME = "site/proposal.lock.json"
 LOCK = ROOT / LOCK_NAME
 """제출본 옆의 **자물쇠** (D-0376). 생성기의 지문을 적어 둔다.
 
