@@ -381,6 +381,28 @@ def _peak_offset(scores: Envelope, best: int) -> float:
     return float(np.clip(0.5 * (left - right) / bottom, -0.5, 0.5))
 
 
+OCTAVE_FLOOR = 90.0
+"""이 아래로 읽힌 박을 **두 배로 접는 선** (D-0206 · D-0392).
+
+**고른 값이고 그것을 숨기지 않는다.** D-0206이 1004곡을 재며 쓴 값이며, 원값 중앙
+**67**이 접은 뒤 **126**이 됐다(사분위 109~141). 사람이 발로 맞추는 대역이 대개 그
+위다.
+
+`octave_margin`이 적듯 **배수 모호성은 결함이 아니라 성질이다** (D-0054). 접는 것은
+«틀린 것을 고치는» 일이 아니라 **쓸 자리의 격자에 맞추는** 일이다 — 그래서 재는
+`beat_period`가 아니라 여기 있고, `tempo_bpm()`이 *"반올림하지 않는다"*고 적은 것과
+같은 가름이다.
+
+**원값을 버리지 않는다.** 부르는 쪽이 접은 값과 원값을 둘 다 들어 산출물에 적는다 —
+이 선이 틀렸다는 것을 나중에 알 수 있어야 한다 (GR-0.5).
+"""
+
+
+def folded_tempo(bpm: float) -> float:
+    """배수 모호성을 **한 번만** 접는다. 두 번 접으면 240이 되고 그것은 박이 아니다."""
+    return bpm * 2.0 if bpm < OCTAVE_FLOOR else bpm
+
+
 def tempo_bpm(period_seconds: float) -> float:
     """박 주기를 BPM으로. **반올림하지 않는다** — 격자에 맞추는 것은 쓰는 쪽 일이다."""
     if period_seconds <= 0.0:

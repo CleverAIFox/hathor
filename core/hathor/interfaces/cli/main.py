@@ -26,7 +26,6 @@ from hathor.domain.services.key_estimation import (
     KEY_MARGIN_FLOOR,
     KeyEstimate,
 )
-from hathor.domain.services.midi_writer import DEFAULT_TEMPO_BPM
 from hathor.domain.services.seed_search import FusionMode
 from hathor.domain.services.stem_sets import (
     DEFAULT_STEM_SET,
@@ -90,6 +89,7 @@ from hathor.interfaces.cli.roots import (
     resolve_root,
 )
 from hathor.interfaces.cli.tables import parse_key
+from hathor.interfaces.cli.tempo_source import resolve_tempo
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
     load_dotenv,
@@ -136,7 +136,7 @@ def _build_generate(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--scan-out", type=resolve_path, default="var/ingest", help="스캔 산출물 루트"
     )
-    parser.add_argument("--tempo", type=int, default=DEFAULT_TEMPO_BPM, help="템포 (BPM)")
+    parser.add_argument("--tempo", type=int, default=None, help="템포 (BPM). 안 주면 참조곡에서")
     parser.add_argument("--sections", type=int, default=DEFAULT_SECTIONS, help="구간 수")
     parser.add_argument(
         "--root",
@@ -677,12 +677,14 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
         args, [song[0] for song in chosen], estimates
     )
     transition, transition_source = _resolve_transition_prior(args, [song[0] for song in chosen])
+    tempo_bpm, tempo_source = resolve_tempo(args, [song[0] for song in chosen])
     job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
     data, summary = render(
         job,
         references,
         key=output_key,
-        tempo_bpm=args.tempo,
+        tempo_bpm=tempo_bpm,
+        tempo_from=tempo_source,
         harmony_prior=harmony_prior,
         transition_prior=transition,
     )

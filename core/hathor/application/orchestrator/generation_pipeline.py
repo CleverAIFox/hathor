@@ -49,6 +49,7 @@ def render(
     *,
     key: Key = DEFAULT_KEY,
     tempo_bpm: int = DEFAULT_TEMPO_BPM,
+    tempo_from: str = "기본값",
     harmony_prior: Sequence[float] | None = None,
     transition_prior: Sequence[Sequence[float]] | None = None,
 ) -> tuple[bytes, dict[str, Any]]:
@@ -61,8 +62,10 @@ def render(
     주지 않으면 이전과 같다 — 구조만 조건화되고 화성은 시드가 정한다.
 
     구조 → 화성 → 배치 → SMF. 시드가 같고 참조가 같으면 바이트가 같다.
-    가락은 박 격자에서 화음 구성음을 짚는다 (D-0141). **반주는 아직 마디 첫 박에만
-    떨어진다** — 온셋 자료가 없어 리듬을 참조곡에서 못 뽑는다 (O-46).
+    가락은 박 격자에서 화음 구성음을 짚는다 (D-0141). **템포는 참조곡에서 온다**
+    (D-0392) — 부르는 쪽이 `onset/drums`에서 뽑아 넘기고 `tempo_from`이 출처를 적는다.
+    **반주가 마디 첫 박에만 떨어지는 것은 아직 그대로다** — 마디 **안**의 발음 위치는
+    박 주기를 알아야 정의되므로 다음 판이다 (O-46).
     """
     pattern = generate_pattern(job.seed, references)
     progression = generate_harmony(
@@ -86,6 +89,9 @@ def render(
         "seed": job.seed,
         "key": str(key),
         "tempo_bpm": tempo_bpm,
+        # **어디서 온 템포인지 산출물이 말한다** (D-0392 · D-0269). 들어 보고
+        # *«왜 이 속도지»*를 되물을 수 있어야 한다.
+        "tempo_from": tempo_from,
         "structure": pattern.as_text(),
         "harmony": list(progression.degrees),
         "harmony_conditioned": harmony_prior is not None,
