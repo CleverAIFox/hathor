@@ -3,20 +3,36 @@
 # `make mutate WIRING=1`은 D-0353부터 있었고 배선 103곳을 정확히 세웠는데 **어느 사슬에도
 # 안 끼어 있었다** — `make check`에도, CI에도, 훅에도. 사람이 기억해야 돌았다.
 #
-# `make check`에 넣지 않는 까닭은 D-0129다: **25분을 거기 넣으면 사람이 검사를 끈다.**
-# 그래서 CI가 제 잡으로 돌리고 `# ci-only:` 선언이 그 차이를 적는다 (D-0219 · D-0355).
+# `make check`에 넣지 않는 까닭은 D-0129다: **사람이 검사를 끈다.** 그래서 CI가 제 잡으로
+# 돌리고 `# ci-only:` 선언이 그 차이를 적는다 (D-0219 · D-0355).
 #
-# **판마다 돌리지 않는다.** 하루 한 번이다 — 배선은 커밋마다 바뀌는 값이 아니고, 25분을
-# 밀 때마다 치르면 그것도 사람이 끄는 이유가 된다. 빨개지면 `make ship`의 CI 절이
-# 그것을 든다 (`_recent_runs`는 잡 이름으로 안 가린다).
+# ### 방아쇠를 시간에서 **변경**으로 옮겼다 (D-0388)
+#
+# 하루 한 번이었다. *«25분이라 판마다는 못 참는다»*로 고른 값인데 **그 25분을 아무도 안
+# 셌다** — 2026-10-11 실측 **83.4분**이고 `timeout-minutes: 90`에 닿아 러너에서 죽었다.
+#
+# 배선은 날짜가 아니라 **코드가 바꾼다.** 하루 한 번은 안 민 날 83분을 태우고 다섯 판 민
+# 날은 넷을 안 잰다 — **비싸면서 동시에 성기다.** 그래서:
+#
+# | 언제 | 무엇을 | 얼마나 |
+# |---|---|---|
+# | push | 그 푸시가 건드린 도구만 (`--tools-for` → `ONLY=`) | 1~5분 |
+# | 주 1회 | 전수. **천장은 전수로만 판정한다** (D-0358) | 83분 |
 #
 # **러너를 고정한다** (D-0330).
 name: wiring
 
 on:
+  push:
+    branches: [main]
+    # **배선을 흔들 수 있는 자리만** (D-0388). 문서만 바뀐 판은 돌 까닭이 없다.
+    paths:
+      - "tools/**.py"
+      - "core/tests/unit/**.py"
+      - ".github/workflows/wiring.yml"
   schedule:
-    # 09:10 KST. 정시를 피한다 — 그때가 가장 붐빈다
-    - cron: "10 0 * * *"
+    # 월요일 09:10 KST. 정시를 피한다 — 그때가 가장 붐빈다
+    - cron: "10 0 * * 1"
   workflow_dispatch:
 
 defaults:
@@ -26,7 +42,8 @@ defaults:
 jobs:
   wiring:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # **83분 위에 여유를 둔다** (D-0388). 90은 실측에 너무 붙어 러너가 조금만 느려도 죽었다.
+    timeout-minutes: 150
     steps:
       # **`ci.yml`과 같은 깊이를 받는다** (D-0369). 여기만 얕았고, 얕은 클론에서는
       # `check_patch`의 `pull_once()`가 제 문제로 1을 내 **배선 둘이 「안 울었다」로
@@ -39,7 +56,24 @@ jobs:
           enable-cache: true
       - run: uv sync --all-extras --all-groups
         working-directory: core
-      # ci-only: mutate_gate.py 배선을 하나씩 끊어 본다. 25분이라 `make check`에 넣으면 사람이 검사를 끈다 (D-0129 · D-0353)
+
+      # **매핑은 `mutate_gate`에 있다** (D-0117). 셸에서 다시 구현하면 두 벌이 된다.
+      #
+      # **깊이 2라 `HEAD^`까지만 본다.** 한 푸시에 커밋이 여럿이면 **마지막 것만** 잰다 —
+      # 깊이를 늘리면 D-0369가 막은 자리로 돌아가므로 그대로 두고, **주 1회 전수가 그
+      # 틈을 덮는다.** 못 잰 것을 잰 것처럼 적지 않는다 (GR-0.5).
+      - name: 범위
+        id: scope
+        working-directory: .
+        if: github.event_name == 'push'
+        run: |
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          only="$(python3 -B tools/mutate_gate.py --tools-for <<<"$changed")"
+          echo "only=${only}" >> "$GITHUB_OUTPUT"
+          echo "바뀐 경로가 흔드는 도구: ${only:-없다}"
+
+      # ci-only: mutate_gate.py 배선을 하나씩 끊어 본다. 전수 83분이라 `make check`에 넣으면 사람이 검사를 끈다 (D-0129 · D-0353 · D-0388)
       - name: Wiring
         working-directory: .
-        run: make mutate WIRING=1
+        if: github.event_name != 'push' || steps.scope.outputs.only != ''
+        run: make mutate WIRING=1 ONLY="${{ steps.scope.outputs.only }}"

@@ -25,11 +25,18 @@
 
 ### 관문에는 안 붙인다
 
-26개를 하나씩 망가뜨리고 매번 전체 시험을 도는 데 25분이 걸린다. `make check`에 넣으면
-사람이 검사를 끄게 된다 (D-0126 · D-0129에서 되풀이해 확인한 것이다). **손으로 부른다.**
+도구를 하나씩 망가뜨리고 매번 시험을 도는 데 **오래 걸린다.** `make check`에 넣으면
+사람이 검사를 끄게 된다 (D-0126 · D-0129에서 되풀이해 확인한 것이다).
 
-    make mutate            # 비교를 뒤집는다. 25분
-    make mutate WIRING=1   # 배선을 끊는다. 빠르다
+**「25분」이라 적고 세 판 동안 아무도 안 셌다** (D-0388). 2026-10-11에 재니
+**도구 46개 · 5006초(83.4분)**였고 CI의 `timeout-minutes: 90`에 닿기 직전이었다 —
+실제로 러너에서 한 번 죽었다. 이 수는 기기마다 다르므로 **정본이 없다**: 언제 어디서
+쟀는지 같이 적는 것이 전부다 (GR-0.5).
+
+    make mutate                     # 비교를 뒤집는다
+    make mutate WIRING=1            # 배선을 끊는다. 전수 83분(2026-10-11 실측)
+    make mutate WIRING=1 ONLY=ship  # 한 도구만. 1~2분
+    python3 tools/mutate_gate.py --tools-for <바뀐 경로…>   # 그 경로가 흔드는 도구
 """
 
 from __future__ import annotations
@@ -225,6 +232,39 @@ def _calls(source: str, name: str) -> int:
     )
 
 
+def tools_for(paths: list[str]) -> list[str]:
+    """바뀐 경로가 **배선을 흔들 수 있는** 도구 이름 (D-0388).
+
+    ### 왜 필요한가
+
+    전수가 83분이라 **판마다 못 돌린다.** 그런데 배선은 날짜가 아니라 **코드가 바꾼다** —
+    `tools/`나 그 시험을 건드려야 생기고 끊긴다. 하루 한 번은 안 민 날 83분을 태우고
+    다섯 판 민 날은 넷을 안 잰다. **방아쇠를 시간에서 변경으로 옮긴다.**
+
+    | 바뀐 것 | 재야 할 도구 |
+    |---|---|
+    | `tools/x.py` | `x` 제 자신 |
+    | `core/tests/unit/test_y.py` | 그 시험이 **이름을 든** 도구 전부 |
+
+    둘째 줄은 `tests_for()`의 **역**이고 같은 판정을 쓴다 — 두 벌로 두면 어긋난다
+    (D-0117 · D-0043). 모르는 경로는 조용히 버린다.
+    """
+    known = set(invoked_tools())
+    found: set[str] = set()
+    for one in paths:
+        path = Path(one)
+        if path.parts[:1] == ("tools",) and path.suffix == ".py":
+            if path.stem in known:
+                found.add(path.stem)
+        elif path.parts[:3] == ("core", "tests", "unit") and path.name.startswith("test_"):
+            full = ROOT / path
+            if not full.exists():
+                continue
+            body = full.read_text(encoding="utf-8")
+            found |= {name for name in known if name in body}
+    return sorted(found)
+
+
 def tests_for(name: str) -> list[str]:
     """그 도구를 여는 시험 파일. **없으면 빈 목록** — 그것 자체가 결함이다 (D-0257)."""
     found = []
@@ -309,8 +349,11 @@ def dirty_tools() -> list[str]:
 def cut_wiring() -> int:
     """배선을 하나씩 끊어 본다 (D-0353).
 
-    `ONLY=<도구>`를 주면 **그 도구만** 잰다 (D-0358). 전수가 25분이라 106곳을 메우는
-    동안 되먹임이 안 돈다 — 한 도구는 1~2분이다. **천장은 전수로만 판정한다.**
+    `ONLY=<도구>`를 주면 **그 도구만** 잰다 (D-0358). 전수가 **83분**이라 그것만으로는
+    되먹임이 안 돈다 — 한 도구는 1~2분이다. **천장은 전수로만 판정한다.**
+
+    D-0388부터 **CI가 판마다 이 길로 돈다** — `--tools-for`가 그 푸시가 건드린 도구를
+    고른다. 전수는 주 1회로 내렸고 천장은 거기서만 움직인다.
     """
     before = dirty_tools()
     tools = invoked_tools()
@@ -425,6 +468,15 @@ def cut_wiring() -> int:
 
 
 def main() -> int:
+    # **인자 하나뿐이다** (D-0388). 워크플로가 바뀐 경로를 넘기고 `ONLY=`에 쓸 이름을
+    # 받는다 — 여기서 찍는 까닭은 **도구와 시험의 매핑이 이 모듈에 있기** 때문이다
+    # (D-0117). 셸에서 다시 구현하면 두 벌이 된다.
+    if sys.argv[1:2] == ["--tools-for"]:
+        # **인자가 없으면 stdin을 읽는다.** 셸에서 `$changed`를 따옴표 없이 펼치면
+        # 단어 분리에 기대게 되고 `shellcheck`가 운다 — 변수로 받아 `<<<`로 넘긴다
+        # (D-0354의 규율과 같은 꼴: 파이프를 안 문다).
+        print(" ".join(tools_for(sys.argv[2:] or sys.stdin.read().split())))
+        return 0
     if os.environ.get("WIRING"):
         return cut_wiring()
     tools = invoked_tools()

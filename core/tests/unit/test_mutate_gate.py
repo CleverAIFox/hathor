@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import cast
 
@@ -287,3 +288,72 @@ def test_겨눔_불명이_늘면_막는다(
     assert TOOL.cut_wiring() == 1
     spoke = capsys.readouterr()
     assert "겨눔 불명" in spoke.out + spoke.err
+
+
+# ------------------------------------- 방아쇠를 시간에서 변경으로 (D-0388)
+
+
+WIRING_YML = ROOT / ".github" / "workflows" / "wiring.yml"
+
+
+def test_도구_제_자신을_문다() -> None:
+    """`tools/x.py`가 바뀌면 **x의 배선을 재야 한다.** 가장 뻔한 줄이 빠지면 전부 헛돈다."""
+    assert TOOL.tools_for(["tools/ship.py"]) == ["ship"]
+
+
+def test_시험이_여는_도구를_거슬러_찾는다() -> None:
+    """**`tests_for()`의 역이다** (D-0117). 시험만 바뀌어도 배선은 흔들린다."""
+    found = TOOL.tools_for(["core/tests/unit/test_mutate_gate.py"])
+
+    assert "mutate_gate" in found, found
+    assert found == sorted(found), "정렬하지 않으면 `ONLY=`가 판마다 흔들린다"
+
+
+def test_상관없는_경로는_버린다() -> None:
+    """**거짓 경보는 진짜 경보를 죽인다** (GR-0.8). 문서만 바뀐 판은 돌 까닭이 없다."""
+    assert TOOL.tools_for(["docs/MASTER.md", "README.md", "measured.toml"]) == []
+
+
+def test_없는_시험_파일을_0으로_안_센다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**지워진 시험을 가리켜도 안 터진다.** 터지면 CI가 그 판에서 멈춘다."""
+    monkeypatch.setattr(TOOL, "ROOT", tmp_path)
+
+    assert TOOL.tools_for(["core/tests/unit/test_없는것.py"]) == []
+
+
+def test_입구가_경로를_받는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**부품을 재고 배선을 안 쟀다** (D-0352). `main()`을 거쳐 화면까지 본다."""
+    monkeypatch.setattr("sys.argv", ["mutate_gate.py", "--tools-for", "tools/ship.py"])
+
+    assert TOOL.main() == 0
+    assert capsys.readouterr().out.strip() == "ship"
+
+
+def test_워크플로가_그_길로_돈다() -> None:
+    """**관문을 만들고 안 걸면 영원히 안 돈다** (D-0126 · D-0219).
+
+    하루 한 번이던 것을 **푸시 + 주 1회**로 갈랐다. 셋이 다 있어야 뜻이 선다:
+    변경이 방아쇠이고, 좁혀 돌고, 천장은 전수에서만 움직인다 (D-0358).
+    """
+    body = WIRING_YML.read_text(encoding="utf-8")
+
+    assert "--tools-for" in body, "좁히는 길이 없다 — 판마다 전수를 돌게 된다"
+    assert 'ONLY="${{ steps.scope.outputs.only }}"' in body, "좁힌 결과를 안 쓴다"
+    assert "push:" in body, "변경이 방아쇠가 아니다"
+    assert "* * 1" in body, "주 1회 전수가 없다 — 천장을 판정할 자리가 사라진다"
+
+
+def test_전수_시간_위에_여유가_있다() -> None:
+    """**실측 83분 위에 둔다** (D-0388). 90은 너무 붙어서 러너가 한 번 죽었다.
+
+    **설정을 보지 주석을 보지 않는다.** 첫 판은 느슨한 정규식으로 찾아
+    **머리 주석이 인용한 「90」**을 집었다 — 설정은 150인데 시험은 90이라 읽었다.
+    인용과 실물을 가르는 것이 이 저장소가 거듭 잡는 자리다 (D-0263 · D-0385).
+    """
+    body = WIRING_YML.read_text(encoding="utf-8")
+    found = re.search(r"(?m)^\s+timeout-minutes:\s*(\d+)\s*$", body)
+
+    assert found, "제한이 없으면 러너 기본값(360분)까지 탄다"
+    assert int(found.group(1)) >= 120, f"실측 83분에 너무 붙는다: {found.group(1)}"
