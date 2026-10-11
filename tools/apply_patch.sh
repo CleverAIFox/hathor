@@ -259,11 +259,19 @@ MESSAGE="$(grep -m1 '^# hathor-commit:' "$PATCH" | sed 's/^# hathor-commit:[[:sp
 EXPECTED="$(declared_paths "$PATCH")"
 # **뒤처리가 만든 것은 선언 밖이다** (D-0377). 패치가 일부러 안 담은 산출물이므로
 # `# hathor-after:`가 돌면 트리에 나타난다 — 섞인 작업이 아니다.
+#
+# **「나타날 수도 있다」이지 「나타나야 한다」가 아니다** (D-0387). 뒤처리가 결정적이면
+# 같은 내용이 다시 쓰이고 git은 변경으로 안 본다 — **생성기를 하나도 안 건드린 판이
+# 그렇다.** 실측: D-0384~0386 합본이 `site/proposal.lock.json`을 그대로 두었고
+# *«패치에만: site/proposal.lock.json»*으로 막혔다. D-0377은 **반대 실수**를 했다(안
+# 담았다). 둘 다 뒤처리 경로를 **패치 선언과 동급으로 본** 탓이다.
+AFTER_PATHS=""
 if [[ -n "$AFTER" ]]; then
   while IFS=$'\t' read -r trigger target; do
     [[ -n "$trigger" ]] || continue
     grep -qw "$target" <<<"$AFTER" || continue
     EXPECTED="$(printf '%s\n%s' "$EXPECTED" "$trigger" | sort -u)"
+    AFTER_PATHS="$(printf '%s\n%s' "$AFTER_PATHS" "$trigger" | sort -u)"
   done < <(python3 -B -c 'import sys
 sys.path.insert(0, "tools")
 import check_patch
@@ -278,10 +286,15 @@ fi
 ACTUAL="$(git -c core.quotepath=false status --porcelain --untracked-files=all \
   | sed 's/^...//' | tr -d '"' | sort)"
 
-if [[ "$EXPECTED" != "$ACTUAL" ]]; then
+# **견줄 때만 뒤처리 경로를 양쪽에서 뺀다** (D-0387). 담을 때는 `EXPECTED`를 그대로
+# 쓴다 — 바뀌었으면 담아야 하고(D-0379), 안 바뀌었으면 `git add`가 아무 일도 안 한다.
+WEIGHED="$(comm -23 <(echo "$EXPECTED") <(echo "$AFTER_PATHS"))"
+FOUND="$(comm -23 <(echo "$ACTUAL") <(echo "$AFTER_PATHS"))"
+
+if [[ "$WEIGHED" != "$FOUND" ]]; then
   echo
   printf '\033[31m패치가 건드린 파일과 실제 변경이 다르다.\033[0m\n' >&2
-  diff <(echo "$EXPECTED") <(echo "$ACTUAL") | sed 's/^</  패치에만: /; s/^>/  트리에만: /' >&2
+  diff <(echo "$WEIGHED") <(echo "$FOUND") | sed 's/^</  패치에만: /; s/^>/  트리에만: /' >&2
   echo >&2
   echo "  다른 작업이 섞여 있다. 정리한 뒤 다시 실행한다." >&2
   echo "  붙인 것은 그대로 두었다. 되돌리려면: git apply -R '${PATCH}'" >&2
