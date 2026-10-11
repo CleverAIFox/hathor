@@ -62,50 +62,48 @@ def test_지금_HEAD는_스스로_맞는다() -> None:
     assert TOOL.check() == []
 
 
-def test_제출본만_낡은_커밋을_잡는다(tmp_path: Path) -> None:
-    """**심은 결함** (D-0069 · D-0379). 그날의 꼴 그대로를 만들어 재 본다.
+PLANT = "\n심은 결함 한 줄 (D-0386).\n\n## 부록 A."
+"""정본에만 넣는 한 줄. 제출본은 그 줄을 모르므로 **커밋된 산출물이 낡는다.**"""
 
-    `HEAD`의 트리에서 **정본만 한 줄 바꾼** 커밋을 배관으로 짓는다 — 작업 트리는
-    안 건드린다. 그러면 커밋된 제출본이 커밋된 정본보다 낡고, **작업 트리는 초록인
-    채로** 그 커밋만 어긋난다.
 
-    **이력을 안 판다** (D-0382). 첫 판은 `HEAD~3`의 blob을 썼고 CI는 `fetch-depth: 2`라
-    거기서만 빨갰다 — **같은 시험이 기기마다 다른 길을 돈** 세 번째 판이다.
+def test_제출본만_낡은_커밋을_잡는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069 · D-0379). 꺼낸 트리에서 **정본만 한 줄 바꾼다.**
+
+    그러면 커밋된 제출본이 커밋된 정본보다 낡고, **작업 트리는 초록인 채로** 그
+    판정만 어긋난다 — D-0379에서 실제로 샌 자리 그대로다.
+
+    ### git에 **아무것도 쓰지 않는다** (D-0386)
+
+    앞선 세 판이 전부 여기서 깨졌다. 셋 다 **로컬은 초록이고 CI만 빨갰다**:
+
+    | 판 | 쓴 것 | 왜 CI에서만 깨졌나 |
+    |---|---|---|
+    | D-0377 | — | `dot`이 없어 `OSError`가 먼저 났다 |
+    | D-0382 | `HEAD~3`의 blob | `fetch-depth: 2`라 그 커밋이 없다 |
+    | D-0385 | `commit-tree` | **까닭을 못 봤다** — `check=True`가 stderr를 삼켰다 |
+
+    쓰기는 **ident · 인덱스 파일 · 이력 깊이**를 묻고 그 셋이 기기마다 다르다.
+    `picked()`를 갈아끼우면 **읽기만 남는다** — 꺼내는 일은 `check()`가 어차피 하는
+    실물 경로이므로 그 길을 그대로 타고, 꺼낸 뒤 파일 하나를 고칠 뿐이다.
     """
-    master = tmp_path / "MASTER.md"
-    body = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
-    master.write_text(body.replace("\n## 부록 A.", "\n심은 결함 한 줄 (D-0382).\n\n## 부록 A.", 1))
-    old = _git("hash-object", "-w", "--path", "docs/MASTER.md", str(master))
-    index = Path(
-        subprocess.run(["mktemp"], capture_output=True, text=True, check=True).stdout.strip()
-    )
-    env = {"GIT_INDEX_FILE": str(index)}
-    for args in (
-        ("read-tree", "HEAD"),
-        ("update-index", "--cacheinfo", f"100644,{old},docs/MASTER.md"),
-    ):
-        subprocess.run(("git", *args), cwd=ROOT, env={**_environ(), **env}, timeout=120, check=True)
-    tree = subprocess.run(
-        ("git", "write-tree"),
-        cwd=ROOT,
-        env={**_environ(), **env},
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=True,
-    ).stdout.strip()
-    planted = _git("commit-tree", tree, "-p", "HEAD", "-m", "심은 결함: 정본만 바뀐 커밋")
+    real = TOOL.picked
 
-    problems = cast("list[str]", TOOL.check(planted))
+    def planted(rev: str, into: Path) -> str | None:
+        broken = cast("str | None", real(rev, into))
+        if broken:
+            return broken
+        page = into / "docs" / "MASTER.md"
+        body = page.read_text(encoding="utf-8")
+        assert "\n## 부록 A." in body, "심을 자리가 사라졌다 — 심은 결함이 안 심긴다"
+        page.write_text(body.replace("\n## 부록 A.", PLANT, 1), encoding="utf-8")
+        return None
+
+    monkeypatch.setattr(TOOL, "picked", planted)
+
+    problems = cast("list[str]", TOOL.check())
 
     assert problems, "정본보다 낡은 제출본을 담은 커밋을 통과시켰다"
     assert any("render_proposal" in one for one in problems), problems
-
-
-def _environ() -> dict[str, str]:
-    import os
-
-    return dict(os.environ)
 
 
 # ------------------------------------------------------------------ 배선

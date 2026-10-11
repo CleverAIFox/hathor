@@ -1,7 +1,7 @@
 """ID3 프레임 전수 히스토그램. **`--emit`이 실측 정본의 `counts`를 다시 쓴다** (D-0366).
 
 예전엔 사람이 읽는 글만 찍었고 **사람이 그 수를 `MASTER.md`로 옮겨 적었다.** 옮겨 적은
-수는 낡는다 (GR-0.7). 지금은 이 도구가 `docs/measured.toml`의 `[id3.counts]`를 직접
+수는 낡는다 (GR-0.7). 지금은 이 도구가 `measured.toml`의 `[id3.counts]`를 직접
 쓰고, `tools/measured.py`가 거기서 표를 찍어 낸다.
 
     cd core && uv run python ../tools/probe_id3.py          # 사람이 읽는 전수

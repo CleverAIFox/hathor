@@ -350,8 +350,9 @@ BASELINE: dict[str, int] = {
     "check_artifacts.QUARANTINE_CEILING": 0,
     "check_artifacts.TRANSIENT_ALLOWED": 1,
     "check_artifacts.UNDER_STUDY_ALLOWED": 1,
+    "check_claims.CLAIM_FLOOR": 150,
     "check_claims.IDENT_FLOOR": 5,
-    "check_claims.UNSOURCED_CEILING": 35,
+    "check_claims.UNSOURCED_CEILING": 0,
     "check_committed.FLOOR_GATES": 4,
     "check_compose.CEILING[core]": 2816,
     "check_compose.CEILING[ml]": 2304,
@@ -390,6 +391,7 @@ BASELINE: dict[str, int] = {
     "test_gate_tools.UNTESTED": 0,
     "test_gate_types.UNTYPED_FAKES": 0,
     "test_hygiene.SYNC_ALLOWED": 5,
+    "test_hygiene.WRITE_FLOOR": 8,
 }
 """**지금까지 가장 조였던 값** (D-0353). 여기서 느슨해지면 몇 판이 걸렸든 빨개진다."""
 

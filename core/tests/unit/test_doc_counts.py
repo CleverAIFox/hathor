@@ -61,10 +61,30 @@ def _axis(name: str) -> object:
 
 
 def test_축마다_정본이_수를_낸다():
-    """**정본이 없는 값은 축이 아니다.** 셋 다 실제로 세어져야 한다."""
+    """**정본이 없는 값은 축이 아니다.** 셋 다 실제로 세어져야 한다.
+
+    **센 0과 못 잰 0을 가른다** (D-0385). `duration_ms <= 0`의 0은 실제로 센 0이다 —
+    가르는 자리가 없으면 *«0이 정답인 수»*는 영원히 축 밖이고, 그것이 D-0230이다.
+    """
     for name, _pattern, count in CHECKER.COUNTED:
         assert isinstance(count(), int), name
+        if name in CHECKER.ZERO_OK:
+            continue
         assert count() > 0, f"{name}의 정본이 0을 낸다 — 세는 자리를 의심한다"
+
+
+def test_센_0을_선언으로만_받는다() -> None:
+    """**빈 목록이면 모든 축이 0을 낼 수 있다** (D-0230 · D-0219).
+
+    `ZERO_OK`는 차집합의 선언이다 — 이름이 거기 없으면 0은 *«못 쟀다»*로 읽힌다.
+    """
+    names = {name for name, _, _ in CHECKER.COUNTED}
+
+    assert CHECKER.ZERO_OK, "선언이 비면 0을 내는 축이 조용히 통과한다"
+    assert set(CHECKER.ZERO_OK) <= names, "없는 축을 면제한다"
+    for name in CHECKER.ZERO_OK:
+        count = next(one for label, _, one in CHECKER.COUNTED if label == name)
+        assert count() == 0, f"«{name}»이 0이 아니다 — 면제를 지운다 (GR-0.8)"
 
 
 def test_재현_불명을_센다() -> None:
@@ -234,3 +254,96 @@ def test_모든_축이_읽는_자리를_가진다() -> None:
     dead = [name for name, pattern, _ in CHECKER.COUNTED if not pattern.findall(blob)]
 
     assert dead == [], dead
+
+
+# ------------------------------------------------- 축 일곱을 더 놓았다 (D-0385)
+
+
+def test_새_축_여섯이_실물을_센다() -> None:
+    """**정본이 다른 파일에 있고 사라지면 터진다** (D-0223 · D-0230).
+
+    상류 없는 수치 35건을 갚으려고 놓은 축이다. 여섯은 새로 놓았고 「취향 축」은
+    **패턴을 넓혔다** — `N축 특징` 5곳에서 `N축` 22곳으로.
+    """
+    assert CHECKER.corpus_tracks() == 1004
+    assert CHECKER.group_code_width() == 3
+    assert CHECKER.mert_sources() == 5
+    assert CHECKER.determinism_runs() == 2
+    assert CHECKER.min_token_chars() == 2
+    assert CHECKER.stream_floor() == 0
+
+    names = {name for name, _, _ in CHECKER.COUNTED}
+    assert {
+        "코퍼스 곡 수",
+        "요구사항 그룹 코드",
+        "MERT 소스",
+        "재현 실행",
+        "아티스트 토큰 바닥",
+        "재생 시간 바닥",
+    } <= names, names
+
+
+def test_그룹_코드가_세_자만은_아니었다() -> None:
+    """**스무 그룹 중 하나가 거짓이었다** (D-0385). `REQ-UI-001`의 `UI`는 두 자다.
+
+    문서가 *«3문자 코드»*라 적고 있었고 **아무도 안 셌다.** 「최대」로 적고 실물의
+    최대를 든다 — 그러니 **길이가 하나로 안 모이는 것**이 이 축의 전제다.
+    """
+    body = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    groups = re.findall(r"(?m)^\|\s*(?:REQ|NFR|TST|OPS)-([A-Z]{2,4})-\d{3}", body)
+    widths = {len(one) for one in groups}
+
+    assert len(widths) > 1, "길이가 하나면 「최대」라 적을 까닭이 없다 — 축을 다시 본다"
+    assert CHECKER.group_code_width() == max(widths)
+    assert "3문자 코드" not in body, "거짓으로 돌아갔다"
+
+
+def test_취향_축이_4축_전부를_문다() -> None:
+    """**D-0381의 좁힘이 열일곱 자리를 축 밖에 뒀다** (D-0385).
+
+    `4축 프로파일` · `4축 독립` · `4축 분석` · `4축으로 분해`가 안 걸렸고, 그 일곱
+    줄이 `check_claims`의 상류 없는 수치였다. **다섯째 축이 생기는 날 전부 거짓이 된다.**
+    """
+    pattern = next(rule for name, rule, _ in CHECKER.COUNTED if name == "취향 축")
+
+    for said in ("4축 프로파일", "**4축 독립**", "4축 분석", "**4축으로 분해**", "4축에 다른 시드"):
+        assert pattern.findall(said) == ["4"], said
+
+    body = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    assert len(pattern.findall(body)) >= 20, "정본에서 무는 자리가 줄었다"
+
+
+def test_대장_행은_축_밖이다() -> None:
+    """**대장은 기록 제목의 거울이고 기록은 추가 전용이다** (D-0385 · D-0117).
+
+    D-0039의 제목이 *«문서 체계를 3축으로 명시한다»*다. 「취향 축」을 넓히자 그 행이
+    *«3이라 적었는데 실물은 4»*로 울었다 — **과거의 제목을 지금 실물로 재는 것은
+    범주 오류다.** 면제 선언으로는 못 막는다: 그 행은 매 판 다시 찍혀 주석이 지워진다.
+    """
+    body = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8").splitlines()
+    inside = FSCK.ledgered(body)
+
+    assert inside, "대장 표식을 못 찾았다 — 건너뛰는 자리가 0곳이면 이 면제가 죽는다"
+    rows = [number for number in inside if "D-0039" in body[number - 1]]
+    assert rows, "D-0039 대장 행이 표식 안에 없다"
+    assert "3축으로 명시한다" in body[rows[0] - 1], "제목이 고쳐졌다 (추가 전용 위반)"
+    assert FSCK.check_counts() == []
+
+
+def test_고치는_쪽도_면제를_본다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069 · D-0385). 선언을 읽는 자가 검사 하나였다.
+
+    `--fix`가 *«면제했다»*고 적힌 **바로 그 줄**의 수를 갈아 버렸다. 선언을 한쪽만
+    읽으면 그 선언이 거짓이다.
+    """
+    (tmp_path / "docs").mkdir()
+    kept = f"| D-0039 | 문서 체계를 3축으로 명시한다 <!-- {FSCK.COUNT_OK} 인용 --> |\n"
+    page = tmp_path / "docs" / "MASTER.md"
+    page.write_text(kept, encoding="utf-8")
+    monkeypatch.setattr(FSCK, "ROOT", tmp_path)
+    monkeypatch.setattr(FSCK, "LIVING", ("docs/MASTER.md",))
+    monkeypatch.setattr(FSCK, "counting_code", list)
+
+    FSCK.fix_counts()
+
+    assert page.read_text(encoding="utf-8") == kept, "면제한 줄의 수를 갈았다"

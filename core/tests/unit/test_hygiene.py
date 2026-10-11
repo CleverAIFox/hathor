@@ -456,3 +456,137 @@ def test_시험이_얕은_클론보다_깊이_안_판다() -> None:
                     guilty.append(f"{path.name}:{node.lineno} 이력 {back}칸 (CI는 {depth})")
 
     assert guilty == [], "제 저장소를 짓거나 `# shallow: ok <사유>`를 적는다 (D-0382)"
+
+
+# ------------------------------------------------- 시험은 실물 저장소에 안 쓴다 (D-0386)
+
+
+GIT_WRITES = frozenset(
+    {
+        "commit",
+        "commit-tree",
+        "hash-object",
+        "write-tree",
+        "update-index",
+        "update-ref",
+        "push",
+        "tag",
+        "am",
+        "reset",
+        "checkout",
+        "merge",
+        "rebase",
+        "gc",
+        "prune",
+    }
+)
+"""**저장소를 바꾸는 git 동사.** 쓰기는 ident · 인덱스 · 이력 깊이를 묻고 그 셋이
+기기마다 다르다 — 읽기(`show` · `rev-parse` · `status`)는 묻지 않는다."""
+
+WRITE_FLOOR = 8
+"""그물의 **바닥** (D-0230). 동사 목록이 비면 이 검사가 영원히 0을 낸다."""
+
+
+def _root_runners(tree: ast.AST) -> set[str]:
+    """`cwd=ROOT`로 무언가를 부르는 **함수의 이름**.
+
+    이번 결함이 정확히 이 틈으로 들어왔다 (D-0386): `_git()`이 `cwd=ROOT`를 들고
+    있었고 호출자는 `_git("commit-tree", …)`라고만 적었다. **호출만 보면 안 걸린다.**
+    """
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for call in ast.walk(node):
+            if isinstance(call, ast.Call) and any(
+                keyword.arg == "cwd"
+                and isinstance(keyword.value, ast.Name)
+                and keyword.value.id == "ROOT"
+                for keyword in call.keywords
+            ):
+                found.add(node.name)
+    return found
+
+
+def _words(nodes: list[ast.expr]) -> set[str]:
+    """인자에 **글자 그대로 적힌** 문자열. 튜플·리스트 안까지 본다."""
+    out: set[str] = set()
+    for node in nodes:
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                out.add(inner.value)
+    return out
+
+
+def _root_writes(path: Path) -> list[str]:
+    """그 파일이 **실물 저장소에** 거는 쓰기 동사."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    runners = _root_runners(tree)
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        by_name = isinstance(node.func, ast.Name) and node.func.id in runners
+        by_cwd = any(
+            keyword.arg == "cwd"
+            and isinstance(keyword.value, ast.Name)
+            and keyword.value.id == "ROOT"
+            for keyword in node.keywords
+        )
+        if not (by_name or by_cwd):
+            continue
+        found += sorted(_words(node.args) & GIT_WRITES)
+    return found
+
+
+def test_시험이_실물_저장소에_git을_안_쓴다() -> None:
+    """**쓰기는 환경에 묻는다** (D-0386 · D-0353).
+
+    같은 죄를 네 판 연속 지었다. 넷 다 **로컬은 초록이고 CI만 빨갰다**:
+
+    | 판 | 물은 것 |
+    |---|---|
+    | D-0377 | `dot`이 깔려 있나 |
+    | D-0378 | 같은 것을 다시 |
+    | D-0382 | 이력이 얼마나 깊나 (`fetch-depth: 2`) |
+    | D-0385 | **`commit-tree`** — ident · 인덱스 파일 |
+
+    임시 저장소에 쓰는 것은 **정상이다** — 그 안에서 `git init`부터 하므로 환경이
+    시험의 것이다. 여기서 막는 것은 **실물 저장소**에 거는 쓰기 하나뿐이다.
+    """
+    assert len(GIT_WRITES) >= WRITE_FLOOR, "동사 목록이 비면 영원히 0을 낸다 (D-0230)"
+
+    dirty = {
+        path.relative_to(ROOT).as_posix(): said
+        for path in sorted((ROOT / "core" / "tests").rglob("*.py"))
+        if (said := _root_writes(path))
+    }
+
+    assert dirty == {}, dirty
+
+
+def test_그물이_헬퍼를_거친_쓰기도_문다(tmp_path: Path) -> None:
+    """**심은 결함** (D-0069). 호출만 보던 그물은 이것을 놓친다 — 그게 D-0385였다."""
+    page = tmp_path / "심은것.py"
+    page.write_text(
+        "ROOT = 1\n"
+        "def _git(*args):\n"
+        "    return subprocess.run(('git', *args), cwd=ROOT)\n"
+        "def test_하나():\n"
+        '    _git("commit-tree", "x")\n',
+        encoding="utf-8",
+    )
+
+    assert _root_writes(page) == ["commit-tree"]
+
+
+def test_그물이_임시_저장소_쓰기는_안_문다(tmp_path: Path) -> None:
+    """**거짓 경보는 진짜 경보를 죽인다** (GR-0.8). 임시 저장소 쓰기는 정상이다."""
+    page = tmp_path / "정상.py"
+    page.write_text(
+        "def test_하나(tmp_path):\n"
+        '    subprocess.run(("git", "commit", "-m", "x"), cwd=tmp_path)\n',
+        encoding="utf-8",
+    )
+
+    assert _root_writes(page) == []

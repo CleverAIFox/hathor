@@ -11,7 +11,7 @@ D-0361이 기획서 캡션의 «계약 5종»에서 같은 꼴을 잡았다.
 
 ### 두 벌을 만들지 않는다
 
-정본은 `docs/measured.toml` **하나**다. MASTER에 있는 표는 그것을 찍어 낸 **거울**이고
+정본은 `measured.toml` **하나**다. MASTER에 있는 표는 그것을 찍어 낸 **거울**이고
 표식 사이에 산다 — `decision-ledger`가 이미 그 꼴이다 (D-0223). 수를 두 곳에 적으면
 어긋난다 (D-0043).
 
@@ -32,7 +32,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CANON = ROOT / "docs" / "measured.toml"
+CANON = ROOT / "measured.toml"
 MASTER = ROOT / "docs" / "MASTER.md"
 
 BLOCKS = {

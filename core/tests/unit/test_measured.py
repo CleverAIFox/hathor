@@ -4,7 +4,7 @@
 있었다.** 세는 도구(`probe_id3.py` · `probe_artist.py`)는 있었고 **사람이 그 수를
 옮겨 적었다.** 옮겨 적은 수는 낡는다 — D-0361이 캡션의 «계약 5종»에서 같은 꼴을 잡았다.
 
-이제 `docs/measured.toml`이 정본이고 MASTER의 표는 **거울**이다.
+이제 `measured.toml`이 정본이고 MASTER의 표는 **거울**이다.
 """
 
 from __future__ import annotations

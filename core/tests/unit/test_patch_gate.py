@@ -351,9 +351,17 @@ def test_뽑은_패치가_산출물을_안_담는다(tmp_path: Path) -> None:
         check=True,
     ).stdout.split()
 
-    for trigger, target in CHECKER.AFTER_RULES:
-        if trigger in touched:
-            assert f"diff --git a/{trigger}" not in body, f"{trigger}을 담았다 — 받는 쪽에서 터진다"
+    # **목표로 모아서 본다** (D-0385). 규칙마다 따로 보고 있었는데 **두 규칙이 같은
+    # 목표(`proposal`)를 가리킨다** — D-0383이 자물쇠 규칙을 더한 판이다. 제출본만
+    # 건드린 커밋에서는 첫 규칙이 「적혀 있어야 한다」, 둘째가 「없어야 한다」로
+    # **서로 반대를 요구했고**, HEAD가 어느 커밋이냐로 결과가 갈렸다 — D-0382와 같은
+    # 부류의 네 번째다.
+    for target in sorted({one for _trigger, one in CHECKER.AFTER_RULES}):
+        triggers = [one for one, where in CHECKER.AFTER_RULES if where == target]
+        hit = [one for one in triggers if one in touched]
+        for one in hit:
+            assert f"diff --git a/{one}" not in body, f"{one}을 담았다 — 받는 쪽에서 터진다"
+        if hit:
             assert f"# hathor-after: {target}" in body, "빼고 **다시 만들라고 안 적었다**"
         else:
             assert f"# hathor-after: {target}" not in body, "안 건드렸는데 뒤처리를 적었다"

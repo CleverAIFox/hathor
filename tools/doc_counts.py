@@ -47,13 +47,13 @@ D-0349가 일곱을 더하며 잡은 것:
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-import check_doc_style
 from decision_ledger import evidence_base
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -327,6 +327,10 @@ def taste_axes() -> int:
 
     *«4축»*은 기획서 곳곳에 아홉 번 나오고 **아무도 그 4를 안 봤다.** 다섯째 축이
     생기는 날 그 아홉 자리가 전부 거짓이 된다.
+
+    D-0385에서 **「4축 특징」 다섯 곳만 물던 것을 「4축」 스물두 곳으로 넓혔다** —
+    *«4축 프로파일»* · *«4축 독립»* · *«4축 분석»* · *«4축으로 분해»*가 축 밖에
+    있었고, 그 일곱 줄이 `check_claims`의 상류 없는 수치였다.
     """
     found = AXIS_TABLE.search((ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8"))
     if not found:
@@ -335,13 +339,102 @@ def taste_axes() -> int:
     return len([one for one in rows[2:] if one.strip()])
 
 
-def outside_tense_count() -> int:
-    """`docs/`에 사는 **시제 밖** 파일 수 (D-0378).
+def corpus_tracks() -> int:
+    """개발 코퍼스의 곡 수. **정본은 `measured.toml`이다** (D-0366 · D-0384).
 
-    축 셋 말고도 실측 정본·제출본·자물쇠가 거기 산다. 디렉터리만 보면 여섯이라
-    *«문서 체계가 무너졌나»*로 읽힌다 — **문서가 수를 들고 여기가 실물을 센다.**
+    기획서가 *«1004곡»*을 **표에서 열다섯 번** 드는데 그 중 둘은 상류가 없었다 —
+    같은 수를 적고 아무 자도 안 보는 자리였다 (D-0385).
     """
-    return len(check_doc_style.OUTSIDE_TENSE)
+    body = tomllib.loads((ROOT / "measured.toml").read_text(encoding="utf-8"))
+    found = body.get("corpus", {}).get("tracks")
+    if not isinstance(found, int):
+        raise LookupError("`measured.toml`의 `[corpus].tracks`를 못 찾았다 (D-0366)")
+    return found
+
+
+def group_code_width() -> int:
+    """요구사항 **그룹 코드의 최대 글자 수**. 정본은 요구사항 표 자신이다.
+
+    `MASTER`가 *«위 체계도의 3문자 코드»*라 적고 있었고 **`REQ-UI-001`의 `UI`는 두
+    자다** (D-0385). 스무 그룹 중 하나가 거짓이었고 아무도 안 셌다 —
+    <!-- doc_fsck: ok 그때의 값을 인용한다 -->
+    D-0261의 «계약 5종»과 같은 꼴이다. **«최대»로 적고 실물의 최대를 든다.**
+    """
+    body = (ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+    groups = re.findall(r"(?m)^\|\s*(?:REQ|NFR|TST|OPS)-([A-Z]{2,4})-\d{3}\s*\|", body)
+    if not groups:
+        raise LookupError("요구사항 표의 그룹 코드를 못 찾았다 (D-0350)")
+    return max(len(one) for one in groups)
+
+
+def mert_sources() -> int:
+    """MERT를 돌리는 소스의 수. **믹스 하나 + Demucs 스템 넷** (D-0205).
+
+    정본은 `ingest_all._one`의 `sources` 사전이다 — `{MIXTURE: waveform, **stems}`.
+    *«MERT 13층 x 5소스»*의 5가 그것이고 **README까지 네 곳이 든다.**
+    """
+    body = (ROOT / "core" / "hathor" / "application" / "ingest_all.py").read_text(encoding="utf-8")
+    if "{MIXTURE: waveform, **stems}" not in body:
+        raise LookupError("`ingest_all._one`의 `sources`를 못 찾았다 (D-0205)")
+    stems = (ROOT / "core" / "hathor" / "domain" / "services" / "stem_sets.py").read_text(
+        encoding="utf-8"
+    )
+    found = re.search(r"ALL_STEMS = frozenset\(\{([^}]*)\}\)", stems)
+    if not found:
+        raise LookupError("`stem_sets.ALL_STEMS`를 못 찾았다 (D-0205)")
+    return 1 + len(re.findall(r'"[a-z]+"', found.group(1)))
+
+
+def determinism_runs() -> int:
+    """재현성 잡이 생성기를 **몇 번 돌리나**. 정본은 `ci.yml`의 그 잡이다 (D-0009).
+
+    *«동일 시드 2회 실행»*의 2다. 한 번만 돌리게 고치면 그 말이 거짓이 된다.
+    """
+    body = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    if "\n  reproducibility:" not in body:
+        raise LookupError("`ci.yml`의 `reproducibility` 잡을 못 찾았다 (D-0009)")
+    inside = re.split(
+        r"\n  [a-z][a-z0-9-]*:\n", body.split("\n  reproducibility:", 1)[1], maxsplit=1
+    )[0]
+    return len(re.findall(r"hathor\.cli generate", inside))
+
+
+def min_token_chars() -> int:
+    """아티스트 토큰의 **최소 글자 수**. 정본은 `_MIN_TOKEN_LENGTH`다 (D-0016)."""
+    body = (ROOT / "core" / "hathor" / "domain" / "services" / "artist_name_parser.py").read_text(
+        encoding="utf-8"
+    )
+    found = re.search(r"(?m)^_MIN_TOKEN_LENGTH = (\d+)$", body)
+    if not found:
+        raise LookupError("`artist_name_parser._MIN_TOKEN_LENGTH`를 못 찾았다 (D-0016)")
+    return int(found.group(1))
+
+
+def stream_floor() -> int:
+    """`MISSING_AUDIO_STREAM`으로 떨어지는 **재생 시간 바닥**. 정본은 스캐너다.
+
+    *«길이 0 이하»*의 0이다. **0도 축이 된다** — 바닥을 1로 올리면 문서가 빨개진다.
+    """
+    body = (ROOT / "core" / "hathor" / "infrastructure" / "filesystem_scanner.py").read_text(
+        encoding="utf-8"
+    )
+    found = re.search(r"if stream\.duration_ms <= (\d+):", body)
+    if not found:
+        raise LookupError("`filesystem_scanner`의 재생 시간 바닥을 못 찾았다")
+    return int(found.group(1))
+
+
+ZERO_OK = ("재생 시간 바닥",)
+"""**센 0을 내는 축** (D-0385 · D-0364).
+
+GR-0.5는 *«없는 것·안 센 것을 0이라 말하지 않는다»*이고, `test_축마다_정본이_수를_낸다`가
+그 규율로 **모든 축에 `count() > 0`을 요구했다.** 그런데 `duration_ms <= 0`의 0은
+**실제로 센 0**이다 — 못 잰 0이 아니다.
+
+둘을 가르는 자리가 없으면 선택지가 *«0인 값은 축으로 안 만든다»* 하나뿐이고, 그러면
+**실패 0 · 누락 0처럼 0이 정답인 수는 영원히 아무 자도 안 본다.** 여기 이름을 적는
+것이 그 차집합의 선언이다 (D-0219).
+"""
 
 
 def gate_count() -> int:
@@ -383,11 +476,21 @@ COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("MVP 예외", re.compile(rf"예외가\s*{BOLD}이고"), mvp_exemptions),
     ("요구사항 행", re.compile(rf"요구사항\s*{BOLD}행"), requirement_rows),
     ("관문 도구", re.compile(rf"관문 도구\s*{BOLD}개"), gate_count),
-    ("docs 시제 밖", re.compile(rf"시제 밖\s*{BOLD}개"), outside_tense_count),
-    # **「축」 하나로는 문서 축과 부딪힌다** (D-0381). `문서 체계를 3축으로`가 걸렸고,
-    # 면제를 달자 그 칸을 읽는 다른 축(`해당없음 판단`)이 흔들렸다 — **면제가 옆을
-    # 깨면 그 면제가 틀린 것이다.** 뜻이 하나뿐인 `N축 특징`으로 좁힌다. 충돌 0.
-    ("취향 축", re.compile(rf"(?<![\w.]){BOLD}축 특징"), taste_axes),
+    # **「축」 하나로는 문서 축과 부딪힌다** (D-0381). 문서 체계의 축을 적은 자리가
+    # 걸렸고, 면제를 달자 그 칸을 읽는 다른 축(`해당없음 판단`)이 흔들렸다 — **면제가
+    # 옆을 깨면 그 면제가 틀린 것이다.** 그래서 `N축 특징`으로 좁혔다.
+    #
+    # **그 좁힘이 열일곱 자리를 축 밖에 뒀다** (D-0385). `4축 프로파일` · `4축 독립` ·
+    # `4축 분석` · `4축으로 분해`가 안 걸렸고, 그 일곱 줄이 `check_claims`의 상류 없는
+    # 수치였다. 지금 `N축`을 전부 물고 **옛 결정의 제목을 인용하는 두 자리만 선언으로
+    # 면제한다** (D-0219: 차집합은 선언으로만).
+    ("취향 축", re.compile(rf"(?<![\w.]){BOLD}축"), taste_axes),
+    ("코퍼스 곡 수", re.compile(rf"코퍼스\s*{BOLD}곡"), corpus_tracks),
+    ("요구사항 그룹 코드", re.compile(rf"최대\s*{BOLD}문자"), group_code_width),
+    ("MERT 소스", re.compile(rf"{BOLD}소스"), mert_sources),
+    ("재현 실행", re.compile(rf"시드\s*{BOLD}회"), determinism_runs),
+    ("아티스트 토큰 바닥", re.compile(rf"각 토큰이\s*{BOLD}자"), min_token_chars),
+    ("재생 시간 바닥", re.compile(rf"길이\s*{BOLD}이하"), stream_floor),
     ("형식 면제 기록", re.compile(rf"형식 면제\s*{BOLD}건"), grandfathered_records),
     ("재현 불명", re.compile(rf"재현 불명\s*{BOLD}건"), unknown_reproductions),
 )

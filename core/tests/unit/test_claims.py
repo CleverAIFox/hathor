@@ -112,11 +112,34 @@ def test_헛인용이_판정까지_닿는다(monkeypatch: pytest.MonkeyPatch) ->
     assert any("대장에 없는 결정" in one for one in cast("list[str]", TOOL.check()))
 
 
-def test_천장을_넘으면_운다(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**표를 손으로 늘리면 여기서 걸린다.**"""
-    monkeypatch.setattr(TOOL, "UNSOURCED_CEILING", 0)
+PLANTED = "| 심은 줄 | 42배 빠르고 7.5초다 |"
+"""상류가 없는 줄 하나. **천장이 0이 된 뒤로는 이 한 줄이면 운다** (D-0385)."""
 
-    assert any("천장 0" in one for one in cast("list[str]", TOOL.check()))
+
+def test_천장을_넘으면_운다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**표를 손으로 늘리면 여기서 걸린다.**
+
+    천장을 0으로 내린 판(D-0385)부터는 **상수를 깎아서 재지 못한다** — 0 아래가 없다.
+    그래서 **줄을 심어서 잰다**: 실물 표에 상류 없는 한 줄을 더하면 즉시 빨개진다.
+    """
+    real = cast("list[str]", TOOL.rows())
+    monkeypatch.setattr(TOOL, "rows", lambda: [*real, PLANTED])
+
+    problems = cast("list[str]", TOOL.check())
+
+    assert any(f"천장 {TOOL.UNSOURCED_CEILING}" in one for one in problems), problems
+    assert any("2건" in one for one in problems), "심은 줄의 두 수를 다 세야 한다"
+
+
+def test_그물이_비면_0건을_통과로_안_읽는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**심은 결함** (D-0069 · D-0230 · D-0385). 천장 0이 만든 새 구멍이다.
+
+    천장 35일 때는 `claims()`가 깨져도 *«0건»*이 **조여라**로 울었다. 0이 된 지금은
+    **0건이 곧 통과**다 — 반대쪽에 바닥이 없으면 가르는 자가 죽어도 조용하다.
+    """
+    monkeypatch.setattr(TOOL, "claims", lambda _rows: [])
+
+    assert any("그물이 비었다" in one for one in cast("list[str]", TOOL.check()))
 
 
 def test_줄면_조이라고_말한다(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,19 +188,38 @@ def test_수를_눈앞에_둔다(
 def test_목록이_상류_없는_줄을_찍는다(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """**40을 적고 끝내지 않는다.** 무엇인지 봐야 갚는다."""
+    """**40을 적고 끝내지 않는다.** 무엇인지 봐야 갚는다.
+
+    **빚이 0이 된 뒤로는 심은 줄로 잰다** (D-0385). 실물에 찍을 줄이 없으니 목록이
+    비는 것이 정상이고, 그 상태만 보면 *«무엇인지 찍는가»*를 영원히 못 잰다.
+    """
+    real = cast("list[str]", TOOL.rows())
+    monkeypatch.setattr(TOOL, "rows", lambda: [*real, PLANTED])
     monkeypatch.setattr("sys.argv", ["check_claims.py", "--list"])
 
     assert TOOL.main() == 0
 
     spoke = capsys.readouterr().out
-    assert spoke.count("건  |") >= 1
-    assert f"{TOOL.UNSOURCED_CEILING}건" in spoke, spoke
+    assert spoke.count("건  |") == 1, spoke
+    assert "심은 줄" in spoke, spoke
 
     # **줄마다 찍은 건수의 합이 총계와 같다** (D-0352). 쓸기로 재니 줄별 `tally()`를
     # 끊어도 조용했다 — 「0건」이 마흔 줄 찍혀도 총계는 맞으니 아무도 안 울었다.
     each = [int(one) for one in re.findall(r"^  (\d+)건  \|", spoke, re.M)]
-    assert sum(each) == TOOL.UNSOURCED_CEILING, each
+    assert sum(each) == TOOL.tally([PLANTED]), each
+
+
+def test_빚이_0이면_찍을_줄이_없다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**실측이 0이다** (D-0385). 35건을 축 · 기록 · 사유로 갈라 갚았다."""
+    monkeypatch.setattr("sys.argv", ["check_claims.py", "--list"])
+
+    assert TOOL.main() == 0
+
+    spoke = capsys.readouterr().out
+    assert "건  |" not in spoke, spoke
+    assert "상류 없는 수치 0건 · 줄 0" in spoke, spoke
 
 
 @pytest.mark.parametrize("where", ["Makefile", ".githooks/pre-commit", ".github/workflows/ci.yml"])

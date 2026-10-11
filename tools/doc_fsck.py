@@ -46,7 +46,7 @@ import re
 import sys
 from pathlib import Path
 
-from doc_counts import COUNTED, gate_tools
+from doc_counts import COUNTED, LEDGER, gate_tools
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -451,10 +451,13 @@ def check_counts() -> list[str]:
         for path in [*living_documents(), *counting_code()]:
             where = path.relative_to(ROOT).as_posix()
             body = path.read_text(encoding="utf-8").splitlines()
+            skip = ledgered(body)
             for number, line in enumerate(body, 1):
                 # **그 줄이나 바로 윗줄** — `deadcheck`와 같은 규율이다. 산문 한 줄에
                 # 선언까지 붙이면 100자를 넘어 `ruff`가 막는다.
                 if COUNT_OK in line or (number > 1 and COUNT_OK in body[number - 2]):
+                    continue
+                if number in skip:
                     continue
                 problems += [
                     f"{where}:{number} «{name}»을 {said}이라 적었는데 실물은 {real}이다. "
@@ -463,6 +466,35 @@ def check_counts() -> list[str]:
                     if int(said) != real
                 ]
     return problems
+
+
+def ledgered(body: list[str]) -> set[int]:
+    """**결정 대장 안의 줄 번호** (D-0385). 1부터 센다.
+
+    ### 축이 과거 제목의 수를 재고 있었다
+
+    대장은 `check_decisions`가 **기록 제목으로 찍는 거울**이고 기록은 추가 전용이다.
+    <!-- doc_fsck: ok 그때의 제목을 인용한다 -->
+    D-0039의 제목이 *«문서 체계를 3축으로 명시한다»*인데, 「취향 축」 패턴을 `N축`으로
+    넓히자 그 행이 *«3이라 적었는데 실물은 4»*로 울었다 — **과거의 제목을 지금 실물로
+    재는 것은 범주 오류다.**
+
+    면제 선언으로는 못 막는다: 그 행은 **매 판 다시 찍히므로 주석이 지워진다.** 실제로
+    한 번 지워졌고, 그 사이 `--fix`가 제목의 3을 4로 갈아 버렸다.
+
+    **표식 밖은 그대로 본다** — `MASTER`에는 기록 번호를 드는 표가 대장 말고도 있고,
+    그것들은 손으로 적은 것이라 축이 봐야 한다 (D-0263).
+    """
+    begin, end = LEDGER
+    inside: set[int] = set()
+    open_at = None
+    for number, line in enumerate(body, 1):
+        if begin in line:
+            open_at = number
+        elif end in line and open_at is not None:
+            inside |= set(range(open_at, number + 1))
+            open_at = None
+    return inside
 
 
 def fix_counts() -> list[str]:
@@ -483,8 +515,16 @@ def fix_counts() -> list[str]:
         for path in living_documents():
             body = path.read_text(encoding="utf-8")
             lines = body.split("\n")
+            skip = ledgered(lines)
             for index, line in enumerate(lines):
-                if not pattern.search(line):
+                if not pattern.search(line) or index + 1 in skip:
+                    continue
+                # **고치는 쪽도 면제를 본다** (D-0385). 선언을 읽는 자가 검사
+                # 하나였다 — `--fix`가 *«면제했다»*고 적힌 바로 그 줄의 수를 갈아
+                # doc_fsck: ok 그때의 제목을 인용한다
+                # 버렸고, 그 줄은 **옛 결정의 제목**이었다(D-0039 「3축」 → 「4축」).
+                # 선언을 한쪽만 읽으면 그 선언이 거짓이 된다 (D-0288 · D-0219).
+                if COUNT_OK in line or (index > 0 and COUNT_OK in lines[index - 1]):
                     continue
 
                 def swap(found: re.Match[str], real: str = real) -> str:
