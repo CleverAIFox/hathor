@@ -3,7 +3,7 @@
   "생성기": {
     "tools/build_proposal.py": "696f028a08624267",
     "tools/proposal_body.py": "f0a306f38a9d187c",
-    "tools/proposal_source.py": "fd0fed9742bb02b6",
+    "tools/proposal_source.py": "7c32151cff249f2f",
     "tools/render_figures.py": "150f979d0c19539f",
     "tools/render_charts.py": "b841da088aee675f",
     "site/proposal.template.html": "be43f8109e708d2f"

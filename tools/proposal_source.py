@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -268,3 +269,54 @@ def stale() -> list[str]:
 
 if __name__ == "__main__":
     print(f"{MASTER} 기획서 구간 · {len(source().splitlines())}줄 · 지문 {fingerprint()[:16]}")
+
+
+DOCX = ROOT / "site" / "proposal.docx"
+"""제출본. **그림의 정본이기도 하다** (D-0391)."""
+
+
+def baked() -> dict[str, str]:
+    """**제출본 안에 든 그림**의 sha256. 자물쇠가 지키는 쪽이다 (D-0377).
+
+    `python-docx`는 넣은 PNG를 **재압축하지 않는다** — 실측으로 28장 전부 바이트가
+    같았다. 그래서 docx가 그림의 정본 노릇을 하고, **따로 커밋할 까닭이 없다**
+    (3.5MB를 아낀다).
+    """
+    with zipfile.ZipFile(DOCX) as bundle:
+        return {
+            name: hashlib.sha256(bundle.read(name)).hexdigest()
+            for name in bundle.namelist()
+            if name.startswith("word/media/")
+        }
+
+
+def redrawn(where: Path) -> list[str]:
+    """**다시 그린 그림이 제출본 속 그림과 같은가** (D-0391).
+
+    ### 러너 쪽에 못이 없었다
+
+    D-0368이 *«사본을 옮기는 대신 같은 정본에서 다시 그린다»*를 골랐다. 그 전제는
+    **«같은 정본 + 같은 도구 = 같은 그림»**인데, D-0377이 그 전제가 깨질 수 있다는 것을
+    찾아 `RENDERERS`로 **그의 기기**를 박았다. **러너는 안 박았다.**
+
+    배포 잡은 PDF를 **그의 docx에서** 굽고 그림은 **러너가 다시 그린다.** 둘이 다르면
+    같은 사이트에 **두 판의 그림**이 올라간다 — 웹에서 보는 그림과 PDF 속 그림이 다르다.
+
+    러너에 `dot 14.1.2`를 깔 길이 없으므로(ubuntu-24.04 apt는 2.43.0) **맞추는 대신
+    견준다.** 같으면 그것이 증명이고, 다르면 **배포가 멈춘다** — 못 잰 것을 괜찮다고
+    적지 않는다 (GR-0.5).
+    """
+    inside = set(baked().values())
+    if not inside:
+        return ["제출본에 그림이 한 장도 없다 — 자르는 법이 깨졌다"]
+    found = sorted(where.glob("*.png"))
+    if not found:
+        return [f"{where}에 그림이 없다. 먼저 `render_figures.py --out`을 돌린다"]
+    odd = [one.name for one in found if hashlib.sha256(one.read_bytes()).hexdigest() not in inside]
+    if odd:
+        return [
+            f"다시 그린 그림 {len(odd)}장이 제출본 속 그림과 다르다: {' '.join(odd[:5])}"
+            f"{' …' if len(odd) > 5 else ''}. **웹과 PDF가 갈린다** — "
+            f"그리는 판이 다르다 (못: dot {RENDERERS['dot']}) (D-0391)"
+        ]
+    return []

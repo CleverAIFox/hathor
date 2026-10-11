@@ -104,6 +104,14 @@ jobs:
         run: |
           uv run --no-sync python ../tools/render_figures.py --out ../_site/figures
           uv run --no-sync python ../tools/render_charts.py --out ../_site/figures
+
+      # **러너가 그린 것이 제출본 속 그림과 같은가** (D-0391). 위 단계의 전제가
+      # «같은 정본 + 같은 도구 = 같은 그림»인데 **도구 판은 안 맞췄다** — 러너는
+      # apt의 graphviz 2.43.0이고 제출본은 그의 14.1.2다 (D-0377의 못). 다르면
+      # 웹에서 보는 그림과 PDF 속 그림이 갈리므로 **여기서 멈춘다.**
+      - name: 그림 대조
+        working-directory: .
+        run: python3 tools/render_proposal.py --figures _site/figures
       - name: Stage site
         run: |
           cp site/proposal.html site/index.html _site/

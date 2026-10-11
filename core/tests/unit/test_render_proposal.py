@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ import pytest
 from tests.conftest import tool_module
 
 TOOL = tool_module("render_proposal")
+SOURCE = tool_module("proposal_source")
 SCRIPT = tool_module("check_script")
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -537,3 +539,83 @@ def test_렌더러가_통과_줄에_오른다(
     drew = TOOL.recorded_renderers()
     for name in TOOL.RENDERERS:
         assert f"{name} {drew.get(name, '안 적혔다')}" in spoke, spoke
+
+
+# ------------------------------- 러너가 그린 그림 ↔ 제출본 (D-0391)
+
+
+FIGURE_GATE = ROOT / ".github" / "workflows" / "proposal.yml"
+
+
+def test_제출본이_그림을_품고_있다() -> None:
+    """**docx가 그림의 정본이다** (D-0391).
+
+    `python-docx`는 넣은 PNG를 **재압축하지 않는다** — 실측 28장 전부 바이트가 같았다.
+    그래서 3.5MB를 따로 커밋할 까닭이 없다.
+    """
+    inside = SOURCE.baked()
+
+    assert len(inside) >= 20, f"제출본 안 그림이 {len(inside)}장이다 — 자르는 법을 의심한다"
+    assert all(len(one) == 64 for one in inside.values())
+
+
+def test_같은_그림이면_아무_말을_안_한다(tmp_path: Path) -> None:
+    """**거짓 경보는 진짜 경보를 죽인다** (GR-0.8). 지금 실측은 28/28이 같다."""
+    inside = SOURCE.baked()
+    with zipfile.ZipFile(SOURCE.DOCX) as bundle:
+        for index, name in enumerate(sorted(inside)):
+            (tmp_path / f"{index}.png").write_bytes(bundle.read(name))
+
+    assert SOURCE.redrawn(tmp_path) == []
+
+
+def test_한_장만_달라도_잡는다(tmp_path: Path) -> None:
+    """**심은 결함** (D-0069). 웹과 PDF가 갈리는 자리다."""
+    inside = SOURCE.baked()
+    with zipfile.ZipFile(SOURCE.DOCX) as bundle:
+        for index, name in enumerate(sorted(inside)):
+            (tmp_path / f"{index}.png").write_bytes(bundle.read(name))
+    (tmp_path / "0.png").write_bytes(b"\x89PNG\r\n\x1a\n" + "다른 판이 그렸다".encode())
+
+    said = SOURCE.redrawn(tmp_path)
+
+    assert said and "0.png" in said[0], said
+    assert "웹과 PDF가 갈린다" in said[0]
+
+
+def test_그림이_없으면_통과로_안_적는다(tmp_path: Path) -> None:
+    """**못 잰 것을 통과로 세지 않는다** (GR-0.5 · D-0230). 빈 폴더는 0이 아니다."""
+    said = SOURCE.redrawn(tmp_path)
+
+    assert said and "그림이 없다" in said[0], said
+
+
+def test_제출본에_그림이_없으면_운다(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """**빈 그물** (D-0230). 견줄 상대가 없으면 무엇을 줘도 통과한다."""
+    monkeypatch.setattr(SOURCE, "baked", dict)
+
+    assert SOURCE.redrawn(tmp_path) == ["제출본에 그림이 한 장도 없다 — 자르는 법이 깨졌다"]
+
+
+def test_배포_잡이_그_길로_돈다() -> None:
+    """**관문을 만들고 안 걸면 영원히 안 돈다** (D-0126 · D-0219).
+
+    러너는 그림을 **다시 그린다** (D-0368). 그 단계 바로 뒤에서 견뎌야 한다 —
+    늦으면 이미 올라간 뒤다.
+    """
+    body = FIGURE_GATE.read_text(encoding="utf-8")
+
+    assert "render_proposal.py --figures _site/figures" in body
+    assert body.index("render_charts.py --out ../_site/figures") < body.index("--figures _site")
+    assert body.index("--figures _site") < body.index("upload-pages-artifact")
+
+
+def test_입구가_그림_인자를_받는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**부품을 재고 배선을 안 쟀다** (D-0352). `main()`을 거쳐 화면까지 본다."""
+    monkeypatch.setattr(TOOL, "redrawn", lambda _where: ["심은 것"])
+    monkeypatch.setattr("sys.argv", ["render_proposal.py", "--figures", "어디든"])
+
+    assert TOOL.main() == 1
+    assert "심은 것" in capsys.readouterr().err

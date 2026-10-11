@@ -62,8 +62,10 @@ from proposal_source import (  # noqa: E402
     GENERATORS,
     RENDERERS,
     SourceError,
+    baked,
     fingerprint,
     recorded_renderers,
+    redrawn,
     source,
     stale,
 )
@@ -496,7 +498,21 @@ def main() -> int:
         action="store_true",
         help="자물쇠가 낡으면 **막는다**. 배포 잡이 쓴다 (D-0376)",
     )
+    parser.add_argument(
+        "--figures",
+        type=Path,
+        help="다시 그린 그림이 제출본 속 그림과 같은지 본다. 배포 잡이 쓴다 (D-0391)",
+    )
     args = parser.parse_args()
+
+    if args.figures is not None:
+        odd = redrawn(args.figures)
+        for text in odd:
+            print(f"  - {text}", file=sys.stderr)
+        if odd:
+            return 1
+        print(f"그림 대조 통과 · 제출본 {len(baked())}장과 바이트가 같다")
+        return 0
 
     try:
         if args.check:

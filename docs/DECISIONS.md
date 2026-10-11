@@ -32652,3 +32652,69 @@ cd "$(git rev-parse --show-toplevel)"
 
 자료  실물 이 저장소 — 받는 쪽에서 터진 판 4건 · 끝까지 도는 시험 0 → 8개 ·
       심은 결함 2건에 운 시험 2·1개 · 내 기대가 틀린 자리 2곳
+
+---
+
+## D-0391. 웹의 그림과 PDF의 그림을 **다른 판이 그리고 있었다** — 맞출 수 없으니 견준다
+
+> **갱신**: D-0368이 *«사본을 옮기는 대신 같은 정본에서 다시 그린다»*를 골랐다.
+> D-0377이 그 전제가 깨진다는 것을 찾아 **그의 기기**를 박았다. 러너는 안 박았다.
+
+- **배경**: D-0377이 *«배포 잡의 `dot` 2.43.0과 제출본의 14.1.2를 안 쟀다»*를 남겼다.
+  세 판 동안 「남기는 것」에 있었다. **재 보니 실재한다.**
+
+### 배포 잡이 그림을 **두 길로** 낸다
+
+| `_site/`의 무엇 | 그림을 그린 것 |
+|---|---|
+| `proposal.pdf` ← `site/proposal.docx` | **그의 dot 14.1.2** — 자물쇠가 지킨다 (D-0377) |
+| `figures/*.png` ← `render_figures.py` | **러너의 graphviz** — 잡이 그 자리에서 apt로 깐다 |
+
+`proposal.html`이 `figures/*.png`를 참조하므로 **웹에서 보는 그림과 PDF 속 그림이
+다른 판에서 나온다.** 다른지는 **모른다** — 러너에 14.1.2를 깔 길이 없다(ubuntu-24.04
+apt는 2.43.0). 그것이 이 판의 요점이다.
+
+### 맞출 수 없으면 **견준다**
+
+`python-docx`는 넣은 PNG를 **재압축하지 않는다** — 실측 **28/28 바이트가 같았다.**
+그래서 **docx가 그림의 정본 노릇을 하고 따로 커밋할 까닭이 없다** (3.5MB를 아낀다).
+
+러너가 그림을 그린 **바로 뒤에** 제출본 속 해시 집합과 견준다. 같으면 **그것이
+증명**이고, 다르면 **배포가 멈춘다.** 못 잰 것을 괜찮다고 적지 않는다 (GR-0.5).
+
+### 내가 두 번 틀렸다
+
+**① *«그림이 낡는다»*.** `make proposal`이 `build_proposal.py`만 부르고 `--figures`
+기본값이 `var/proposal/figures`라 **옛 그림을 쓴다**고 읽었다. 틀렸다 —
+`proposal_body.py:195`가 매번 `render_all`을 둘 다 부른다. **그림은 안 낡는다.**
+
+**② *«그림을 커밋해야 한다»*.** 3.5MB를 넣을 뻔했다. 재 보니 **docx 안에 이미
+그대로 있다.**
+
+둘 다 **코드를 읽기 전에 세운 가설**이었고 읽자마자 무너졌다.
+
+- **결과**:
+  - `tools/proposal_source.py` — `baked()` · `redrawn()` · `DOCX`. **제출본을 읽는
+    자리가 거기다** — `render_proposal.py`가 616줄로 상한을 넘어 옮겼다 (D-0257).
+  - `tools/render_proposal.py` — `--figures <dir>`.
+  - `.github/workflows/proposal.yml` — 그림을 그린 **직후** 대조한다.
+  - `core/tests/unit/test_render_proposal.py` — 일곱. 한 장만 달라도 잡는다 ·
+    빈 폴더를 0으로 안 읽는다 · 제출본에 그림이 없으면 운다 · 배포 잡이 그 길로 돈다.
+
+- **남기는 것**:
+  - **두 판이 실제로 다른지는 아직 모른다.** 다음 배포가 답한다 — 초록이면 같은
+    것이고, 빨가면 그때 러너에 14.1.2를 깔거나 docx에서 뽑는다.
+  - D-0388의 좁히기가 덜 좁다 — D-0389 푸시가 도구 아홉을 골라 24분을 썼다.
+  - 겨눔 불명 1곳 (`check_model_licenses:found_models`) — 천장 안이다.
+
+재현
+    python3 tools/render_proposal.py --figures var/proposal/figures
+    cd core && uv run pytest tests/unit/test_render_proposal.py -q
+
+강제자
+    `core/tests/unit/test_render_proposal.py::test_한_장만_달라도_잡는다`
+    `core/tests/unit/test_render_proposal.py::test_배포_잡이_그_길로_돈다`
+    `core/tests/unit/test_render_proposal.py::test_그림이_없으면_통과로_안_적는다`
+
+자료  실물 이 저장소 — 제출본 속 그림 28장 · 다시 그린 것과 바이트 일치 28/28 ·
+      그림 폴더 3.5MB(커밋 안 한다) · 내 가설이 틀린 자리 2곳
