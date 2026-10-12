@@ -124,7 +124,16 @@ class SplitVerdict:
     """같은 곡 앞↔뒤 거리. 곡마다 하나."""
 
     other: tuple[float, ...]
-    """다른 곡과의 거리. **짝은 시드로 고른다** — 무작위면 판마다 수가 흔들린다."""
+    """다른 곡과의 거리. **짝은 시드로 고른다** — 무작위면 판마다 수가 흔들린다.
+
+    **돌리지 않고 맞댄 거리다.** 곡마다 위상 원점이 다르므로 이 수에는 *«리듬이
+    다르다»*와 *«녹음이 다른 자리에서 시작했다»*가 섞여 있다 (D-0407)."""
+
+    turned: tuple[float, ...]
+    """다른 곡과의 거리 — **네 칸을 돌려 가장 가까운 자리에서** 잰다.
+
+    생성이 참조곡에서 베끼는 것은 **모양이지 원점이 아니다** — 어차피 우리 격자
+    머리에 맞춰 놓는다. 그래서 귀무도 돌려서 맞대야 하고, **판정은 이쪽이다.**"""
 
     read: int
     """박을 읽어 양쪽 분포를 다 낸 곡 수."""
@@ -141,6 +150,17 @@ class SplitVerdict:
             return None
         return median(self.other) - median(self.same)
 
+    @property
+    def turned_signal(self) -> float | None:
+        """**돌려서 맞댄 신호.** 원점 차이를 뺀 나머지이고 **이것이 판정이다.**
+
+        `signal`보다 작을 수밖에 없다 — 돌리기는 귀무를 **가깝게만** 만든다. 그래서
+        이 수가 살아 있으면 **보수적으로** 살아 있는 것이다.
+        """
+        if len(self.same) < 2:
+            return None
+        return median(self.turned) - median(self.same)
+
 
 def _distance(left: tuple[float, ...], right: tuple[float, ...]) -> float:
     """두 분포 사이 **총변동거리** — L1의 절반이라 0~1이다.
@@ -149,6 +169,31 @@ def _distance(left: tuple[float, ...], right: tuple[float, ...]) -> float:
     천분율 정수로 들 수 있다 (D-0366 — 정본은 정수만 든다).
     """
     return sum(abs(one - two) for one, two in zip(left, right, strict=True)) / 2.0
+
+
+def _turned(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+    """네 칸을 다 돌려 본 **가장 가까운** 거리 (D-0407).
+
+    **고를 값이 없다.** 칸 수는 `PHASE_BINS`이고 전부 본다 — 어느 회전을 쓸지
+    정하는 문턱이 없다는 뜻이다 (D-0058의 손잡이를 안 만든다).
+    """
+    return min(_distance(left, right[turn:] + right[:turn]) for turn in range(len(right)))
+
+
+def peaked(envelopes: Sequence[tuple[np.ndarray, float]]) -> list[tuple[np.ndarray, float]]:
+    """**봉우리가 있는 곡만.** 고른 곡은 베낄 리듬이 없다 (`FLAT` · D-0401의 45.9%).
+
+    고른 곡끼리는 같은 곡이든 다른 곡이든 거리가 0에 가깝다 — **섞여 들면 양쪽을
+    똑같이 끌어내려 신호를 묽게 만든다.** 판정은 쓸 수 있는 곡에서 낸다.
+    """
+    found: list[tuple[np.ndarray, float]] = []
+    for envelope, hop_seconds in envelopes:
+        beat = beat_period(envelope, hop_seconds)
+        if beat is None:
+            continue
+        if max(phase_profile(envelope, beat.period_seconds, hop_seconds)) >= FLAT:
+            found.append((envelope, hop_seconds))
+    return found
 
 
 def _halves(
@@ -190,16 +235,25 @@ def split_half(envelopes: Sequence[tuple[np.ndarray, float]], *, seed: int = 0) 
 
     짝은 `seed`로 고른다 — 무작위면 **같은 코퍼스에서 판마다 다른 수**가 나온다
     (GR-6.5 · D-0082).
+
+    **귀무를 둘 낸다** (D-0407). `other`는 돌리지 않고 맞댄 것이고 `turned`는 네 칸을
+    돌려 가장 가까운 자리에서 잰 것이다. 첫 실측에서 돌리지 않은 신호가 +0.177이었는데
+    **그 안에 「녹음이 다른 자리에서 시작했다」가 섞여 있다** — 판정은 `turned_signal`이다.
     """
     halves = [one for envelope, hop in envelopes if (one := _halves(envelope, hop)) is not None]
     if len(halves) < 2:
-        return SplitVerdict(same=(), other=(), read=len(halves))
+        return SplitVerdict(same=(), other=(), turned=(), read=len(halves))
     picker = Random(seed)
     same: list[float] = []
     other: list[float] = []
+    turned: list[float] = []
     for index, (head, tail) in enumerate(halves):
         same.append(_distance(head, tail))
         # **제 짝을 안 고른다.** 자기 자신과 견주면 귀무가 신호를 베낀다.
         choices = [one for one in range(len(halves)) if one != index]
-        other.append(_distance(head, halves[picker.choice(choices)][1]))
-    return SplitVerdict(same=tuple(same), other=tuple(other), read=len(halves))
+        partner = halves[picker.choice(choices)][1]
+        other.append(_distance(head, partner))
+        turned.append(_turned(head, partner))
+    return SplitVerdict(
+        same=tuple(same), other=tuple(other), turned=tuple(turned), read=len(halves)
+    )

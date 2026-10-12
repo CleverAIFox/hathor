@@ -184,7 +184,14 @@ def test_집중도가_정본의_수에_함께_든다(tmp_path: Path) -> None:
     assert set(counts) == set(TOOL.EMITS)
 
 
-def _placed(root: Path, offsets: list[int], *, bpm: float = 120.0, seconds: float = 40.0) -> Path:
+def _placed(
+    root: Path,
+    offsets: list[int],
+    *,
+    bpm: float = 120.0,
+    seconds: float = 40.0,
+    starts: list[int] | None = None,
+) -> Path:
     """곡마다 **박 안 다른 칸**에 치는 폴더. 반쪽 나누기가 볼 것이 있어야 한다.
 
     **칸 한가운데를 친다** — 경계에 치면 주기 보간 차이로 칸이 뒤집힌다 (D-0406).
@@ -194,7 +201,8 @@ def _placed(root: Path, offsets: list[int], *, bpm: float = 120.0, seconds: floa
     frames = int(seconds / HOP)
     for index, offset in enumerate(offsets):
         envelope = np.random.default_rng(index).random(frames) * 0.02
-        for start in range(0, frames - beat, beat):
+        begin = 0 if starts is None else starts[index]
+        for start in range(begin, frames - beat, beat):
             envelope[start + round((offset + 0.5) * beat / 4)] += 1.0
         write_envelope(folder, f"곡{index}.mp3", envelope, hop_seconds=HOP)
     return folder
@@ -207,8 +215,8 @@ def test_반쪽을_천분율_정수로_낸다(tmp_path: Path) -> None:
     assert set(parts) == set(TOOL.SPLIT)
     for key in (one for one in TOOL.SPLIT if one.endswith("_permille")):
         assert 0 <= parts[key] <= 1000, key
-    assert parts["split_same_q1_permille"] <= parts["split_same_mid_permille"]
-    assert parts["split_same_mid_permille"] <= parts["split_same_q3_permille"]
+    assert parts["split_peaked_same_q1_permille"] <= parts["split_peaked_same_mid_permille"]
+    assert parts["split_peaked_same_mid_permille"] <= parts["split_peaked_same_q3_permille"]
 
 
 def test_곡마다_자리가_다르면_신호가_난다(tmp_path: Path) -> None:
@@ -256,8 +264,8 @@ def test_입구가_반쪽_수를_찍는다(
     assert TOOL.main() == 0
     said = " ".join(capsys.readouterr().out.split())
 
-    assert "split_other_mid_permille 300" in said, "parted()가 끊겼다"
-    assert "신호 (다른 곡 중앙 - 같은 곡 중앙) 0 천분율" in said
+    assert "split_peaked_turned_mid_permille 300" in said, "parted()가 끊겼다"
+    assert "판정은 이것이다" in said
 
 
 def test_반쪽을_못_내면_운다(
@@ -269,3 +277,35 @@ def test_반쪽을_못_내면_운다(
 
     assert TOOL.main() == 2
     assert "사분위를 못 낸다" in capsys.readouterr().err
+
+
+def test_판정은_돌린_쪽이다(tmp_path: Path) -> None:
+    """**원점만 다른 코퍼스에서 돌린 신호가 0이어야 한다** (D-0407).
+
+    탐침이 돌리는 귀무를 안 들면 *«곡마다 고유한 리듬이 있다»*가 **녹음 시작 자리**로
+    증명된다 — 그 결론으로 D-0402를 다시 열면 헛걸음이다.
+    """
+    folder = _placed(tmp_path, [0] * 6, starts=[0, 12, 25, 37, 12, 25])
+
+    parts = TOOL.parted(TOOL.envelopes(folder))
+
+    assert parts["split_other_mid_permille"] > parts["split_same_mid_permille"] + 100
+    turned = parts["split_peaked_turned_mid_permille"] - parts["split_peaked_same_mid_permille"]
+    assert abs(turned) < 50, f"원점만 다른데 돌린 신호가 {turned}이다"
+
+
+def test_고른_곡을_빼고_센다(tmp_path: Path) -> None:
+    """**전수와 봉우리 수를 둘 다 든다** (GR-0.5). 차이가 못 쓰는 곡이다."""
+    folder = _placed(tmp_path, [0, 1, 2, 3, 0, 2])
+    for index in range(4):
+        write_envelope(
+            folder,
+            f"잡음{index}.mp3",
+            np.random.default_rng(900 + index).random(4000),
+            hop_seconds=HOP,
+        )
+
+    parts = TOOL.parted(TOOL.envelopes(folder))
+
+    assert parts["split_peaked_read"] == 6
+    assert parts["split_read"] > parts["split_peaked_read"]

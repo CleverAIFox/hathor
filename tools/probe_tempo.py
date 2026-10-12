@@ -49,7 +49,12 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import measured  # noqa: E402 — sys.path 조작 뒤라야 한다
 
-from hathor.application.corpus_rhythm import phase_spread, split_half, spread  # noqa: E402
+from hathor.application.corpus_rhythm import (  # noqa: E402
+    peaked,
+    phase_spread,
+    split_half,
+    spread,
+)
 from hathor.application.reference_tempo import from_envelopes  # noqa: E402
 from hathor.infrastructure.onset_store import SUFFIX, find_envelope_root  # noqa: E402
 
@@ -95,37 +100,52 @@ PHASE = tuple(one for one in EMITS if one.startswith("phase_"))
 
 SPLIT = (
     "split_read",
-    "split_same_q1_permille",
     "split_same_mid_permille",
-    "split_same_q3_permille",
-    "split_other_q1_permille",
     "split_other_mid_permille",
-    "split_other_q3_permille",
+    "split_turned_mid_permille",
+    "split_peaked_read",
+    "split_peaked_same_q1_permille",
+    "split_peaked_same_mid_permille",
+    "split_peaked_same_q3_permille",
+    "split_peaked_turned_q1_permille",
+    "split_peaked_turned_mid_permille",
+    "split_peaked_turned_q3_permille",
 )
-"""반쪽 나누기가 내는 수 — **아직 정본에 없다** (O-77 · D-0406).
+"""반쪽 나누기가 내는 수 — **아직 정본에 없다** (O-77 · D-0406 · D-0407).
 
 `EMITS`와 **일부러 갈라 둔다.** 정본에 키를 넣으면 `measured --check`가 그 수를
 찾는데, 그 수는 **그의 기기에서만 나온다** (D-0015). D-0399가 같은 자리에서
 차례를 둘로 나눴다 — 먼저 찍고, 수를 받아서 정본을 짓는다 (D-0401이 그 둘째였다).
 
-거리는 **총변동거리**라 0~1이고, 천분율 정수로 적으면 거울이 `49.7%`로 찍는다."""
+거리는 **총변동거리**라 0~1이고, 천분율 정수로 적으면 거울이 `49.7%`로 찍는다.
+
+**판정은 `peaked_turned` ↔ `peaked_same`이다** (D-0407). 나머지 셋은 그 판정이
+무엇을 걷어냈는지 보이려고 함께 든다 — 첫 자(D-0406)의 수와 대조된다."""
 
 
 def parted(loaded: list[tuple[np.ndarray, float]]) -> dict[str, int]:
-    """같은 곡 앞↔뒤 거리와 **다른 곡과의 거리** (O-77 · D-0406).
+    """같은 곡 앞↔뒤 거리와 **다른 곡과의 거리** (O-77 · D-0406 · D-0407).
 
-    **귀무는 다른 곡이다.** 둘이 같으면 곡마다 고유한 리듬이 없는 것이고, 그러면
-    쪼갬은 D-0402가 고른 관례로 둬야 한다.
+    **귀무를 둘 낸다.** 돌리지 않은 것(`other`)에는 *«녹음이 다른 자리에서
+    시작했다»*가 섞여 있고, 돌린 것(`turned`)에는 안 섞인다. 그리고 **고른 곡은
+    뺀다** — 베낄 리듬이 없는 곡이 양쪽을 똑같이 끌어내려 신호를 묽게 만든다.
+
+    사분위는 `corpus_rhythm.spread` **한 자**가 낸다 (D-0043).
     """
-    verdict = split_half(loaded)
-    found = {"split_read": verdict.read}
-    # **사분위는 `corpus_rhythm.spread`가 낸다** (D-0043). 여기서 다시 내면 바닥이
-    # 두 곳에 서고, 둘 중 하나는 반드시 낡는다.
-    for name, values in (("same", verdict.same), ("other", verdict.other)):
+    whole = split_half(loaded)
+    only = split_half(peaked(loaded))
+    found = {"split_read": whole.read, "split_peaked_read": only.read}
+    for name, values in (
+        ("same", whole.same),
+        ("other", whole.other),
+        ("turned", whole.turned),
+    ):
+        found[f"split_{name}_mid_permille"] = round(spread(values)[1] * 1000)
+    for name, values in (("same", only.same), ("turned", only.turned)):
         low, mid, high, _top = spread(values)
-        found[f"split_{name}_q1_permille"] = round(low * 1000)
-        found[f"split_{name}_mid_permille"] = round(mid * 1000)
-        found[f"split_{name}_q3_permille"] = round(high * 1000)
+        found[f"split_peaked_{name}_q1_permille"] = round(low * 1000)
+        found[f"split_peaked_{name}_mid_permille"] = round(mid * 1000)
+        found[f"split_peaked_{name}_q3_permille"] = round(high * 1000)
     return found
 
 
@@ -203,8 +223,12 @@ def main() -> int:
         print(f"{folder.name} · 반쪽을 낸 곡 {parts['split_read']}개")
         for key in SPLIT:
             print(f"  {key:<26} {parts[key]}")
-        gap = parts["split_other_mid_permille"] - parts["split_same_mid_permille"]
-        print(f"\n  신호 (다른 곡 중앙 - 같은 곡 중앙) {gap} 천분율")
+        raw = parts["split_other_mid_permille"] - parts["split_same_mid_permille"]
+        turn = parts["split_turned_mid_permille"] - parts["split_same_mid_permille"]
+        real = parts["split_peaked_turned_mid_permille"] - parts["split_peaked_same_mid_permille"]
+        print(f"\n  신호 · 안 돌림            {raw} 천분율  (원점 차이가 섞여 있다)")
+        print(f"  신호 · 돌림              {turn} 천분율")
+        print(f"  신호 · 돌림 + 봉우리만    {real} 천분율  ← **판정은 이것이다**")
         print("**0에 가까우면 곡마다 고유한 리듬이 없다** — 쪼갬을 관례로 둔다 (O-77)")
         return 0
 

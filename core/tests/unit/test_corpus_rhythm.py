@@ -16,7 +16,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hathor.application.corpus_rhythm import BEATS_PER_BAR, FLAT, phase_spread, split_half
+from hathor.application.corpus_rhythm import (
+    BEATS_PER_BAR,
+    FLAT,
+    peaked,
+    phase_spread,
+    split_half,
+)
 from hathor.domain.services.onset import PHASE_BINS
 
 HOP = 0.01
@@ -97,7 +103,9 @@ def test_고름의_선을_옮겨_적지_않았다() -> None:
     assert pytest.approx(1.5 / PHASE_BINS) == FLAT
 
 
-def _voiced(offsets: tuple[int, ...], seconds: float = 40.0, seed: int = 0) -> np.ndarray:
+def _voiced(
+    offsets: tuple[int, ...], seconds: float = 40.0, seed: int = 0, start: int = 0
+) -> np.ndarray:
     """**그 곡만의 박 안 자리**에 치는 포락선. `offsets`는 박을 넷으로 나눈 칸.
 
     **칸 한가운데를 친다** (`MIDDLE`). 칸 경계에 치면 주기 보간의 0.0x칸 차이로
@@ -106,9 +114,9 @@ def _voiced(offsets: tuple[int, ...], seconds: float = 40.0, seed: int = 0) -> n
     """
     frames = int(seconds / HOP)
     envelope = np.random.default_rng(seed).random(frames) * 0.02
-    for start in range(0, frames - BEAT_FRAMES, BEAT_FRAMES):
+    for head in range(start, frames - BEAT_FRAMES, BEAT_FRAMES):
         for one in offsets:
-            envelope[start + round((one + 0.5) * BEAT_FRAMES / PHASE_BINS)] += 1.0
+            envelope[head + round((one + 0.5) * BEAT_FRAMES / PHASE_BINS)] += 1.0
     return envelope
 
 
@@ -227,3 +235,51 @@ def test_앞뒤가_다른_곡은_같은_곡_거리가_크다() -> None:
     verdict = split_half([(turning, HOP), (_voiced((1,), seed=4), HOP)])
 
     assert verdict.same[0] > 0.8, "앞뒤가 다른 곡인데 거리가 0에 가깝다"
+
+
+def test_모양은_같고_시작만_다르면_돌린_신호가_0이다() -> None:
+    """**이 자의 요점이다** (D-0407).
+
+    곡마다 녹음이 시작한 자리가 다르면 **리듬이 똑같아도** 분포가 통째로 돌아간다 —
+    돌리지 않은 귀무는 그것을 「곡마다 다른 리듬」으로 읽는다. 생성이 베끼는 것은
+    모양이지 원점이 아니므로(어차피 우리 격자 머리에 맞춘다) **판정은 돌린 쪽이다.**
+    """
+    turned = [
+        (_voiced((0, 2), seed=index, start=(index % PHASE_BINS) * 12), HOP) for index in range(6)
+    ]
+
+    verdict = split_half(turned)
+
+    assert verdict.signal is not None
+    assert verdict.signal > 0.3, "원점만 다른데 돌리지 않은 신호가 안 났다 — 자가 이상하다"
+    assert verdict.turned_signal == pytest.approx(0.0, abs=0.05)
+
+
+def test_모양이_진짜_다르면_돌려도_남는다() -> None:
+    """**돌리기가 신호를 다 먹으면 쓸 수 없는 자다.** 거짓 음성이 된다 (GR-0.8)."""
+    shapes = ((0,), (0, 1), (0, 1, 2), (0, 2), (1, 2), (0, 1, 3))
+    songs = [(_voiced(one, seed=index), HOP) for index, one in enumerate(shapes)]
+
+    verdict = split_half(songs)
+
+    assert verdict.turned_signal is not None
+    assert verdict.turned_signal > 0.2
+
+
+def test_돌린_거리가_안_돌린_것보다_크지_않다() -> None:
+    """**돌리기는 귀무를 가깝게만 만든다.** 커지면 최솟값을 안 고른 것이다."""
+    songs = _songs()
+
+    verdict = split_half(songs)
+
+    assert all(turn <= raw + 1e-9 for turn, raw in zip(verdict.turned, verdict.other, strict=True))
+
+
+def test_고른_곡을_거른다() -> None:
+    """**봉우리가 없는 곡은 베낄 리듬이 없다** (D-0401의 45.9%).
+
+    섞여 들면 같은 곡도 다른 곡도 거리가 0에 가까워 **양쪽을 똑같이 끌어내린다.**
+    """
+    noise = [(_noise(seed=200 + index), HOP) for index in range(6)]
+
+    assert len(peaked(noise + _songs())) == len(PLACES)
