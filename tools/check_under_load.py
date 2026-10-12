@@ -51,11 +51,21 @@ WORKERS = 16
 MINE = "check_under_load.py"
 """저 자신은 안 돈다. **제가 저를 부르면 갈래가 제곱으로 는다.**"""
 
+PAIRED = ("tools/tree_guard.py",)
+"""**앞선 걸음이 있어야 뜻이 있는 관문** (D-0400 · D-0219).
+
+`tree_guard --check`는 `--snapshot`이 뜬 지문과 대조한다. 혼자 돌리면 *«지문이 없다»*로
+2를 내고, 부하 검사는 그것을 **부하에서 빨개진 관문**으로 읽었다 — 실측 4건, 전부
+거짓 경보다 (GR-0.8). 짝을 여기서 같이 돌리면 **열여섯 갈래가 같은 지문 파일에
+달려들어** 찢긴 읽기가 또 거짓 경보를 낸다.
+
+**부하에서 안 재는 관문이 생긴 것이고, 그 차집합이 이 선언이다.**"""
+
 
 def gates() -> list[str]:
-    """`make check`이 부르는 관문 전부."""
+    """`make check`이 부르는 관문 전부. **짝이 필요한 것은 뺀다** (D-0400)."""
     found = GATE.findall(MAKEFILE.read_text(encoding="utf-8"))
-    return sorted({one for one in found if not one.endswith(MINE)})
+    return sorted({one for one in found if not one.endswith(MINE) and one not in PAIRED})
 
 
 def once(tool: str) -> tuple[str, int, str]:

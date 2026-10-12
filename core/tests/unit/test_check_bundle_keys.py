@@ -190,3 +190,32 @@ def test_실물에서_onset만_안_읽힌다() -> None:
 def test_실물이_통과한다() -> None:
     """관문이 지금 초록인가. **고친 뒤의 상태가 이 줄이다.**"""
     assert KEYS.verdict(repo_root()) == []
+
+
+# ------------------------------------------------ 배선 (D-0400 · D-0353)
+#
+# **부품을 재고 배선을 안 쟀다.** 위의 열둘은 `verdict()`를 직접 부르므로, 입구에서
+# 그 호출이 끊겨도 아무도 안 운다 — 전수 변이가 **안 운 배선 셋**으로 그것을 잡았다.
+
+
+def test_문제가_있으면_입구가_1을_낸다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`main()` → `verdict()`. **끊기면 「문제 0건」이 되어 통과한다.**"""
+    monkeypatch.setattr(KEYS, "verdict", lambda _root: ["심은 문제"])
+    monkeypatch.setattr("sys.argv", ["check_bundle_keys.py", "--check"])
+
+    assert KEYS.main() == 1
+
+
+def test_통과줄이_센_수를_말한다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`main()` → `written()` · `scan()`. **수가 화면에 없으면 0인 것도 모른다** (D-0269)."""
+    monkeypatch.setattr(KEYS, "verdict", lambda _root: [])
+    monkeypatch.setattr(KEYS, "written", lambda _root: {"가계열"})
+    monkeypatch.setattr(KEYS, "scan", lambda _root, _f: ({"가계열": ["x.py:1"]}, {"가계열": []}))
+    monkeypatch.setattr("sys.argv", ["check_bundle_keys.py", "--check"])
+
+    assert KEYS.main() == 0
+    spoke = capsys.readouterr().out
+    assert "계열 1개" in spoke, "written()이 끊겼다"
+    assert "가계열 1곳" in spoke, "scan()이 끊겼다"

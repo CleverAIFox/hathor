@@ -77,4 +77,7 @@ def test_합성만으로_선_강제자_수가_대장과_같다() -> None:
     synthetic = [row for row in rows if base(row.rsplit("|", 2)[1]) == "합성"]
 
     assert rows, "대장이 비었다"
-    assert _claim(r"강제자 \*\*(\d+)건\*\*이 합성 자료만으로") == len(synthetic)
+    # **같은 수를 두 곳에 안 적는다** (D-0043 · D-0399). 제목 칸이 「**8건**」을 또
+    # 들고 있었고 `doc_fsck`는 크기 칸만 고쳤다 — 그래서 **고치는 자가 있는 수가
+    # 고쳐지지 않은 수 옆에서 어긋났다.** 이제 크기 칸 하나만 본다.
+    assert _claim(r"대장 \d+건 중 합성 (\d+) ·") == len(synthetic)

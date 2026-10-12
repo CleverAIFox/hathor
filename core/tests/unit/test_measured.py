@@ -538,3 +538,14 @@ def test_measure가_템포까지_다시_잰다() -> None:
     start = recipe.index("\nmeasure:")
 
     assert "probe_tempo.py --emit" in recipe[start : recipe.index("\n\n", start)]
+
+
+def test_check가_묶인_상수까지_본다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`check()` → `tied()` **배선** (D-0400 · D-0353).
+
+    위의 넷은 `tied()`를 직접 부른다. 입구에서 그 호출이 끊기면 **상수가 낡아도
+    `make check`이 초록**이고, 전수 변이가 그것을 「안 운 배선」으로 잡았다.
+    """
+    monkeypatch.setattr(TOOL, "tied", lambda root=None: ["심은 문제"])
+
+    assert "심은 문제" in TOOL.check()

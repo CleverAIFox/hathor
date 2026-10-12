@@ -108,3 +108,60 @@ def test_자의_이름이_정본과_같다() -> None:
     """**자가 바뀌면 다시 재라고 운다** (D-0374). 홉도 자의 일부다 (D-0145)."""
     assert CANON.canon()["onset"]["ruler"] == TOOL.RULER
     assert "홉" in TOOL.RULER, "자에 홉이 안 적혀 있다"
+
+
+def test_집중도를_천분율_정수로_낸다(tmp_path: Path) -> None:
+    """**정본은 정수만 든다** (D-0366 · D-0399). 비율은 천분율로 적고 거울이 찍는다."""
+    folder = _folder(tmp_path, [120.0, 124.0, 128.0, 132.0])
+    counts = TOOL.explored(TOOL.envelopes(folder))
+
+    assert set(counts) == set(TOOL.PHASE)
+    for key in (one for one in TOOL.PHASE if one.endswith("_permille")):
+        assert 0 <= counts[key] <= 1000, key
+    assert counts["phase_beat_q1_permille"] <= counts["phase_beat_top_permille"]
+    assert counts["phase_beat_top_permille"] <= counts["phase_beat_max_permille"]
+
+
+def test_박_읽기와_마디_읽기를_둘_다_낸다(tmp_path: Path) -> None:
+    """**D-0206의 말이 두 가지로 읽혔다** (D-0399). 둘을 섞어 적으면 비교선이 거짓이 된다.
+
+    또박또박 치는 합성 곡에서는 **박에 몰리고 마디엔 고르다** — 두 수가 크게 갈린다.
+    """
+    folder = _folder(tmp_path, [120.0, 124.0, 128.0, 132.0])
+    counts = TOOL.explored(TOOL.envelopes(folder))
+
+    assert counts["phase_beat_top_permille"] > counts["phase_bar_top_permille"] + 100
+
+
+def test_정본에_아직_없는_수를_선언한다() -> None:
+    """**차집합은 선언으로만** (D-0219 · D-0399).
+
+    `emit()`은 없는 키를 안 더한다 (D-0366) — 그래서 차례가 둘이다. 이 판이 수를 찍고,
+    다음 판이 정본의 키·표시·거울을 짓는다. 그때 `PHASE`가 `EMITS`로 옮겨 간다.
+    """
+    assert not set(TOOL.PHASE) & set(TOOL.EMITS), "둘에 다 있으면 상류 검사가 운다"
+    assert set(TOOL.EMITS) <= set(CANON.canon()["onset"]["counts"]), "정본에 없는 키를 선언했다"
+    assert not set(TOOL.PHASE) & set(CANON.canon()["onset"]["counts"]), "정본에 들었으면 EMITS로"
+
+
+def test_입구가_정본의_수를_찍는다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`main()` → `counted()` **배선** (D-0400 · D-0353).
+
+    위의 열은 `counted()`를 직접 부르므로 **입구에서 그 호출이 끊겨도 안 운다** —
+    전수 변이가 그것을 잡았다. 화면에 수가 없으면 `make measure`를 돌린 사람이
+    **무엇이 바뀌었는지 모른다** (D-0269).
+    """
+    folder = _folder(tmp_path, [120.0, 128.0, 132.0])
+    monkeypatch.setattr(TOOL, "counted", lambda _folder: dict.fromkeys(TOOL.EMITS, 7))
+    # **받은 것을 그대로 비춘다.** 상수를 내면 `envelopes()`가 끊겨도 같은 수가 나와
+    # **그 절단이 안 보인다** — 전수 변이가 그것을 잡았다 (D-0400).
+    monkeypatch.setattr(TOOL, "explored", lambda loaded: dict.fromkeys(TOOL.PHASE, len(loaded)))
+    monkeypatch.setattr("sys.argv", ["probe_tempo.py", "--out", str(folder)])
+
+    assert TOOL.main() == 0
+    said = " ".join(capsys.readouterr().out.split())
+
+    assert "bpm_folded_median 7" in said, "counted()가 끊겼다"
+    assert "phase_bar_top_permille 3" in said, "envelopes()나 explored()가 끊겼다"
