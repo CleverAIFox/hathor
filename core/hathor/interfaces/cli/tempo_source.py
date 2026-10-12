@@ -24,8 +24,9 @@ def resolve_tempo(args: argparse.Namespace, source_keys: list[str]) -> tuple[int
     그것이 이 판 전까지의 상태였다.
 
     차례는 **사람 → 참조곡 → 코퍼스 중앙**이다. 사람이 `--tempo`를 주면 그대로 쓰고,
-    안 주면 참조곡의 `onset/drums`에서 뽑고, 그것도 못 읽으면 `DEFAULT_TEMPO_BPM`으로
-    떨어진다. **어디서 왔는지는 산출물이 말한다** (D-0269).
+    안 주면 참조곡의 **온셋 포락선 산출물**(`keys-*.onsets` · 믹스)에서 뽑고, 그것도
+    못 읽으면 `DEFAULT_TEMPO_BPM`으로 떨어진다. **어디서 왔는지는 산출물이 말한다**
+    (D-0269).
     """
     from hathor.application.reference_tempo import from_envelopes
     from hathor.infrastructure.onset_store import find_envelope_root, load_envelope

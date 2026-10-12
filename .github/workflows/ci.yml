@@ -101,6 +101,11 @@ jobs:
         working-directory: .
         run: python3 tools/check_artifacts.py --check
 
+      # D-0395. 묶음 배열을 **쓰고 안 읽는 계열** — 저장소만 읽으므로 러너에서도 돈다.
+      - name: Bundle array readers
+        working-directory: .
+        run: python3 tools/check_bundle_keys.py --check
+
       - name: Model licenses
         working-directory: .
         run: python3 tools/check_model_licenses.py --check
