@@ -590,3 +590,66 @@ def test_그물이_임시_저장소_쓰기는_안_문다(tmp_path: Path) -> None
     )
 
     assert _root_writes(page) == []
+
+
+# ------------------------------------- 시험이 실물 저장소를 안 고친다 (D-0398)
+#
+# **D-0386은 `git` 쓰기만 봤다.** 파일 쓰기는 그물 밖이었고 **정적으로는 안 보인다** —
+# 쓰는 자가 시험이 아니라 **시험이 부른 도구**다. `test_mutate_gate`가 `ROOT`를 안 바꾼
+# 채 `cut_wiring()`을 불러 실물 `tools/tidy.py`를 덮었고, 그가 **190줄이 비워진 트리**를
+# 받았다. `make check`은 **전부 초록이었다.**
+
+GUARD = _tool("tree_guard")
+
+
+def test_나무_지킴이가_make_test에_걸려_있다() -> None:
+    """**안 걸면 안 돈다** (D-0126). 지문만 뜨고 대조를 안 하면 장식이다."""
+    recipe = (ROOT / "Makefile").read_text(encoding="utf-8")
+    start = recipe.index("\ntest:")
+    block = recipe[start : recipe.index("\n\n", start)]
+
+    assert "tree_guard.py --snapshot" in block
+    assert "tree_guard.py --check" in block
+    assert block.index("--snapshot") < block.index("pytest"), "지문을 시험 뒤에 뜬다"
+    assert block.index("pytest") < block.index("--check"), "대조를 시험 전에 한다"
+
+
+def test_지켜보는_파일이_바닥을_넘는다() -> None:
+    """**0개를 지켜보며 「아무것도 안 바뀌었다」를 내놓을 수 있다** (D-0230)."""
+    assert len(GUARD.fingerprint()) >= GUARD.FLOOR
+
+
+def test_바뀐_파일을_센다() -> None:
+    """바뀐 것 · 생긴 것 · 사라진 것 셋 다 든다."""
+    before = {"가": [1, 1], "나": [2, 2]}
+
+    assert GUARD.changed(before, before) == []
+    assert GUARD.changed(before, {**before, "가": [1, 9]}) == ["가"]
+    assert GUARD.changed(before, {**before, "다": [3, 3]}) == ["다"]
+    assert GUARD.changed(before, {"가": [1, 1]}) == ["나"]
+
+
+def test_되돌려_놔도_걸린다() -> None:
+    """**쓰기 자체가 결함이다.** 내용이 같아도 `mtime`이 다르면 누가 쓴 것이다.
+
+    `test_mutate_gate`는 `finally`로 되돌리고 있었다 — 그래서 내용만 보면 **영원히
+    안 걸린다.** 그 창에서 끊긴 것이 이번 사고다.
+    """
+    before = {"가": [10, 111]}
+
+    assert GUARD.changed(before, {"가": [10, 222]}) == ["가"]
+
+
+def test_시험_나무는_안_지켜본다() -> None:
+    """**빨간 시험을 일부러 심고 지우는 자가 있다** (D-0359 · D-0219).
+
+    그 차집합은 **선언으로만** 비운다 — `WATCHED`에 `core/tests`가 없는 것이 그 선언이다.
+    """
+    assert "core/tests" not in GUARD.WATCHED
+    assert set(GUARD.WATCHED) == {"tools", "core/hathor"}
+
+
+def test_저장소_안에_지문을_안_쓴다() -> None:
+    """**새 파일이 `ship`의 위생에 센다.** 지문은 기기의 임시 자리에 둔다."""
+    assert ROOT not in GUARD.where().parents
+    assert GUARD.where().name.startswith("hathor-tree-")

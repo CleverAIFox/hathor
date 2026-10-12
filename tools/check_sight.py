@@ -152,6 +152,7 @@ PINNED = {
     "ship.PASSING": 3,
     "ship.REGENERABLE": 1,
     "step0_check.AUDIO_EXTS": 10,
+    "tree_guard.WATCHED": 2,
 }
 """**시야 못. 정본은 여기 하나다** (D-0223). `--update`로만 조인다.
 

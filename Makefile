@@ -91,8 +91,10 @@ type:          ## 제품 · 관문 도구 · 검사 코드. **셋 다 본다** (
 arch:
 	cd core && uv run lint-imports
 test:
+	python3 tools/tree_guard.py --snapshot
 	cd core && uv run pytest --cov=hathor -q -n auto --dist loadgroup
 	python3 tools/check_coverage.py
+	python3 tools/tree_guard.py --check
 
 quick:         ## 고치는 동안 도는 고리. **관문이 아니다** — 커버리지·문서·타입은 `make check` (D-0238)
 	cd core && uv run ruff check . ../tools

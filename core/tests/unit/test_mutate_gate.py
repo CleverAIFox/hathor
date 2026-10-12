@@ -227,14 +227,22 @@ def test_끝난_뒤_남은_변이를_센다() -> None:
 
 
 def test_미리_빨간_시험이_있으면_수를_판정하지_않는다(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """**미리 빨간 시험이 그 자리를 겨눈 시험일 수 있다** (D-0359).
 
     그 시험을 빼고 세면 **울었어야 하는 자리가 살아남은 것으로 잡힌다** — 실제로
     `doc_fsck:living_documents`가 그렇게 부풀었고, 문서 수 하나가 어긋난 것이 까닭이었다.
     수가 **위로** 틀리므로 천장을 내릴 때는 안 걸리고 **올릴 때 거짓 근거가 된다.**
+
+    **`ROOT`를 임시로 돌린다** (D-0398). 이 시험은 `ROOT`를 안 바꾼 채 `cut_wiring()`을
+    불러 **실물 `tools/tidy.py`를 「# 잘렸다」로 덮었다** — `finally`가 되돌리지만 그
+    창에서 끊기면 파일이 빈다. 실제로 그가 **190줄이 비워진 트리**를 받았고 `make ship`이
+    막혔다. 끄고 있던 `dirty_tools`가 바로 그것을 막으라고 있던 자다.
     """
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "tidy.py").write_text("def survey():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(TOOL, "ROOT", tmp_path)
     monkeypatch.delenv("ONLY", raising=False)
     monkeypatch.setattr(TOOL, "dirty_tools", list)
     monkeypatch.setattr(TOOL, "invoked_tools", lambda: ["tidy"])
@@ -267,12 +275,17 @@ def test_못_읽은_파일을_혐의로_세지_않는다() -> None:
 
 
 def test_겨눔_불명이_늘면_막는다(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """**「울었다」가 「그 자리를 겨눈 시험이 울었다」와 같지 않다** (D-0360).
 
     절단이 엉뚱한 것을 깨뜨려 아무 시험이나 울어도 예전에는 「메워졌다」가 됐다.
+
+    **`ROOT`를 임시로 돌린다** (D-0398) — 위와 같은 까닭이다.
     """
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "tidy.py").write_text("def survey():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(TOOL, "ROOT", tmp_path)
     monkeypatch.delenv("ONLY", raising=False)
     monkeypatch.setattr(TOOL, "UNAIMED_CEILING", 0)
     monkeypatch.setattr(TOOL, "WIRING_CEILING", 0)

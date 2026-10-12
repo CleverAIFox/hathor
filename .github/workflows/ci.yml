@@ -174,12 +174,22 @@ jobs:
       - name: Architecture boundary
         run: uv run lint-imports
 
+      # D-0398. **시험이 실물 저장소의 코드를 고쳤나.** 앞뒤로 지문을 뜬다 — 러너에서도
+      # 같은 일이 일어나고, 거기서는 아무도 `git status`를 안 본다.
+      - name: Tree fingerprint
+        working-directory: .
+        run: python3 tools/tree_guard.py --snapshot
+
       - name: Test
         run: uv run pytest --cov=hathor -q -n auto --dist loadgroup
 
       - name: Coverage ratchet
         working-directory: .
         run: python3 tools/check_coverage.py
+
+      - name: Tree unchanged
+        working-directory: .
+        run: python3 tools/tree_guard.py --check
 
       # 상류 패키지의 취약점은 이 저장소가 고칠 수 없다. 막지 않고 노란불로 알린다 (D-0219).
       # `|| true`였을 때는 취약점이 있어도 초록이라 **알림조차 아니었다.**
