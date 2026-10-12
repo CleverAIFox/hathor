@@ -72,6 +72,23 @@ METRIC_STRESS: tuple[int, ...] = (0, 2, 1, 2)
 """
 
 
+OFFBEAT_STRESS = max(METRIC_STRESS) + 1
+"""**박 사이는 어느 박보다 여리다** (D-0402).
+
+새 표를 손으로 적지 않는다 (D-0043) — `METRIC_STRESS`에서 **한 칸 더 내린 자리**이고,
+그것이 8분 격자의 음악 표준이다: 강 · (사이) · 중 · (사이) …
+"""
+
+EIGHTH_STRESS: tuple[int, ...] = tuple(
+    one for stress in METRIC_STRESS for one in (stress, OFFBEAT_STRESS)
+)
+"""8분 여덟 자리의 강세 — `(0, 3, 2, 3, 1, 3, 2, 3)`.
+
+**`METRIC_STRESS`에서 끌어낸다.** 두 벌로 적으면 어긋나고, 그때 어느 쪽이 참인지
+아무도 모른다 (D-0043 · GR-0.7).
+"""
+
+
 def softer(level: int, steps: int) -> int:
     """여린소리표에서 `steps`칸 아래. **표 밖으로 안 나간다.**
 

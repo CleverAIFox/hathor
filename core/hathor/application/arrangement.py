@@ -28,6 +28,7 @@ from collections.abc import Sequence
 from hathor.domain.services.melody import sing
 from hathor.domain.services.midi_writer import (
     DYNAMICS,
+    EIGHTH_STRESS,
     METRIC_STRESS,
     MIDDLE_C,
     TICKS_PER_BEAT,
@@ -48,6 +49,16 @@ BARS_PER_SECTION = 8
 둘 중 하나는 반드시 틀린다.**
 """
 TICKS_PER_BAR = TICKS_PER_BEAT * BEATS_PER_BAR
+
+SUBDIVISIONS = 2
+"""배경이 한 박을 몇 번 치나 — **8분** (D-0402).
+
+**밖에서 온 격자다.** 대중가요 반주의 기본 쪼갬이고 `BEATS_PER_BAR = 4`와 같은 자리다 —
+맞추는 값이 아니다. **실측으로 고르면 그 순간 D-0058이다.**
+
+왜 하나로 멈추나: 16분까지 쪼개면 배경이 전경을 덮는다. **판정은 「코퍼스 범위 안인가」
+이지 「중앙에 맞췄나」가 아니다** (D-0207과 같은 규율).
+"""
 
 
 def _beat(start_tick: int) -> int:
@@ -185,16 +196,23 @@ def arrange(
                     velocity=DYNAMICS["mp"],
                 )
             )
-            beats = BEATS_PER_BAR * repeats
-            beat_length = length // beats
-            for beat in range(beats):
-                fall = METRIC_STRESS[beat % len(METRIC_STRESS)]
+            # **배경은 8분으로 친다** (D-0402). 박마다 치던 동안 **박 안 4등분의
+            # 100%가 박머리에 몰렸다** — 코퍼스는 중앙 38.6%이고 가장 몰린 곡도
+            # 82.2%다. 마디는 D-0207이 범위 안으로 넣었고 **박 안은 그대로였다.**
+            #
+            # **쪼개는 수는 관례다** (D-0111의 `BARS_PER_SECTION`과 같은 꼴). 실측이
+            # 고른 값이 아니고, 코퍼스는 **박 안 어디에 치는지를 안 말해 준다** —
+            # 461곡(45.9%)이 봉우리가 없다 (D-0401).
+            strikes = BEATS_PER_BAR * SUBDIVISIONS * repeats
+            strike_length = length // strikes
+            for strike in range(strikes):
+                fall = EIGHTH_STRESS[strike % len(EIGHTH_STRESS)]
                 for pitch in voiced:
                     notes.append(
                         Note(
                             pitch=pitch,
-                            start_tick=start + beat * beat_length,
-                            duration_ticks=beat_length,
+                            start_tick=start + strike * strike_length,
+                            duration_ticks=strike_length,
                             velocity=softer(DYNAMICS["p"], fall),
                         )
                     )

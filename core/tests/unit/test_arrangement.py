@@ -1,9 +1,13 @@
 """구조와 화성을 잇는 배치 테스트."""
 
+from collections.abc import Sequence
+from typing import cast
+
 import pytest
 
 from hathor.application.arrangement import (
     BARS_PER_SECTION,
+    SUBDIVISIONS,
     TICKS_PER_BAR,
     arrange,
     duration_seconds,
@@ -13,12 +17,14 @@ from hathor.domain.services.midi_writer import (
     DYNAMICS,
     METRIC_STRESS,
     TICKS_PER_BEAT,
+    Note,
     chord_pitches,
     softer,
 )
 from hathor.domain.services.song_structure import StructurePattern
 from hathor.domain.value_objects.chord_progression import ChordProgression
 from hathor.domain.value_objects.key import Key, Mode
+from tests.conftest import tool_module
 
 KEY = Key(tonic="C", mode=Mode.MAJOR)
 PROGRESSION = ChordProgression(key=KEY, degrees=("I", "V", "vi", "IV"))
@@ -67,8 +73,9 @@ def test_소리가_끊기지_않는다():
     """
     notes = arrange(pattern("UU"), PROGRESSION)
     starts = sorted({note.start_tick for note in notes})
-    # **박 격자다** (D-0207). 마디 격자였을 때 화음 에너지의 100%가 첫 박에 몰렸다.
-    assert all(tick % TICKS_PER_BEAT == 0 for tick in starts)
+    # **8분 격자다** (D-0207 → D-0402). 마디 격자였을 때 화음 에너지의 100%가 첫
+    # 박에 몰렸고, 박 격자에서도 **박 안 4등분의 100%가 박머리에** 몰려 있었다.
+    assert all(tick % (TICKS_PER_BEAT // SUBDIVISIONS) == 0 for tick in starts)
     assert starts[0] == 0
     ends = {note.end_tick for note in notes}
     assert max(ends) == 2 * BARS_PER_SECTION * TICKS_PER_BAR
@@ -143,8 +150,8 @@ def test_progression_shorter_than_section_wraps():
     whole = TICKS_PER_BAR * BARS_PER_SECTION
     # **베이스는 한 번 쳐서 구간 전체를 끈다** — D-0138이 지키려던 것이다.
     assert [n.duration_ticks for n in notes if n.start_tick == 0].count(whole) == 1
-    # **위 성부는 박마다 다시 친다** (D-0207).
-    assert {n.duration_ticks for n in notes} == {whole, TICKS_PER_BEAT}
+    # **위 성부는 8분마다 다시 친다** (D-0207 → D-0402).
+    assert {n.duration_ticks for n in notes} == {whole, TICKS_PER_BEAT // SUBDIVISIONS}
     assert max(n.end_tick for n in notes) == whole
 
 
@@ -323,3 +330,58 @@ def test_잇기가_밀도를_안_바꾼다():
 
     sung = [(0, 480, 60), (480, 480, 60), (960, 480, 62)]
     assert sum(length for _, length, _ in _tie(sung)) == sum(length for _, length, _ in sung)
+
+
+# ------------------------------- 코퍼스 범위 안인가 (D-0402 · D-0401)
+#
+# **판정선이 정본에 있다.** D-0206·D-0207은 그 수를 기록에 적어 두었고 아무도 다시
+# 안 봤다 — 이제 `measured.toml`의 `[onset]`이 들고 이 시험이 **거기서 읽는다.**
+# 재서 수가 움직이면 이 시험이 먼저 운다 (GR-0.7).
+
+
+def _concentration(notes: Sequence[Note], period: int, bins: int = 4) -> float:
+    """그 주기 안 `bins`등분에서 **가장 센 칸의 몫** — 코퍼스를 잰 자와 같은 꼴.
+
+    세기로 무게를 준다. `phase_profile`이 봉우리 높이로 무게를 주는 것과 같다
+    (D-0206) — 발음 수가 아니라 **에너지**가 몰렸는가를 본다.
+    """
+    found = [0.0] * bins
+    for note in notes:
+        found[int((note.start_tick % period) / period * bins) % bins] += note.velocity
+    total = sum(found)
+    return max(one / total for one in found)
+
+
+def _corpus() -> dict[str, int]:
+    return cast("dict[str, int]", tool_module("measured").canon()["onset"]["counts"])
+
+
+def test_마디_집중도가_코퍼스_범위_안이다():
+    """**100% → 41.5%** (D-0207) → **35.8%** (D-0402). 범위는 정본이 든다."""
+    notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
+
+    found = _concentration(notes, TICKS_PER_BAR)
+
+    assert found <= _corpus()["phase_bar_max_permille"] / 1000
+    assert found > _corpus()["phase_bar_q1_permille"] / 1000, "코퍼스보다 고르면 그것도 수상하다"
+
+
+def test_박_안_집중도가_코퍼스_범위_안이다():
+    """**박 안은 100%였다** (D-0402). 박마다 쳐도 **박 안에서는 메트로놈**이었다.
+
+    자가 없어서 안 보였다 — D-0401이 `[onset]`에 박 읽기를 넣고서야 드러났다.
+    """
+    notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
+
+    found = _concentration(notes, TICKS_PER_BEAT)
+
+    assert found <= _corpus()["phase_beat_max_permille"] / 1000
+    assert found > _corpus()["phase_beat_q1_permille"] / 1000
+
+
+def test_쪼갬을_늘리면_집중도가_내려간다():
+    """**방향이 맞나.** 늘려도 안 내려가면 쪼갬이 그 수를 안 움직이는 것이다."""
+    notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
+    only_beats = [note for note in notes if note.start_tick % TICKS_PER_BEAT == 0]
+
+    assert _concentration(notes, TICKS_PER_BEAT) < _concentration(only_beats, TICKS_PER_BEAT)
