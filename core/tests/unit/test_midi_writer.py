@@ -7,8 +7,10 @@
 import pytest
 
 from hathor.domain.services.midi_writer import (
+    DRUM_CHANNEL,
     MAJOR_SCALE,
     TICKS_PER_BEAT,
+    VOICES,
     Note,
     _variable_length,
     chord_pitches,
@@ -158,3 +160,52 @@ def test_invalid_notes_are_rejected(kwargs):
 def test_invalid_tempo_is_rejected():
     with pytest.raises(ValueError):
         render_smf([Note(60, 0, 480)], tempo_bpm=0)
+
+
+# ------------------------------------ 층마다 악기 (D-0405 · O-51)
+#
+# **세 층은 코드에 이미 있었다** — 전경(D-0141) · 배경(D-0137) · 받침(D-0139). 그런데
+# `program_change`를 안 써서 재생기 기본값으로 **셋 다 피아노로 났고**, 사람이 세 번
+# 물었다: *«베이스가 내가 아는 그 콘트라베이스?»* **층이 안 갈리면 귀가 판정을 못 한다.**
+
+
+def test_쓰는_층에만_악기를_준다():
+    """**안 쓰는 채널까지 적으면 바이트가 늘고 아무 소리도 안 낸다.**"""
+    data = render_smf(
+        [
+            Note(pitch=60, start_tick=0, duration_ticks=480),
+            Note(pitch=48, start_tick=0, duration_ticks=480, channel=2),
+        ]
+    )
+
+    programs = [
+        data[index : index + 2]
+        for index in range(len(data) - 1)
+        if data[index] in (0xC0, 0xC1, 0xC2)
+    ]
+
+    assert bytes((0xC0, VOICES[0][1])) in data
+    assert bytes((0xC2, VOICES[2][1])) in data
+    assert bytes((0xC1, VOICES[1][1])) not in data, "안 쓴 층에 악기를 줬다"
+    assert len(programs) == 2
+
+
+def test_음이_제_채널로_난다():
+    """`0x90 | channel`. **채널을 안 실으면 셋이 한 악기로 겹친다.**"""
+    data = render_smf([Note(pitch=60, start_tick=0, duration_ticks=480, channel=2)])
+
+    assert bytes((0x92, 60)) in data
+    assert bytes((0x82, 60, 0)) in data
+
+
+def test_타악_채널은_막는다():
+    """GM 9번은 북이다. **거기에 피아노를 넣으면 화음이 북으로 난다.**"""
+    with pytest.raises(ValueError, match="타악"):
+        Note(pitch=60, start_tick=0, duration_ticks=480, channel=DRUM_CHANNEL)
+
+
+def test_층마다_악기가_다르다():
+    """**같은 번호를 둘에 주면 갈라 들을 수 없다** — 이 판의 목적이 그것이다."""
+    assert len({program for _, program in VOICES.values()}) == len(VOICES)
+    assert set(VOICES) == {0, 1, 2}
+    assert all(0 <= program <= 127 for _, program in VOICES.values())

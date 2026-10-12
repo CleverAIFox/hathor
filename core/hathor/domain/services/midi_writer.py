@@ -127,10 +127,17 @@ class Note:
     start_tick: int
     duration_ticks: int
     velocity: int = DEFAULT_VELOCITY
+    channel: int = 0
+    """어느 층인가 (D-0405). **역할이 곧 채널이다** — `VOICES`가 악기를 준다.
+
+    기본이 0인 것은 **예전 노트가 그대로 돌게** 하기 위해서다. 0은 가락이고,
+    층을 안 적는 부름은 전경으로 난다."""
 
     def __post_init__(self) -> None:
         if not 0 <= self.pitch <= 127:
             raise ValueError(f"MIDI 음높이는 0~127이다: {self.pitch}")
+        if not 0 <= self.channel <= 15 or self.channel == DRUM_CHANNEL:
+            raise ValueError(f"채널은 0~15이고 {DRUM_CHANNEL}은 타악 전용이다: {self.channel}")
         if not 1 <= self.velocity <= 127:
             raise ValueError(f"벨로시티는 1~127이다: {self.velocity}")
         if self.start_tick < 0:
@@ -177,6 +184,26 @@ def _variable_length(value: int) -> bytes:
     return bytes(reversed(chunk))
 
 
+DRUM_CHANNEL = 9
+"""GM이 타악에 못 박아 둔 채널. **밖에서 온 격자다** — 여기에 피아노를 넣으면 북이 난다."""
+
+VOICES: dict[int, tuple[str, int]] = {
+    0: ("가락", 0),
+    1: ("배경", 4),
+    2: ("받침", 33),
+}
+"""채널 → (층 이름, **GM 프로그램 번호**) (D-0405 · O-51).
+
+세 층은 **코드에 이미 있었다** — 전경(D-0141) · 배경(D-0137) · 받침(D-0139). 그런데
+`program_change`를 안 써서 **재생기 기본값으로 셋 다 피아노로 났다.** 사람이 세 번
+물었고(*«베이스가 내가 아는 그 콘트라베이스?»*), **층이 안 갈리면 귀가 판정을 못 한다.**
+
+번호는 GM 표준이다 — 0 어쿠스틱 피아노 · 4 일렉트릭 피아노 · 33 핑거 베이스.
+**어느 층에 무슨 악기인지는 취향이고 이 표가 그 취향의 전부다** (O-51 · 닫힘 D-0405). 바꾸려면
+여기 셋을 고치면 되고, **고르기 쉬운 자리에 둔 것이 이 판의 요점이다.**
+"""
+
+
 def render_smf(
     notes: list[Note],
     *,
@@ -199,14 +226,21 @@ def render_smf(
 
     events: list[tuple[int, int, int, bytes]] = []
     for note in notes:
-        events.append((note.start_tick, 1, note.pitch, bytes((0x90, note.pitch, note.velocity))))
-        events.append((note.end_tick, 0, note.pitch, bytes((0x80, note.pitch, 0))))
+        on, off = 0x90 | note.channel, 0x80 | note.channel
+        events.append((note.start_tick, 1, note.pitch, bytes((on, note.pitch, note.velocity))))
+        events.append((note.end_tick, 0, note.pitch, bytes((off, note.pitch, 0))))
     events.sort()
 
     microseconds = round(60_000_000 / tempo_bpm)
     body = bytearray()
     body += _variable_length(0)
     body += bytes((0xFF, 0x51, 0x03)) + microseconds.to_bytes(3, "big")
+
+    # **쓰는 층에만 악기를 준다** (D-0405). 안 쓰는 채널까지 적으면 바이트가 늘고,
+    # 늘어난 바이트는 **아무 소리도 안 낸다.**
+    for channel in sorted({note.channel for note in notes}):
+        body += _variable_length(0)
+        body += bytes((0xC0 | channel, VOICES[channel][1]))
 
     previous = 0
     for tick, _, _, payload in events:

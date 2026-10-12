@@ -50,6 +50,13 @@ BARS_PER_SECTION = 8
 """
 TICKS_PER_BAR = TICKS_PER_BEAT * BEATS_PER_BAR
 
+LEAD_CHANNEL, PAD_CHANNEL, BASS_CHANNEL = 0, 1, 2
+"""층마다 채널 하나 (D-0405 · O-51). **역할은 D-0137 · D-0139 · D-0141이 이미 적었다** —
+여기서는 그 역할에 **들리는 몸**을 준다. 악기 번호는 `midi_writer.VOICES`가 든다.
+
+가락이 0인 것은 `Note`의 기본값이 0이라 **안 적은 부름이 전경으로 나기** 때문이다.
+"""
+
 SUBDIVISIONS = 2
 """배경이 한 박을 몇 번 치나 — **8분** (D-0402).
 
@@ -194,6 +201,7 @@ def arrange(
                     start_tick=start,
                     duration_ticks=length,
                     velocity=DYNAMICS["mp"],
+                    channel=BASS_CHANNEL,
                 )
             )
             # **배경은 8분으로 친다** (D-0402). 박마다 치던 동안 **박 안 4등분의
@@ -214,6 +222,7 @@ def arrange(
                             start_tick=start + strike * strike_length,
                             duration_ticks=strike_length,
                             velocity=softer(DYNAMICS["p"], fall),
+                            channel=PAD_CHANNEL,
                         )
                     )
             bar_index += repeats
@@ -230,6 +239,7 @@ def arrange(
                 start_tick=start,
                 duration_ticks=length,
                 velocity=softer(DYNAMICS["f"], METRIC_STRESS[_beat(start) % len(METRIC_STRESS)]),
+                channel=LEAD_CHANNEL,
             )
             for start, length, pitch in _tie(
                 sing(

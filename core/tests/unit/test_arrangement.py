@@ -7,6 +7,9 @@ import pytest
 
 from hathor.application.arrangement import (
     BARS_PER_SECTION,
+    BASS_CHANNEL,
+    LEAD_CHANNEL,
+    PAD_CHANNEL,
     SUBDIVISIONS,
     TICKS_PER_BAR,
     arrange,
@@ -385,3 +388,18 @@ def test_쪼갬을_늘리면_집중도가_내려간다():
     only_beats = [note for note in notes if note.start_tick % TICKS_PER_BEAT == 0]
 
     assert _concentration(notes, TICKS_PER_BEAT) < _concentration(only_beats, TICKS_PER_BEAT)
+
+
+def test_층이_제_채널로_간다():
+    """**역할이 곧 채널이다** (D-0405 · O-51).
+
+    셋이 한 채널에 있으면 재생기가 **한 악기로** 낸다 — 사람이 *«베이스가 내가 아는
+    그 콘트라베이스?»*라고 물은 것이 그 상태였다.
+    """
+    notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
+    layers = {note.channel for note in notes}
+
+    assert layers == {LEAD_CHANNEL, PAD_CHANNEL, BASS_CHANNEL}
+    # **받침은 드물고 배경은 잦다** (D-0207 · D-0402). 수가 뒤집히면 역할이 바뀐 것이다.
+    counted = {one: sum(1 for note in notes if note.channel == one) for one in layers}
+    assert counted[BASS_CHANNEL] < counted[LEAD_CHANNEL] < counted[PAD_CHANNEL]

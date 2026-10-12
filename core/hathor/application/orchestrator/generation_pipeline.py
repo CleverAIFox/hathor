@@ -65,7 +65,7 @@ def render(
     가락은 박 격자에서 화음 구성음을 짚는다 (D-0141). **템포는 참조곡에서 온다**
     (D-0392) — 부르는 쪽이 온셋 포락선 산출물에서 뽑아 넘기고 `tempo_from`이 출처를 적는다.
     **반주가 마디 첫 박에만 떨어지는 것은 아직 그대로다** — 마디 **안**의 발음 위치는
-    박 주기를 알아야 정의되므로 다음 판이다 (O-46).
+    박 주기를 알아야 정의되므로 다음 판이다 (O-46 · 닫힘 D-0404).
     """
     pattern = generate_pattern(job.seed, references)
     progression = generate_harmony(

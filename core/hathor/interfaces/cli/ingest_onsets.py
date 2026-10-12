@@ -139,6 +139,6 @@ def run_command(args: argparse.Namespace) -> int:
 
 
 COMMANDS: tuple[Command, ...] = (
-    Command("onsets", "곡별 온셋 포락선을 뽑는다 (O-46)", _build_onsets, run_command),
+    Command("onsets", "곡별 온셋 포락선을 뽑는다 (O-46 · 닫힘 D-0404)", _build_onsets, run_command),
 )
 """`ingest` 표에 실리는 것 (D-0273). `eval clap`과 같은 이유로 꼴을 맞춘다."""
