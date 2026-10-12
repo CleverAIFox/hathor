@@ -43,8 +43,8 @@ BLOCKS = {
 }
 """표식 이름 → (제목에 들어갈 말, 머리 칸). **네 표가 1004곡 전수에서 나온다.**"""
 
-FLOOR_ROWS = 28
-"""네 블록의 행 합계 **바닥** (D-0230). 실측 31행 — 정본이 비면 빈 표가 조용히 들어간다."""
+FLOOR_ROWS = 34
+"""네 블록의 행 합계 **바닥** (D-0230). 실측 38행 — 정본이 비면 빈 표가 조용히 들어간다."""
 
 
 SOURCES = {
@@ -206,6 +206,15 @@ def cell(kind: str, row: dict[str, object], counts: dict[str, int], tracks: int)
         return " / ".join(
             f"{one} {pct(counts[one], tracks)} ({counts[one]}곡)" for one in map(str, name)
         )
+    if kind == "rate-span":
+        # **천분율 두 수 사이** (D-0401). 정본은 정수만 들고 거울이 나눈다.
+        if not isinstance(name, list) or len(name) != 2:
+            raise LookupError(f"`rate-span`의 `of`가 두 키가 아니다: {name!r}")
+        low, high = (str(one) for one in name)
+        missing = [one for one in (low, high) if one not in counts]
+        if missing:
+            raise LookupError(f"`counts`에 없는 센 수를 부른다: {missing}")
+        return f"{counts[low] / 10:.1f}% ~ {counts[high] / 10:.1f}%"
     if kind == "span":
         # **두 수 사이** (D-0397). 사분위처럼 아래와 위가 한 칸인 값이다.
         if not isinstance(name, list) or len(name) != 2:
@@ -230,6 +239,10 @@ def cell(kind: str, row: dict[str, object], counts: dict[str, int], tracks: int)
         return f"{pct(got, tracks)} ({got}곡)"
     if kind == "cases":
         return f"**{got}건**" if row.get("bold") else f"{got}건"
+    if kind == "rate":
+        # **비율은 천분율 정수로 정본에 든다** (D-0399). 282 → `28.2%`.
+        text = f"{got / 10:.1f}%"
+        return f"**{text}**" if row.get("bold") else text
     if kind == "unit":
         # **단위가 붙는 수** (D-0397). `130`과 `130 BPM`은 다른 말이고, 단위를 거울에
         # 손으로 적으면 그것이 또 옮겨 적기다 (GR-0.7).

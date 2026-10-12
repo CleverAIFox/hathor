@@ -206,7 +206,7 @@ def test_통과줄이_센_수를_말한다(
 
     assert TOOL.main() == 0
     spoke = _spoke(capsys)
-    assert "31행" in spoke, "rows_of()가 끊겼다"
+    assert "38행" in spoke, "rows_of()가 끊겼다"
     assert "곡 1004" in spoke, "canon()이 끊겼다"
 
 
@@ -549,3 +549,26 @@ def test_check가_묶인_상수까지_본다(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(TOOL, "tied", lambda root=None: ["심은 문제"])
 
     assert "심은 문제" in TOOL.check()
+
+
+def test_비율을_천분율에서_되살린다() -> None:
+    """**정본은 정수만 든다** (D-0366 · D-0399). 289 → `28.9%`는 거울이 나눈다."""
+    row = {"kind": "rate", "of": "몫"}
+
+    assert TOOL.cell("rate", row, {"몫": 289}, 1004) == "28.9%"
+    assert TOOL.cell("rate", {**row, "bold": True}, {"몫": 289}, 1004) == "**28.9%**"
+
+
+def test_천분율_사분위를_두_수_사이로_찍는다() -> None:
+    row = {"kind": "rate-span", "of": ["아래", "위"]}
+
+    assert TOOL.cell("rate-span", row, {"아래": 272, "위": 318}, 1004) == "27.2% ~ 31.8%"
+
+
+def test_rate_span이_두_키가_아니면_막는다() -> None:
+    """**한 키로 「사이」를 적을 수 없다.** 조용히 한쪽만 찍으면 거울이 거짓이 된다."""
+    with pytest.raises(LookupError):
+        TOOL.cell("rate-span", {"of": "아래"}, {"아래": 272}, 1004)
+
+    with pytest.raises(LookupError):
+        TOOL.cell("rate-span", {"of": ["아래", "위"]}, {"아래": 272}, 1004)

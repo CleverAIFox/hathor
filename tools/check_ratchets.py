@@ -385,7 +385,7 @@ BASELINE: dict[str, int] = {
     "doc_fsck.FLOOR_RULES": 18,
     "doc_fsck.UNENFORCED_CEILING": 16,
     "encoding_check.FLOOR_TRACKED": 200,
-    "measured.FLOOR_ROWS": 28,
+    "measured.FLOOR_ROWS": 34,
     "mutate_gate.UNAIMED_CEILING": 1,
     "mutate_gate.WIRING_CEILING": 0,
     "render_proposal.FLOOR_SLOTS": 5,

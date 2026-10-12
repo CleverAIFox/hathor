@@ -55,7 +55,7 @@ from hathor.infrastructure.onset_store import SUFFIX, find_envelope_root  # noqa
 SECTION = "onset"
 """갈아 넣을 정본 블록."""
 
-RULER = "2026-10-12 · 홉 0.01 · 곡마다 접고 중앙 (D-0392)"
+RULER = "2026-10-12 · 홉 0.01 · 곡마다 접고 중앙 · 박/마디 4등분 (D-0401)"
 """`[onset.counts]`를 낸 자의 이름 (D-0374). **홉과 접는 법이 둘 다 자다.**"""
 
 EMITS = (
@@ -65,30 +65,31 @@ EMITS = (
     "bpm_folded_median",
     "bpm_folded_q1",
     "bpm_folded_q3",
-)
-"""`[onset.counts]`에 넣는 수. **전부 정수다** — 곡명·경로·곡별 행은 안 나간다 (D-0366)."""
-
-PHASE = (
-    "phase_beat_top_permille",
+    "phase_bar_q1_permille",
+    "phase_bar_top_permille",
+    "phase_bar_q3_permille",
+    "phase_bar_max_permille",
     "phase_beat_q1_permille",
+    "phase_beat_top_permille",
     "phase_beat_q3_permille",
     "phase_beat_max_permille",
-    "phase_bar_top_permille",
     "phase_flat",
 )
-"""**아직 정본에 없는 수** — 찍기만 한다 (D-0399 · D-0219).
+"""`[onset.counts]`에 넣는 수. **전부 정수다** — 곡명·경로·곡별 행은 안 나간다 (D-0366).
 
-`measured.emit()`은 **없는 키를 안 더한다** — 더하려면 `display`도 같이 가야 하므로
-사람이 한다 (D-0366). 그래서 차례가 둘이다: 이 판이 **수를 찍고**, 그가 돌려 수를 주면
-다음 판이 **정본의 키·표시·거울**을 짓는다. 그때 이 묶음은 `EMITS`로 옮겨 간다.
+**한 벌로 적는다** (D-0401). 처음에 `(*PHASE, …)`로 펼쳤더니 `measured.emitted()`가 이
+묶음을 **글자로 읽어** 따옴표 안의 이름만 세므로 **아홉이 안 보였다** — 상류 검사가
+*«아무도 안 센다»*로 울었다. 도구를 임포트하면 `numpy`가 딸려 와 관문에 못 넣는다
+(D-0256), 그래서 **읽는 쪽이 글자인 한 선언도 글자여야 한다.**
 
-**정본에 넣을 때까지는 상류 검사가 이 수를 안 본다.** 그 차집합이 여기 적혀 있다.
+비율은 **천분율 정수**다 — 정본은 정수만 들고 거울이 `28.9%`로 찍는다 (D-0043)."""
 
-### 비율을 천분율 정수로 든다
+PHASE = tuple(one for one in EMITS if one.startswith("phase_"))
+"""발음 집중도 — **O-46의 비교선** (D-0399 → D-0401). **`EMITS`에서 끌어낸다** — 두
+벌로 적으면 어긋난다 (D-0043).
 
-정본은 정수만 든다. 집중도는 비율이므로 **천분율**로 적고, 거울이 `28.2%`처럼 찍게
-된다 — 반올림을 한 곳에서만 한다 (D-0043).
-"""
+**마디 읽기와 박 읽기를 둘 다 든다.** D-0206의 28.2%가 어느 쪽이었는지 실측이 갈랐다:
+마디 **28.9%** · 박 38.6%. **기록의 말이 옳았고 내 추정이 틀렸다** (D-0401)."""
 
 
 def envelopes(folder: Path) -> list[tuple[np.ndarray, float]]:
@@ -106,23 +107,21 @@ def envelopes(folder: Path) -> list[tuple[np.ndarray, float]]:
 
 
 def explored(loaded: list[tuple[np.ndarray, float]]) -> dict[str, int]:
-    """**정본에 아직 없는 수** (D-0399). O-46의 비교선이고, 찍어서 사람이 읽는다.
+    """발음 집중도 — **O-46의 비교선** (D-0399 · D-0401).
 
     **두 번 걷는다.** 한 번에 하려면 템포 판정이 위상까지 들고 와야 하고, 그러면
     **생성 경로가 쓰는 함수**(`from_envelopes`)가 코퍼스 집계 꼴로 비틀린다. 1004곡에
     자가상관을 두 번 돌리는 값이고, 이 도구는 `make measure`에서만 돈다.
     """
     phase = phase_spread(loaded)
-    beat_q1, beat_mid, beat_q3, beat_max = phase.spread(phase.beat_top)
-    _, bar_mid, _, _ = phase.spread(phase.bar_top)
-    return {
-        "phase_beat_top_permille": round(beat_mid * 1000),
-        "phase_beat_q1_permille": round(beat_q1 * 1000),
-        "phase_beat_q3_permille": round(beat_q3 * 1000),
-        "phase_beat_max_permille": round(beat_max * 1000),
-        "phase_bar_top_permille": round(bar_mid * 1000),
-        "phase_flat": phase.flat,
-    }
+    found: dict[str, int] = {"phase_flat": phase.flat}
+    for name, values in (("bar", phase.bar_top), ("beat", phase.beat_top)):
+        low, mid, high, top = phase.spread(values)
+        found[f"phase_{name}_q1_permille"] = round(low * 1000)
+        found[f"phase_{name}_top_permille"] = round(mid * 1000)
+        found[f"phase_{name}_q3_permille"] = round(high * 1000)
+        found[f"phase_{name}_max_permille"] = round(top * 1000)
+    return found
 
 
 def counted(folder: Path) -> dict[str, int]:
@@ -139,6 +138,7 @@ def counted(folder: Path) -> dict[str, int]:
         "bpm_folded_median": verdict.bpm,
         "bpm_folded_q1": round(cut[0]),
         "bpm_folded_q3": round(cut[2]),
+        **explored(loaded),
     }
 
 
@@ -163,19 +163,9 @@ def main() -> int:
         return 2
 
     print(f"{folder.name} · 곡 {counts['beat_read'] + counts['beat_missing']}개")
-    print("\n정본에 드는 수")
     for key in EMITS:
-        print(f"  {key:<26} {counts[key]}")
-
-    # **정본에 아직 없는 수** (D-0399). 찍어서 사람이 읽고, 그 수로 정본의 키를 짓는다.
-    print("\n정본에 **아직 없는** 수 — O-46의 비교선 (D-0399)")
-    phase = explored(envelopes(folder))
-    for key in PHASE:
-        print(f"  {key:<26} {phase[key]}")
-    print(
-        "  천분율이다 — 282면 28.2%다. **박 읽기와 마디 읽기 둘 다 든다**: D-0206이\n"
-        "  「마디 4등분」이라 적었는데 그 수를 낸 도구는 박을 4등분했다 (D-0399)"
-    )
+        mark = "  (천분율)" if key.endswith("_permille") else ""
+        print(f"  {key:<26} {counts[key]}{mark}")
 
     if not args.emit:
         print("\n정본에 넣으려면 `--emit`. **자의 이름이 바뀌면 거울도 다시 찍는다** (D-0374)")

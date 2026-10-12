@@ -133,15 +133,24 @@ def test_박_읽기와_마디_읽기를_둘_다_낸다(tmp_path: Path) -> None:
     assert counts["phase_beat_top_permille"] > counts["phase_bar_top_permille"] + 100
 
 
-def test_정본에_아직_없는_수를_선언한다() -> None:
-    """**차집합은 선언으로만** (D-0219 · D-0399).
+def test_선언과_정본이_같다() -> None:
+    """**양방향이다** (D-0371). 안 세는 수도, 세고 버리는 수도 둘 다 결함이다.
 
-    `emit()`은 없는 키를 안 더한다 (D-0366) — 그래서 차례가 둘이다. 이 판이 수를 찍고,
-    다음 판이 정본의 키·표시·거울을 짓는다. 그때 `PHASE`가 `EMITS`로 옮겨 간다.
+    D-0399가 **차례를 둘로** 나눴다 — 수를 찍고, 받아서 정본을 짓는다. 이 판(D-0401)이
+    그 둘째이고 `PHASE`는 이제 `EMITS`의 부분집합이다.
     """
-    assert not set(TOOL.PHASE) & set(TOOL.EMITS), "둘에 다 있으면 상류 검사가 운다"
-    assert set(TOOL.EMITS) <= set(CANON.canon()["onset"]["counts"]), "정본에 없는 키를 선언했다"
-    assert not set(TOOL.PHASE) & set(CANON.canon()["onset"]["counts"]), "정본에 들었으면 EMITS로"
+    assert set(TOOL.EMITS) == set(CANON.canon()["onset"]["counts"])
+    assert set(TOOL.PHASE) < set(TOOL.EMITS), "PHASE는 EMITS에서 끌어낸다"
+    assert len(TOOL.PHASE) == 9
+
+
+def test_선언을_글자로_읽을_수_있다() -> None:
+    """**읽는 쪽이 글자다** (D-0401 · D-0256).
+
+    `measured.emitted()`는 도구를 임포트하지 않고 `EMITS = (...)` 안의 **따옴표 친
+    이름**을 센다 — `(*PHASE, …)`로 펼쳤더니 아홉이 안 보여 상류 검사가 울었다.
+    """
+    assert CANON.emitted("probe_tempo", "EMITS") == set(TOOL.EMITS)
 
 
 def test_입구가_정본의_수를_찍는다(
@@ -155,13 +164,21 @@ def test_입구가_정본의_수를_찍는다(
     """
     folder = _folder(tmp_path, [120.0, 128.0, 132.0])
     monkeypatch.setattr(TOOL, "counted", lambda _folder: dict.fromkeys(TOOL.EMITS, 7))
-    # **받은 것을 그대로 비춘다.** 상수를 내면 `envelopes()`가 끊겨도 같은 수가 나와
-    # **그 절단이 안 보인다** — 전수 변이가 그것을 잡았다 (D-0400).
-    monkeypatch.setattr(TOOL, "explored", lambda loaded: dict.fromkeys(TOOL.PHASE, len(loaded)))
     monkeypatch.setattr("sys.argv", ["probe_tempo.py", "--out", str(folder)])
 
     assert TOOL.main() == 0
     said = " ".join(capsys.readouterr().out.split())
 
     assert "bpm_folded_median 7" in said, "counted()가 끊겼다"
-    assert "phase_bar_top_permille 3" in said, "envelopes()나 explored()가 끊겼다"
+    assert "phase_bar_top_permille 7" in said, "집중도가 화면에 없다"
+
+
+def test_집중도가_정본의_수에_함께_든다(tmp_path: Path) -> None:
+    """**`counted()`가 `explored()`를 품는다** (D-0401).
+
+    D-0399에서는 둘이 갈려 있었다 — 정본에 키가 없어서 찍기만 했다. 이제 한 벌이고,
+    `explored()`가 끊기면 **선언한 열다섯 중 아홉이 사라진다.**
+    """
+    counts = TOOL.counted(_folder(tmp_path, [120.0, 124.0, 128.0, 132.0]))
+
+    assert set(counts) == set(TOOL.EMITS)

@@ -244,7 +244,7 @@ bold = true
 
 [onset]
 stamp = "2026-10-12"
-ruler = "2026-10-12 · 홉 0.01 · 곡마다 접고 중앙 (D-0392)"
+ruler = "2026-10-12 · 홉 0.01 · 곡마다 접고 중앙 · 박/마디 4등분 (D-0401)"
 tracks = 1004
 
 [onset.counts]
@@ -254,6 +254,15 @@ bpm_raw_median = 74
 bpm_folded_median = 130
 bpm_folded_q1 = 113
 bpm_folded_q3 = 144
+phase_bar_q1_permille = 272
+phase_bar_top_permille = 289
+phase_bar_q3_permille = 318
+phase_bar_max_permille = 548
+phase_beat_q1_permille = 317
+phase_beat_top_permille = 386
+phase_beat_q3_permille = 455
+phase_beat_max_permille = 822
+phase_flat = 461
 
 [[onset.display]]
 label = "박을 읽은 곡"
@@ -283,3 +292,39 @@ label = "접은 값 사분위"
 kind = "span"
 of = ["bpm_folded_q1", "bpm_folded_q3"]
 suffix = " BPM"
+
+[[onset.display]]
+label = "**화음 발음 집중도** — 마디 4등분 중앙"
+kind = "rate"
+of = "phase_bar_top_permille"
+bold = true
+
+[[onset.display]]
+label = "마디 사분위"
+kind = "rate-span"
+of = ["phase_bar_q1_permille", "phase_bar_q3_permille"]
+
+[[onset.display]]
+label = "마디 최대"
+kind = "rate"
+of = "phase_bar_max_permille"
+
+[[onset.display]]
+label = "박 4등분 중앙"
+kind = "rate"
+of = "phase_beat_top_permille"
+
+[[onset.display]]
+label = "박 사분위"
+kind = "rate-span"
+of = ["phase_beat_q1_permille", "phase_beat_q3_permille"]
+
+[[onset.display]]
+label = "박 최대"
+kind = "rate"
+of = "phase_beat_max_permille"
+
+[[onset.display]]
+label = "**봉우리가 없는 곡**"
+kind = "share-tracks"
+of = "phase_flat"
