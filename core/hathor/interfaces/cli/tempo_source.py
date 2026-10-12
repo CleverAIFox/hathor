@@ -41,7 +41,9 @@ def resolve_tempo(args: argparse.Namespace, source_keys: list[str]) -> tuple[int
     if not found:
         print("참조곡이 온셋 저장분에 없다. 코퍼스 중앙 템포를 쓴다.", file=sys.stderr)
         return DEFAULT_TEMPO_BPM, f"기본값 — 참조 {len(source_keys)}곡이 저장분에 없다"
-    verdict = from_envelopes(found)
+    # **물어본 수를 넘긴다** (D-0396). 위에서 저장분에 없는 곡을 걸러 냈으므로, 안
+    # 넘기면 판정이 「2/2」라 적고 **셋을 물어 둘을 읽은 것이 안 보인다** (GR-0.5).
+    verdict = from_envelopes(found, asked=len(source_keys))
     if verdict.bpm is None:
         return DEFAULT_TEMPO_BPM, verdict.source
     return verdict.bpm, verdict.source

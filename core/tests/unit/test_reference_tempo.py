@@ -111,6 +111,19 @@ def test_빈_목록도_0을_안_낸다() -> None:
     assert from_envelopes([]) == TempoVerdict(bpm=None, read=0, asked=0, raw_median=None)
 
 
+def test_물어본_수를_받아_든다() -> None:
+    """**부르는 쪽이 이미 걸러 냈을 수 있다** (D-0396).
+
+    `tempo_source`가 저장분에 없는 곡을 먼저 뺀다. 그래서 묶음의 길이는 *«읽을 수
+    있던 곡»*이고 **물어본 곡이 아니다** — 안 받으면 「2/2」가 「셋을 물었다」를 덮는다.
+    """
+    one = [(_pulse(120.0), HOP)]
+
+    assert from_envelopes(one, asked=3).asked == 3
+    assert "1/3곡" in from_envelopes(one, asked=3).source
+    assert from_envelopes([], asked=3).source == "기본값 — 참조 3곡에서 박을 못 읽었다"
+
+
 # ------------------------------------------------------------------ 배선
 #
 # **부품을 재고 배선을 안 쟀다** (D-0352). 위의 열셋은 가르는 법을 보고, 아래는

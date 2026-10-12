@@ -58,7 +58,12 @@ class TempoVerdict:
     """박을 읽은 참조곡 수."""
 
     asked: int
-    """물어본 참조곡 수. `read`와 다르면 그 차이가 **못 읽은 곡**이다."""
+    """물어본 참조곡 수. `read`와 다르면 그 차이가 **못 읽은 곡**이다.
+
+    **포락선 묶음의 길이가 아니라 「물어본 수」다** (D-0396). 부르는 쪽이 저장분에
+    없는 곡을 먼저 걸러 내므로, 그 수를 따로 받지 않으면 **언제나 `read`와 같아지고
+    「2/2」가 「셋을 물어 둘을 읽었다」를 덮는다** — 안 센 것을 0이라 말하는 꼴이다
+    (GR-0.5). 시험을 쓰다가 드러났다."""
 
     raw_median: float | None
     """**접기 전** 중앙값. 접는 선(`OCTAVE_FLOOR`)이 틀렸는지 나중에 보려면 이것이 든다."""
@@ -71,12 +76,18 @@ class TempoVerdict:
         return f"참조 {self.read}/{self.asked}곡 중앙"
 
 
-def from_envelopes(envelopes: Sequence[tuple[np.ndarray, float]]) -> TempoVerdict:
+def from_envelopes(
+    envelopes: Sequence[tuple[np.ndarray, float]], *, asked: int | None = None
+) -> TempoVerdict:
     """(온셋 포락선, 홉 초) 묶음에서 템포 하나를 뽑는다.
 
     **곡마다 접고 나서 중앙값을 낸다.** 거꾸로 하면 절반으로 읽힌 곡이 중앙값을 끌어
     내린 뒤에 접혀 엉뚱한 값이 된다 — D-0206의 원값 중앙 67이 그 상태였다.
+
+    `asked`를 주면 **물어본 수**가 그것이다 (D-0396). 안 주면 받은 묶음의 수이고,
+    그때는 저장분에서 빠진 곡이 안 보인다.
     """
+    wanted = len(envelopes) if asked is None else asked
     folded: list[float] = []
     raw: list[float] = []
     for envelope, hop_seconds in envelopes:
@@ -87,10 +98,10 @@ def from_envelopes(envelopes: Sequence[tuple[np.ndarray, float]]) -> TempoVerdic
         raw.append(found)
         folded.append(folded_tempo(found))
     if not folded:
-        return TempoVerdict(bpm=None, read=0, asked=len(envelopes), raw_median=None)
+        return TempoVerdict(bpm=None, read=0, asked=wanted, raw_median=None)
     return TempoVerdict(
         bpm=round(median(folded)),
         read=len(folded),
-        asked=len(envelopes),
+        asked=wanted,
         raw_median=round(median(raw), 2),
     )
