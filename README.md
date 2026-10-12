@@ -89,6 +89,12 @@ uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
     --no-key-estimation          # 음원 없이. C장조 고정
 ```
 
+**듣는 법** (D-0403). 산출물은 SMF이고 **우리는 소리를 안 굽는다** — 악기도 안 고른다
+(`program_change`가 없다). WSL에는 기본으로 소리 장치가 없으므로 둘 중 하나다:
+윈도우로 꺼내 열거나(`cp ~/out.mid /mnt/c/Users/<이름>/Desktop/`), 여기서 WAV로 굽는다
+(`fluidsynth -ni /usr/share/sounds/sf2/FluidR3_GM.sf2 out.mid -F out.wav`).
+**이 저장소는 그 음원 글꼴을 안 들고 다닌다** — 라이선스가 딸린 바깥 자료다 (D-0217과 같은 자리).
+
 참조곡에서 **조성을 추정하고**(D-0054) 가사 반복으로 구조를 뽑는다(D-0049). 화성 도수 사전과
 으뜸음 기준으로 회전한 배열 사전을 걸고(D-0063 · D-0213), 가락이 박마다 화음 구성음을 짚으며
 (D-0141) 성부 진행 · 베이스 · 층별 세기 · 박 분할까지 들어간다(D-0137 ~ D-0207). SMF는 라이브러리

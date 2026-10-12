@@ -33,8 +33,18 @@ def test_cli_prints_when_no_out(capsys):
     assert "harmony" in capsys.readouterr().out
 
 
-def test_cli_requires_dry_run():
+def test_cli_requires_dry_run(capsys):
+    """**길이 둘인데 하나만 말하면 없는 길이 된다** (D-0403).
+
+    D-0052가 MIDI 경로를 붙인 뒤에도 이 자리가 *«아직 dry-run 경로만 구현되어 있다
+    (P0)»*라고 적고 있었고, **그것을 읽은 사람이 소리를 못 듣는다고 판단했다.**
+    """
     assert main(["generate", "--seed", "1"]) == 2
+    said = capsys.readouterr().err
+
+    assert "--midi" in said, "쓸 수 있는 길을 안 말한다"
+    assert "--dry-run" in said
+    assert "아직" not in said, "구현된 것을 안 됐다고 말한다"
 
 
 def test_cli_rejects_unknown_stage():

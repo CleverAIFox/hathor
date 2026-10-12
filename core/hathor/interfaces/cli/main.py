@@ -341,12 +341,12 @@ def _run_generate(args: argparse.Namespace) -> int:
     if args.midi is not None:
         return _run_generate_midi(args)
     if not args.dry_run:
-        print("아직 dry-run 경로만 구현되어 있다 (P0). --dry-run을 사용한다.", file=sys.stderr)
+        # **길이 둘인데 하나만 말하면 없는 길이 된다** (D-0403)
+        print("`--midi <경로>`로 쓰거나 `--dry-run`으로 본다 (D-0052 · D-0403).", file=sys.stderr)
         return 2
 
     job = GenerationJob(seed=args.seed, stages=_parse_stages(args.stages))
     payload = json.dumps(run_dry(job, args.sections), ensure_ascii=False, indent=2, sort_keys=True)
-
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(payload + "\n", encoding="utf-8")
