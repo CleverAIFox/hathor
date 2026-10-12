@@ -206,7 +206,7 @@ def test_통과줄이_센_수를_말한다(
 
     assert TOOL.main() == 0
     spoke = _spoke(capsys)
-    assert "26행" in spoke, "rows_of()가 끊겼다"
+    assert "31행" in spoke, "rows_of()가 끊겼다"
     assert "곡 1004" in spoke, "canon()이 끊겼다"
 
 
@@ -450,3 +450,91 @@ def test_measure가_제출본까지_다시_낸다() -> None:
     assert "probe_artist.py --emit" in block
     assert "docs-fix" in block
     assert "proposal" in block, "거울을 고치고 제출본을 안 낸다 (D-0375)"
+
+
+# ------------------------------------------- 정본에 묶인 상수 (D-0397)
+#
+# **기본 템포 126은 사람이 옮겨 적은 수였다.** 같은 측정 하나를 두고 전수가
+# 1004·1003·200, 못 읽은 곡이 0·1·0으로 네 곳에서 달랐다 (GR-0.7). 수를 코드에 박는
+# 것은 피할 수 없다 — 도메인이 `measured.toml`을 임포트하면 계층이 깨진다. **박되
+# 대조한다.**
+
+
+def test_상수가_정본과_같다() -> None:
+    """`make check`이 보는 그 판정. 지금 `DEFAULT_TEMPO_BPM` ↔ `onset.bpm_folded_median`."""
+    assert TOOL.tied() == []
+
+
+def test_상수가_정본과_다르면_운다(tmp_path: Path) -> None:
+    """**심은 결함** (D-0069). 옛 수(126)를 되돌려 놓으면 잡아야 한다."""
+    where = tmp_path / "core" / "hathor" / "domain" / "services"
+    where.mkdir(parents=True)
+    (where / "midi_writer.py").write_text("DEFAULT_TEMPO_BPM = 126\n", encoding="utf-8")
+
+    problems = TOOL.tied(tmp_path)
+
+    assert len(problems) == 1
+    assert "126" in problems[0] and "낡았다" in problems[0]
+
+
+def test_상수가_식이면_못_읽었다고_운다(tmp_path: Path) -> None:
+    """**못 읽은 것을 통과로 읽지 않는다** (GR-0.5). 식이면 글자로 못 대조한다."""
+    where = tmp_path / "core" / "hathor" / "domain" / "services"
+    where.mkdir(parents=True)
+    (where / "midi_writer.py").write_text("DEFAULT_TEMPO_BPM = 65 * 2\n", encoding="utf-8")
+
+    problems = TOOL.tied(tmp_path)
+
+    assert len(problems) == 1
+    assert "못 읽었다" in problems[0]
+
+
+def test_묶인_상수가_그물에_있다() -> None:
+    """**선언이 비면 아무것도 안 대조한다** (D-0230 · D-0219)."""
+    assert TOOL.TIED, "묶인 상수가 0개다 — 그물이 비었다"
+    for name, (const, section, key) in TOOL.TIED.items():
+        assert (TOOL.ROOT / name).exists(), name
+        assert const and section in TOOL.canon()
+        assert key in TOOL.canon()[section]["counts"]
+
+
+# ------------------------------------------- 새 표시 부류 (D-0397)
+
+
+def test_단위를_붙여_찍는다() -> None:
+    """`130`과 `130 BPM`은 다른 말이다. **단위를 거울에 손으로 적지 않는다.**"""
+    row = {"kind": "unit", "of": "bpm", "suffix": " BPM"}
+    assert TOOL.cell("unit", row, {"bpm": 130}, 1004) == "130 BPM"
+    assert TOOL.cell("unit", {**row, "bold": True}, {"bpm": 130}, 1004) == "**130 BPM**"
+
+
+def test_사분위는_두_수_사이로_찍는다() -> None:
+    row = {"kind": "span", "of": ["low", "high"], "suffix": " BPM"}
+
+    assert TOOL.cell("span", row, {"low": 113, "high": 144}, 1004) == "113 ~ 144 BPM"
+
+
+def test_span이_두_키가_아니면_막는다() -> None:
+    """**한 키로 「사이」를 적을 수 없다.** 조용히 한쪽만 찍으면 거울이 거짓이 된다."""
+    with pytest.raises(LookupError):
+        TOOL.cell("span", {"of": "low"}, {"low": 113}, 1004)
+
+    with pytest.raises(LookupError):
+        TOOL.cell("span", {"of": ["low", "high"]}, {"low": 113}, 1004)
+
+
+def test_박_실측이_거울로_선다() -> None:
+    """**네 블록 다 거울이다** (D-0397). 표식이 없으면 손으로 적힌 표다."""
+    master = (TOOL.ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
+
+    assert TOOL.begin("onset") in master
+    assert TOOL.present(master, "onset") is not None
+    assert "onset" in TOOL.BLOCKS and "onset" in TOOL.SOURCES
+
+
+def test_measure가_템포까지_다시_잰다() -> None:
+    """**상류가 셋이다** (D-0397). 안 걸면 안 돈다 (D-0126)."""
+    recipe = (TOOL.ROOT / "Makefile").read_text(encoding="utf-8")
+    start = recipe.index("\nmeasure:")
+
+    assert "probe_tempo.py --emit" in recipe[start : recipe.index("\n\n", start)]

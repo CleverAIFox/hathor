@@ -39,17 +39,19 @@ BLOCKS = {
     "corpus": ("개발 코퍼스 실측", ("항목", "값")),
     "id3": ("ID3 프레임 실측", ("프레임", "보유율", "용도")),
     "artist": ("아티스트 표기 실측", ("항목", "값")),
+    "onset": ("박 실측", ("항목", "값")),
 }
-"""표식 이름 → (제목에 들어갈 말, 머리 칸). **세 표가 1004곡 전수에서 나온다.**"""
+"""표식 이름 → (제목에 들어갈 말, 머리 칸). **네 표가 1004곡 전수에서 나온다.**"""
 
-FLOOR_ROWS = 20
-"""세 블록의 행 합계 **바닥** (D-0230). 실측 26행 — 정본이 비면 빈 표가 조용히 들어간다."""
+FLOOR_ROWS = 28
+"""네 블록의 행 합계 **바닥** (D-0230). 실측 31행 — 정본이 비면 빈 표가 조용히 들어간다."""
 
 
 SOURCES = {
     "corpus": ("probe_id3", "CORPUS_EMITS", "CORPUS_RULER"),
     "id3": ("probe_id3", "ID3_EMITS", "ID3_RULER"),
     "artist": ("probe_artist", "EMITS", "RULER"),
+    "onset": ("probe_tempo", "EMITS", "RULER"),
 }
 """블록 → (세는 도구, 내는 키를 든 상수, **자의 이름**을 든 상수) (D-0371 · D-0374).
 
@@ -122,6 +124,48 @@ def check_upstream(data: dict[str, dict[str, object]]) -> list[str]:
     return problems
 
 
+TIED = {
+    "core/hathor/domain/services/midi_writer.py": (
+        "DEFAULT_TEMPO_BPM",
+        "onset",
+        "bpm_folded_median",
+    ),
+}
+"""**정본의 수를 그대로 든 상수** → (상수 이름, 블록, 센 수의 키) (D-0397).
+
+기본 템포 126은 D-0206이 손으로 옮긴 수였고, 같은 측정을 두고 **전수가 1004·1003·200,
+못 읽은 곡이 0·1·0**으로 네 곳에서 달랐다. 수를 코드에 박는 것 자체는 피할 수 없다 —
+`import`로는 도메인이 `measured.toml`을 알게 되고 그것이 계층을 깬다. 그래서 **박되
+대조한다.**
+
+코드를 임포트하지 않고 **글자로 읽는다** (`ruler_of`와 같은 이유 · D-0256)."""
+
+CONSTANT = r"(?m)^{name} = (\d+)$"
+"""상수 한 줄. **식이 아니라 수여야 한다** — 식이면 못 읽고, 못 읽으면 운다."""
+
+
+def tied(root: Path | None = None) -> list[str]:
+    """정본의 수와 코드의 상수가 같은가. **다르면 어느 쪽을 고칠지는 사람이 정한다.**"""
+    data = canon()
+    problems: list[str] = []
+    for name, (const, section, key) in TIED.items():
+        path = (root or ROOT) / name
+        found = re.search(CONSTANT.format(name=re.escape(const)), path.read_text(encoding="utf-8"))
+        if found is None:
+            problems.append(f"{name}의 `{const}`을 못 읽었다 — 수 한 줄이 아니다 (D-0397)")
+            continue
+        counts = data.get(section, {}).get("counts")
+        if not isinstance(counts, dict) or key not in counts:
+            problems.append(f"정본의 `[{section}.counts].{key}`가 없다 — `{const}`이 홀로 섰다")
+            continue
+        if int(found.group(1)) != counts[key]:
+            problems.append(
+                f"`{const}`은 {found.group(1)}인데 정본의 `{section}.{key}`는 "
+                f"{counts[key]}다 — **옮겨 적은 수가 낡았다** (GR-0.7 · D-0397)"
+            )
+    return problems
+
+
 def begin(name: str) -> str:
     return f"<!-- measured:{name}:begin -->"
 
@@ -162,6 +206,15 @@ def cell(kind: str, row: dict[str, object], counts: dict[str, int], tracks: int)
         return " / ".join(
             f"{one} {pct(counts[one], tracks)} ({counts[one]}곡)" for one in map(str, name)
         )
+    if kind == "span":
+        # **두 수 사이** (D-0397). 사분위처럼 아래와 위가 한 칸인 값이다.
+        if not isinstance(name, list) or len(name) != 2:
+            raise LookupError(f"`span`의 `of`가 두 키가 아니다: {name!r}")
+        low, high = (str(one) for one in name)
+        missing = [one for one in (low, high) if one not in counts]
+        if missing:
+            raise LookupError(f"`counts`에 없는 센 수를 부른다: {missing}")
+        return f"{prefix}{counts[low]:,} ~ {counts[high]:,}{suffix}"
     if str(name) not in counts:
         raise LookupError(f"`display`가 센 수 `{name}`을 부르는데 `counts`에 없다")
     got = counts[str(name)]
@@ -177,6 +230,11 @@ def cell(kind: str, row: dict[str, object], counts: dict[str, int], tracks: int)
         return f"{pct(got, tracks)} ({got}곡)"
     if kind == "cases":
         return f"**{got}건**" if row.get("bold") else f"{got}건"
+    if kind == "unit":
+        # **단위가 붙는 수** (D-0397). `130`과 `130 BPM`은 다른 말이고, 단위를 거울에
+        # 손으로 적으면 그것이 또 옮겨 적기다 (GR-0.7).
+        text = f"{prefix}{got:,}{suffix}"
+        return f"**{text}**" if row.get("bold") else text
     if kind == "nfc":
         return f"NFC {pct(tracks - got, tracks)} (NFD {got}건)"
     raise LookupError(f"모르는 표시 부류다: {kind}")
@@ -266,7 +324,7 @@ def check() -> list[str]:
             )
     if total < FLOOR_ROWS:
         problems.append(f"정본의 행이 {total}개다(바닥 {FLOOR_ROWS}). **그물이 비었다** (D-0230)")
-    return problems + check_upstream(data)
+    return problems + check_upstream(data) + tied()
 
 
 def fix() -> list[str]:

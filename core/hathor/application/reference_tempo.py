@@ -68,6 +68,13 @@ class TempoVerdict:
     raw_median: float | None
     """**접기 전** 중앙값. 접는 선(`OCTAVE_FLOOR`)이 틀렸는지 나중에 보려면 이것이 든다."""
 
+    folded: tuple[float, ...] = ()
+    """곡마다 접은 값 전부. **중앙값만 내면 사분위를 못 낸다** (D-0397).
+
+    실측 정본(`measured.toml`의 `[onset]`)이 사분위를 들고, 그 수를 내는 `probe_tempo`가
+    이것을 받는다. **접는 법을 두 벌로 구현하지 않기 위해서다** (D-0117) — 탐침이 제
+    손으로 접으면 엔진이 접는 법을 바꿀 때 정본이 조용히 낡는다."""
+
     @property
     def source(self) -> str:
         """산출물에 적을 한 줄. **어디서 온 템포인지 사람이 읽는다** (D-0269)."""
@@ -104,4 +111,5 @@ def from_envelopes(
         read=len(folded),
         asked=wanted,
         raw_median=round(median(raw), 2),
+        folded=tuple(folded),
     )

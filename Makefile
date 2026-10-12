@@ -146,6 +146,7 @@ proposal:      ## 기획서를 MASTER Part I ~ III에서 빌드한다. graphviz 
 measure:       ## 실측 정본을 기기에서 다시 잰다. 음원 1004곡 · var/ingest 필요 (D-0374)
 	cd core && uv run python ../tools/probe_id3.py --emit
 	cd core && uv run python ../tools/probe_artist.py --emit
+	cd core && uv run python ../tools/probe_tempo.py --emit
 	$(MAKE) docs-fix
 	$(MAKE) proposal
 

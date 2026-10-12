@@ -241,3 +241,45 @@ label = "`feat.` `with` `and` `/` `·`"
 kind = "cases"
 of = "separator_words"
 bold = true
+
+[onset]
+stamp = "2026-10-12"
+ruler = "2026-10-12 · 홉 0.01 · 곡마다 접고 중앙 (D-0392)"
+tracks = 1004
+
+[onset.counts]
+beat_read = 1004
+beat_missing = 0
+bpm_raw_median = 74
+bpm_folded_median = 130
+bpm_folded_q1 = 113
+bpm_folded_q3 = 144
+
+[[onset.display]]
+label = "박을 읽은 곡"
+kind = "share-tracks"
+of = "beat_read"
+
+[[onset.display]]
+label = "박을 못 읽은 곡"
+kind = "count"
+of = "beat_missing"
+
+[[onset.display]]
+label = "**기본 템포** — 접은 값의 중앙"
+kind = "unit"
+of = "bpm_folded_median"
+suffix = " BPM"
+bold = true
+
+[[onset.display]]
+label = "접기 전 중앙"
+kind = "unit"
+of = "bpm_raw_median"
+suffix = " BPM"
+
+[[onset.display]]
+label = "접은 값 사분위"
+kind = "span"
+of = ["bpm_folded_q1", "bpm_folded_q3"]
+suffix = " BPM"
