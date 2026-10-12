@@ -3,6 +3,7 @@
 
     cd core && uv run python ../tools/probe_tempo.py           # 수를 찍는다
     cd core && uv run python ../tools/probe_tempo.py --emit    # 정본을 갈아 넣는다
+    cd core && uv run python ../tools/probe_tempo.py --split   # 반쪽 나누기 (O-77)
     make measure                                               # 셋 다 + 거울
 
 **맨 `python3`으로는 안 돈다** — `numpy`와 `hathor`가 프로젝트 묶음에 있다 (D-0367).
@@ -48,7 +49,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import measured  # noqa: E402 — sys.path 조작 뒤라야 한다
 
-from hathor.application.corpus_rhythm import phase_spread  # noqa: E402
+from hathor.application.corpus_rhythm import phase_spread, split_half, spread  # noqa: E402
 from hathor.application.reference_tempo import from_envelopes  # noqa: E402
 from hathor.infrastructure.onset_store import SUFFIX, find_envelope_root  # noqa: E402
 
@@ -90,6 +91,42 @@ PHASE = tuple(one for one in EMITS if one.startswith("phase_"))
 
 **마디 읽기와 박 읽기를 둘 다 든다.** D-0206의 28.2%가 어느 쪽이었는지 실측이 갈랐다:
 마디 **28.9%** · 박 38.6%. **기록의 말이 옳았고 내 추정이 틀렸다** (D-0401)."""
+
+
+SPLIT = (
+    "split_read",
+    "split_same_q1_permille",
+    "split_same_mid_permille",
+    "split_same_q3_permille",
+    "split_other_q1_permille",
+    "split_other_mid_permille",
+    "split_other_q3_permille",
+)
+"""반쪽 나누기가 내는 수 — **아직 정본에 없다** (O-77 · D-0406).
+
+`EMITS`와 **일부러 갈라 둔다.** 정본에 키를 넣으면 `measured --check`가 그 수를
+찾는데, 그 수는 **그의 기기에서만 나온다** (D-0015). D-0399가 같은 자리에서
+차례를 둘로 나눴다 — 먼저 찍고, 수를 받아서 정본을 짓는다 (D-0401이 그 둘째였다).
+
+거리는 **총변동거리**라 0~1이고, 천분율 정수로 적으면 거울이 `49.7%`로 찍는다."""
+
+
+def parted(loaded: list[tuple[np.ndarray, float]]) -> dict[str, int]:
+    """같은 곡 앞↔뒤 거리와 **다른 곡과의 거리** (O-77 · D-0406).
+
+    **귀무는 다른 곡이다.** 둘이 같으면 곡마다 고유한 리듬이 없는 것이고, 그러면
+    쪼갬은 D-0402가 고른 관례로 둬야 한다.
+    """
+    verdict = split_half(loaded)
+    found = {"split_read": verdict.read}
+    # **사분위는 `corpus_rhythm.spread`가 낸다** (D-0043). 여기서 다시 내면 바닥이
+    # 두 곳에 서고, 둘 중 하나는 반드시 낡는다.
+    for name, values in (("same", verdict.same), ("other", verdict.other)):
+        low, mid, high, _top = spread(values)
+        found[f"split_{name}_q1_permille"] = round(low * 1000)
+        found[f"split_{name}_mid_permille"] = round(mid * 1000)
+        found[f"split_{name}_q3_permille"] = round(high * 1000)
+    return found
 
 
 def envelopes(folder: Path) -> list[tuple[np.ndarray, float]]:
@@ -146,6 +183,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="코퍼스 템포 전수 (D-0397)")
     parser.add_argument("--emit", action="store_true", help="실측 정본의 counts를 다시 쓴다")
     parser.add_argument("--out", type=Path, default=None, help="포락선 폴더를 직접 준다")
+    parser.add_argument("--split", action="store_true", help="반쪽 나누기로 O-77을 잰다")
     args = parser.parse_args()
 
     folder = args.out or find_envelope_root(ROOT)
@@ -156,6 +194,20 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    if args.split:
+        try:
+            parts = parted(envelopes(folder))
+        except LookupError as error:
+            print(f"{error}", file=sys.stderr)
+            return 2
+        print(f"{folder.name} · 반쪽을 낸 곡 {parts['split_read']}개")
+        for key in SPLIT:
+            print(f"  {key:<26} {parts[key]}")
+        gap = parts["split_other_mid_permille"] - parts["split_same_mid_permille"]
+        print(f"\n  신호 (다른 곡 중앙 - 같은 곡 중앙) {gap} 천분율")
+        print("**0에 가까우면 곡마다 고유한 리듬이 없다** — 쪼갬을 관례로 둔다 (O-77)")
+        return 0
+
     try:
         counts = counted(folder)
     except LookupError as error:

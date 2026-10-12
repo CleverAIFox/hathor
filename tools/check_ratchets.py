@@ -383,7 +383,7 @@ BASELINE: dict[str, int] = {
     "decision_evidence.UNKNOWN_EVIDENCE": 0,
     "doc_fsck.FLOOR_CODE": 40,
     "doc_fsck.FLOOR_RULES": 18,
-    "doc_fsck.UNENFORCED_CEILING": 16,
+    "doc_fsck.UNENFORCED_CEILING": 15,
     "encoding_check.FLOOR_TRACKED": 200,
     "measured.FLOOR_ROWS": 34,
     "mutate_gate.UNAIMED_CEILING": 1,

@@ -27,6 +27,7 @@ D-0206은 *«마디 4등분»*이라 적었는데 그 수를 낸 `probe_onsets`�
 from __future__ import annotations
 
 from dataclasses import dataclass
+from random import Random
 from statistics import median, quantiles
 from typing import TYPE_CHECKING
 
@@ -45,6 +46,22 @@ FLAT = 1.5 / PHASE_BINS
 
 `probe_onsets`가 D-0160부터 이 선으로 「고른 곡」을 세 왔다 — **새 값이 아니라 옮겨 온
 값이고**, 옮긴 것을 여기 적는다 (GR-0.7)."""
+
+
+QUARTILE_FLOOR = 4
+"""사분위를 내는 데 드는 점의 수. **넷 미만이면 수를 안 낸다** (GR-0.5)."""
+
+
+def spread(values: tuple[float, ...]) -> tuple[float, float, float, float]:
+    """(1사분위, 중앙, 3사분위, 최대). **네 곡 미만이면 사분위가 없다.**
+
+    **두 판정이 같은 자를 쓴다** (D-0043). 반쪽 나누기가 제 손으로 사분위를 내면
+    한쪽이 바닥을 바꿀 때 다른 쪽이 조용히 어긋난다.
+    """
+    if len(values) < QUARTILE_FLOOR:
+        raise LookupError(f"{len(values)}곡으로는 사분위를 못 낸다")
+    cut = quantiles(sorted(values), n=4)
+    return cut[0], median(values), cut[2], max(values)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,11 +84,8 @@ class PhaseVerdict:
     """봉우리가 없는 곡 수 (`FLAT` 아래). **반주 리듬을 못 뽑는 곡이다.**"""
 
     def spread(self, values: tuple[float, ...]) -> tuple[float, float, float, float]:
-        """(1사분위, 중앙, 3사분위, 최대). **네 곡 미만이면 사분위가 없다.**"""
-        if len(values) < 4:
-            raise LookupError(f"{len(values)}곡으로는 사분위를 못 낸다")
-        cut = quantiles(sorted(values), n=4)
-        return cut[0], median(values), cut[2], max(values)
+        """(1사분위, 중앙, 3사분위, 최대)."""
+        return spread(values)
 
 
 def phase_spread(envelopes: Sequence[tuple[np.ndarray, float]]) -> PhaseVerdict:
@@ -95,3 +109,97 @@ def phase_spread(envelopes: Sequence[tuple[np.ndarray, float]]) -> PhaseVerdict:
         bar_top=tuple(bar),
         flat=sum(1 for value in beat if value < FLAT),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SplitVerdict:
+    """**곡마다 고유한 리듬이 있나** — 반쪽 나누기 (O-77 · D-0406).
+
+    같은 곡의 앞 절반과 뒤 절반이 서로 닮았는데 **다른 곡과는 다르면** 그것이 신호다.
+    둘이 같으면 **노이즈를 리듬이라 부르는 것**이고, 그때 쪼갬은 관례로 둬야 한다
+    (D-0402가 고른 자리).
+    """
+
+    same: tuple[float, ...]
+    """같은 곡 앞↔뒤 거리. 곡마다 하나."""
+
+    other: tuple[float, ...]
+    """다른 곡과의 거리. **짝은 시드로 고른다** — 무작위면 판마다 수가 흔들린다."""
+
+    read: int
+    """박을 읽어 양쪽 분포를 다 낸 곡 수."""
+
+    @property
+    def signal(self) -> float | None:
+        """다른 곡 중앙 빼기 같은 곡 중앙. **0에 가까우면 신호가 없다.**
+
+        양수여야 신호다 — 같은 곡이 더 가깝다는 뜻이기 때문이다. 크기는 총변동거리의
+        단위이고 **0~1 사이**다. 판정선은 사람이 정하지 않는다: 귀무(다른 곡)와
+        견주는 것이 판정이며 **차가 0이면 끝이다** (D-0207과 같은 꼴).
+        """
+        if len(self.same) < 2:
+            return None
+        return median(self.other) - median(self.same)
+
+
+def _distance(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+    """두 분포 사이 **총변동거리** — L1의 절반이라 0~1이다.
+
+    0이면 두 분포가 같고 1이면 겹치는 곳이 없다. **백분율로 읽히는 양**이라 거울이
+    천분율 정수로 들 수 있다 (D-0366 — 정본은 정수만 든다).
+    """
+    return sum(abs(one - two) for one, two in zip(left, right, strict=True)) / 2.0
+
+
+def _halves(
+    envelope: np.ndarray, hop_seconds: float
+) -> tuple[tuple[float, ...], tuple[float, ...]] | None:
+    """앞 절반 · 뒤 절반의 박 안 분포. **박은 곡 전체에서 한 번 읽는다.**
+
+    절반마다 따로 읽으면 **다른 템포로 잰 두 분포**가 되고, 그 차이는 리듬이 아니라
+    박 추정의 차이다 (D-0143이 주기 오차 0.8%로 위상이 뭉개지는 것을 실측했다).
+
+    ### 여기 결함이 심겨 있었다 (D-0406)
+
+    `phase_profile`은 **받은 배열의 0번 칸을 박의 머리로 본다** (`index % span`).
+    그래서 한가운데서 그냥 자르면 뒤 절반의 위상 원점이 `중간 % 주기`만큼 **통째로
+    돌아간다** — 리듬이 완벽히 같은 곡도 남남이 된다.
+
+    합성으로 재 보니 40.0초(반이 박의 배수)에서 같은 곡 거리 **0.003**, 40.25초
+    (나머지 12칸)에서 **0.992**였다. **길이 하나로 신호가 사라진다.** 그래서 자르는
+    자리를 **박의 배수에서 가장 가까운 칸**으로 옮긴다.
+    """
+    found = beat_period(envelope, hop_seconds)
+    if found is None:
+        return None
+    span = found.period_seconds / hop_seconds
+    cut = round(round(envelope.size / 2 / span) * span)
+    if cut < 1 or cut >= envelope.size:
+        return None
+    return (
+        phase_profile(envelope[:cut], found.period_seconds, hop_seconds),
+        phase_profile(envelope[cut:], found.period_seconds, hop_seconds),
+    )
+
+
+def split_half(envelopes: Sequence[tuple[np.ndarray, float]], *, seed: int = 0) -> SplitVerdict:
+    """곡마다 반쪽을 나눠 **같은 곡 ↔ 다른 곡**을 견준다 (O-77).
+
+    **귀무는 다른 곡이다.** D-0207이 *«순서를 섞은 귀무와 소수점 셋째 자리까지 같다»*로
+    마디 안 위치를 기각한 그 꼴이며, 여기서는 박 안을 같은 방식으로 묻는다.
+
+    짝은 `seed`로 고른다 — 무작위면 **같은 코퍼스에서 판마다 다른 수**가 나온다
+    (GR-6.5 · D-0082).
+    """
+    halves = [one for envelope, hop in envelopes if (one := _halves(envelope, hop)) is not None]
+    if len(halves) < 2:
+        return SplitVerdict(same=(), other=(), read=len(halves))
+    picker = Random(seed)
+    same: list[float] = []
+    other: list[float] = []
+    for index, (head, tail) in enumerate(halves):
+        same.append(_distance(head, tail))
+        # **제 짝을 안 고른다.** 자기 자신과 견주면 귀무가 신호를 베낀다.
+        choices = [one for one in range(len(halves)) if one != index]
+        other.append(_distance(head, halves[picker.choice(choices)][1]))
+    return SplitVerdict(same=tuple(same), other=tuple(other), read=len(halves))

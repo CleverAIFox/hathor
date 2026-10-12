@@ -182,3 +182,90 @@ def test_집중도가_정본의_수에_함께_든다(tmp_path: Path) -> None:
     counts = TOOL.counted(_folder(tmp_path, [120.0, 124.0, 128.0, 132.0]))
 
     assert set(counts) == set(TOOL.EMITS)
+
+
+def _placed(root: Path, offsets: list[int], *, bpm: float = 120.0, seconds: float = 40.0) -> Path:
+    """곡마다 **박 안 다른 칸**에 치는 폴더. 반쪽 나누기가 볼 것이 있어야 한다.
+
+    **칸 한가운데를 친다** — 경계에 치면 주기 보간 차이로 칸이 뒤집힌다 (D-0406).
+    """
+    folder = root / f"keys-{HOP:g}s.onsets"
+    beat = round(60.0 / bpm / HOP)
+    frames = int(seconds / HOP)
+    for index, offset in enumerate(offsets):
+        envelope = np.random.default_rng(index).random(frames) * 0.02
+        for start in range(0, frames - beat, beat):
+            envelope[start + round((offset + 0.5) * beat / 4)] += 1.0
+        write_envelope(folder, f"곡{index}.mp3", envelope, hop_seconds=HOP)
+    return folder
+
+
+def test_반쪽을_천분율_정수로_낸다(tmp_path: Path) -> None:
+    """**정본은 정수만 든다** (D-0366). 거리는 총변동거리라 0~1이고 천분율로 적는다."""
+    parts = TOOL.parted(TOOL.envelopes(_placed(tmp_path, [0, 1, 2, 0, 2, 1])))
+
+    assert set(parts) == set(TOOL.SPLIT)
+    for key in (one for one in TOOL.SPLIT if one.endswith("_permille")):
+        assert 0 <= parts[key] <= 1000, key
+    assert parts["split_same_q1_permille"] <= parts["split_same_mid_permille"]
+    assert parts["split_same_mid_permille"] <= parts["split_same_q3_permille"]
+
+
+def test_곡마다_자리가_다르면_신호가_난다(tmp_path: Path) -> None:
+    """**이 탐침이 신호를 볼 수 있나.** 못 보는 자로 「없다」고 하면 거짓 음성이다."""
+    parts = TOOL.parted(TOOL.envelopes(_placed(tmp_path, [0, 1, 2, 0, 2, 1])))
+
+    assert parts["split_other_mid_permille"] > parts["split_same_mid_permille"] + 100
+
+
+def test_전부_같은_자리면_신호가_없다(tmp_path: Path) -> None:
+    """**귀무.** 곡마다 다른 것이 없으면 같은 곡도 다른 곡도 똑같이 가깝다."""
+    parts = TOOL.parted(TOOL.envelopes(_placed(tmp_path, [0, 0, 0, 0, 0, 0])))
+
+    gap = parts["split_other_mid_permille"] - parts["split_same_mid_permille"]
+    assert abs(gap) < 50
+
+
+def test_넷_미만이면_반쪽을_안_낸다(tmp_path: Path) -> None:
+    """**없는 수를 지어내지 않는다** (GR-0.5). 사분위가 안 선다."""
+    with pytest.raises(LookupError):
+        TOOL.parted(TOOL.envelopes(_placed(tmp_path, [0, 1, 2])))
+
+
+def test_반쪽은_아직_정본에_안_든다() -> None:
+    """**차례를 둘로 나눴다** (D-0399와 같은 꼴 · D-0406).
+
+    수는 그의 기기에서만 나온다 (D-0015). 정본에 키부터 넣으면 `measured --check`가
+    **없는 수를 찾으며 운다.** 수를 받아 정본에 넣는 판이 이 단언을 뒤집는다.
+    """
+    assert not set(TOOL.SPLIT) & set(TOOL.EMITS)
+    assert not set(TOOL.SPLIT) & set(CANON.canon()["onset"]["counts"])
+
+
+def test_입구가_반쪽_수를_찍는다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`main --split` → `parted()` **배선** (D-0353).
+
+    화면에 수가 없으면 돌린 사람이 **무엇을 봤는지 모른다** (D-0269).
+    """
+    folder = _placed(tmp_path, [0, 1, 2, 3])
+    monkeypatch.setattr(TOOL, "parted", lambda _loaded: dict.fromkeys(TOOL.SPLIT, 300))
+    monkeypatch.setattr("sys.argv", ["probe_tempo.py", "--split", "--out", str(folder)])
+
+    assert TOOL.main() == 0
+    said = " ".join(capsys.readouterr().out.split())
+
+    assert "split_other_mid_permille 300" in said, "parted()가 끊겼다"
+    assert "신호 (다른 곡 중앙 - 같은 곡 중앙) 0 천분율" in said
+
+
+def test_반쪽을_못_내면_운다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**입구가 울어야 사람이 안다** — 조용히 0을 내면 그것이 거짓 통과다 (GR-0.8)."""
+    folder = _placed(tmp_path, [0, 1])
+    monkeypatch.setattr("sys.argv", ["probe_tempo.py", "--split", "--out", str(folder)])
+
+    assert TOOL.main() == 2
+    assert "사분위를 못 낸다" in capsys.readouterr().err
