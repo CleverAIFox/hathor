@@ -17,6 +17,13 @@
 | **진입** | 이 문서 | 지금 무엇을 할 수 있는가 | 처음 열었을 때, 명령이 필요할 때 |
 | **기획서** | [`site/proposal.docx`](site/proposal.docx) | 무엇을 왜 만드는가 — 밖에 내는 판. `MASTER.md` Part I ~ III에서 `make proposal`로 빌드한다 (D-0221) | 제출·면접·소개할 때 |
 
+**뿌리에는 기계가 쓰는 대장 둘이 더 있다** (D-0384). 읽는 문서가 아니라 **도구가 세고 쓰는 수**다.
+
+| 대장 | 무엇 | 쓰는 자 |
+|---|---|---|
+| [`measured.toml`](measured.toml) | 코퍼스 1004곡 실측 집계 — **수만 있다** (D-0366) | `make measure` → `tools/measured.py`가 `MASTER`에 거울을 찍는다 |
+| [`artifacts.toml`](artifacts.toml) | 산출물 계열 대장 | `make artifacts-audit` |
+
 - `docs/MASTER.md`가 **설계의 단일 진실 공급원**이다. 뿌리의 `MASTER.md`는 **없다** — D-0189가 흡수했다.
 - `DECISIONS.md`는 **추가 전용**이다. 판단이 바뀌면 고쳐 쓰지 않고 새 번호로 정정한다.
 - **문서를 먼저 고치고 코드를 고친다 (GR-0.1).** 코드가 앞서면 그 즉시 문서를 맞춘다.
@@ -75,7 +82,9 @@ make check                    # CI와 같은 검사 — 문서 · 길이 · 린�
 cd core
 uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid
 uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
-    --reference "10CM-폰서트" --reference "10CM-스토커" --tempo 108
+    --reference "10CM-폰서트" --reference "10CM-스토커"      # 템포도 참조곡에서
+uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
+    --reference "10CM-폰서트" --tempo 108                    # 손으로 못 박는다
 uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
     --no-key-estimation          # 음원 없이. C장조 고정
 ```
@@ -84,6 +93,10 @@ uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
 으뜸음 기준으로 회전한 배열 사전을 걸고(D-0063 · D-0213), 가락이 박마다 화음 구성음을 짚으며
 (D-0141) 성부 진행 · 베이스 · 층별 세기 · 박 분할까지 들어간다(D-0137 ~ D-0207). SMF는 라이브러리
 없이 직접 쓴다 — 같은 시드는 같은 바이트다. 참조곡 상한은 5곡이다 (D-0011).
+
+**템포도 참조곡에서 온다** (D-0392). `--tempo`를 안 주면 참조곡의 `onset/drums`에서 박을 읽어
+**곡마다 접고 중앙값**을 쓴다 — 박을 못 읽으면 코퍼스 중앙 126으로 떨어진다. 산출물의
+`tempo_from`이 **어디서 온 값인지** 적으므로 들어 보고 되물을 수 있다.
 
 **기준선으로 동결했다** (D-0214). 한 축만 바꾼 두 판을 귀가 가르지 못했다 — 다음은 오디오 엔진이다.
 

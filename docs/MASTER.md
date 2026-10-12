@@ -2743,6 +2743,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0391 | 웹의 그림과 PDF의 그림을 **다른 판이 그리고 있었다** | `core/tests/unit/test_render_proposal.py::test_한_장만_달라도_잡는다` | 실물 이 저장소 — 제출본 속 그림 28장 · 다시 그린 것과 바이트 일치 28/28 · |
 | D-0392 | 템포가 **참조곡에서 온다** | `core/tests/unit/test_reference_tempo.py::test_접기로_못_고치는_이상치에_안_끌린다` | 합성 · 실물 이 저장소 — 합성 박 여섯 꼴 · 심은 결함 4건에 운 시험 |
 | D-0393 | **두 판이 달랐다** | `core/tests/unit/test_render_proposal.py::test_이름_그대로_꺼낸다` | 실물 이 저장소 — 갈린 그림 16/28장(graphviz) · 같은 그림 12장(matplotlib) · |
+| D-0394 | 입구가 **열 판 뒤처졌다** | `core/tests/unit/test_debts.py::test_기획서는_신선도_축에_없다` | 실물 이 저장소 — 뒤처진 판 10 · 고친 자리 2곳(문서 지도 · 생성 절) |
 
 <!-- decision-ledger:end -->
 
