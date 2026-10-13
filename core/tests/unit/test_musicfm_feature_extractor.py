@@ -14,7 +14,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -121,25 +121,63 @@ def _extractor(
     if importlib.util.find_spec("scipy") is not None:
         import scipy.signal  # noqa: F401  데우기 전용
 
+    class _Layer:
+        """컨포머 층 하나. **훅이 걸리는 자리**이고 그것이 이 가짜의 전부다."""
+
+        def __init__(self) -> None:
+            self._hooks: list[Any] = []
+
+        def register_forward_pre_hook(self, hook: Any) -> Any:
+            self._hooks.append(hook)
+            return SimpleNamespace(remove=lambda: self._hooks.remove(hook))
+
+        def fire(self, given: _FakeTensor) -> None:
+            for hook in list(self._hooks):
+                hook(self, (given,))
+
+        @property
+        def hooked(self) -> int:
+            return len(self._hooks)
+
+    class _Conformer:
+        def __init__(self) -> None:
+            self.layers = [_Layer() for _ in range(depth - 1)]
+
+        def __call__(self, entering: _FakeTensor) -> dict[str, _FakeTensor]:
+            # **프레임마다 값을 흔든다** (D-0400 · D-0413). 층 번호로 꽉 채웠더니
+            # *«평균 대신 첫 프레임을 쓴다»*는 변이가 **안 물렸다** — 가짜가 그 축을
+            # 안 보면 그 축의 배선이 안 보인다. 0을 중심으로 대칭이라 **평균은
+            # 정확히 층 번호**이고 첫 프레임은 아니다.
+            swing = np.linspace(-1.0, 1.0, FRAMES, dtype=np.float32)[None, :, None]
+            for index, layer in enumerate(self.layers):
+                layer.fire(
+                    _FakeTensor(
+                        np.full((1, FRAMES, dimension), float(index), dtype=np.float32) + swing
+                    )
+                )
+            last = np.full((1, FRAMES, dimension), float(depth - 1), dtype=np.float32) + swing
+            return {"last_hidden_state": _FakeTensor(last)}
+
     class _Model:
+        def __init__(self) -> None:
+            self.conformer = _Conformer()
+
         def to(self, device: str) -> _Model:
             return self
 
         def eval(self) -> _Model:
             return self
 
-        def get_predictions(self, values: _FakeTensor) -> tuple[object, list[_FakeTensor]]:
+        def preprocessing(self, values: _FakeTensor, features: list[str]) -> dict[str, Any]:
             # **가짜가 인자를 본다** (D-0400). 안 보면 청크 배선이 끊겨도 안 운다.
             seen.append(int(values.shape[-1]))
-            # **프레임마다 값을 흔든다** (D-0400 · D-0413). 층 번호로 꽉 채웠더니
-            # *«평균 대신 첫 프레임을 쓴다»*는 변이가 **안 물렸다** — 가짜가 그 축을
-            # 안 보면 그 축의 배선이 안 보인다. 0을 중심으로 대칭이라 **평균은
-            # 정확히 층 번호**이고 첫 프레임은 아니다.
-            swing = np.linspace(-1.0, 1.0, FRAMES, dtype=np.float32)[None, :, None]
-            return object(), [
-                _FakeTensor(np.full((1, FRAMES, dimension), float(index), dtype=np.float32) + swing)
-                for index in range(depth)
-            ]
+            return {one: values for one in features}
+
+        def normalize(self, given: dict[str, Any]) -> dict[str, Any]:
+            return given
+
+        def conv(self, given: _FakeTensor) -> _FakeTensor:
+            return given
 
     package = ModuleType("musicfm")
     package.__path__ = []  # type: ignore[attr-defined]
@@ -251,13 +289,29 @@ def test_혼합은_마지막_층이다(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert float(found["layer03"][0][0]) == pytest.approx(3.0, abs=1e-4)
 
 
-@requires_scipy
-def test_층_수가_다르면_죽는다(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """**조용히 다른 수를 쌓으면 MERT와 나란히 못 놓는데 산출물은 그럴듯하다** (D-0233)."""
-    extractor = _extractor(monkeypatch, tmp_path, [], depth=7)
+def test_층_수가_다르면_올릴_때_죽는다(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """**조용히 다른 수를 쌓으면 MERT와 나란히 못 놓는데 산출물은 그럴듯하다** (D-0233).
 
-    with pytest.raises(ValueError, match="은닉 층"):
-        extractor.extract_layers(np.zeros((2, SOURCE_SAMPLE_RATE * 11), dtype=np.float32))
+    훅으로 모으므로 **모을 수가 컨포머 층 수로 정해진다** — 그래서 배치를 돌리기
+    전에, 모델을 올리는 자리에서 본다 (D-0416).
+    """
+    with pytest.raises(ValueError, match="컨포머 층"):
+        _extractor(monkeypatch, tmp_path, [], depth=7)
+
+
+@requires_scipy
+def test_훅을_청크마다_떼_둔다(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """**안 떼면 다음 청크에서 스물여섯이 쌓인다** (D-0416).
+
+    그때 층 수 검사가 울기는 하지만, 그전에 **핸들이 샌다** — 1004곡이면 그 수가
+    이십만을 넘는다. 돌고 나서 남은 훅이 0이어야 한다.
+    """
+    extractor = _extractor(monkeypatch, tmp_path, [])
+
+    extractor.extract_layers(np.zeros((2, SOURCE_SAMPLE_RATE * 25), dtype=np.float32))
+
+    layers = extractor._model.conformer.layers  # 가짜의 속을 본다
+    assert [one.hooked for one in layers] == [0] * len(layers)
 
 
 @requires_scipy

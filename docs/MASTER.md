@@ -2858,6 +2858,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0413 | MusicFM을 붙인다 | `core/tests/unit/test_musicfm_feature_extractor.py::test_라이선스_대장이_가중치를_미확인으로_든다` | 합성 · 실물 MusicFM 저장소 — LICENSE 듀얼 · 커밋 b83ebed · 층 13 · 1024차원 |
 | D-0414 | **실물 첫 실행이 떨어졌다** | `core/tests/unit/test_musicfm_feature_extractor.py::test_들여온_코드의_의존성이_없으면_말해_준다` | 실물 이 저장소 — 첫 실행 로그 1건(torchaudio 없음 · 내려받기 639MB/1.22GB에서 끊김) |
 | D-0415 | 입구가 **거짓을 적고 있었다** | `core/tests/unit/test_debts.py::test_신선도는_못_읽으면_0이_아니라_모름이다` | 실물 이 저장소 — 틀린 문장 2 · 빠진 것 2 · 마지막 갱신 D-0403 |
+| D-0416 | **`transformers` 5가 은닉 층을 안 준다** | `core/tests/unit/test_musicfm_feature_extractor.py::test_훅을_청크마다_떼_둔다` | 합성 · 실물 transformers 5.17 — 반환 키 1개(`last_hidden_state`) · 층 13 재현 확인 |
 
 <!-- decision-ledger:end -->
 

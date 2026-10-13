@@ -28,12 +28,22 @@ MERT는 처리기가 패딩을 넣으므로 유효 구간만 평균한다(`_mask
 짧은 마지막 청크는 멜스펙 프레임이 그만큼 적게 난다. **전 프레임 평균이 곧 정확한
 평균이다.**
 
-### 층을 한 번에 뽑는다
+### 층을 저자 코드가 못 준다 (D-0416)
 
-저자가 준 `get_latent(x, layer_ix=N)`은 **층마다 `get_predictions`를 다시 돈다** — 층
-셋이면 forward 세 번이다. 그 안쪽 `get_predictions`가 **은닉 상태 전부**를 내므로 그것을
-직접 부른다. D-0025가 MERT에서 *«반복하면 13배 시간이 든다»*로 피한 자리이고 같은 함정이
-여기 그대로 있다.
+저자의 `get_predictions`는 `conformer(x, output_hidden_states=True)["hidden_states"]`를
+읽는다. **`transformers` 5에서 그 키가 안 나온다** — 실측으로 반환 키가
+`['last_hidden_state']` 하나뿐이고 `config`에 켜도 같다. 2024년 2월 코드이고 그때는 4.x였다.
+
+저자가 둔 대안(`is_flash=True`의 벤더 사본)도 **임포트부터 죽는다** —
+`transformers.deepspeed`가 5에서 사라졌다.
+
+그래서 **층마다 앞 훅을 걸어** 직접 모은다. `transformers` 4의 `hidden_states`가
+*(인코더 입력, 층0 출력, …, 층10 출력, layer_norm 뒤)*이므로 **층마다 「들어가는 것」
+열둘 + `last_hidden_state` 하나 = 열셋**이 정확히 그 구성이다. 실측으로 확인했다 —
+`들어감[i+1] == 나옴[i]`이고 마지막만 정규화를 더 거친다.
+
+**한 번의 forward로 전 층을 얻는다.** 저자의 `get_latent(layer_ix=N)`은 층마다 다시
+도는데, D-0025가 MERT에서 *«반복하면 13배»*로 피한 그 함정이다.
 
 ### 설치가 다르다
 
@@ -171,6 +181,11 @@ class MusicFmFeatureExtractor:
             model_path=str(data / checkpoint),
         )
         self._model: Any = model.to(device).eval()
+        found = len(self._model.conformer.layers)
+        if found != MUSICFM_LAYERS - 1:
+            # **훅으로 모으는 수가 여기서 정해진다** (D-0416). 층이 달라지면 열셋이
+            # 안 되고, 그러면 MERT와 나란히 못 놓는다.
+            raise ValueError(f"컨포머 층이 {MUSICFM_LAYERS - 1}개가 아니다: {found}")
         self._device = device
         self._layers = tuple(sorted(set(layers)))
         self._checkpoint = checkpoint
@@ -214,7 +229,7 @@ class MusicFmFeatureExtractor:
         with torch.no_grad():
             for chunk in chunks:
                 values = torch.from_numpy(np.asarray(chunk, dtype=np.float32))
-                _logits, hidden = self._model.get_predictions(values[None, :].to(self._device))
+                hidden = self._hidden(values[None, :].to(self._device))
                 if len(hidden) != MUSICFM_LAYERS:
                     # 체크포인트를 바꾸면 여기서 먼저 죽는다. **조용히 다른 수를 쌓으면
                     # MERT와 나란히 못 놓는데 산출물은 그럴듯하게 쌓인다** (D-0233).
@@ -226,6 +241,32 @@ class MusicFmFeatureExtractor:
             key: np.asarray(torch.stack(values).cpu().numpy(), dtype=np.float32)
             for key, values in collected.items()
         }
+
+    def _hidden(self, values: Any) -> tuple[Any, ...]:
+        """은닉 상태 열셋. **저자의 `encoder`를 여기서 다시 엮는다** (D-0416).
+
+        `get_predictions`를 못 쓴다 — 그 안쪽이 `transformers` 5에서 안 내는 키를
+        읽는다. 전처리·정규화·합성곱은 **저자 것을 그대로 부르고**, 컨포머만 훅으로
+        받는다.
+
+        **훅은 청크마다 걸고 뗀다.** 안 떼면 다음 청크에서 스물여섯이 쌓이고,
+        그때는 위의 층 수 검사가 운다 — 조용히 틀리지는 않는다.
+        """
+        model = self._model
+        melspec = model.normalize(model.preprocessing(values, features=["melspec_2048"]))
+        entering = model.conv(melspec["melspec_2048"])
+
+        before: list[Any] = []
+        handles = [
+            layer.register_forward_pre_hook(lambda _m, given: before.append(given[0]))
+            for layer in model.conformer.layers
+        ]
+        try:
+            out = model.conformer(entering)
+        finally:
+            for handle in handles:
+                handle.remove()
+        return (*before, out["last_hidden_state"])
 
     def _pooled(self, hidden: Any) -> Any:
         """청크 하나를 벡터 하나로. **마스크가 필요 없다** — 패딩이 안 생긴다.
