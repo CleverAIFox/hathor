@@ -283,3 +283,60 @@ def test_고른_곡을_거른다() -> None:
     noise = [(_noise(seed=200 + index), HOP) for index in range(6)]
 
     assert len(peaked(noise + _songs())) == len(PLACES)
+
+
+def test_평균이_참조곡을_못_이길_때_관례가_이긴다() -> None:
+    """**원점만 다르고 모양이 같으면** 코퍼스 평균이 참조곡만큼 좋다 (D-0408).
+
+    그때 참조곡에서 쪼갬을 뽑는 것은 **값을 안 낳는다** — 관례가 공짜로 같은 일을 한다.
+    """
+    shaped = [
+        (_voiced((0, 2), seed=index, start=(index % PHASE_BINS) * 12), HOP) for index in range(8)
+    ]
+
+    verdict = split_half(shaped)
+
+    assert verdict.beats_convention == pytest.approx(0.0, abs=0.05)
+
+
+def test_모양이_제각각이면_관례가_진다() -> None:
+    """**평균이 따라갈 수 없는 코퍼스**에서는 참조곡이 이긴다 — 자가 그것을 봐야 한다."""
+    shapes = ((0,), (0, 1), (0, 1, 2), (0, 2), (1, 2), (0, 1, 3), (0, 3), (1, 3))
+    songs = [(_voiced(one, seed=index), HOP) for index, one in enumerate(shapes)]
+
+    verdict = split_half(songs)
+
+    assert verdict.beats_convention is not None
+    assert verdict.beats_convention > 0.2
+
+
+def test_평균에_제_짝이_안_섞인다() -> None:
+    """**자기가 섞인 평균과 견주면 그만큼 가까워진다** — 관례가 부당하게 이긴다.
+
+    곡이 둘뿐이면 제 짝을 뺀 평균은 **다른 한 곡 그 자체**다. 섞여 있으면 둘의
+    평균이 되어 제 모양 쪽으로 끌려온다 — 실측으로 0.488이 0.245가 된다.
+
+    **봉우리 수가 다른 두 모양이어야 가른다.** `(0,)`과 `(2,)`처럼 봉우리가 하나씩인
+    모양은 틀을 모으면 **같은 프로필**이라 섞든 말든 평균이 안 변한다 (처음에 그
+    모양으로 적었고 변이가 안 물렸다).
+    """
+    two = [(_voiced((0,), seed=1), HOP), (_voiced((0, 1), seed=2), HOP)]
+
+    verdict = split_half(two)
+
+    assert verdict.turned_mean[0] == pytest.approx(verdict.turned[0], abs=0.01)
+
+
+def test_평균_틀을_안_모으면_균등이_된다() -> None:
+    """**돌리지 않고 평균 내면 언제나 균등이다** (D-0206이 속은 자리).
+
+    원점만 다른 같은 모양 여덟 곡의 평균은 **그 모양이어야** 한다 — 균등(0.25씩)이
+    되면 모든 곡에서 거리가 멀어지고 관례가 이유 없이 진다.
+    """
+    shaped = [
+        (_voiced((0, 2), seed=index, start=(index % PHASE_BINS) * 12), HOP) for index in range(8)
+    ]
+
+    verdict = split_half(shaped)
+
+    assert max(verdict.turned_mean) < 0.2, "평균이 균등으로 뭉개졌다"

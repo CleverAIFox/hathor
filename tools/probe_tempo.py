@@ -107,11 +107,17 @@ SPLIT = (
     "split_peaked_same_q1_permille",
     "split_peaked_same_mid_permille",
     "split_peaked_same_q3_permille",
+    "split_peaked_self_q1_permille",
+    "split_peaked_self_mid_permille",
+    "split_peaked_self_q3_permille",
+    "split_peaked_mean_q1_permille",
+    "split_peaked_mean_mid_permille",
+    "split_peaked_mean_q3_permille",
     "split_peaked_turned_q1_permille",
     "split_peaked_turned_mid_permille",
     "split_peaked_turned_q3_permille",
 )
-"""반쪽 나누기가 내는 수 — **아직 정본에 없다** (O-77 · D-0406 · D-0407).
+"""반쪽 나누기가 내는 수 — **아직 정본에 없다** (O-77 · D-0406 ~ D-0408).
 
 `EMITS`와 **일부러 갈라 둔다.** 정본에 키를 넣으면 `measured --check`가 그 수를
 찾는데, 그 수는 **그의 기기에서만 나온다** (D-0015). D-0399가 같은 자리에서
@@ -119,17 +125,18 @@ SPLIT = (
 
 거리는 **총변동거리**라 0~1이고, 천분율 정수로 적으면 거울이 `49.7%`로 찍는다.
 
-**판정은 `peaked_turned` ↔ `peaked_same`이다** (D-0407). 나머지 셋은 그 판정이
-무엇을 걷어냈는지 보이려고 함께 든다 — 첫 자(D-0406)의 수와 대조된다."""
+**판정은 `peaked_mean` ↔ `peaked_self`다** (D-0408) — *«참조곡이 관례를 이기나»*.
+나머지는 그 판정이 무엇을 걷어냈는지 보이려고 함께 든다: 원점(D-0407이 123천분율로
+쟀다) · 봉우리 없는 곡 · 무작위 한 곡이라는 틀린 귀무(D-0408)."""
 
 
 def parted(loaded: list[tuple[np.ndarray, float]]) -> dict[str, int]:
-    """같은 곡 앞↔뒤 거리와 **다른 곡과의 거리** (O-77 · D-0406 · D-0407).
+    """반쪽 나누기 전수 (O-77 · D-0406 ~ D-0408).
 
-    **귀무를 둘 낸다.** 돌리지 않은 것(`other`)에는 *«녹음이 다른 자리에서
-    시작했다»*가 섞여 있고, 돌린 것(`turned`)에는 안 섞인다. 그리고 **고른 곡은
-    뺀다** — 베낄 리듬이 없는 곡이 양쪽을 똑같이 끌어내려 신호를 묽게 만든다.
+    **예측자 셋을 같은 자로 잰다** — 제 앞 절반(참조곡의 천장) · 코퍼스 평균(관례) ·
+    다른 곡 하나. 셋 다 돌려서 재므로 **원점 차이가 안 섞인다.**
 
+    고른 곡은 뺀다 — 베낄 리듬이 없다 (`peaked` · D-0401의 45.9%).
     사분위는 `corpus_rhythm.spread` **한 자**가 낸다 (D-0043).
     """
     whole = split_half(loaded)
@@ -141,7 +148,12 @@ def parted(loaded: list[tuple[np.ndarray, float]]) -> dict[str, int]:
         ("turned", whole.turned),
     ):
         found[f"split_{name}_mid_permille"] = round(spread(values)[1] * 1000)
-    for name, values in (("same", only.same), ("turned", only.turned)):
+    for name, values in (
+        ("same", only.same),
+        ("self", only.turned_self),
+        ("mean", only.turned_mean),
+        ("turned", only.turned),
+    ):
         low, mid, high, _top = spread(values)
         found[f"split_peaked_{name}_q1_permille"] = round(low * 1000)
         found[f"split_peaked_{name}_mid_permille"] = round(mid * 1000)
@@ -225,11 +237,13 @@ def main() -> int:
             print(f"  {key:<26} {parts[key]}")
         raw = parts["split_other_mid_permille"] - parts["split_same_mid_permille"]
         turn = parts["split_turned_mid_permille"] - parts["split_same_mid_permille"]
-        real = parts["split_peaked_turned_mid_permille"] - parts["split_peaked_same_mid_permille"]
-        print(f"\n  신호 · 안 돌림            {raw} 천분율  (원점 차이가 섞여 있다)")
-        print(f"  신호 · 돌림              {turn} 천분율")
-        print(f"  신호 · 돌림 + 봉우리만    {real} 천분율  ← **판정은 이것이다**")
-        print("**0에 가까우면 곡마다 고유한 리듬이 없다** — 쪼갬을 관례로 둔다 (O-77)")
+        apart = parts["split_peaked_turned_mid_permille"] - parts["split_peaked_self_mid_permille"]
+        beats = parts["split_peaked_mean_mid_permille"] - parts["split_peaked_self_mid_permille"]
+        print(f"\n  곡마다 다른가 · 안 돌림     {raw} 천분율  (원점 차이가 섞여 있다)")
+        print(f"  곡마다 다른가 · 돌림       {turn} 천분율")
+        print(f"  곡마다 다른가 · 봉우리만    {apart} 천분율  (귀무가 **다른 곡 하나**다)")
+        print(f"\n  관례를 이기나            {beats} 천분율  ← **판정은 이것이다**")
+        print("**0에 가까우면 코퍼스 평균이 참조곡만큼 좋다** — 쪼갬을 관례로 둔다 (O-77)")
         return 0
 
     try:

@@ -145,7 +145,7 @@ PINNED = {
     "probe_stems.PITCH_STEMS": 2,
     "probe_stems.PREFIXES": 2,
     "probe_tempo.EMITS": 15,
-    "probe_tempo.SPLIT": 11,
+    "probe_tempo.SPLIT": 17,
     "proposal_source.GENERATORS": 6,
     "proposal_source.RENDERERS": 1,
     "render_figures.FONTS": 4,

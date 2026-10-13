@@ -135,6 +135,20 @@ class SplitVerdict:
     생성이 참조곡에서 베끼는 것은 **모양이지 원점이 아니다** — 어차피 우리 격자
     머리에 맞춰 놓는다. 그래서 귀무도 돌려서 맞대야 하고, **판정은 이쪽이다.**"""
 
+    turned_self: tuple[float, ...]
+    """**제 앞 절반**과의 거리 — 돌려서. 참조곡 조건화가 낼 수 있는 **가장 좋은 수**다.
+
+    `same`과 거의 같지만 `turned`·`turned_mean`과 **같은 셈법으로** 재야 셋을 나란히
+    놓을 수 있다 (D-0408)."""
+
+    turned_mean: tuple[float, ...]
+    """**코퍼스 평균 모양**과의 거리 — 돌려서. **이것이 관례다** (D-0408).
+
+    우리의 대안은 「다른 곡 하나」가 아니라 **고정된 쪼갬**이고, 고정 예측자 중 가장
+    좋은 것이 평균이다. 참조곡이 이것을 못 이기면 **D-0402의 관례가 맞다.**
+
+    평균은 **제 짝을 빼고** 낸다 — 자기가 섞인 평균과 견주면 그만큼 가까워진다."""
+
     read: int
     """박을 읽어 양쪽 분포를 다 낸 곡 수."""
 
@@ -161,6 +175,18 @@ class SplitVerdict:
             return None
         return median(self.turned) - median(self.same)
 
+    @property
+    def beats_convention(self) -> float | None:
+        """**관례 - 참조곡.** 양수여야 참조곡에서 뽑을 값이 있다 (D-0408).
+
+        `turned_signal`은 *«곡마다 다른가»*를 묻고 이 수는 *«그 다름이 고정 쪼갬보다
+        나은가»*를 묻는다. **결정은 이쪽이다** — 우리가 참조곡을 안 쓰면 무작위 한
+        곡이 아니라 **관례**를 쓰기 때문이다.
+        """
+        if len(self.same) < 2:
+            return None
+        return median(self.turned_mean) - median(self.turned_self)
+
 
 def _distance(left: tuple[float, ...], right: tuple[float, ...]) -> float:
     """두 분포 사이 **총변동거리** — L1의 절반이라 0~1이다.
@@ -178,6 +204,24 @@ def _turned(left: tuple[float, ...], right: tuple[float, ...]) -> float:
     정하는 문턱이 없다는 뜻이다 (D-0058의 손잡이를 안 만든다).
     """
     return min(_distance(left, right[turn:] + right[:turn]) for turn in range(len(right)))
+
+
+def _canonical(profile: tuple[float, ...]) -> tuple[float, ...]:
+    """봉우리가 0번 칸에 오게 돌린다. **평균을 내려면 틀을 하나로 모아야 한다.**
+
+    돌리지 않고 평균 내면 **언제나 균등이 된다** — 곡마다 원점이 다르기 때문이고
+    D-0206이 그렇게 한 번 속았다. 봉우리가 둘이면 앞의 것을 쓴다(결정적).
+
+    쌍을 견줄 때는 이 틀을 **안 쓴다** (D-0407의 기각된 후보 2) — 거기서는 돌릴
+    자리를 전부 보면 되므로 고를 필요가 없다. **평균에는 고를 수밖에 없다.**
+    """
+    turn = profile.index(max(profile))
+    return profile[turn:] + profile[:turn]
+
+
+def _without(total: tuple[float, ...], one: tuple[float, ...], count: int) -> tuple[float, ...]:
+    """합에서 제 몫을 뺀 평균. **자기가 섞인 평균과 견주면 그만큼 가까워진다.**"""
+    return tuple((whole - mine) / (count - 1) for whole, mine in zip(total, one, strict=True))
 
 
 def peaked(envelopes: Sequence[tuple[np.ndarray, float]]) -> list[tuple[np.ndarray, float]]:
@@ -236,24 +280,41 @@ def split_half(envelopes: Sequence[tuple[np.ndarray, float]], *, seed: int = 0) 
     짝은 `seed`로 고른다 — 무작위면 **같은 코퍼스에서 판마다 다른 수**가 나온다
     (GR-6.5 · D-0082).
 
-    **귀무를 둘 낸다** (D-0407). `other`는 돌리지 않고 맞댄 것이고 `turned`는 네 칸을
-    돌려 가장 가까운 자리에서 잰 것이다. 첫 실측에서 돌리지 않은 신호가 +0.177이었는데
-    **그 안에 「녹음이 다른 자리에서 시작했다」가 섞여 있다** — 판정은 `turned_signal`이다.
+    **귀무를 셋 낸다.** `other`는 돌리지 않고 맞댄 다른 곡이고(첫 실측 +0.177 —
+    **그 안에 「녹음이 다른 자리에서 시작했다」가 섞여 있다** · D-0407), `turned`는
+    돌린 다른 곡이며(+0.058), `turned_mean`은 **코퍼스 평균 모양**이다.
+
+    **결정은 `beats_convention`이다** (D-0408). 참조곡을 안 쓰면 무작위 한 곡이 아니라
+    **관례**를 쓰므로, 견줄 상대는 고정 예측자 중 가장 좋은 것이어야 한다.
     """
     halves = [one for envelope, hop in envelopes if (one := _halves(envelope, hop)) is not None]
     if len(halves) < 2:
-        return SplitVerdict(same=(), other=(), turned=(), read=len(halves))
+        return SplitVerdict(
+            same=(), other=(), turned=(), turned_self=(), turned_mean=(), read=len(halves)
+        )
     picker = Random(seed)
+    # **뒤 절반을 틀 하나로 모아 더해 둔다** — 곡마다 빼서 제 짝 없는 평균을 만든다.
+    aligned = [_canonical(tail) for _head, tail in halves]
+    total = tuple(sum(one[bin_] for one in aligned) for bin_ in range(PHASE_BINS))
     same: list[float] = []
     other: list[float] = []
     turned: list[float] = []
+    turned_self: list[float] = []
+    turned_mean: list[float] = []
     for index, (head, tail) in enumerate(halves):
         same.append(_distance(head, tail))
+        turned_self.append(_turned(head, tail))
+        turned_mean.append(_turned(head, _without(total, aligned[index], len(halves))))
         # **제 짝을 안 고른다.** 자기 자신과 견주면 귀무가 신호를 베낀다.
         choices = [one for one in range(len(halves)) if one != index]
         partner = halves[picker.choice(choices)][1]
         other.append(_distance(head, partner))
         turned.append(_turned(head, partner))
     return SplitVerdict(
-        same=tuple(same), other=tuple(other), turned=tuple(turned), read=len(halves)
+        same=tuple(same),
+        other=tuple(other),
+        turned=tuple(turned),
+        turned_self=tuple(turned_self),
+        turned_mean=tuple(turned_mean),
+        read=len(halves),
     )

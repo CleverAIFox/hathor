@@ -264,8 +264,8 @@ def test_입구가_반쪽_수를_찍는다(
     assert TOOL.main() == 0
     said = " ".join(capsys.readouterr().out.split())
 
-    assert "split_peaked_turned_mid_permille 300" in said, "parted()가 끊겼다"
-    assert "판정은 이것이다" in said
+    assert "split_peaked_mean_mid_permille 300" in said, "parted()가 끊겼다"
+    assert "관례를 이기나 0 천분율" in said
 
 
 def test_반쪽을_못_내면_운다(
@@ -309,3 +309,16 @@ def test_고른_곡을_빼고_센다(tmp_path: Path) -> None:
 
     assert parts["split_peaked_read"] == 6
     assert parts["split_read"] > parts["split_peaked_read"]
+
+
+def test_관례를_이기는지_찍는다(tmp_path: Path) -> None:
+    """**판정 줄이 화면에 있어야 한다** (D-0269 · D-0408).
+
+    원점만 다른 코퍼스에서는 코퍼스 평균이 참조곡만큼 좋다 — 그 수가 0 근처여야 한다.
+    """
+    folder = _placed(tmp_path, [0] * 8, starts=[0, 12, 25, 37, 12, 25, 0, 37])
+
+    parts = TOOL.parted(TOOL.envelopes(folder))
+
+    beats = parts["split_peaked_mean_mid_permille"] - parts["split_peaked_self_mid_permille"]
+    assert abs(beats) < 50, f"원점만 다른데 관례가 {beats}만큼 졌다"
