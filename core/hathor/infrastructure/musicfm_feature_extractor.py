@@ -112,6 +112,26 @@ def _home(home: Path | None) -> Path:
     return home
 
 
+def _weights(home: Path, checkpoint: str, stats: str) -> Path:
+    """가중치 둘이 **제자리에** 있나 (D-0414).
+
+    첫 실물 실행에서 1.22GB 받기가 **절반에서 끊겼고**(`curl: (92)`), 받다 만 파일은
+    `torch.load`가 알아듣기 힘든 말로 죽는다. **모델을 올리기 전에** 본다.
+
+    크기로는 안 본다 — 「몇 바이트여야 맞나」를 적어 두면 그것이 또 손으로 적은 수다
+    (GR-0.7). 있는지만 보고, 깨졌으면 아래 `__init__`이 이어받기를 알려 준다.
+    """
+    data = home / "musicfm" / "data"
+    missing = [one for one in (stats, checkpoint) if not (data / one).is_file()]
+    if missing:
+        raise ValueError(
+            f"{data}에 {missing}이 없다. "
+            "`https://huggingface.co/minzwon/MusicFM/resolve/main/<이름>`에서 받는다 — "
+            "**끊기면 `curl -LC -`로 이어받는다** (D-0414)"
+        )
+    return data
+
+
 class MusicFmFeatureExtractor:
     """모델을 한 번 적재하고 재사용한다.
 
@@ -130,11 +150,21 @@ class MusicFmFeatureExtractor:
         import sys
 
         root = _home(home)
+        data = _weights(root, checkpoint, stats)
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
-        from musicfm.model.musicfm_25hz import MusicFM25Hz  # type: ignore[import-not-found]
+        try:
+            from musicfm.model.musicfm_25hz import MusicFM25Hz  # type: ignore[import-not-found]
+        except ModuleNotFoundError as missing:
+            # **들여온 코드의 의존성은 우리 것이 아니다** (D-0414). 저자 코드가
+            # `torchaudio`를 들이는데 우리는 안 부르므로 **없어도 시험이 초록이었다** —
+            # 실물 첫 실행에서야 났다.
+            raise ValueError(
+                # **`make sync` 하나다** (D-0225). `uv`는 정확 동기화라 부분 명령을
+                # 안내하면 **다른 묶음이 지워진다** — 관문이 그것을 잡았다.
+                f"MusicFM이 `{missing.name}`을 요구한다 — `make sync`로 다시 맞춘다"
+            ) from missing
 
-        data = root / "musicfm" / "data"
         model: Any = MusicFM25Hz(
             is_flash=False,
             stat_path=str(data / stats),

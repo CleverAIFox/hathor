@@ -770,6 +770,7 @@ gpu = [
     { name = "librosa", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "scipy", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "torchaudio", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "transformers", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 music = [
@@ -813,6 +814,7 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'gpu'", specifier = ">=1.18.1" },
     { name = "sqlalchemy", marker = "extra == 'api'", specifier = ">=2.1.1" },
     { name = "torch", marker = "extra == 'gpu'", specifier = ">=2.14.0" },
+    { name = "torchaudio", marker = "extra == 'gpu'", specifier = ">=2.11.0" },
     { name = "transformers", marker = "extra == 'gpu'", specifier = ">=5.17.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.54.0" },
 ]
@@ -2613,6 +2615,14 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/15/71/49399acd41f750a906c686bd23c08a2001ccb8dd25f2971003c2ed89c1dd/torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:fecffb58f51fd643d213acd68da21cc3fc19bea05a3bc64b4ee55128f47a4963", size = 554620488, upload-time = "2026-09-02T13:44:49.442Z" },
+]
+
+[[package]]
+name = "torchaudio"
+version = "2.11.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/d8/d6d0f896e064aa67377484efef4911cdcc07bce2929474e1417cc0af18c2/torchaudio-2.11.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:6503c0bdb29daf2e6281bb70ea2dfe2c3553b782b619eb5d73bdadd8a3f7cecf", size = 1771992, upload-time = "2026-03-23T18:13:33.188Z" },
 ]
 
 [[package]]

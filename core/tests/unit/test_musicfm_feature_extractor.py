@@ -98,6 +98,9 @@ def _clone(root: Path) -> Path:
     data = root / "musicfm" / "data"
     data.mkdir(parents=True, exist_ok=True)
     (data / "fma_stats.json").write_text('{"mean": 0.0, "std": 1.0}', encoding="utf-8")
+    # **가중치도 있어야 한다** (D-0414). 첫 실물 실행에서 1.22GB가 절반에서 끊겼고,
+    # 그 뒤로 **모델을 올리기 전에** 파일 둘을 본다.
+    (data / "pretrained_fma.pt").write_bytes(b"\x00")
     return root
 
 
@@ -166,6 +169,44 @@ def test_코드가_없으면_무엇을_할지_말한다(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="부모"):
         MusicFmFeatureExtractor(home=tmp_path)
+
+
+def test_가중치가_없으면_모델을_올리기_전에_죽는다(tmp_path: Path) -> None:
+    """**받다 만 파일은 `torch.load`가 알아듣기 힘든 말로 죽는다** (D-0414).
+
+    실물 첫 실행에서 1.22GB 받기가 절반에서 끊겼다(`curl: (92)`). 모델을 올린 뒤에
+    죽으면 **무엇을 해야 하는지가 안 보인다** — 이어받기를 오류가 직접 적는다.
+    """
+    root = _clone(tmp_path)
+    (root / "musicfm" / "data" / "pretrained_fma.pt").unlink()
+
+    with pytest.raises(ValueError, match="curl -LC -"):
+        MusicFmFeatureExtractor(home=root)
+
+
+def test_들여온_코드의_의존성이_없으면_말해_준다(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """**우리가 안 부르는 의존성이라 시험이 초록이었다** (D-0414).
+
+    저자 코드가 `torchaudio`를 들이는데 우리 코드는 그것을 안 쓴다. 가짜를 심은
+    시험에서는 영원히 안 난다 — **실물 첫 실행에서야 났다.** 여기서 보는 것은
+    **잡는 자리**이고, 무엇이 없었는지가 아니다.
+    """
+    root = _clone(tmp_path)
+    # **잎을 안 심는다.** 그러면 `from musicfm.model.musicfm_25hz import …`가 실물과
+    # 같은 `ModuleNotFoundError`로 떨어진다 — 실물에서는 그 안쪽의 `torchaudio`가
+    # 없어서 났고, 여기서는 잎 자체가 없어서 난다. **잡는 자리는 같다.**
+    package = ModuleType("musicfm")
+    package.__path__ = []  # type: ignore[attr-defined]
+    inner = ModuleType("musicfm.model")
+    inner.__path__ = []  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "musicfm", package)
+    monkeypatch.setitem(sys.modules, "musicfm.model", inner)
+    monkeypatch.delitem(sys.modules, "musicfm.model.musicfm_25hz", raising=False)
+
+    with pytest.raises(ValueError, match="make sync"):
+        MusicFmFeatureExtractor(home=root)
 
 
 @requires_scipy

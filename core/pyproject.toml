@@ -25,6 +25,10 @@ gpu = [
   "demucs>=4.0",
   "transformers>=5.17.0",
   "scipy>=1.18.1",
+  # **MusicFM이 요구한다** (D-0414). 저자 코드의 `modules/features.py`가 `MelSTFT`에서
+  # 들인다 — 실물 첫 실행이 `ModuleNotFoundError: torchaudio`로 떨어졌다.
+  # **우리 코드는 안 부른다**, 그래서 들여온 코드의 의존성이 여기 서는 것이 맞다.
+  "torchaudio>=2.11.0",
   # 음고 추적 (D-0203). `numba`·`scikit-learn`이 딸려 오므로 가볍지 않지만,
   # CQ 격자 argmax는 **음고 추적이 아니라 우세 격자 찾기**이며 옥타브 오류를
   # 거르지 못한다. 실측으로 곡당 8초라 감당된다.
