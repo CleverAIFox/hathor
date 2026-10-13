@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import itertools
 import re
 import sys
 from pathlib import Path
@@ -85,18 +86,38 @@ UNREAD = {
 **읽는 자리가 생기면 여기서 빼야 한다.** 안 빼면 이 검사가 운다 (양방향 · D-0371)."""
 
 
+def _said(node: ast.expr | None) -> bool:
+    """그 노드가 **글자 상수**인가."""
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+
 def _docstrings(tree: ast.Module) -> set[int]:
-    """독스트링 노드의 `id`. **문자열 상수 중 이것만 말이고 나머지는 배선이다.**"""
+    """독스트링 노드의 `id`. **문자열 상수 중 이것만 말이고 나머지는 배선이다.**
+
+    ### 상수 독스트링도 말이다 (D-0411)
+
+    처음에는 **모듈·클래스·함수의 첫 줄**만 셌다. 그런데 이 저장소는 상수마다 그
+    아래에 설명을 단다 — `KICK_BEATS = (0, 2)` 다음 줄의 글자가 그것이고, 파이썬
+    문법으로는 **그냥 떠 있는 상수**다. 그래서 이 검사가 *«`onset/drums`를 읽는
+    자리»*로 셌고, **설명 한 줄이 배선으로 읽혔다.**
+
+    제 독스트링에 세 판 연속 걸린 그 꼴이 **네 번째로 났다** (D-0385 · D-0388 ·
+    D-0393). 이번에는 비키는 선언을 더하지 않고 **눈을 고쳤다** — 대입 바로 뒤에
+    오는 글자는 그 이름의 설명이다 (PEP 258).
+    """
     found: set[int] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
             continue
         body = node.body
-        if not body or not isinstance(body[0], ast.Expr):
-            continue
-        said = body[0].value
-        if isinstance(said, ast.Constant) and isinstance(said.value, str):
-            found.add(id(said))
+        if body and isinstance(body[0], ast.Expr) and _said(body[0].value):
+            found.add(id(body[0].value))
+        # **대입 바로 뒤의 글자는 그 이름의 설명이다** (PEP 258 · D-0411).
+        for before, after in itertools.pairwise(body):
+            if not isinstance(before, ast.Assign | ast.AnnAssign):
+                continue
+            if isinstance(after, ast.Expr) and _said(after.value):
+                found.add(id(after.value))
     return found
 
 

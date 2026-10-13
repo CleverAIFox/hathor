@@ -119,6 +119,18 @@ DEGREE_INDEX: dict[str, int] = {
 }
 
 
+DRUM_CHANNEL = 9
+"""GM이 타악에 못 박아 둔 채널. **밖에서 온 격자다** — 여기에 피아노를 넣으면 북이 난다."""
+
+DRUM_KIT: dict[str, int] = {"킥": 36, "스네어": 38, "하이햇": 42}
+"""타악 이름 → **GM 타악 키 번호** (D-0411). **밖에서 온 격자다** — 9번 채널에서
+음높이는 음이 아니라 **어느 북인지**를 고르는 번호이고, 그 표는 GM 표준이 든다.
+
+셋만 든다. 킥·스네어·하이햇이 **4/4 대중가요 드럼의 최소 구성**이고, 더 넣는 것은
+취향이다 (`VOICES`와 같은 꼴 — 고르기 쉬운 자리에 둔다).
+"""
+
+
 @dataclass(frozen=True, slots=True)
 class Note:
     """한 음. 시각과 길이는 틱이다."""
@@ -136,8 +148,13 @@ class Note:
     def __post_init__(self) -> None:
         if not 0 <= self.pitch <= 127:
             raise ValueError(f"MIDI 음높이는 0~127이다: {self.pitch}")
-        if not 0 <= self.channel <= 15 or self.channel == DRUM_CHANNEL:
-            raise ValueError(f"채널은 0~15이고 {DRUM_CHANNEL}은 타악 전용이다: {self.channel}")
+        if not 0 <= self.channel <= 15:
+            raise ValueError(f"채널은 0~15이다: {self.channel}")
+        # **타악 채널에는 타악만** (D-0405 → D-0411). 전에는 9번을 통째로 막았다 —
+        # 치는 자가 없었으니 그것이 맞았다. 이제는 들어오되 **`DRUM_KIT`에 적힌
+        # 번호만** 들어온다. 9번에 가락을 보내면 음이 아니라 **북이 난다.**
+        if self.channel == DRUM_CHANNEL and self.pitch not in set(DRUM_KIT.values()):
+            raise ValueError(f"{DRUM_CHANNEL}번은 타악 전용이다 — `DRUM_KIT` 밖: {self.pitch}")
         if not 1 <= self.velocity <= 127:
             raise ValueError(f"벨로시티는 1~127이다: {self.velocity}")
         if self.start_tick < 0:
@@ -183,9 +200,6 @@ def _variable_length(value: int) -> bytes:
         value >>= 7
     return bytes(reversed(chunk))
 
-
-DRUM_CHANNEL = 9
-"""GM이 타악에 못 박아 둔 채널. **밖에서 온 격자다** — 여기에 피아노를 넣으면 북이 난다."""
 
 VOICES: dict[int, tuple[str, int]] = {
     0: ("가락", 0),
@@ -239,6 +253,11 @@ def render_smf(
     # **쓰는 층에만 악기를 준다** (D-0405). 안 쓰는 채널까지 적으면 바이트가 늘고,
     # 늘어난 바이트는 **아무 소리도 안 낸다.**
     for channel in sorted({note.channel for note in notes}):
+        # **타악 채널은 악기를 안 고른다** (D-0411). 9번은 GM이 타악으로 못 박아
+        # 뒀고 음높이가 곧 북이다 — 여기에 `program_change`를 적으면 **드럼 킷을
+        # 바꾸는 말**이 되고, 우리는 기본 킷을 쓴다.
+        if channel == DRUM_CHANNEL:
+            continue
         body += _variable_length(0)
         body += bytes((0xC0 | channel, VOICES[channel][1]))
 

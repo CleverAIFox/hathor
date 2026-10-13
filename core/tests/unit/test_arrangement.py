@@ -8,8 +8,12 @@ import pytest
 from hathor.application.arrangement import (
     BARS_PER_SECTION,
     BASS_CHANNEL,
+    BEATS_PER_BAR,
+    DRUM_HIT_TICKS,
+    KICK_BEATS,
     LEAD_CHANNEL,
     PAD_CHANNEL,
+    SNARE_BEATS,
     SUBDIVISIONS,
     TICKS_PER_BAR,
     arrange,
@@ -17,6 +21,8 @@ from hathor.application.arrangement import (
     total_bars,
 )
 from hathor.domain.services.midi_writer import (
+    DRUM_CHANNEL,
+    DRUM_KIT,
     DYNAMICS,
     METRIC_STRESS,
     TICKS_PER_BEAT,
@@ -59,8 +65,10 @@ def test_화음마다_네_성부다():
     """베이스 하나에 3화음 셋 (D-0139).
 
     **베이스는 발음이 드물다** (D-0207). 위 성부는 박마다 다시 치고 받침은 끈다.
+
+    **타악은 성부가 아니다** (D-0411) — 세면 같은 틱에 북이 겹쳐 수가 흐트러진다.
     """
-    notes = arrange(pattern("URUR"), PROGRESSION)
+    notes = [one for one in arrange(pattern("URUR"), PROGRESSION) if one.channel != DRUM_CHANNEL]
     counts = {
         tick: sum(1 for n in notes if n.start_tick == tick)
         for tick in {note.start_tick for note in notes}
@@ -136,8 +144,12 @@ def test_unique_sections_differ_from_each_other():
 
 
 def test_repeated_section_starts_at_progression_head():
+    """**타악은 빼고 본다** (D-0411). 9번 채널의 음높이는 음이 아니라 **어느 북인지**를
+    고르는 번호다 — 음명으로 읽으면 36·38·42가 화음에 섞여 들어온다."""
     notes = arrange(pattern("R"), PROGRESSION)
-    first_bar = sorted(n.pitch % 12 for n in notes if n.start_tick == 0)
+    first_bar = sorted(
+        n.pitch % 12 for n in notes if n.start_tick == 0 and n.channel != DRUM_CHANNEL
+    )
     wanted = sorted({p % 12 for p in chord_pitches(KEY, "I")})
     assert sorted(set(first_bar)) == wanted
 
@@ -151,10 +163,13 @@ def test_progression_shorter_than_section_wraps():
     short = ChordProgression(key=KEY, degrees=("I",))
     notes = arrange(pattern("U"), short)
     whole = TICKS_PER_BAR * BARS_PER_SECTION
+    pitched = [n for n in notes if n.channel != DRUM_CHANNEL]
     # **베이스는 한 번 쳐서 구간 전체를 끈다** — D-0138이 지키려던 것이다.
-    assert [n.duration_ticks for n in notes if n.start_tick == 0].count(whole) == 1
+    assert [n.duration_ticks for n in pitched if n.start_tick == 0].count(whole) == 1
     # **위 성부는 8분마다 다시 친다** (D-0207 → D-0402).
-    assert {n.duration_ticks for n in notes} == {whole, TICKS_PER_BEAT // SUBDIVISIONS}
+    assert {n.duration_ticks for n in pitched} == {whole, TICKS_PER_BEAT // SUBDIVISIONS}
+    # **타악은 한 방이다** (D-0411) — GM이 노트오프를 무시하므로 길이를 안 준다.
+    assert {n.duration_ticks for n in notes if n.channel == DRUM_CHANNEL} == {DRUM_HIT_TICKS}
     assert max(n.end_tick for n in notes) == whole
 
 
@@ -399,7 +414,82 @@ def test_층이_제_채널로_간다():
     notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
     layers = {note.channel for note in notes}
 
-    assert layers == {LEAD_CHANNEL, PAD_CHANNEL, BASS_CHANNEL}
+    assert layers == {LEAD_CHANNEL, PAD_CHANNEL, BASS_CHANNEL, DRUM_CHANNEL}
     # **받침은 드물고 배경은 잦다** (D-0207 · D-0402). 수가 뒤집히면 역할이 바뀐 것이다.
     counted = {one: sum(1 for note in notes if note.channel == one) for one in layers}
     assert counted[BASS_CHANNEL] < counted[LEAD_CHANNEL] < counted[PAD_CHANNEL]
+    # **북은 마디마다 같은 수로 온다** (D-0411) — 가락보다 잦고 배경보다 드물다.
+    assert counted[LEAD_CHANNEL] < counted[DRUM_CHANNEL] < counted[PAD_CHANNEL]
+
+
+def _drum_notes(notes: Sequence[Note]) -> list[Note]:
+    return [one for one in notes if one.channel == DRUM_CHANNEL]
+
+
+def test_북이_난다() -> None:
+    """**D-0405가 남긴 말이 «드럼이 없다»였다.** 채널만 막아 두고 치는 자가 없었다."""
+    drums = _drum_notes(arrange(pattern("URUR"), PROGRESSION, seed=42))
+
+    assert drums, "타악이 하나도 없다"
+    assert {one.pitch for one in drums} == set(DRUM_KIT.values())
+
+
+def test_뒷박_치기다() -> None:
+    """**킥 1·3, 스네어 2·4** (D-0411). 그 둘이 번갈아 나는 것이 춤곡의 자리다.
+
+    뒤바뀌면 — 킥이 2·4로 가면 — **박이 거꾸로 들린다.** 귀로는 바로 알지만 수로
+    안 걸면 아무도 모른다 (D-0126).
+    """
+    drums = _drum_notes(arrange(pattern("URUR"), PROGRESSION, seed=42))
+
+    for name, beats in (("킥", KICK_BEATS), ("스네어", SNARE_BEATS)):
+        where = {
+            (one.start_tick % TICKS_PER_BAR) // TICKS_PER_BEAT
+            for one in drums
+            if one.pitch == DRUM_KIT[name]
+        }
+        assert where == set(beats), f"{name}이 {sorted(where)}에 있다"
+
+
+def test_하이햇이_8분이다() -> None:
+    """**배경과 같은 격자다** (D-0402의 `SUBDIVISIONS`). 표를 두 벌로 안 만든다."""
+    drums = _drum_notes(arrange(pattern("URUR"), PROGRESSION, seed=42))
+    hats = [one for one in drums if one.pitch == DRUM_KIT["하이햇"]]
+
+    where = {one.start_tick % TICKS_PER_BEAT for one in hats}
+
+    assert where == {0, TICKS_PER_BEAT // SUBDIVISIONS}
+
+
+def test_마디마다_북이_빠짐없이_있다() -> None:
+    """**한 마디라도 비면 거기서 박이 끊긴다.** 마디 수는 다른 층이 든다."""
+    notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
+    bars = max(one.start_tick for one in notes) // TICKS_PER_BAR + 1
+    drums = _drum_notes(notes)
+
+    struck = {one.start_tick // TICKS_PER_BAR for one in drums}
+
+    assert struck == set(range(bars))
+    per_bar = len(KICK_BEATS) + len(SNARE_BEATS) + BEATS_PER_BAR * SUBDIVISIONS
+    assert len(drums) == bars * per_bar
+
+
+def test_북이_들어가도_집중도가_범위_안이다() -> None:
+    """**북은 박 머리에 떨어진다** — 그만큼 박 안 집중도를 올린다 (D-0411).
+
+    실측: 마디 34.3% · 박 68.5%. 북 없이는 35.8% · 65.6%였고 **박이 2.9점 올랐다.**
+    판정은 «범위 안인가»다 (D-0207 · D-0404) — 중앙을 겨누면 세기 표를 만지게 되고
+    그것이 D-0058이다.
+    """
+    notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
+
+    assert _concentration(notes, TICKS_PER_BAR) <= _corpus()["phase_bar_max_permille"] / 1000
+    assert _concentration(notes, TICKS_PER_BEAT) <= _corpus()["phase_beat_max_permille"] / 1000
+
+
+def test_북을_빼면_박_집중도가_내려간다() -> None:
+    """**방향이 맞나.** 북이 그 수를 안 움직이면 위 시험이 헛돈다 (D-0230)."""
+    notes = arrange(pattern("URUR"), PROGRESSION, seed=42)
+    pitched = [one for one in notes if one.channel != DRUM_CHANNEL]
+
+    assert _concentration(pitched, TICKS_PER_BEAT) < _concentration(notes, TICKS_PER_BEAT)

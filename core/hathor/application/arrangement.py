@@ -15,10 +15,10 @@
 이것이 구조 추출(D-0049)을 실제로 소리에 연결하는 지점이다. 구조를 뽑아 두고
 배치에 쓰지 않으면 **지표를 만들어두고 보지 않는 것과 같다** (D-0030에서 겪음).
 
-### 아직 하지 않는 것
+### 층이 넷이다
 
-가락이 없다. 3화음을 마디마다 통째로 울릴 뿐이다. 리듬도 없다.
-**지금 필요한 것은 파이프라인 관통이며, 음악적 타당성은 그 뒤다** (GR-6.1).
+가락(D-0141) · 배경(D-0137) · 받침(D-0139) · **타악**(D-0411). 앞 셋은 D-0405가
+채널과 악기를 줬고, 타악은 그 판이 *«치는 자가 없다»*로 남긴 자리였다.
 """
 
 from __future__ import annotations
@@ -27,6 +27,8 @@ from collections.abc import Sequence
 
 from hathor.domain.services.melody import sing
 from hathor.domain.services.midi_writer import (
+    DRUM_CHANNEL,
+    DRUM_KIT,
     DYNAMICS,
     EIGHTH_STRESS,
     METRIC_STRESS,
@@ -55,6 +57,28 @@ LEAD_CHANNEL, PAD_CHANNEL, BASS_CHANNEL = 0, 1, 2
 여기서는 그 역할에 **들리는 몸**을 준다. 악기 번호는 `midi_writer.VOICES`가 든다.
 
 가락이 0인 것은 `Note`의 기본값이 0이라 **안 적은 부름이 전경으로 나기** 때문이다.
+"""
+
+KICK_BEATS = (0, 2)
+SNARE_BEATS = (1, 3)
+"""북이 어느 박에 오나 — **뒷박 치기**(backbeat) (D-0411).
+
+4/4 대중가요의 관례다. 킥이 1·3, 스네어가 2·4이고 **그 둘이 번갈아 나는 것**이
+행진곡과 춤곡을 가르는 자리다. `BARS_PER_SECTION`·`SUBDIVISIONS`와 같은 부류 —
+**실측이 고른 값이 아니라 관례이고, 그렇다고 적는다** (D-0410이 참조곡에서 뽑는
+길을 재고 닫았다).
+
+**코퍼스는 이것을 안 말해 준다.** 묶음에 스템별 온셋이 있지만 쓰기만 하고 아무도
+안 읽고(O-76), 읽어도 홉이 안 적혀 있다 (D-0145).
+
+`onset/drums` 쪽이다 — check_bundle_keys: ok **안 읽는다고 적는 줄**이라 비킨다.
+"""
+
+DRUM_HIT_TICKS = 1
+"""타악 음길이. **1틱이면 된다** — GM 타악은 노트오프를 무시한다 (한 방 소리다).
+
+0으로 둘 수 없고(`Note`가 막는다) 길게 둘 이유도 없다 — 길이를 주면 **바이트만
+늘고 소리는 같다.**
 """
 
 SUBDIVISIONS = 2
@@ -107,6 +131,46 @@ def _runs(degrees: Sequence[str]) -> list[tuple[str, int]]:
             found[-1] = (degree, found[-1][1] + 1)
         else:
             found.append((degree, 1))
+    return found
+
+
+def _drums(start: int, repeats: int) -> list[Note]:
+    """마디마다 **뒷박 치기** 한 벌 (D-0411 · O-51의 다음 자리).
+
+    D-0405가 층 셋에 몸을 줬는데 **타악은 채널만 막아 두고 치는 자가 없었다** —
+    *«드럼이 없다»*가 그 판이 남긴 말이다. 반주가 메트로놈을 벗어나도(D-0402) 북이
+    없으면 박을 세는 것이 화음뿐이고, 그러면 **화음이 리듬까지 맡는다.**
+
+    하이햇은 **8분**으로 깐다 — 배경과 같은 격자이고 세기도 `EIGHTH_STRESS`를
+    그대로 쓴다. **표를 두 벌로 안 만든다** (D-0043).
+    """
+    found: list[Note] = []
+    for bar in range(repeats):
+        head = start + bar * TICKS_PER_BAR
+        for beat in range(BEATS_PER_BAR):
+            at = head + beat * TICKS_PER_BEAT
+            for name, beats in (("킥", KICK_BEATS), ("스네어", SNARE_BEATS)):
+                if beat not in beats:
+                    continue
+                found.append(
+                    Note(
+                        pitch=DRUM_KIT[name],
+                        start_tick=at,
+                        duration_ticks=DRUM_HIT_TICKS,
+                        velocity=softer(DYNAMICS["mf"], METRIC_STRESS[beat]),
+                        channel=DRUM_CHANNEL,
+                    )
+                )
+        for strike in range(BEATS_PER_BAR * SUBDIVISIONS):
+            found.append(
+                Note(
+                    pitch=DRUM_KIT["하이햇"],
+                    start_tick=head + strike * (TICKS_PER_BEAT // SUBDIVISIONS),
+                    duration_ticks=DRUM_HIT_TICKS,
+                    velocity=softer(DYNAMICS["p"], EIGHTH_STRESS[strike % len(EIGHTH_STRESS)]),
+                    channel=DRUM_CHANNEL,
+                )
+            )
     return found
 
 
@@ -225,6 +289,7 @@ def arrange(
                             channel=PAD_CHANNEL,
                         )
                     )
+            notes.extend(_drums(start, repeats))
             bar_index += repeats
 
     if seed is not None:

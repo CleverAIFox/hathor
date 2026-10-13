@@ -8,6 +8,7 @@ import pytest
 
 from hathor.domain.services.midi_writer import (
     DRUM_CHANNEL,
+    DRUM_KIT,
     MAJOR_SCALE,
     TICKS_PER_BEAT,
     VOICES,
@@ -198,10 +199,45 @@ def test_음이_제_채널로_난다():
     assert bytes((0x82, 60, 0)) in data
 
 
-def test_타악_채널은_막는다():
-    """GM 9번은 북이다. **거기에 피아노를 넣으면 화음이 북으로 난다.**"""
+def test_타악_채널에_가락이_못_간다():
+    """GM 9번은 북이다. **거기에 피아노를 넣으면 화음이 북으로 난다.**
+
+    D-0405는 9번을 **통째로** 막았다 — 치는 자가 없었으니 그것이 맞았다. D-0411이
+    북을 넣으면서 문을 열었고, **열되 `DRUM_KIT`에 적힌 번호만** 들어온다.
+    """
     with pytest.raises(ValueError, match="타악"):
         Note(pitch=60, start_tick=0, duration_ticks=480, channel=DRUM_CHANNEL)
+
+
+def test_타악_번호는_들어간다():
+    """**열었다는 증거.** 안 열리면 `_drums`가 통째로 못 선다."""
+    note = Note(pitch=DRUM_KIT["킥"], start_tick=0, duration_ticks=1, channel=DRUM_CHANNEL)
+
+    assert note.channel == DRUM_CHANNEL
+
+
+def test_타악은_악기를_안_고른다():
+    """**9번에 `program_change`를 적으면 드럼 킷을 바꾸는 말이 된다** (D-0411).
+
+    `VOICES`에 9번이 없으므로 안 거르면 `KeyError`로 터진다 — 터지는 것보다 나쁜
+    것은 **엉뚱한 킷이 조용히 나는 것**이다.
+    """
+    data = render_smf(
+        [
+            Note(pitch=60, start_tick=0, duration_ticks=480, channel=0),
+            Note(pitch=DRUM_KIT["스네어"], start_tick=0, duration_ticks=1, channel=DRUM_CHANNEL),
+        ]
+    )
+
+    assert bytes((0xC0, 0)) in data, "가락 채널은 악기를 고른다"
+    assert bytes((0xC0 | DRUM_CHANNEL,)) not in data
+
+
+def test_타악_번호가_GM_표다():
+    """**밖에서 온 격자다** — 셋 다 GM 타악 키 번호이고 서로 다르다."""
+    assert set(DRUM_KIT) == {"킥", "스네어", "하이햇"}
+    assert len(set(DRUM_KIT.values())) == len(DRUM_KIT)
+    assert all(35 <= number <= 81 for number in DRUM_KIT.values()), "GM 타악 범위 밖이다"
 
 
 def test_층마다_악기가_다르다():

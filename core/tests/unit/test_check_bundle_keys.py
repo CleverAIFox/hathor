@@ -150,6 +150,49 @@ def test_독스트링은_읽는_자리가_아니다(tmp_path: Path) -> None:
     assert not any("선언을 뺀다" in line for line in problems)
 
 
+def test_상수_독스트링도_말이다(tmp_path: Path) -> None:
+    """**네 번째로 같은 꼴에 걸렸다** (D-0385 · D-0388 · D-0393 → D-0411).
+
+    이 저장소는 상수마다 그 아래에 설명을 단다. 파이썬 문법으로는 **그냥 떠 있는
+    글자**라 처음에는 배선으로 셌고, D-0411의 `KICK_BEATS` 설명이 *«`onset/drums`를
+    읽는 자리»*로 잡혔다 — **설명 한 줄이 배선으로 읽혔다.**
+
+    대입 **바로 뒤**여야 한다. 한 줄 건너뛰면 그것은 설명이 아니다.
+    """
+    said = (
+        "KICK_BEATS = (0, 2)\n"
+        '"""코퍼스의 `onset/drums`는 아무도 안 읽는다."""\n\n'
+        'PREFIXES = ("chroma/",)\n'
+    )
+    _tree(tmp_path, reader=said)
+
+    problems = KEYS.verdict(tmp_path)
+
+    assert any("keys_from_bundles.py:2" in line for line in problems), "설명을 말로 안 읽었다"
+    assert not any("선언을 뺀다" in line for line in problems)
+
+
+def test_대입에서_떨어진_글자는_배선이다(tmp_path: Path) -> None:
+    """**바로 뒤가 아니면 설명이 아니다.** 넓게 열면 떠 있는 글자가 전부 말이 된다.
+
+    설명 **다음**에 오는 글자는 그 이름의 설명이 아니다 — 대입에 붙어 있지 않다.
+    """
+    said = (
+        "KICK_BEATS = (0, 2)\n"
+        '"""북이 어느 박에 오나."""\n'
+        '"""`onset/drums`"""\n\n'
+        'PREFIXES = ("chroma/",)\n'
+    )
+    _tree(tmp_path, reader=said)
+
+    problems = KEYS.verdict(tmp_path)
+
+    # **「부르는데」가 말로 셌다는 표식이다.** 「선언을 뺀다」 쪽은 선언문을 통째로
+    # 인용하므로 거기에도 *«아무도 안 읽는다»*가 들어 있다 — 그 말로는 못 가른다.
+    assert not any("부르는데" in line for line in problems)
+    assert any("선언을 뺀다" in line for line in problems), "읽는 자리로 안 셌다"
+
+
 def test_스템이_아닌_인용은_안_잡는다(tmp_path: Path) -> None:
     """`onset/*`는 *«이런 계열이 있다»*이고 *«우리가 읽는다»*가 아니다 (GR-0.8)."""
     _tree(tmp_path, docs="`onset/*`는 스펙트럼 선속이라 음량이 아니다.\n")
