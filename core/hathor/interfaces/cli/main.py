@@ -54,6 +54,7 @@ from hathor.infrastructure.npz_feature_store import NpzFeatureStore
 from hathor.interfaces.cli import (
     eval_clap,
     eval_extract,
+    eval_musicfm,
     eval_order,
     eval_output,
     eval_priors,
@@ -1200,6 +1201,7 @@ def entries() -> tuple[Entry, ...]:
                 *eval_order.COMMANDS,
                 *eval_extract.COMMANDS,
                 *eval_clap.COMMANDS,
+                *eval_musicfm.COMMANDS,
             ),
         ),
         Group(

@@ -59,6 +59,13 @@ LICENSES: dict[str, tuple[str, str, str]] = {
         "대체 후보였다 — MERT의 27%로 판정됐다 (O-68 · D-0235)",
     ),
     "BAAI/bge-m3": ("MIT", "yes", "가사 임베딩 (D-0048)"),
+    "minzwon/MusicFM": (
+        "코드 MIT+Apache-2.0 · 가중치 미명시",
+        "unknown",
+        "셋째 후보 (D-0248 → D-0413). **D-0248은 «MIT다»로 적었고 그것은 코드 얘기다** — "
+        "`LICENSE`는 듀얼이고(`modules/flash_conformer.py`만 Apache-2.0) **가중치 "
+        "라이선스는 어디에도 없다.** `htdemucs`와 같은 자리다",
+    ),
     "htdemucs": (
         "코드 MIT · 가중치 미명시",
         "unknown",
