@@ -10,6 +10,7 @@ from hathor.application.arrangement import (
     BASS_CHANNEL,
     BEATS_PER_BAR,
     DRUM_HIT_TICKS,
+    DRUM_STRIKE,
     KICK_BEATS,
     LEAD_CHANNEL,
     PAD_CHANNEL,
@@ -493,3 +494,38 @@ def test_북을_빼면_박_집중도가_내려간다() -> None:
     pitched = [one for one in notes if one.channel != DRUM_CHANNEL]
 
     assert _concentration(pitched, TICKS_PER_BEAT) < _concentration(notes, TICKS_PER_BEAT)
+
+
+def test_북이_하이햇보다_세다() -> None:
+    """**귀가 잡은 것을 수로 건다** (D-0412 · D-0126).
+
+    D-0411은 킥·스네어에 `METRIC_STRESS`를 곱했다. 2·4박이 약박이라 **스네어가
+    하이햇과 똑같은 48**이 됐고, 사람이 *«북이 북 같지도 않고 너무 작아»*로
+    판정했다 — **철 때리는 소리만 들렸다.**
+
+    뒷박 치기의 요점이 **메트릭 강세를 거스르는 것**이다. 거기에 메트릭 강세를
+    곱하면 그 어긋남이 사라진다.
+    """
+    drums = _drum_notes(arrange(pattern("URUR"), PROGRESSION, seed=42))
+    struck = {
+        name: {one.velocity for one in drums if one.pitch == DRUM_KIT[name]} for name in DRUM_KIT
+    }
+
+    assert struck["킥"] == struck["스네어"] == {DRUM_STRIKE}
+    assert max(struck["하이햇"]) < DRUM_STRIKE, "하이햇이 북만큼 세다"
+
+
+def test_뒷박이_약박에서_안_죽는다() -> None:
+    """**2·4박의 스네어가 1·3박의 킥과 같은 세기여야 한다** (D-0412).
+
+    박자리를 따르면 2·4가 내려간다 — 그것이 D-0411의 결함이었고, **자리마다 세기가
+    다른지**를 보면 바로 걸린다.
+    """
+    drums = _drum_notes(arrange(pattern("URUR"), PROGRESSION, seed=42))
+    beaten = {
+        (one.start_tick % TICKS_PER_BAR) // TICKS_PER_BEAT: one.velocity
+        for one in drums
+        if one.pitch in {DRUM_KIT["킥"], DRUM_KIT["스네어"]}
+    }
+
+    assert len(set(beaten.values())) == 1, f"박자리마다 세기가 다르다: {beaten}"

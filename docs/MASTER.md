@@ -2854,6 +2854,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0409 | 참조곡이 관례를 이긴다. **그런데 짝을 안 지어 셌다** (O-77) | `core/tests/unit/test_corpus_rhythm.py::test_승률과_차를_둘_다_본다` | 합성 · 실물 1004곡 |
 | D-0410 | 참조곡에서 **쪼갬을 안 뽑는다** | `core/tests/unit/test_probe_tempo.py::test_반쪽이_정본과_같다` | 실물 1004곡 — 봉우리 543곡 · 승률 63.4% · 차의 중앙 1.8%p |
 | D-0411 | **북을 넣는다** | `core/tests/unit/test_arrangement.py::test_뒷박_치기다` | 합성 · 실물 이 저장소 — 음 1280(타악 384) · 마디 34.3% · 박 68.5% |
+| D-0412 | **뒷박 치기에 메트릭 강세를 곱해 그것을 지웠다** (귀 판정) | `core/tests/unit/test_arrangement.py::test_북이_하이햇보다_세다` | 합성 · 실물 이 저장소 — 세기 96/96/48·32 · 마디 32.4% · 박 71.1% · 사람 판정 1건 |
 
 <!-- decision-ledger:end -->
 

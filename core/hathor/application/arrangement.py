@@ -74,6 +74,22 @@ SNARE_BEATS = (1, 3)
 `onset/drums` 쪽이다 — check_bundle_keys: ok **안 읽는다고 적는 줄**이라 비킨다.
 """
 
+DRUM_STRIKE = DYNAMICS["f"]
+"""킥·스네어의 세기 — **박자리를 안 따른다** (D-0412).
+
+D-0411은 여기에 `METRIC_STRESS`를 곱했다. **그것이 뒷박 치기를 지웠다** — 2·4박이
+약박이라 스네어가 두 칸 내려가 `p`(48)가 됐고, **하이햇과 똑같은 세기**였다. 귀가
+*«북이 북 같지도 않고 너무 작아»*로 판정했다.
+
+**뒷박 치기의 요점이 메트릭 강세를 거스르는 것이다.** 2·4를 때려서 1·3의 강세와
+어긋나게 놓는 것이 그 패턴의 전부인데, 거기에 메트릭 강세를 곱하면 **그 어긋남이
+사라진다.** 그래서 북은 한 세기로 친다.
+
+**올리기만 하는 것이 아니다** — D-0174가 *«강박을 올리면 곡 전체가 세진다»*로
+`METRIC_STRESS`를 내리기 전용으로 둔 그 자리와 다르다. 여기서는 **층 하나의
+바닥값**을 고르는 것이고, 그 층은 지금 안 들린다.
+"""
+
 DRUM_HIT_TICKS = 1
 """타악 음길이. **1틱이면 된다** — GM 타악은 노트오프를 무시한다 (한 방 소리다).
 
@@ -142,7 +158,8 @@ def _drums(start: int, repeats: int) -> list[Note]:
     없으면 박을 세는 것이 화음뿐이고, 그러면 **화음이 리듬까지 맡는다.**
 
     하이햇은 **8분**으로 깐다 — 배경과 같은 격자이고 세기도 `EIGHTH_STRESS`를
-    그대로 쓴다. **표를 두 벌로 안 만든다** (D-0043).
+    그대로 쓴다. **표를 두 벌로 안 만든다** (D-0043). 킥·스네어는 다르다 —
+    `DRUM_STRIKE` 한 세기이고, **왜 박자리를 안 따르는지는 거기 적혀 있다** (D-0412).
     """
     found: list[Note] = []
     for bar in range(repeats):
@@ -157,7 +174,7 @@ def _drums(start: int, repeats: int) -> list[Note]:
                         pitch=DRUM_KIT[name],
                         start_tick=at,
                         duration_ticks=DRUM_HIT_TICKS,
-                        velocity=softer(DYNAMICS["mf"], METRIC_STRESS[beat]),
+                        velocity=DRUM_STRIKE,
                         channel=DRUM_CHANNEL,
                     )
                 )
