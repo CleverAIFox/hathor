@@ -116,6 +116,10 @@ SPLIT = (
     "split_peaked_turned_q1_permille",
     "split_peaked_turned_mid_permille",
     "split_peaked_turned_q3_permille",
+    "split_peaked_wins_permille",
+    "split_peaked_gain_q1_permille",
+    "split_peaked_gain_mid_permille",
+    "split_peaked_gain_q3_permille",
 )
 """반쪽 나누기가 내는 수 — **아직 정본에 없다** (O-77 · D-0406 ~ D-0408).
 
@@ -125,7 +129,9 @@ SPLIT = (
 
 거리는 **총변동거리**라 0~1이고, 천분율 정수로 적으면 거울이 `49.7%`로 찍는다.
 
-**판정은 `peaked_mean` ↔ `peaked_self`다** (D-0408) — *«참조곡이 관례를 이기나»*.
+**판정은 `peaked_wins`와 `peaked_gain`이다** (D-0409) — 곡마다 짝지어 견준
+*«관례 빼기 참조»*이고, 승률 500이면 동전 던지기다. `peaked_mean` ↔ `peaked_self`의
+중앙값 차는 **짝을 안 지은 수**라 참고로만 든다 — *«참조곡이 관례를 이기나»*.
 나머지는 그 판정이 무엇을 걷어냈는지 보이려고 함께 든다: 원점(D-0407이 123천분율로
 쟀다) · 봉우리 없는 곡 · 무작위 한 곡이라는 틀린 귀무(D-0408)."""
 
@@ -148,7 +154,9 @@ def parted(loaded: list[tuple[np.ndarray, float]]) -> dict[str, int]:
         ("turned", whole.turned),
     ):
         found[f"split_{name}_mid_permille"] = round(spread(values)[1] * 1000)
+    found["split_peaked_wins_permille"] = round(only.wins / only.read * 1000)
     for name, values in (
+        ("gain", only.gain),
         ("same", only.same),
         ("self", only.turned_self),
         ("mean", only.turned_mean),
@@ -238,11 +246,13 @@ def main() -> int:
         raw = parts["split_other_mid_permille"] - parts["split_same_mid_permille"]
         turn = parts["split_turned_mid_permille"] - parts["split_same_mid_permille"]
         apart = parts["split_peaked_turned_mid_permille"] - parts["split_peaked_self_mid_permille"]
-        beats = parts["split_peaked_mean_mid_permille"] - parts["split_peaked_self_mid_permille"]
+        beats = parts["split_peaked_gain_mid_permille"]
+        wins = parts["split_peaked_wins_permille"]
         print(f"\n  곡마다 다른가 · 안 돌림     {raw} 천분율  (원점 차이가 섞여 있다)")
         print(f"  곡마다 다른가 · 돌림       {turn} 천분율")
         print(f"  곡마다 다른가 · 봉우리만    {apart} 천분율  (귀무가 **다른 곡 하나**다)")
-        print(f"\n  관례를 이기나            {beats} 천분율  ← **판정은 이것이다**")
+        print(f"\n  참조가 이긴 곡           {wins} 천분율  ← **500이면 동전 던지기다**")
+        print(f"  관례 - 참조 · 차의 중앙    {beats} 천분율  ← **판정은 이 둘이다**")
         print("**0에 가까우면 코퍼스 평균이 참조곡만큼 좋다** — 쪼갬을 관례로 둔다 (O-77)")
         return 0
 

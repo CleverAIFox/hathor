@@ -13,12 +13,15 @@ D-0206은 *«마디 4등분»*이라 적었는데 그 수를 낸 도구는 **박
 
 from __future__ import annotations
 
+from statistics import median
+
 import numpy as np
 import pytest
 
 from hathor.application.corpus_rhythm import (
     BEATS_PER_BAR,
     FLAT,
+    SplitVerdict,
     peaked,
     phase_spread,
     split_half,
@@ -340,3 +343,73 @@ def test_평균_틀을_안_모으면_균등이_된다() -> None:
     verdict = split_half(shaped)
 
     assert max(verdict.turned_mean) < 0.2, "평균이 균등으로 뭉개졌다"
+
+
+def test_승률과_차를_둘_다_본다() -> None:
+    """**승률만 보면 속는다** (D-0409).
+
+    원점만 다른 코퍼스에서 승률이 8곡 중 6이었는데 **차의 중앙은 +0.001**이었다 —
+    `gain`이 0보다 조금만 크면 이긴 것으로 세기 때문이다. 크기는 차가 든다.
+    """
+    shaped = [
+        (_voiced((0, 2), seed=index, start=(index % PHASE_BINS) * 12), HOP) for index in range(8)
+    ]
+
+    verdict = split_half(shaped)
+
+    assert median(verdict.gain) == pytest.approx(0.0, abs=0.02)
+
+
+def test_모양이_제각각이면_전부_이긴다() -> None:
+    """**짝지은 수여야 「어느 곡에서 이겼나」가 남는다.**"""
+    shapes = ((0,), (0, 1), (0, 1, 2), (0, 2), (1, 2), (0, 1, 3), (0, 3), (1, 3))
+    songs = [(_voiced(one, seed=index), HOP) for index, one in enumerate(shapes)]
+
+    verdict = split_half(songs)
+
+    assert verdict.wins == verdict.read
+    assert median(verdict.gain) > 0.2
+
+
+def test_비긴_곡은_진_것으로_센다() -> None:
+    """**보수적으로 센다** — 모르는 쪽을 이겼다고 적지 않는다 (GR-0.5).
+
+    토씨 하나 안 다른 여섯 곡에서는 제 짝을 뺀 평균이 **다른 한 곡 그 자체**이므로
+    차가 **정확히 0**이다. 그때 승률이 100%로 찍히면 *«참조곡이 전부 이겼다»*가
+    되고, 그것이 가장 나쁜 거짓 양성이다 (GR-0.8).
+    """
+    verdict = SplitVerdict(
+        same=(0.1, 0.1),
+        other=(0.5, 0.5),
+        turned=(0.4, 0.4),
+        turned_self=(0.30, 0.30),
+        turned_mean=(0.30, 0.45),
+        read=2,
+    )
+
+    assert verdict.gain[0] == 0.0
+    assert verdict.wins == 1, "비긴 곡을 이긴 것으로 셌다"
+
+
+def test_토씨_안_다른_곡들은_차가_먼지뿐이다() -> None:
+    """**실수 먼지 위에서 승패가 갈린다** — 그래서 승률만 보면 안 된다 (D-0409).
+
+    똑같은 여섯 곡에서 제 짝을 뺀 평균은 **다른 한 곡 그 자체**이므로 차가 0이어야
+    하는데, 나눗셈이 끼어 `-2.8e-17`이 나온다. 코퍼스에서는 이런 곡이 양쪽으로
+    흩어지고 **승률이 그만큼 동전 던지기가 된다.** 크기는 `gain`이 든다.
+    """
+    identical = [(_voiced((0, 2), seed=5), HOP) for _ in range(6)]
+
+    verdict = split_half(identical)
+
+    assert max(abs(one) for one in verdict.gain) < 1e-12
+
+
+def test_차가_짝지어_빼진다() -> None:
+    """**곡 i의 관례에서 곡 i의 참조를 뺀다.** 순서가 어긋나면 수가 통째로 거짓이다."""
+    verdict = split_half(_songs())
+
+    assert verdict.gain == tuple(
+        convention - reference
+        for convention, reference in zip(verdict.turned_mean, verdict.turned_self, strict=True)
+    )

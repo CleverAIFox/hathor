@@ -176,6 +176,27 @@ class SplitVerdict:
         return median(self.turned) - median(self.same)
 
     @property
+    def gain(self) -> tuple[float, ...]:
+        """곡마다 **관례 - 참조.** 양수면 그 곡에서 참조곡이 이겼다 (D-0409).
+
+        **짝지은 수다.** 예측자 둘이 같은 곡을 맞히므로 *«중앙값의 차»*가 아니라
+        *«차의 중앙값»*이 맞다 — 두 수는 다를 수 있고, 짝을 안 지으면 **어느 곡에서
+        이겼는지**가 사라진다.
+        """
+        return tuple(
+            convention - reference
+            for convention, reference in zip(self.turned_mean, self.turned_self, strict=True)
+        )
+
+    @property
+    def wins(self) -> int:
+        """참조곡이 **이긴 곡 수.** 비긴 곡은 진 것으로 센다 (보수적).
+
+        **승률은 해석에 여지가 없다** — 절반이면 동전 던지기이고 신호가 없다.
+        """
+        return sum(1 for one in self.gain if one > 0.0)
+
+    @property
     def beats_convention(self) -> float | None:
         """**관례 - 참조곡.** 양수여야 참조곡에서 뽑을 값이 있다 (D-0408).
 

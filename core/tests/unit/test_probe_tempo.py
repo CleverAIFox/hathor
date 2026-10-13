@@ -214,7 +214,9 @@ def test_반쪽을_천분율_정수로_낸다(tmp_path: Path) -> None:
 
     assert set(parts) == set(TOOL.SPLIT)
     for key in (one for one in TOOL.SPLIT if one.endswith("_permille")):
-        assert 0 <= parts[key] <= 1000, key
+        # **`gain`만 음수가 된다** — 관례가 이긴 곡에서 음수이고 그것이 뜻있는 수다.
+        floor = -1000 if "_gain_" in key else 0
+        assert floor <= parts[key] <= 1000, key
     assert parts["split_peaked_same_q1_permille"] <= parts["split_peaked_same_mid_permille"]
     assert parts["split_peaked_same_mid_permille"] <= parts["split_peaked_same_q3_permille"]
 
@@ -265,7 +267,8 @@ def test_입구가_반쪽_수를_찍는다(
     said = " ".join(capsys.readouterr().out.split())
 
     assert "split_peaked_mean_mid_permille 300" in said, "parted()가 끊겼다"
-    assert "관례를 이기나 0 천분율" in said
+    assert "참조가 이긴 곡 300 천분율" in said
+    assert "관례 - 참조 · 차의 중앙 300 천분율" in said
 
 
 def test_반쪽을_못_내면_운다(
@@ -320,5 +323,5 @@ def test_관례를_이기는지_찍는다(tmp_path: Path) -> None:
 
     parts = TOOL.parted(TOOL.envelopes(folder))
 
-    beats = parts["split_peaked_mean_mid_permille"] - parts["split_peaked_self_mid_permille"]
+    beats = parts["split_peaked_gain_mid_permille"]
     assert abs(beats) < 50, f"원점만 다른데 관례가 {beats}만큼 졌다"
