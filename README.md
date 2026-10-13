@@ -89,8 +89,8 @@ uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
     --no-key-estimation          # 음원 없이. C장조 고정
 ```
 
-**듣는 법** (D-0403). 산출물은 SMF이고 **우리는 소리를 안 굽는다** — 악기도 안 고른다
-(`program_change`가 없다). WSL에는 기본으로 소리 장치가 없으므로 둘 중 하나다:
+**듣는 법** (D-0403). 산출물은 SMF이고 **우리는 소리를 안 굽는다** — 다만 **악기는
+고른다**(층마다 `program_change` · D-0405). WSL에는 기본으로 소리 장치가 없으므로 둘 중 하나다:
 윈도우로 꺼내 열거나(`cp ~/out.mid /mnt/c/Users/<이름>/Desktop/`), 여기서 WAV로 굽는다
 (`fluidsynth -ni /usr/share/sounds/sf2/FluidR3_GM.sf2 out.mid -F out.wav`).
 **이 저장소는 그 음원 글꼴을 안 들고 다닌다** — 라이선스가 딸린 바깥 자료다 (D-0217과 같은 자리).
@@ -100,13 +100,22 @@ uv run python -m hathor.cli generate --seed 7 --midi var/out/demo.mid \
 (D-0141) 성부 진행 · 베이스 · 층별 세기 · 박 분할까지 들어간다(D-0137 ~ D-0207). SMF는 라이브러리
 없이 직접 쓴다 — 같은 시드는 같은 바이트다. 참조곡 상한은 5곡이다 (D-0011).
 
+**층이 넷이다** — 가락(GM 0) · 배경(4) · 받침(33) · **타악**(채널 9 · D-0405 · D-0411).
+북은 **뒷박 치기** 한 벌이고 킥 1·3 · 스네어 2·4 · 하이햇 8분이다. **코퍼스가 북 패턴을
+안 말해 주므로 관례다** — 참조곡에서 쪼갬을 뽑는 길은 네 판에 걸쳐 재고 닫았다
+(O-77 · 닫힘 D-0410: 참조가 관례를 이기는 폭이 **중앙 1.8%p**이고 사분위가 0을 가로지른다).
+취향은 상수 둘에 모여 있다 — `VOICES`와 `DRUM_KIT`.
+
 **템포도 참조곡에서 온다** (D-0392). `--tempo`를 안 주면 참조곡의 **온셋 포락선 산출물**
 (`keys-*.onsets` · 스템을 안 나눈 믹스)에서 박을 읽어 **곡마다 접고 중앙값**을 쓴다 — 박을
 못 읽으면 코퍼스 중앙 130으로 떨어진다(`measured.toml`이 정본 · D-0397). 산출물의 `tempo_from`이 **어디서 온 값인지** 적으므로
 들어 보고 되물을 수 있다. **타악만 떼어 읽지는 않는다** — 묶음에 스템별 포락선이 있지만
 그쪽이 더 나은지 안 쟀다 (O-76 · D-0395).
 
-**기준선으로 동결했다** (D-0214). 한 축만 바꾼 두 판을 귀가 가르지 못했다 — 다음은 오디오 엔진이다.
+**귀가 가르는 것만 고친다** (D-0214 → D-0412). 한 축만 바꾼 두 판은 귀가 못 갈랐지만
+**북이 빠진 것은 바로 갈렸고**, 세기를 잘못 줘 스네어가 하이햇에 묻힌 것도 갈렸다. 그래서
+규율이 하나 섰다 — **수치 차이를 먼저 보이고, 수가 안 갈리면 안 들려준다.** 다음은 여전히
+오디오 엔진이다 (핵심 경로 · D-0214).
 
 ## 검색 · 퓨전
 
@@ -122,7 +131,20 @@ uv run python -m hathor.cli eval clap --limit 20        # 배치. 빼면 전량
 uv run python -m hathor.cli eval retrieval --out var/ingest \
     --features mert=var/ingest --features clap=var/ingest/clap \
     --keys mert:mixture,clap:mixture --label clap-vs-mert
+
+# 셋째 후보 (D-0413). **pip로 안 깔린다** — 클론한 곳의 **부모**를 준다
+#   git clone https://github.com/minzwon/musicfm ~/musicfm
+#   mkdir -p ~/musicfm/data && cd ~/musicfm/data
+#   curl -LOC - --http1.1 https://huggingface.co/minzwon/MusicFM/resolve/main/fma_stats.json
+#   curl -LOC - --http1.1 https://huggingface.co/minzwon/MusicFM/resolve/main/pretrained_fma.pt
+uv run python -m hathor.cli eval musicfm --home ~ --limit 3
 ```
+
+**MusicFM은 「상업 가능」이라고 못 적는다** (D-0413). 코드는 MIT+Apache-2.0 듀얼인데
+**가중치 라이선스가 어디에도 없다** — `htdemucs`와 같은 자리이고 `check_model_licenses`가
+미확인으로 든다. MERT의 **확정된 불가**와 달리 **불확실은 물어서 풀리므로** 후보로 남긴다.
+기본은 **FMA 판**이다 — 저자가 라이선스 때문에 따로 낸 판이고 MSD 판은 학습 오디오 출처가
+안 적혀 있다.
 
 중심화가 기본이다 (D-0031) — `--raw`로 끄면 허브 곡이 어떤 질의에도 상위에 온다. 시드가 둘
 이상이면 `--fusion min`으로 결합 규칙을 바꾼다 (D-0033). 평가는 M0 게이트(0.95)를 못 넘으면
