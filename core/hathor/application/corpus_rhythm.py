@@ -293,7 +293,7 @@ def _halves(
 
 
 def split_half(envelopes: Sequence[tuple[np.ndarray, float]], *, seed: int = 0) -> SplitVerdict:
-    """곡마다 반쪽을 나눠 **같은 곡 ↔ 다른 곡**을 견준다 (O-77).
+    """곡마다 반쪽을 나눠 **같은 곡 ↔ 다른 곡**을 견준다 (O-77 · 닫힘 D-0410).
 
     **귀무는 다른 곡이다.** D-0207이 *«순서를 섞은 귀무와 소수점 셋째 자리까지 같다»*로
     마디 안 위치를 기각한 그 꼴이며, 여기서는 박 안을 같은 방식으로 묻는다.

@@ -3,7 +3,8 @@
 
     cd core && uv run python ../tools/probe_tempo.py           # 수를 찍는다
     cd core && uv run python ../tools/probe_tempo.py --emit    # 정본을 갈아 넣는다
-    cd core && uv run python ../tools/probe_tempo.py --split   # 반쪽 나누기 (O-77)
+    cd core && uv run python ../tools/probe_tempo.py --split   # 반쪽 나누기 (닫힘 D-0410)
+    cd core && uv run python ../tools/probe_tempo.py --split --emit
     make measure                                               # 셋 다 + 거울
 
 **맨 `python3`으로는 안 돈다** — `numpy`와 `hathor`가 프로젝트 묶음에 있다 (D-0367).
@@ -61,6 +62,9 @@ from hathor.infrastructure.onset_store import SUFFIX, find_envelope_root  # noqa
 SECTION = "onset"
 """갈아 넣을 정본 블록."""
 
+SPLIT_SECTION = "split"
+"""`--split --emit`이 갈아 넣을 블록. **박 수와 따로 산다** — 자가 다르다 (D-0374)."""
+
 RULER = "2026-10-12 · 홉 0.01 · 곡마다 접고 중앙 · 박/마디 4등분 (D-0401)"
 """`[onset.counts]`를 낸 자의 이름 (D-0374). **홉과 접는 법이 둘 다 자다.**"""
 
@@ -98,6 +102,10 @@ PHASE = tuple(one for one in EMITS if one.startswith("phase_"))
 마디 **28.9%** · 박 38.6%. **기록의 말이 옳았고 내 추정이 틀렸다** (D-0401)."""
 
 
+SPLIT_RULER = "2026-10-13 · 홉 0.01 · 반쪽 나누기 · 네 칸 돌림 · 봉우리만 (D-0410)"
+"""`[split.counts]`를 낸 자의 이름 (D-0374). **돌리는 것과 거르는 것이 둘 다 자다** —
+D-0407과 D-0408이 각각 그것을 고치며 수를 통째로 바꿨다."""
+
 SPLIT = (
     "split_read",
     "split_same_mid_permille",
@@ -129,7 +137,7 @@ SPLIT = (
 
 거리는 **총변동거리**라 0~1이고, 천분율 정수로 적으면 거울이 `49.7%`로 찍는다.
 
-**판정은 `peaked_wins`와 `peaked_gain`이다** (D-0409) — 곡마다 짝지어 견준
+**판정은 `peaked_wins`와 `peaked_gain`이다** (D-0409 · 닫힘 D-0410) — 곡마다 짝지어 견준
 *«관례 빼기 참조»*이고, 승률 500이면 동전 던지기다. `peaked_mean` ↔ `peaked_self`의
 중앙값 차는 **짝을 안 지은 수**라 참고로만 든다 — *«참조곡이 관례를 이기나»*.
 나머지는 그 판정이 무엇을 걷어냈는지 보이려고 함께 든다: 원점(D-0407이 123천분율로
@@ -223,7 +231,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="코퍼스 템포 전수 (D-0397)")
     parser.add_argument("--emit", action="store_true", help="실측 정본의 counts를 다시 쓴다")
     parser.add_argument("--out", type=Path, default=None, help="포락선 폴더를 직접 준다")
-    parser.add_argument("--split", action="store_true", help="반쪽 나누기로 O-77을 잰다")
+    parser.add_argument(
+        "--split", action="store_true", help="반쪽 나누기 — O-77을 닫은 자 (D-0410)"
+    )
     args = parser.parse_args()
 
     folder = args.out or find_envelope_root(ROOT)
@@ -253,7 +263,13 @@ def main() -> int:
         print(f"  곡마다 다른가 · 봉우리만    {apart} 천분율  (귀무가 **다른 곡 하나**다)")
         print(f"\n  참조가 이긴 곡           {wins} 천분율  ← **500이면 동전 던지기다**")
         print(f"  관례 - 참조 · 차의 중앙    {beats} 천분율  ← **판정은 이 둘이다**")
-        print("**0에 가까우면 코퍼스 평균이 참조곡만큼 좋다** — 쪼갬을 관례로 둔다 (O-77)")
+        print("**0에 가까우면 코퍼스 평균이 참조곡만큼 좋다** — 관례로 둔다 (닫힘 D-0410)")
+        if not args.emit:
+            return 0
+        changed = measured.emit(SPLIT_SECTION, parts)
+        print(f"\n정본 갱신 · 바뀐 수 {len(changed)}개")
+        for line in changed:
+            print(f"  {line}")
         return 0
 
     try:

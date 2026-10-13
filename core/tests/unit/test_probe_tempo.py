@@ -242,14 +242,40 @@ def test_넷_미만이면_반쪽을_안_낸다(tmp_path: Path) -> None:
         TOOL.parted(TOOL.envelopes(_placed(tmp_path, [0, 1, 2])))
 
 
-def test_반쪽은_아직_정본에_안_든다() -> None:
-    """**차례를 둘로 나눴다** (D-0399와 같은 꼴 · D-0406).
+def test_반쪽이_정본과_같다() -> None:
+    """**양방향이다** (D-0371). 안 세는 수도, 세고 버리는 수도 둘 다 결함이다.
 
-    수는 그의 기기에서만 나온다 (D-0015). 정본에 키부터 넣으면 `measured --check`가
-    **없는 수를 찾으며 운다.** 수를 받아 정본에 넣는 판이 이 단언을 뒤집는다.
+    D-0406이 차례를 둘로 나눴다 — 먼저 찍고, 수를 받아 정본을 짓는다. 그 사이
+    자를 세 번 고쳤고(D-0407 원점 · D-0408 귀무 · D-0409 짝) **고칠 때마다 수가
+    내려갔다.** 이 판(D-0410)이 그 둘째이고 `SPLIT`은 이제 정본의 키와 같다.
     """
-    assert not set(TOOL.SPLIT) & set(TOOL.EMITS)
-    assert not set(TOOL.SPLIT) & set(CANON.canon()["onset"]["counts"])
+    counts = CANON.canon()["split"]["counts"]
+
+    assert set(TOOL.SPLIT) == set(counts)
+    assert not set(TOOL.SPLIT) & set(TOOL.EMITS), "박 블록과 섞였다 — 자가 다르다"
+
+
+def test_반쪽의_자가_정본과_같다() -> None:
+    """**자가 바뀌면 다시 재라고 운다** (D-0374).
+
+    돌리는 것과 거르는 것이 **둘 다 자다** — D-0407과 D-0408이 각각 그것을 고치며
+    수를 통째로 바꿨다. 자 이름에 그 둘이 적혀 있어야 한다.
+    """
+    assert CANON.canon()["split"]["ruler"] == TOOL.SPLIT_RULER
+    assert "돌림" in TOOL.SPLIT_RULER
+    assert "봉우리만" in TOOL.SPLIT_RULER
+
+
+def test_정본의_판정이_관례_쪽이다() -> None:
+    """**O-77을 닫은 수** (D-0410). 참조가 이기지만 **폭이 0을 가로지른다.**
+
+    이 단언이 뒤집히면 — 다시 재서 사분위가 0 위로 올라가면 — **D-0402를 다시 열
+    근거가 생긴 것이다.** 그때 울어야 사람이 안다.
+    """
+    counts = CANON.canon()["split"]["counts"]
+
+    assert counts["split_peaked_wins_permille"] > 500, "참조가 이기는 방향은 맞았다"
+    assert counts["split_peaked_gain_q1_permille"] < 0, "사분위가 0을 안 가로지른다 — 다시 본다"
 
 
 def test_입구가_반쪽_수를_찍는다(

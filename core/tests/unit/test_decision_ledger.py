@@ -198,7 +198,8 @@ def test_갚는_법이_빈_행을_잡는다() -> None:
 def test_지금_표가_아직_판결_안_난_합성과_같다() -> None:
     """**표와 세는 것이 갈리면 표가 낡는다** (D-0263과 같은 자리).
 
-    **판결이 난 것은 뺀다** (D-0328). `(D-xxxx 승격 아님)` · `(D-xxxx 뒤집힘)`은
+    **판결이 난 것은 뺀다** (D-0328 · D-0410). `(D-xxxx 확인)` · `(D-xxxx 승격 아님)` ·
+    `(D-xxxx 뒤집힘)`은
     *"더 갚을 것이 없다"*는 뜻이고, 그 판단은 `자료` 칸이 든다. 미래 문서에 두었더니
     **일곱 줄이 쌓였고 그것은 과거였다** — 한 항목은 한 문서에만 산다 (D-0262).
 
@@ -216,11 +217,7 @@ def test_지금_표가_아직_판결_안_난_합성과_같다() -> None:
         found = ledger.EVIDENCE.search(record.body)
         if found and ledger.evidence_base(found.group(1)) == "합성":
             synthetic[record.identifier] = found.group(1)
-    settled = {
-        name
-        for name, value in synthetic.items()
-        if ledger.NOT_PROMOTED.search(value) or ledger.OVERTURNED.search(value)
-    }
+    settled = {name for name, value in synthetic.items() if evidence._settled(value)}
     open_rows = set(synthetic) - settled
 
     assert listed == open_rows, f"표에만 {listed - open_rows} · 기록에만 {open_rows - listed}"

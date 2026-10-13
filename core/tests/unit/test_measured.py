@@ -200,13 +200,21 @@ def test_판정이_입구에_배선돼_있다(
 def test_통과줄이_센_수를_말한다(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`canon()` · `rows_of()` 두 자리. **수가 화면에 없으면 0인 것도 모른다** (D-0230)."""
+    """`canon()` · `rows_of()` 두 자리. **수가 화면에 없으면 0인 것도 모른다** (D-0230).
+
+    **행 수를 손으로 안 적는다** (GR-0.7). 38을 박아 뒀더니 블록이 다섯으로 늘자
+    이 시험이 울었다 — *«늘어난 것»*을 결함으로 읽은 것이다 (D-0410). 정본의
+    `display` 수를 **따로 세어** 대조한다: `rows_of`가 끊기면 둘이 갈린다.
+    """
     monkeypatch.setattr(TOOL, "check", list)
     monkeypatch.setattr("sys.argv", ["measured.py", "--check"])
+    data = TOOL.canon()
+    wanted = sum(len(data[name].get("display", [])) for name in TOOL.BLOCKS if name in data)
 
     assert TOOL.main() == 0
     spoke = _spoke(capsys)
-    assert "38행" in spoke, "rows_of()가 끊겼다"
+    assert f"{wanted}행" in spoke, "rows_of()가 끊겼다"
+    assert wanted >= TOOL.FLOOR_ROWS, "정본이 바닥 아래다 (D-0230)"
     assert "곡 1004" in spoke, "canon()이 끊겼다"
 
 

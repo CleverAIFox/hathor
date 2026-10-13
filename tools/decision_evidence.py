@@ -82,6 +82,17 @@ CONFIRMED_BY = re.compile(r"\(D-(\d{4}) 확인\)")
 """
 
 
+def _settled(value: str) -> bool:
+    """**더 갚을 것이 없다**는 꼬리표가 붙었나 (D-0410).
+
+    셋을 **한 자리에서** 본다 — 둘만 읽다가 「확인」을 빠뜨린 것이 D-0328 · D-0340에
+    이은 세 번째였다. 두 벌로 적으면 한쪽만 고치는 날이 온다 (D-0043).
+    """
+    return bool(
+        CONFIRMED_BY.search(value) or NOT_PROMOTED.search(value) or OVERTURNED.search(value)
+    )
+
+
 def _confirmation(record: Record, value: str) -> list[str]:
     """`(D-xxxx 확인)`과 `(D-xxxx 승격 아님)`이 **자기보다 뒤 번호**인가 (D-0301 · D-0323)."""
     problems: list[str] = []
@@ -356,7 +367,10 @@ def payable(records: list[Record]) -> list[str]:
         # **`뒤집힘`도 명단에서 뺀다** (D-0340). D-0328이 그 꼬리표를 만들었는데
         # 여기서 안 읽었다 — **판정이 뒤집힌 판은 승격 후보가 아니다.** 「승격 아님」이
         # 그 약한 짝이고, 강한 쪽을 안 보면 뒤집힌 판이 명단에 영원히 선다.
-        if evidence_base(value) != "합성" or NOT_PROMOTED.search(value) or OVERTURNED.search(value):
+        #
+        # **`확인`도 같은 자리였다** (D-0410 — 세 번째다). 꼬리표 셋 중 둘만 읽고 있었고,
+        # 하필 **실물로 확인된 판**이 빠져 있었다 — 갚은 빚이 명단에 영원히 서는 꼴이다.
+        if evidence_base(value) != "합성" or _settled(value):
             continue
         later = [
             f"D-{number}"

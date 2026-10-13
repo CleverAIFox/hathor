@@ -328,3 +328,113 @@ of = "phase_beat_max_permille"
 label = "**봉우리가 없는 곡**"
 kind = "share-tracks"
 of = "phase_flat"
+
+[split]
+stamp = "2026-10-13"
+ruler = "2026-10-13 · 홉 0.01 · 반쪽 나누기 · 네 칸 돌림 · 봉우리만 (D-0410)"
+tracks = 1004
+
+[split.counts]
+split_read = 1004
+split_same_mid_permille = 87
+split_other_mid_permille = 264
+split_turned_mid_permille = 141
+split_peaked_read = 543
+split_peaked_same_q1_permille = 33
+split_peaked_same_mid_permille = 62
+split_peaked_same_q3_permille = 133
+split_peaked_self_q1_permille = 33
+split_peaked_self_mid_permille = 61
+split_peaked_self_q3_permille = 109
+split_peaked_mean_q1_permille = 62
+split_peaked_mean_mid_permille = 89
+split_peaked_mean_q3_permille = 123
+split_peaked_turned_q1_permille = 82
+split_peaked_turned_mid_permille = 120
+split_peaked_turned_q3_permille = 169
+split_peaked_wins_permille = 634
+split_peaked_gain_q1_permille = -33
+split_peaked_gain_mid_permille = 18
+split_peaked_gain_q3_permille = 53
+
+[[split.display]]
+label = "반쪽을 낸 곡"
+kind = "share-tracks"
+of = "split_read"
+
+[[split.display]]
+label = "봉우리가 있어 쓸 수 있는 곡"
+kind = "share-tracks"
+of = "split_peaked_read"
+
+[[split.display]]
+label = "**참조가 이긴 곡** — 500이면 동전 던지기"
+kind = "rate"
+of = "split_peaked_wins_permille"
+bold = true
+
+[[split.display]]
+label = "**관례 빼기 참조** — 차의 중앙"
+kind = "rate"
+of = "split_peaked_gain_mid_permille"
+bold = true
+
+[[split.display]]
+label = "차의 사분위"
+kind = "rate-span"
+of = ["split_peaked_gain_q1_permille", "split_peaked_gain_q3_permille"]
+
+[[split.display]]
+label = "예측자 · 참조(제 앞 절반) 중앙"
+kind = "rate"
+of = "split_peaked_self_mid_permille"
+
+[[split.display]]
+label = "참조 사분위"
+kind = "rate-span"
+of = ["split_peaked_self_q1_permille", "split_peaked_self_q3_permille"]
+
+[[split.display]]
+label = "예측자 · 관례(코퍼스 평균) 중앙"
+kind = "rate"
+of = "split_peaked_mean_mid_permille"
+
+[[split.display]]
+label = "관례 사분위"
+kind = "rate-span"
+of = ["split_peaked_mean_q1_permille", "split_peaked_mean_q3_permille"]
+
+[[split.display]]
+label = "예측자 · 다른 곡 하나 중앙"
+kind = "rate"
+of = "split_peaked_turned_mid_permille"
+
+[[split.display]]
+label = "다른 곡 사분위"
+kind = "rate-span"
+of = ["split_peaked_turned_q1_permille", "split_peaked_turned_q3_permille"]
+
+[[split.display]]
+label = "같은 곡 앞↔뒤 · 안 돌림 중앙"
+kind = "rate"
+of = "split_peaked_same_mid_permille"
+
+[[split.display]]
+label = "같은 곡 사분위"
+kind = "rate-span"
+of = ["split_peaked_same_q1_permille", "split_peaked_same_q3_permille"]
+
+[[split.display]]
+label = "전수 · 같은 곡 중앙"
+kind = "rate"
+of = "split_same_mid_permille"
+
+[[split.display]]
+label = "전수 · 다른 곡 중앙 (안 돌림)"
+kind = "rate"
+of = "split_other_mid_permille"
+
+[[split.display]]
+label = "전수 · 다른 곡 중앙 (돌림)"
+kind = "rate"
+of = "split_turned_mid_permille"
