@@ -42,8 +42,12 @@ if TYPE_CHECKING:
 DIRNAME = "musicfm"
 """`--out` 아래 기본 산출물 폴더. MERT·CLAP 산출물과 **섞지 않는다** — 차원이 다르다."""
 
-SECONDS_PER_TRACK = 4.0
-"""진행 예상에 쓰는 값. 스템을 안 만들므로 `eval layers`와 같은 자리다."""
+SECONDS_PER_TRACK = 4.7
+"""진행 예상에 쓰는 값. **실측이다** — 그의 기기에서 1004곡 전수 누적 4.7초/곡 (D-0417).
+
+`eval layers`에서 4.0을 빌려 왔었고 **18% 낮았다** (예상 66.9분 · 실제 78.6분). 빌린
+수는 빌린 자리의 수다 — 한 번 돌았으면 **그 자리의 수로 바꾼다** (GR-0.7 · D-0374).
+"""
 
 
 def _build_musicfm(parser: argparse.ArgumentParser) -> None:
