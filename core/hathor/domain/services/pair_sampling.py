@@ -70,3 +70,58 @@ def presentation_order(pair: Pair, *, seed: int) -> Pair:
     """
     generator = np.random.default_rng(seed)
     return (pair[1], pair[0]) if bool(generator.integers(2)) else pair
+
+
+REPEAT_SHARE = 0.1
+"""새 문항 대비 **되묻는 몫**.
+
+10%면 200문항에 20번이고, 그 20번으로 본 일치율의 95% 구간이 대략 ±20%p다 —
+천장을 소수점까지 재자는 것이 아니라 **«80%대인가 60%대인가»**를 가리자는 것이다.
+더 키우면 새 라벨이 줄고, 새 라벨이 모형을 만든다.
+"""
+
+REPEAT_MODE = "repeat"
+"""되물은 문항의 `mode`. **새 라벨과 섞이면 같은 쌍이 두 번 세어진다** (D-0012)."""
+
+
+def with_repeats(
+    fresh: Sequence[Pair],
+    answered: Sequence[Pair],
+    *,
+    seed: int,
+    share: float = REPEAT_SHARE,
+) -> list[tuple[Pair, bool]]:
+    """새 문항 사이에 **이미 답한 쌍**을 섞는다. 되묻기에는 표시가 붙는다.
+
+    ### 왜 되묻나
+
+    되묻지 않으면 나중에 나올 정확도가 *«모형이 나쁘다»*인지 *«판정자가 흔들린다»*인지
+    **못 가린다.** 합성 실측에서 판정자 잡음이 천장을 90%로 눌렀다 — 천장을 모르면
+    70%가 좋은 수인지 나쁜 수인지 말할 수 없다.
+
+    **나중에 못 메운다.** 답한 쌍은 다시 안 나오므로(`exclude`), 되묻기 없이 200번을
+    누르면 그 200쌍의 천장은 **영원히 못 잰다.**
+
+    ### 지난 세션 것만 되묻는다
+
+    `answered`는 세션 시작에 읽은 것이므로 **방금 답한 문항은 안 들어온다.** 방금
+    답한 것을 다시 물으면 일관성이 아니라 **기억**을 재게 된다.
+
+    섞는다 — 되묻기가 끝에 몰리면 사람이 알아채고 그때부터 답이 달라진다.
+    """
+    if not 0.0 <= share < 1.0:
+        raise ValueError(f"되묻는 몫은 [0, 1)이어야 한다: {share}")
+
+    wanted = min(round(len(fresh) * share), len(answered))
+    generator = np.random.default_rng(seed)
+    chosen = (
+        [
+            tuple(answered[int(index)])
+            for index in generator.choice(len(answered), wanted, replace=False)
+        ]
+        if wanted
+        else []
+    )
+    asked: list[tuple[Pair, bool]] = [(pair, False) for pair in fresh]
+    asked += [(canonical(*pair), True) for pair in chosen]
+    return [asked[int(index)] for index in generator.permutation(len(asked))]

@@ -6,14 +6,10 @@ import argparse
 import json
 import sys
 import time
-from collections.abc import Iterator, Mapping
-from datetime import UTC, datetime
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hathor.application.evaluate_retrieval import (
-    DEFAULT_SEED,
-)
 from hathor.application.extract_features import ExtractFeatures
 from hathor.application.orchestrator.generation_pipeline import DEFAULT_SECTIONS, run_dry
 from hathor.application.resolve_identities import ResolveIdentities
@@ -62,12 +58,12 @@ from hathor.interfaces.cli import (
     eval_vocabulary,
     ingest_keys,
     ingest_onsets,
+    taste,
 )
 from hathor.interfaces.cli.doctor import run_doctor
 from hathor.interfaces.cli.eval_log import recorded
 from hathor.interfaces.cli.eval_retrieval import load_search_tracks
 from hathor.interfaces.cli.extraction import drive_extraction
-from hathor.interfaces.cli.feature_sources import open_feature_source
 from hathor.interfaces.cli.lyrics import (
     _build_lyrics_extract,
     _build_lyrics_structure,
@@ -99,7 +95,7 @@ from hathor.shared.config.paths import (
 )
 
 if TYPE_CHECKING:
-    from hathor.domain.entities.track_tags import TrackTags
+    pass
 
 
 DEFAULT_CONTACT = "https://github.com/CleverAIFox/hathor"
@@ -254,24 +250,6 @@ def _build_ingest_compact(parser: argparse.ArgumentParser) -> None:
         help="npz가 없는 기록도 남긴다 (기본은 버린다)",
     )
     parser.add_argument("--dry-run", action="store_true", help="쓰지 않고 결과만 보고한다")
-
-
-def _build_taste_compare(parser: argparse.ArgumentParser) -> None:
-    """`hathor taste compare` 인자."""
-    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
-    parser.add_argument(
-        "--features",
-        type=resolve_path,
-        default=None,
-        help=f"특징 산출물 루트 (미지정 시 --out/{DEFAULT_FEATURE_DIRNAME})",
-    )
-    parser.add_argument("--count", type=int, default=20, help="이번 세션 문항 수")
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추출 시드")
-
-
-def _build_taste_status(parser: argparse.ArgumentParser) -> None:
-    """`hathor taste status` 인자."""
-    parser.add_argument("--out", type=resolve_path, default=DEFAULT_OUTPUT_ROOT, help="산출물 위치")
 
 
 def _build_search(parser: argparse.ArgumentParser) -> None:
@@ -948,115 +926,6 @@ def _eval_log_root(args: argparse.Namespace) -> Path:
     return Path(out) if out is not None else resolve_path(DEFAULT_OUTPUT_ROOT)
 
 
-def _format_track(source_key: str, tags: Mapping[str, TrackTags]) -> str:
-    """`아티스트 — 제목` 형태. 태그가 없으면 경로를 그대로 쓴다."""
-    tag = tags.get(source_key)
-    if tag is None:
-        return source_key
-    artist = tag.artist or "(아티스트 없음)"
-    title = tag.title or source_key
-    return f"{artist} — {title}"
-
-
-def _run_taste_compare(args: argparse.Namespace) -> int:
-    """쌍대비교 문항을 내고 응답을 기록한다 (O-10, D-0012).
-
-    이번 단계는 **무작위 쌍만** 낸다. 적응적 선택은 모델이 있어야 성립하고,
-    모델로 고른 쌍으로 평가하면 시험 분포가 모델에 의존한다. 무작위 쌍을
-    고정 평가 집합으로 먼저 확보한다.
-    """
-    from hathor.domain.entities.preference_comparison import PreferenceComparison, Side
-    from hathor.domain.services.pair_sampling import presentation_order, sample_pairs
-    from hathor.infrastructure.jsonl_preference_store import JsonlPreferenceStore
-    from hathor.interfaces.cli import taste_input
-    from hathor.interfaces.cli.taste_input import read_answer
-
-    tags = {track.source_key: track.tags for track in JsonlScanStore(args.out).read_tracks()}
-    if not tags:
-        print(f"스캔 산출물이 없다: {args.out}", file=sys.stderr)
-        return 2
-
-    # **모양을 보고 고른다** (D-0233 · O-69 닫힘 D-0274). 규약에 없는 `read_records()`를
-    # 불러서 **묶음을 못 읽었다.** 배열 이름은 안 준다 — `source_keys()`는 배열을 안 연다.
-    features = open_feature_source(args.features or args.out / DEFAULT_FEATURE_DIRNAME, ())
-    if not features.index_path.exists():
-        print(f"특징 인덱스가 없다: {features.index_path}", file=sys.stderr)
-        return 2
-    # 임베딩이 없는 곡은 출제하지 않는다. 응답을 받아도 모델에 못 쓴다.
-    keys = sorted(features.source_keys() & set(tags))
-    if len(keys) < 2:
-        print("출제할 수 있는 곡이 둘 미만이다", file=sys.stderr)
-        return 2
-
-    store = JsonlPreferenceStore(args.out)
-    answered = list(store.read_all())
-    pairs = sample_pairs(
-        keys,
-        args.count,
-        seed=args.seed + len(answered),
-        exclude=[(item.left, item.right) for item in answered],
-    )
-    if not pairs:
-        print("낼 수 있는 새 문항이 없다")
-        return 0
-
-    print(f"곡 {len(keys)}개 / 기록된 응답 {len(answered)}건 / 이번 문항 {len(pairs)}개")
-    print("1 또는 2로 답한다. s=건너뛰기, q=중단. 답할 때마다 즉시 저장된다.")
-    print("**다른 키는 안 받는다** — 오타가 「건너뜀」으로 저장되면 그 쌍은 다시 안 나온다.\n")
-
-    recorded = 0
-    for index, pair in enumerate(pairs, 1):
-        first, second = presentation_order(pair, seed=args.seed + index)
-        print(f"[{index}/{len(pairs)}]")
-        print(f"  1) {_format_track(first, tags)}")
-        print(f"  2) {_format_track(second, tags)}")
-        answer = read_answer(input, print)
-        if answer == taste_input.QUIT:
-            print("\n중단한다. 여기까지 저장됐다.")
-            break
-        if answer == taste_input.PICK_LEFT:
-            winner = Side.LEFT if first == pair[0] else Side.RIGHT
-        elif answer == taste_input.PICK_RIGHT:
-            winner = Side.LEFT if second == pair[0] else Side.RIGHT
-        else:
-            winner = None
-        store.append(
-            PreferenceComparison(
-                left=pair[0],
-                right=pair[1],
-                winner=winner,
-                recorded_at=datetime.now(UTC).isoformat(),
-                mode="random",
-            )
-        )
-        recorded += 1
-        print()
-
-    summary = store.counts()
-    print(
-        f"이번 세션 {recorded}건 기록. 누적 {summary['total']}건 "
-        f"(응답 {summary['answered']}, 건너뜀 {summary['skipped']})"
-    )
-    print(f"저장: {store.path}")
-    return 0
-
-
-def _run_taste_status(args: argparse.Namespace) -> int:
-    from hathor.infrastructure.jsonl_preference_store import JsonlPreferenceStore
-
-    store = JsonlPreferenceStore(args.out)
-    summary = store.counts()
-    if summary["total"] == 0:
-        print(f"기록된 응답이 없다: {store.path}")
-        return 0
-    print(f"누적 {summary['total']}건 (응답 {summary['answered']}, 건너뜀 {summary['skipped']})")
-    for key, value in sorted(summary.items()):
-        if key.startswith("mode:"):
-            print(f"  {key[5:]}: {value}건")
-    print(f"저장: {store.path}")
-    return 0
-
-
 def _resolve_seed(query: str, tracks: list[SearchTrack]) -> str:
     """검색어로 시드곡 하나를 특정한다.
 
@@ -1204,20 +1073,7 @@ def entries() -> tuple[Entry, ...]:
                 *eval_musicfm.COMMANDS,
             ),
         ),
-        Group(
-            "taste",
-            "취향 라벨 수집",
-            "taste_command",
-            (
-                Command(
-                    "compare",
-                    "쌍대비교 문항을 내고 응답을 기록한다",
-                    _build_taste_compare,
-                    _run_taste_compare,
-                ),
-                Command("status", "수집 현황", _build_taste_status, _run_taste_status),
-            ),
-        ),
+        Group("taste", "취향 라벨 수집", "taste_command", taste.COMMANDS),
         Group(
             "lyrics",
             "가사축",

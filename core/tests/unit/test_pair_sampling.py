@@ -2,8 +2,13 @@
 
 import pytest
 
-from hathor.domain.entities.preference_comparison import PreferenceComparison, Side
-from hathor.domain.services.pair_sampling import canonical, presentation_order, sample_pairs
+from hathor.domain.entities.preference_comparison import PreferenceComparison, Side, agreement
+from hathor.domain.services.pair_sampling import (
+    canonical,
+    presentation_order,
+    sample_pairs,
+    with_repeats,
+)
 
 KEYS = [f"곡{index:02d}.mp3" for index in range(12)]
 
@@ -96,3 +101,104 @@ def test_comparison_skip_is_preserved():
     assert skipped.skipped
     assert skipped.preferred is None
     assert skipped.as_record()["winner"] is None
+
+
+# ------------------------------------------------- 되묻기 · 판정자의 천장 (D-0421)
+
+
+ANSWERED = [canonical(f"곡{i:02d}.mp3", f"곡{i + 1:02d}.mp3") for i in range(0, 10, 2)]
+
+
+def _asked(count=20, answered=ANSWERED, *, seed=3, **kwargs):
+    fresh = sample_pairs(KEYS, count, seed=seed, exclude=answered)
+    return with_repeats(fresh, answered, seed=seed, **kwargs), fresh
+
+
+def test_되묻기가_몫만큼_섞인다():
+    """**천장을 재려면 같은 쌍을 다시 물어야 한다** (D-0421).
+
+    10%면 20문항에 2번이다. 더 키우면 새 라벨이 줄고, 새 라벨이 모형을 만든다.
+    """
+    asked, fresh = _asked(20)
+
+    assert sum(1 for _, again in asked if again) == 2
+    assert len(asked) == len(fresh) + 2
+
+
+def test_되묻기는_이미_답한_쌍에서만_나온다():
+    """**새 쌍을 되묻기라 적으면 천장이 아니라 잡음을 잰다.**"""
+    asked, _ = _asked(20)
+
+    assert [pair for pair, again in asked if again] and all(
+        pair in ANSWERED for pair, again in asked if again
+    )
+
+
+def test_새_문항은_하나도_안_빠진다():
+    """되묻기를 섞느라 **새 라벨을 잃으면 안 된다.**"""
+    asked, fresh = _asked(20)
+
+    assert sorted(pair for pair, again in asked if not again) == sorted(fresh)
+
+
+def test_되묻기가_끝에_안_몰린다():
+    """**몰리면 사람이 알아챈다** — 알아챈 순간부터 답이 달라져 천장이 아니다."""
+    asked, _ = _asked(60)
+
+    places = [index for index, (_, again) in enumerate(asked) if again]
+    assert places, "되묻기가 없다 — 이 검사가 빈 그물이다 (D-0230)"
+    assert min(places) < len(asked) // 2, f"전부 뒷절반에 있다: {places}"
+
+
+def test_답한_것이_없으면_안_되묻는다():
+    """첫 세션에는 되물을 것이 없다. **지어내지 않는다** (GR-0.5)."""
+    asked, fresh = _asked(20, [])
+
+    assert [pair for pair, _ in asked] and len(asked) == len(fresh)
+    assert not any(again for _, again in asked)
+
+
+def test_몫이_1이상이면_거부한다():
+    with pytest.raises(ValueError, match="되묻는 몫"):
+        _asked(20, share=1.0)
+
+
+def _said(*rows):
+    return [
+        PreferenceComparison(left=left, right=right, winner=winner, recorded_at="t")
+        for left, right, winner in rows
+    ]
+
+
+def test_자기일치는_같은_쌍의_두_답을_견준다():
+    said = _said(
+        ("가", "나", Side.LEFT),
+        ("가", "나", Side.LEFT),
+        ("다", "라", Side.LEFT),
+        ("다", "라", Side.RIGHT),
+    )
+
+    assert agreement(said) == (2, 1)
+
+
+def test_한_번만_물은_쌍은_안_센다():
+    """**천장은 되물은 쌍에서만 나온다.** 한 번짜리를 세면 분모가 부풀어 100%가 된다."""
+    assert agreement(_said(("가", "나", Side.LEFT))) == (0, 0)
+
+
+def test_건너뛴_것은_일치의_증거가_아니다():
+    """판단을 안 한 것은 **일관된 것이 아니다.**"""
+    said = _said(("가", "나", None), ("가", "나", None), ("가", "나", Side.LEFT))
+
+    assert agreement(said) == (0, 0)
+
+
+def test_세_번_물으면_언제나_첫_답과_견준다():
+    """**학습 집합에 들어가는 라벨이 첫 답이다** — 모형이 맞혀야 하는 것이 그것이다.
+
+    연달아 견주면 `A·B·A`가 0/2가 된다. 첫 답 기준이면 1/2이다. 둘 다 말이 되므로
+    **정해 두지 않으면 나중에 조용히 바뀐다** (D-0043).
+    """
+    said = _said(("가", "나", Side.LEFT), ("가", "나", Side.RIGHT), ("가", "나", Side.LEFT))
+
+    assert agreement(said) == (2, 1)
