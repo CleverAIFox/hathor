@@ -55,6 +55,7 @@ OPTIONAL_HEADS = ("hathor-after",)
 
 AFTER_RULES = (
     ("site/proposal.docx", "proposal"),
+    ("site/proposal.html", "proposal"),
     ("site/proposal.lock.json", "proposal"),
 )
 """**패치에 안 싣고 받는 쪽이 다시 만드는 것** → 그것을 만드는 `make` 목표 (D-0377).

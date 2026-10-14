@@ -365,3 +365,42 @@ def test_뽑은_패치가_산출물을_안_담는다(tmp_path: Path) -> None:
             assert f"# hathor-after: {target}" in body, "빼고 **다시 만들라고 안 적었다**"
         else:
             assert f"# hathor-after: {target}" not in body, "안 건드렸는데 뒤처리를 적었다"
+
+
+# ------------------------------- 생성물이 둘인데 하나만 다시 만들었다 (D-0424)
+
+
+def test_기획서_생성물이_전부_뒤처리_규칙에_있다() -> None:
+    """**빠진 생성물은 받는 쪽에서 훅이 잡는다** (D-0424).
+
+    `site/proposal.html`이 규칙에 없었다. D-0423 패치가 `MASTER` §3을 건드려 화면이
+    낡았는데 **뒤처리 머리는 docx만 알았고**, 받는 쪽에서 훅이 커밋을 막았다 —
+    D-0377이 없애려던 바로 그 상황이 **생성물 하나 때문에 되살아났다.**
+
+    **목록이 두 곳에 산다** (D-0043). `render_proposal`이 무엇을 만드는지 알고
+    `check_patch`가 무엇을 다시 만들라 할지 안다. 둘을 여기서 맞댄다.
+    """
+    render = tool_module("render_proposal")
+    made = {
+        path.relative_to(ROOT).as_posix()
+        for path in (cast("Path", render.OUT), cast("Path", render.DOCX))
+    }
+    declared = {trigger for trigger, _target in CHECKER.AFTER_RULES}
+
+    assert made, "생성물을 한 개도 못 읽었다 — 이 검사가 빈 그물이다 (D-0230)"
+    assert made <= declared, f"뒤처리 규칙에 없는 생성물이 있다: {sorted(made - declared)}"
+
+
+def test_뒤처리_목표가_생성물을_전부_만든다() -> None:
+    """**`make proposal`이 docx만 만들면 html이 낡는다** (D-0424).
+
+    규칙에 적는 것과 목표가 만드는 것은 다른 일이다 — 적어만 두면 받는 쪽은
+    *«적힌 대로 했는데 왜 막히지»*를 본다.
+    """
+    recipe = ROOT / "Makefile"
+    body = recipe.read_text(encoding="utf-8")
+    start = body.index("\nproposal:")
+    block = body[start : body.index("\n\n", start)]
+
+    assert "build_proposal.py" in block, "docx를 안 만든다"
+    assert "render_proposal.py" in block, "화면을 안 만든다 — 받는 쪽에서 훅이 막는다"

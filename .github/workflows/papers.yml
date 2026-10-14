@@ -1,0 +1,64 @@
+# 주 1회 arXiv를 훑어 docs/PLAN.md §4 「읽을 후보」에 붙인다 (D-0424).
+#
+# seshat의 papers.yml을 옮겼다 (seshat DECISIONS §126). 그쪽에서 돌고 있는 물건이다.
+#
+# **후보이지 요약이 아니다.** 「무엇을 했나 · 가져올 것」은 읽은 사람이 MASTER §3에
+# 적는다 (D-0423) — 안 읽고 쓰면 그것이 추측이다 (GR-0.5).
+name: papers
+
+on:
+  schedule:
+    # 월요일 09:17 KST. **정각을 피한다** — 그 분에 세상의 예약 작업이 몰린다.
+    - cron: "17 0 * * 1"
+  workflow_dispatch:
+
+# **권한을 적는다.** 가지를 밀고 PR을 열려면 쓰기와 PR 쓰기가 둘 다 든다.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      # **의존성이 없다.** 표준 라이브러리만 쓰는 도구라 `uv sync`를 안 한다 —
+      # 예약 작업이 의존성 하나 때문에 조용히 멈추는 자리를 안 만든다.
+      - run: python3 tools/watch_papers.py --write --days 8
+
+      # **main을 안 민다** (D-0376). 봇이 main을 움직이면 보내 둔 패치의 기준 나무가
+      # 갈리고, 받는 쪽은 까닭 모를 «기준 트리가 다르다»를 본다. 가지와 PR로만 낸다.
+      - name: 바뀌었으면 PR을 연다
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # **종료 코드를 가른다.** `git diff --quiet`는 0 없음 · 1 있음 · 128 고장이다.
+          # `&& exit 0` 하나로 쓰면 **고장이 «바뀌었다»로 읽힌다.**
+          # **`--`로 경로임을 못 박는다** — 없으면 git이 «revision인가 path인가»를 묻는다.
+          RC=0
+          git diff --quiet -- docs/PLAN.md || RC=$?
+          case "$RC" in
+            0) echo "  붙일 후보가 없다"; exit 0 ;;
+            1) ;;
+            *) echo "  git diff가 $RC로 죽었다 — 경로를 본다: docs/PLAN.md" >&2; exit 1 ;;
+          esac
+          BR="papers/$(date -u +%Y-%m-%d)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BR"
+          git add -- docs/PLAN.md
+          git commit -m "읽을 후보: $(date -u +%Y-%m-%d)에 훑은 것"
+          git push -u origin "$BR"
+          # **역따옴표를 안 쓴다.** 작은따옴표 안의 그것을 shellcheck이 «펼치려던 것
+          # 아니냐»로 읽고(SC2016), 들여쓴 히어독은 종결자를 못 찾는다(SC1073).
+          # 영리한 쪽으로 가지 않는다 — PR 본문에 코드 서식이 필요하지 않다.
+          gh pr create --base main --head "$BR" \
+            --title "읽을 후보 — $(date -u +%Y-%m-%d)" \
+            --body '주 1회 훑은 후보다. **요약이 아니라 후보다** —
+          읽고 나면 줄을 PLAN에서 빼고 MASTER 3절 「읽은 논문」에 적는다 (D-0423).
+
+          합치면 main이 움직인다. **보내 둔 패치가 있으면 합친 뒤 다시 받는다** (D-0376).'

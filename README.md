@@ -348,7 +348,7 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/check_issue_mentions.py` | 닫힌 질문을 열린 것처럼 적었는가 |
 | `tools/check_secrets.py` | 추적 중인 비밀정보 |
 | `tools/check_doc_style.py` | 문서 레이아웃 · 여섯 번째 문서 |
-| `tools/check_egress.py` | 망 접점 — 허용 목록 4곳 (밖 2 · 로컬 2) |
+| `tools/check_egress.py` | 망 접점 — 허용 목록 5곳 (밖 2 · 로컬 2) |
 | `tools/check_model_licenses.py` | 모델 가중치 라이선스 · 상업 불가 집합 |
 | `tools/render_proposal.py` | 기획서 화면을 낸다 · 정본 ↔ docx ↔ 화면 대조 |
 | `tools/check_script.py` | 화면 스크립트 문법 (`node --check`) |

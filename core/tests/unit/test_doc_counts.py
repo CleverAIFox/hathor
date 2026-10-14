@@ -138,7 +138,7 @@ def test_새_축_일곱이_실물을_센다() -> None:
     assert CHECKER.frozen_issues() >= 1
     assert CHECKER.service_count() >= 10
     assert CHECKER.rule_mentions() >= 150
-    assert CHECKER.egress_points() == 4
+    assert CHECKER.egress_points() == 5  # D-0424 — 논문 훑기
     assert CHECKER.grandfathered_records() == 79
 
     names = {name for name, _, _ in CHECKER.COUNTED}

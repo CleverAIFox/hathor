@@ -56,6 +56,9 @@ def _fixture(folder: Path) -> None:
     (folder / "docs" / "DECISIONS.md").write_text("## D-0001. 첫 기록\n", encoding="utf-8")
     (folder / "site" / "proposal.docx").write_text("옛 제출본\n", encoding="utf-8")
     (folder / "site" / "proposal.lock.json").write_text("{}\n", encoding="utf-8")
+    # **생성물이 셋이다** (D-0424). 화면이 빠져 있어 `git add`가 128로 죽었다 —
+    # 가짜 저장소가 실물보다 적게 들고 있으면 **그 자리는 시험 밖이다.**
+    (folder / "site" / "proposal.html").write_text("옛 화면\n", encoding="utf-8")
     _git(folder, "init", "-q", "-b", "main")
     _git(folder, "config", "user.email", "t@example.invalid")
     _git(folder, "config", "user.name", "시험")
@@ -124,14 +127,18 @@ def test_뒤처리가_낸_것이_커밋에_담긴다(tmp_path: Path) -> None:
     """**D-0379가 샌 자리다.** `EXPECTED`에 더하고 담지 않으면 커밋이 낡는다."""
     folder = tmp_path / "repo"
     _fixture(folder)
-    bin_dir = _make(folder, 'echo "새 제출본" > site/proposal.docx')
+    bin_dir = _make(
+        folder,
+        'echo "새 제출본" > site/proposal.docx; echo "새 화면" > site/proposal.html',
+    )
 
     done = _run(folder, _patch(folder, after="proposal"), bin_dir)
 
     assert done.returncode == 0, done.stderr
     assert _git(folder, "status", "--porcelain") == "", done.stdout
     carried = _git(folder, "show", "--name-only", "--format=", "HEAD").split()
-    assert "site/proposal.docx" in carried, f"뒤처리 산출물이 커밋에 없다: {carried}"
+    for one in ("site/proposal.docx", "site/proposal.html"):
+        assert one in carried, f"뒤처리 산출물이 커밋에 없다: {one} · {carried}"
 
 
 def test_뒤처리가_아무것도_안_바꿔도_간다(tmp_path: Path) -> None:

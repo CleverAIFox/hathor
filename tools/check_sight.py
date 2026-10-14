@@ -86,7 +86,7 @@ PINNED = {
     "check_doc_style.NO_TOOL": 2,
     "check_doc_style.POLITE": 2,
     "check_doc_style.SECTION": 3,
-    "check_egress.ALLOWED": 4,
+    "check_egress.ALLOWED": 5,
     "check_egress.NETWORK": 10,
     "check_egress.TREES": 2,
     "check_file_size.LIMITS": 2,
@@ -155,6 +155,7 @@ PINNED = {
     "ship.REGENERABLE": 1,
     "step0_check.AUDIO_EXTS": 10,
     "tree_guard.WATCHED": 2,
+    "watch_papers.CATEGORIES": 4,
 }
 """**시야 못. 정본은 여기 하나다** (D-0223). `--update`로만 조인다.
 

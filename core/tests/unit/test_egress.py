@@ -82,16 +82,24 @@ def test_접점을_이름으로_못_박는다():
     D-0146이 `tools`를 훑기 시작하며 하나가 늘었다 — `probe_musicbrainz.py`가
     `urllib`을 쓰는데 **검사 밖이었다.** D-0215가 셋으로 늘렸고 **D-0216이 도로 둘로
     줄였다** — 쓰지 않을 탐침을 위해 구멍을 열어 두지 않는다. D-0224가 로컬 서버에만 붙는
-    둘(MLflow · Prefect)을 더했다. **밖으로 가는 것은 여전히 MusicBrainz 둘이다.**
+    둘(MLflow · Prefect)을 더했다. **D-0424가 셋째 바깥 접점을 열었다** — 논문 훑기이며
+    **질의가 분야 이름과 날짜뿐이고 받기만 한다.** 오디오도 라이브러리도 안 나간다.
     """
     assert set(CHECKER.ALLOWED) == {
         "core/hathor/infrastructure/musicbrainz_lookup.py",
         "tools/probe_musicbrainz.py",
         "tools/mlflow_sync.py",
         "tools/prefect_flow.py",
+        "tools/watch_papers.py",
     }
+    # **밖으로 가는 것을 이름으로 센다.** 셋이고 **셋 다 오디오를 안 만진다** —
+    # MusicBrainz 둘은 아티스트·제목 문자열을, 논문 훑기는 분야 이름과 날짜를 보낸다.
     outward = {name for name, reason in CHECKER.ALLOWED.items() if "로컬 주소" not in reason}
-    assert all("musicbrainz" in name for name in outward)
+    assert outward == {
+        "core/hathor/infrastructure/musicbrainz_lookup.py",
+        "tools/probe_musicbrainz.py",
+        "tools/watch_papers.py",
+    }
 
 
 def test_이름에_망이_안_보이는_클라이언트도_센다():
