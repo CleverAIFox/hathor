@@ -968,6 +968,8 @@ def _run_taste_compare(args: argparse.Namespace) -> int:
     from hathor.domain.entities.preference_comparison import PreferenceComparison, Side
     from hathor.domain.services.pair_sampling import presentation_order, sample_pairs
     from hathor.infrastructure.jsonl_preference_store import JsonlPreferenceStore
+    from hathor.interfaces.cli import taste_input
+    from hathor.interfaces.cli.taste_input import read_answer
 
     tags = {track.source_key: track.tags for track in JsonlScanStore(args.out).read_tracks()}
     if not tags:
@@ -999,7 +1001,8 @@ def _run_taste_compare(args: argparse.Namespace) -> int:
         return 0
 
     print(f"곡 {len(keys)}개 / 기록된 응답 {len(answered)}건 / 이번 문항 {len(pairs)}개")
-    print("1 또는 2로 답한다. s=건너뛰기, q=중단. 답할 때마다 즉시 저장된다.\n")
+    print("1 또는 2로 답한다. s=건너뛰기, q=중단. 답할 때마다 즉시 저장된다.")
+    print("**다른 키는 안 받는다** — 오타가 「건너뜀」으로 저장되면 그 쌍은 다시 안 나온다.\n")
 
     recorded = 0
     for index, pair in enumerate(pairs, 1):
@@ -1007,16 +1010,13 @@ def _run_taste_compare(args: argparse.Namespace) -> int:
         print(f"[{index}/{len(pairs)}]")
         print(f"  1) {_format_track(first, tags)}")
         print(f"  2) {_format_track(second, tags)}")
-        try:
-            answer = input("  > ").strip().lower()
-        except EOFError:
-            answer = "q"
-        if answer == "q":
+        answer = read_answer(input, print)
+        if answer == taste_input.QUIT:
             print("\n중단한다. 여기까지 저장됐다.")
             break
-        if answer == "1":
+        if answer == taste_input.PICK_LEFT:
             winner = Side.LEFT if first == pair[0] else Side.RIGHT
-        elif answer == "2":
+        elif answer == taste_input.PICK_RIGHT:
             winner = Side.LEFT if second == pair[0] else Side.RIGHT
         else:
             winner = None

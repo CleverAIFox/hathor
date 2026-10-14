@@ -393,6 +393,7 @@ BASELINE: dict[str, int] = {
     "test_gate_types.UNTYPED_FAKES": 0,
     "test_hygiene.SYNC_ALLOWED": 5,
     "test_hygiene.WRITE_FLOOR": 8,
+    "test_taste_input.CEILING": 20,
     "tree_guard.FLOOR": 150,
 }
 """**지금까지 가장 조였던 값** (D-0353). 여기서 느슨해지면 몇 판이 걸렸든 빨개진다."""
