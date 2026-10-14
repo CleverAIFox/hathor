@@ -88,8 +88,12 @@ STAMP = re.compile(r"^(?P<name>[\w.-]*?)-?(?P<stamp>\d{8}T\d{6}Z)(?P<rest>\..*)?
 """`scan-20260915T133016Z.jsonl` 꼴에서 이름과 시각을 가른다."""
 
 
-def runs(files: list[Path]) -> dict[str, tuple[set[str], int]]:
-    """이름별 `(실행 시각 집합, 총 바이트)` (D-0209).
+def runs(files: list[Path]) -> dict[str, dict[str, int]]:
+    """이름별 `{실행 시각: 그 실행의 바이트}` (D-0209).
+
+    **실행마다 따로 센다** (D-0422). 전에는 이름별로 합쳐서 **어느 실행이 큰지
+    몰랐고**, 그래서 *«최신만 남긴다»*를 날짜만 보고 말했다. 정본 1004곡이 가장
+    오래된 실행이고 40곡 실험본이 최신인 상태에서 그 말을 따르면 **정본을 지운다.**
 
     **한 실행이 낸 파일들을 한 묶음으로 센다.** `scan-*`는 한 번 돌면
     `.jsonl` · `.failures.jsonl` · `.summary.json` **셋**이 나온다. 접두사만 보고
@@ -98,14 +102,24 @@ def runs(files: list[Path]) -> dict[str, tuple[set[str], int]]:
 
     시각이 둘 이상일 때가 진짜 잔해다. 시각이 없는 파일은 한 실행으로 센다.
     """
-    table: dict[str, tuple[set[str], int]] = {}
+    table: dict[str, dict[str, int]] = {}
     for item in files:
         found = STAMP.match(item.name)
         name = (found["name"] or item.stem) if found else item.stem
         stamp = found["stamp"] if found else ""
-        stamps, size = table.get(name, (set(), 0))
-        table[name] = (stamps | {stamp}, size + item.stat().st_size)
+        sizes = table.setdefault(name, {})
+        sizes[stamp] = sizes.get(stamp, 0) + item.stat().st_size
     return table
+
+
+def newest_is_biggest(sizes: dict[str, int]) -> bool:
+    """**가장 최근 실행이 가장 큰가.**
+
+    아니면 *«최신만 남긴다»*가 위험한 말이 된다 — 크기는 곡 수가 아니지만
+    **«가서 확인해라»를 말할 근거로는 충분하다** (D-0325 · D-0422).
+    """
+    newest = max(sizes)
+    return sizes[newest] >= max(sizes.values())
 
 
 def report(root: Path, ratchet: bool = False) -> int:
@@ -133,19 +147,34 @@ def report(root: Path, ratchet: bool = False) -> int:
 
     print(f"\n낱개 파일 {len(files)}개")
     stale = 0
-    for label, (stamps, size) in sorted(runs(files).items()):
+    shadowed = 0
+    for label, sizes in sorted(runs(files).items()):
         mark = ""
-        if len(stamps) > 1:
+        if len(sizes) > 1:
             stale += 1
             mark = "  ← **옛 실행이 남았다**"
-        print(f"  {label:<22} 실행 {len(stamps)}회 · {human(size):>6}{mark}")
+            if not newest_is_biggest(sizes):
+                shadowed += 1
+                mark += " · **최신이 가장 작다**"
+        print(f"  {label:<22} 실행 {len(sizes)}회 · {human(sum(sizes.values())):>6}{mark}")
 
     if stale:
         print(f"\n**{stale}개 이름에 실행이 여럿 남았다.** 최신만 남긴다 (O-62 · D-0245).")
+    if shadowed:
+        print(
+            f"\n**{shadowed}개는 최신이 가장 크지 않다 — 지우기 전에 곡 수를 본다** "
+            "(D-0325 · D-0422). 실험용이 정본보다 최신일 수 있고, "
+            "그때 «최신만 남긴다»는 **정본을 지우라는 말이 된다.** `hathor doctor`가 센다."
+        )
     if unnamed:
         print(f"\n**{unnamed}개 묶음이 자기를 설명하지 않는다.** 정체를 추측해야 한다 (D-0203).")
     if ratchet and stale:
-        print("  최신만 남기고 옛 실행은 지운다. 교두보에 있으면 거기서도 지운다.", file=sys.stderr)
+        advice = (
+            "  **곡 수를 먼저 본다** — 최신이 정본이 아닐 수 있다 (D-0422)."
+            if shadowed
+            else "  최신만 남기고 옛 실행은 지운다. 교두보에 있으면 거기서도 지운다."
+        )
+        print(advice, file=sys.stderr)
         return 1
     return 0
 

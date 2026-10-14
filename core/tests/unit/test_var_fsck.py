@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tests.conftest import tool_module
 
 CHECKER = tool_module("var_fsck")
@@ -32,9 +34,9 @@ def test_한_실행이_낸_파일_셋을_한_묶음으로_센다(tmp_path: Path)
         "scan-20260915T133016Z.summary.json",
     )
 
-    stamps, _size = CHECKER.runs(files)["scan"]
+    sizes = CHECKER.runs(files)["scan"]
 
-    assert stamps == {"20260915T133016Z"}
+    assert set(sizes) == {"20260915T133016Z"}
 
 
 def test_옛_실행이_남으면_잡는다(tmp_path: Path) -> None:
@@ -45,18 +47,18 @@ def test_옛_실행이_남으면_잡는다(tmp_path: Path) -> None:
         "scan-20260901T010101Z.jsonl",
     )
 
-    stamps, _size = CHECKER.runs(files)["scan"]
+    sizes = CHECKER.runs(files)["scan"]
 
-    assert len(stamps) == 2
+    assert len(sizes) == 2
 
 
 def test_시각이_없는_파일은_한_실행으로_센다(tmp_path: Path) -> None:
     """`all.log`처럼 이름에 시각이 없는 것은 경고 대상이 아니다."""
     files = _touch(tmp_path, "all.log")
 
-    stamps, _size = CHECKER.runs(files)["all"]
+    sizes = CHECKER.runs(files)["all"]
 
-    assert stamps == {""}
+    assert set(sizes) == {""}
 
 
 def test_한_단계_아래_manifest도_읽는다(tmp_path: Path) -> None:
@@ -95,3 +97,58 @@ def test_정체_불명은_관문이_아니다(tmp_path: Path) -> None:
     (tmp_path / "옛묶음" / "a.npz").write_text("", encoding="utf-8")
 
     assert CHECKER.report(tmp_path, ratchet=True) == 0
+
+
+# ------------------------------------------- 최신이 정본이 아닐 때 (D-0325 · D-0422)
+
+
+def _sized(root: Path, pairs: dict[str, int]) -> list[Path]:
+    """`이름 → 바이트`로 파일을 만든다. **크기가 이 검사의 자료다.**"""
+    made = []
+    for name, size in pairs.items():
+        path = root / name
+        path.write_bytes(b"x" * size)
+        made.append(path)
+    return made
+
+
+def test_실행마다_크기를_따로_센다(tmp_path: Path) -> None:
+    """**이름별로 합치면 어느 실행이 큰지 모른다** (D-0422).
+
+    그 상태에서 *«최신만 남긴다»*는 **날짜만 보고 하는 말**이 된다.
+    """
+    files = _sized(
+        tmp_path, {"keys-20260916T000000Z.jsonl": 900, "keys-20260930T000000Z.jsonl": 10}
+    )
+
+    sizes = CHECKER.runs(files)["keys"]
+
+    assert sizes == {"20260916T000000Z": 900, "20260930T000000Z": 10}
+
+
+def test_최신이_가장_작으면_지우라고_안_한다(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**정본 1004곡이 가장 오래된 실행이었다** (D-0325).
+
+    40곡 실험본이 최신이다. 거기서 *«최신만 남긴다»*를 따르면 **정본을 지운다.**
+    """
+    _sized(tmp_path, {"keys-20260916T000000Z.jsonl": 900, "keys-20260930T000000Z.jsonl": 10})
+
+    assert CHECKER.report(tmp_path, ratchet=True) == 1
+    printed = capsys.readouterr()
+
+    assert "최신이 가장 작다" in printed.out
+    assert "곡 수를 먼저 본다" in printed.err
+    assert "최신만 남기고 옛 실행은 지운다" not in printed.err, "위험한 안내가 그대로 나갔다"
+
+
+def test_최신이_가장_크면_지우라고_한다(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """**거짓 경보를 늘리지 않는다** (GR-0.8). 보통은 최신이 맞고 그때는 그냥 말한다."""
+    _sized(tmp_path, {"scan-20260916T000000Z.jsonl": 10, "scan-20260930T000000Z.jsonl": 900})
+
+    assert CHECKER.report(tmp_path, ratchet=True) == 1
+    printed = capsys.readouterr()
+
+    assert "최신이 가장 작다" not in printed.out
+    assert "최신만 남기고 옛 실행은 지운다" in printed.err
