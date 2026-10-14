@@ -11,12 +11,14 @@ from itertools import pairwise
 import pytest
 
 from hathor.application.arrangement import BEATS_PER_BAR
-from hathor.domain.services.melody import chord_positions, sing
+from hathor.domain.services.melody import chord_positions, pitch_classes, sing
 from hathor.domain.services.midi_writer import TICKS_PER_BEAT
 from hathor.domain.value_objects.key import Key, Mode
 
 KEY = Key(tonic="C", mode=Mode.MAJOR)
 SPANS = [("I", 1), ("V", 2), ("vi", 1), ("IV", 1)]
+TRIAD_CLASSES = pitch_classes(chord_positions("I"), KEY)
+"""다장조 `I`화음의 **피치클래스** — C·E·G = 0·4·7. 손으로 안 적는다 (GR-0.7)."""
 
 
 def _line(seed=7, **kwargs):
@@ -107,22 +109,67 @@ def test_자료가_없으면_균등이다():
     assert len(found) == 3
 
 
+def _tonic_line(**kwargs):
+    """`I`화음(C·E·G) 위에서 한 축만 세워 **어느 음이 나오는지** 본다."""
+    return sing(7, [("I", 8)], KEY, ceiling=72, beats_per_bar=BEATS_PER_BAR, **kwargs)
+
+
+@pytest.mark.parametrize("wanted", TRIAD_CLASSES)
+def test_사전이_가리킨_피치클래스가_나온다(wanted):
+    """**사전의 축은 피치클래스 12칸이다** (D-0063 · `DEGREE_COUNT`).
+
+    음계 자리 0~6으로 찍으면 다장조에서 «미»(4)에 준 무게가 «솔»(7)로 간다.
+    셋 다 거는 이유는 **상수 하나로는 안 걸리기 때문이다** — 으뜸음(0)은 두 축에서
+    값이 같아 혼자서는 아무것도 못 잡는다 (D-0420).
+    """
+    prior = [0.0] * 12
+    prior[wanted] = 1.0
+    line = _tonic_line(prior=prior)
+
+    assert {pitch % 12 for _, _, pitch in line} == {wanted}
+
+
+def test_무게가_말없이_사라지지_않는다():
+    """**«솔»에 준 무게는 안 읽혀 합이 0이 되고 균등으로 떨어졌다** (D-0420).
+
+    틀린 음을 내는 것보다 나쁘다 — 참조곡 사전이 **아무 말 없이 버려진다.**
+    """
+    prior = [0.0] * 12
+    prior[7] = 1.0
+    line = _tonic_line(prior=prior)
+
+    assert len({pitch % 12 for _, _, pitch in line}) == 1, "균등으로 떨어졌다"
+
+
 def test_전이_행렬이_우선한다():
-    """**직전에 무엇이 왔는가가 곡의 움직임이다.** 사전만 쓰면 점의 나열이다."""
-    prior = [1.0] + [0.0] * 11
+    """**직전에 무엇이 왔는가가 곡의 움직임이다.** 사전만 쓰면 점의 나열이다.
+
+    **이 검사가 결함을 고정하고 있었다** (D-0420). `row[4]`(«미»)를 세워 놓고
+    기대값을 `7`(«솔»)로 적었다 — 구현을 보고 쓴 수다. 뜻을 보고 쓰면 `4`다.
+    """
     transition = [[0.0] * 12 for _ in range(12)]
     for row in transition:
         row[4] = 1.0
-    line = sing(
-        7,
-        [("I", 8)],
-        KEY,
-        ceiling=72,
-        beats_per_bar=BEATS_PER_BAR,
-        prior=prior,
-        transition=transition,
-    )
-    assert {pitch % 12 for _, _, pitch in line[1:]} == {7}
+    line = _tonic_line(prior=[1.0] + [0.0] * 11, transition=transition)
+
+    assert line[0][2] % 12 == 0, "첫 박은 사전이 정한다 — 전이에는 시작이 없다"
+    assert {pitch % 12 for _, _, pitch in line[1:]} == {4}
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"prior": [1.0] * 7}, "도수 사전은"),
+        ({"prior": [1.0] * 12, "transition": [[1.0] * 7] * 7}, "전이 사전은"),
+    ],
+)
+def test_차원이_다르면_죽는다(kwargs, message):
+    """**`% len(...)`으로 감으면 아무 데서도 안 죽고 다른 칸을 읽는다** (D-0233).
+
+    `degree_weights`는 같은 자리에서 터진다 — 가락만 안 터졌다.
+    """
+    with pytest.raises(ValueError, match=message):
+        sing(7, [("I", 2)], KEY, ceiling=72, beats_per_bar=BEATS_PER_BAR, **kwargs)
 
 
 def test_도약을_막지_않는다():

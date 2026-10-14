@@ -40,6 +40,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.domain.services.midi_writer import (
     DEGREE_INDEX,
     MAJOR_SCALE,
@@ -54,38 +55,61 @@ TRIAD_STEPS = (0, 2, 4)
 
 
 def chord_positions(degree: str) -> tuple[int, ...]:
-    """화음 구성음의 **음계 자리**. 음높이가 아니라 자리다."""
+    """화음 구성음의 **음계 자리** 0~6. 음높이도 피치클래스도 아니다."""
     index = DEGREE_INDEX.get(degree.lower())
     if index is None:
         raise ValueError(f"알 수 없는 도수: {degree}")
     return tuple((index + step) % 7 for step in TRIAD_STEPS)
 
 
+def pitch_classes(positions: Sequence[int], key: Key) -> tuple[int, ...]:
+    """음계 자리 0~6 → **피치클래스 0~11**.
+
+    **사전과 전이 행렬의 축이 이것이다** (D-0063 · D-0107 · `DEGREE_COUNT`). 두 축을
+    섞으면 다장조에서 «미»에 준 무게가 «솔»로 간다 (D-0420).
+    """
+    scale = MAJOR_SCALE if key.mode is Mode.MAJOR else MINOR_SCALE
+    return tuple((key.tonic_pitch_class + scale[position]) % OCTAVE for position in positions)
+
+
+def _axis(values: object, name: str, shape: tuple[int, ...]) -> np.ndarray:
+    """사전·전이 행렬의 모양을 본다. **차원이 다르면 죽는다** (D-0233).
+
+    전에는 `% len(...)`으로 감았다. 12칸짜리 표를 7칸으로 찍으면서 **아무 데서도
+    안 죽고** 다른 칸을 읽었다 — `degree_weights`는 같은 자리에서 터진다.
+    """
+    vector = np.asarray(values, dtype=np.float64)
+    if vector.shape != shape:
+        raise ValueError(f"{name}은 {shape}이어야 한다: {vector.shape}")
+    return vector
+
+
 def _weights(
-    positions: Sequence[int],
+    roots: Sequence[int],
     before: int | None,
     prior: Sequence[float] | None,
     transition: Sequence[Sequence[float]] | None,
 ) -> tuple[float, ...]:
-    """구성음 각각의 가중치. **없으면 균등이다** — 지어내지 않는다 (GR-0.5)."""
+    """구성음 각각의 가중치. **없으면 균등이다** — 지어내지 않는다 (GR-0.5).
+
+    `roots`와 `before`는 **피치클래스**다. 음계 자리를 주면 표를 잘못 찍는다.
+    """
+    index = list(roots)
     if transition is not None and before is not None:
-        row = np.asarray(transition[before % len(transition)], dtype=np.float64)
-        picked = np.maximum([row[position % len(row)] for position in positions], 0.0)
+        row = _axis(transition, "전이 사전", (DEGREE_COUNT, DEGREE_COUNT))[before]
+        picked = np.maximum(row[index], 0.0)
     elif prior is not None:
-        vector = np.asarray(prior, dtype=np.float64)
-        picked = np.maximum([vector[position % len(vector)] for position in positions], 0.0)
+        picked = np.maximum(_axis(prior, "도수 사전", (DEGREE_COUNT,))[index], 0.0)
     else:
-        picked = np.ones(len(positions), dtype=np.float64)
+        picked = np.ones(len(index), dtype=np.float64)
     total = float(picked.sum())
     if total <= 0.0:
-        return tuple(1.0 / len(positions) for _ in positions)
+        return tuple(1.0 / len(index) for _ in index)
     return tuple(float(value) for value in picked / total)
 
 
-def _place(position: int, key: Key, floor: int) -> int:
-    """음계 자리를 `floor` 이상의 가장 낮은 음높이로 놓는다."""
-    scale = MAJOR_SCALE if key.mode is Mode.MAJOR else MINOR_SCALE
-    pitch_class = (key.tonic_pitch_class + scale[position]) % OCTAVE
+def _place(pitch_class: int, floor: int) -> int:
+    """피치클래스를 `floor` 이상의 가장 낮은 음높이로 놓는다."""
     return floor + (pitch_class - floor) % OCTAVE
 
 
@@ -112,11 +136,10 @@ def sing(
     before: int | None = None
     beat = 0
     for degree, repeats in spans:
-        positions = chord_positions(degree)
+        roots = pitch_classes(chord_positions(degree), key)
         for _ in range(repeats * beats_per_bar):
-            weights = _weights(positions, before, prior, transition)
-            position = int(rng.choice(len(positions), p=weights))
-            before = positions[position]
-            found.append((beat * TICKS_PER_BEAT, TICKS_PER_BEAT, _place(before, key, ceiling)))
+            weights = _weights(roots, before, prior, transition)
+            before = roots[int(rng.choice(len(roots), p=weights))]
+            found.append((beat * TICKS_PER_BEAT, TICKS_PER_BEAT, _place(before, ceiling)))
             beat += 1
     return found
