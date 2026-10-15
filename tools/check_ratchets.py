@@ -395,6 +395,7 @@ BASELINE: dict[str, int] = {
     "test_hygiene.WRITE_FLOOR": 8,
     "test_taste_input.CEILING": 20,
     "tree_guard.FLOOR": 150,
+    "watch_papers.NAP_CEILING": 120,
 }
 """**지금까지 가장 조였던 값** (D-0353). 여기서 느슨해지면 몇 판이 걸렸든 빨개진다."""
 

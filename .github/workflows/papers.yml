@@ -22,12 +22,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
-        with:
-          python-version: "3.12"
-      # **의존성이 없다.** 표준 라이브러리만 쓰는 도구라 `uv sync`를 안 한다 —
-      # 예약 작업이 의존성 하나 때문에 조용히 멈추는 자리를 안 만든다.
+      # **여기만 SHA로 박혀 있었다** (D-0428). 세샤트에서 옮기며 그쪽 꼴을 같이
+      # 들고 왔고, 나머지 워크플로는 전부 주 판 꼬리표다. 꼴이 둘이면 래칫의
+      # 정규식이 한쪽을 못 본다 — 이 파일은 `checkout@v5`에 멈춰 있었는데도
+      # **아홉 판 동안 아무 검사도 안 짖었다** (D-0230 · D-0043).
+      - uses: actions/checkout@v7
+      # **파이썬을 안 깐다.** 표준 라이브러리만 쓰는 도구고 `ubuntu-24.04`가
+      # `python3` 3.12를 들고 있다. `setup-python`은 **Node 20 경고를 내던 유일한
+      # 액션**이었고, 판을 올리려면 내가 수를 골라야 한다 — 안 고른다 (D-0330).
+      # ci-only: watch_papers.py 망을 탄다. `make check`에 넣으면 arXiv이 흔들릴 때마다 관문이 빨개진다 (GR-0.8 · D-0428)
       - run: python3 tools/watch_papers.py --write --days 8
 
       # **main을 안 민다** (D-0376). 봇이 main을 움직이면 보내 둔 패치의 기준 나무가

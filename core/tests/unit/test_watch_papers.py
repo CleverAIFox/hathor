@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import email.message
+import types
+import urllib.error
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -160,3 +164,86 @@ def test_링크와_제목이_둘_다_남는다(monkeypatch: pytest.MonkeyPatch) 
     assert one.link in rows
     assert "Chord generation" in rows
     assert "상징" in rows, "걸린 주제가 사라졌다"
+
+
+# ------------------------------- 기다리라는 답은 못 문 것이 아니다 (D-0428)
+
+BODY = b"<feed><entry></entry></feed>"
+
+
+def _headers(**fields: str) -> email.message.Message:
+    said = email.message.Message()
+    for name, value in fields.items():
+        said[name.replace("_", "-")] = value
+    return said
+
+
+class _Flaky:
+    """urlopen의 자리. **정해진 만큼 넘어지고 그 다음에 준다.**"""
+
+    def __init__(self, *falls: int, said: email.message.Message | None = None) -> None:
+        self.falls = list(falls)
+        self.said = said if said is not None else email.message.Message()
+        self.asked = 0
+
+    def __call__(self, request: object, timeout: int = 30) -> object:
+        del request, timeout
+        self.asked += 1
+        if self.falls:
+            raise urllib.error.HTTPError("u", self.falls.pop(0), "", self.said, None)
+        return contextlib.nullcontext(types.SimpleNamespace(read=lambda: BODY))
+
+
+def _rested(monkeypatch: pytest.MonkeyPatch, door: _Flaky) -> list[int]:
+    """**재우지 않는다.** 검사가 실제로 쉬면 관문이 분 단위로 느려진다."""
+    naps: list[int] = []
+    monkeypatch.setattr(WATCH.urllib.request, "urlopen", door)
+    monkeypatch.setattr(WATCH.time, "sleep", naps.append)
+    return naps
+
+
+def test_429면_쉬고_다시_부른다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**봇이 429에서 그 자리에 죽었다** (D-0428).
+
+    한 시간에 손으로 세 번 돌렸고 arXiv이 막았다. 429는 «없다»가 아니라 «나중에»다.
+    """
+    door = _Flaky(429, 429)
+    naps = _rested(monkeypatch, door)
+
+    assert WATCH.fetch("https://x.invalid/q") == BODY
+    assert naps == [5, 20], "안 쉬었거나 수를 지어냈다"
+
+
+def test_계속_429여도_영원히_안_돈다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**쉬는 횟수는 `BACKOFF`가 든다.** 안 그러면 작업이 15분을 태우고 죽는다."""
+    door = _Flaky(*([429] * 9))
+    naps = _rested(monkeypatch, door)
+
+    with pytest.raises(SystemExit, match="너무 자주 불렀다"):
+        WATCH.fetch("https://x.invalid/q")
+    assert len(naps) == len(WATCH.BACKOFF)
+    assert door.asked == len(WATCH.BACKOFF) + 1
+
+
+def test_404는_안_기다린다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**기다려도 안 바뀌는 것을 기다리면** 빨간불이 85초 늦게 뜬다."""
+    naps = _rested(monkeypatch, _Flaky(404))
+
+    with pytest.raises(SystemExit, match="0건이 아니다"):
+        WATCH.fetch("https://x.invalid/q")
+    assert naps == [], "404를 기다렸다"
+
+
+def test_Retry_After를_따른다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**서버가 적어 주면 그쪽이 맞다** — 우리 수는 바닥일 뿐이다 (GR-0.5)."""
+    naps = _rested(monkeypatch, _Flaky(429, said=_headers(Retry_After="45")))
+
+    assert WATCH.fetch("https://x.invalid/q") == BODY
+    assert naps == [45], "서버가 적어 준 수를 안 썼다"
+
+
+def test_Retry_After가_터무니없으면_천장에_막힌다() -> None:
+    """**작업을 서버가 시킨 수에 통째로 맡기지 않는다.**"""
+    huge = urllib.error.HTTPError("u", 429, "", _headers(Retry_After="86400"), None)
+
+    assert WATCH._nap(huge, 5) == WATCH.NAP_CEILING

@@ -48,6 +48,7 @@ import pathlib
 import re
 import sys
 import textwrap
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -100,20 +101,66 @@ class Candidate:
     link: str
 
 
+WAIT = (429, 503)
+"""**기다리면 되는 것** — «너무 자주 불렀다»와 «지금 바쁘다»다.
+
+둘 다 *«없다»*가 아니라 *«나중에»*다. 그래서 바로 안 죽는다. 나머지(404 · 500)는
+기다려도 안 바뀌니 **그 자리에서 죽는다** — 15분 타임아웃을 태우지 않는다.
+"""
+
+BACKOFF = (5, 20, 60)
+"""몇 초씩 쉬나. 합이 85초이고 작업의 `timeout-minutes: 15` 안에 넉넉히 든다."""
+
+NAP_CEILING = 120
+"""`Retry-After`가 아무리 커도 여기까지다. **서버가 시킨 수에 작업을 통째로 맡기지 않는다.**"""
+
+
+def _nap(exc: urllib.error.HTTPError, floor: int) -> int:
+    """얼마나 쉬나. **서버가 적어 주면 그쪽이 맞다** — 우리 수는 바닥일 뿐이다."""
+    said = (exc.headers.get("Retry-After", "") if exc.headers else "").strip()
+    return min(max(int(said), floor), NAP_CEILING) if said.isdigit() else floor
+
+
+def _died(url: str, exc: Exception) -> str:
+    code = getattr(exc, "code", 0)
+    often = (
+        "    **너무 자주 불렀다.** 손으로 다시 돌린 횟수도 같은 통에 들어간다 —\n"
+        "    주 1회가 기본이고 그 사이에 거듭 부르면 월요일 치가 막힌다\n"
+        if code in WAIT
+        else ""
+    )
+    return (
+        f"{urllib.parse.urlsplit(url).netloc}을 못 물었다 — {type(exc).__name__}: {exc}\n"
+        "    **0건이 아니다.** 못 잰 것을 «새 것이 없다»로 적지 않는다 (GR-0.5)\n"
+        f"{often}"
+        f"    그물을 본다 : curl -sI {url}\n"
+        "    잠깐 넘어진 것이면 다시 부른다 — 이 도구는 주 1회 도는 것이다"
+    )
+
+
 def fetch(url: str, timeout: int = 30) -> bytes:
-    """**못 물면 죽는다.** 빈 손을 «새 것이 없다»로 적지 않는다."""
+    """**못 물면 죽는다.** 빈 손을 «새 것이 없다»로 적지 않는다.
+
+    **단, 기다리라는 답은 못 문 것이 아니다** (D-0428). arXiv이 429를 줬고 봇이 그
+    자리에서 죽었다 — 한 시간에 손으로 세 번 부른 탓이다. 쉬었다 다시 묻고, 그래도
+    안 되면 그때 죽는다. **쉬는 횟수는 `BACKOFF`가 든다** — 영원히 안 돈다.
+    """
     request = urllib.request.Request(url, headers={"User-Agent": UA})
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            body: bytes = response.read()
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise SystemExit(
-            f"{urllib.parse.urlsplit(url).netloc}을 못 물었다 — {type(exc).__name__}: {exc}\n"
-            "    **0건이 아니다.** 못 잰 것을 «새 것이 없다»로 적지 않는다 (GR-0.5)\n"
-            f"    그물을 본다 : curl -sI {url}\n"
-            "    잠깐 넘어진 것이면 다시 부른다 — 이 도구는 주 1회 도는 것이다"
-        ) from exc
-    return body
+    naps = list(BACKOFF)
+    while True:
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                body: bytes = response.read()
+            return body
+        except urllib.error.HTTPError as exc:
+            if exc.code not in WAIT or not naps:
+                raise SystemExit(_died(url, exc)) from exc
+            nap = _nap(exc, naps.pop(0))
+            left = f"{len(naps)}번 남았다"
+            print(f"  {exc.code} — {nap}초 쉬고 다시 부른다 ({left})", file=sys.stderr)
+            time.sleep(nap)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise SystemExit(_died(url, exc)) from exc
 
 
 def topics_of(text: str) -> tuple[str, ...]:

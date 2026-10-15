@@ -372,6 +372,25 @@ def test_액션이_노드20에_머물러_있지_않다() -> None:
     assert not behind, f"Node 20 판에 머물러 있다: {behind}"
 
 
+def test_액션을_한_가지_꼴로_고정한다() -> None:
+    """**꼴이 둘이면 그물이 한쪽을 못 본다** (D-0428 · D-0230).
+
+    위 바닥 검사는 `@v<수>`를 찾는다. `papers.yml`을 세샤트에서 옮기며 그쪽의 SHA 핀을
+    같이 들고 왔고, **그 파일만 정규식 밖에 섰다.** `checkout@v5`(저장소는 v7)에
+    `setup-python`은 Node 20이었는데 **아홉 판 동안 아무 검사도 안 짖었다.**
+
+    고르는 것은 **꼴 하나**다 (D-0043). 꼬리표로 박으면 Dependabot이 올려 주고 바닥
+    검사가 본다 — SHA로 박으면 둘 다 못 한다.
+    """
+    sha = re.compile(r"uses: ([\w./-]+)@([0-9a-f]{40})")
+    odd = [
+        f"{path.name}: {found.group(1)}@{found.group(2)[:8]}…"
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+        for found in sha.finditer(path.read_text(encoding="utf-8"))
+    ]
+    assert not odd, f"SHA로 박았다: {odd}. 이 저장소는 `@v<수>`로 고정한다 (D-0428)"
+
+
 def test_파이썬_하한을_상한과_같이_읽는다(tmp_path: Path) -> None:
     """**한 가지 꼴만 가정한 파서였다** (D-0341).
 
