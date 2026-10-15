@@ -35152,3 +35152,49 @@ D-0377이 *«패치에 안 싣고 받는 쪽이 다시 만드는 것»*을 `AFTE
     `core/tests/unit/test_patch_gate.py::test_합본_커밋이면_뽑기를_건너뛴다`
 
 자료  실물 그의 저장소 — 후보 41줄 · 216~376자 · 강조 43개 · CI 작업 2개 실패
+
+---
+
+## D-0427. **손으로 켠 설정은 다음 기기에서 없다** — `make gh-setup`이 켠다
+
+> **갱신 — D-0426.** 거기 *«다음 판에 넣는다»*로 적어 둔 빚을 갚는다.
+
+- **배경**: 봇이 PR을 못 열었다.
+
+      pull request create failed: GitHub Actions is not permitted to
+      create or approve pull requests (createPullRequest)
+
+  D-0426이 **손으로 켜고 그 사실만 적었다.** 저장소 설정이라 **파일로 흔적이 안 남고**,
+  새로 클론한 날 또 같은 자리에서 막힌다 — D-0226이 *«웹 화면 안내는 PLAN에 손
+  항목으로 쌓이고 누를 자리를 잊는다»*로 적은 그것이다.
+
+- **결과**: `gh_ops.actions_can_open_pulls()`가 켠다. `private_reporting`(D-0329)과
+  같은 자리 — **파일로 못 세는 설정을 명령이 든다.**
+  - **전역 쓰기는 안 켠다.** `default_workflow_permissions`를 **읽어서 그대로
+    되돌린다.** 워크플로마다 `permissions:`를 적어 두므로 전역은 좁을수록 좋고,
+    **한 줄 고치러 와서 다른 줄을 넓히면 그것이 느슨해진 래칫이다** (D-0422).
+    우리가 안 정한 값을 우리 기본값으로 덮지도 않는다 (GR-0.5).
+  - **이미 켜져 있으면 안 건드린다.** 몇 번 쳐도 같다 (D-0226) — 켜 둔 것을 다시
+    `PUT`하면 감사 로그만 는다.
+  - 시험 넷, 변이 셋 확인. 그중 하나는 **`setup()`에서 빼면 빨개진다** —
+    함수만 있고 안 걸리면 D-0126이다.
+
+### 남기는 것
+
+- **「다음 판에 넣는다」는 빚이다.** D-0426이 그 한 줄을 안 적었으면 오늘 이걸 안 했고,
+  새 기기에서 똑같이 막힌 뒤에야 알았을 것이다. **적어 두는 것과 갚는 것은 다른
+  일이지만, 안 적으면 갚을 기회도 없다** (D-0423과 같은 모양 — 거기는 139판이 걸렸다).
+- **설정은 코드가 아니라서 검사가 못 본다.** `check_secrets`도 `doc_fsck`도 GitHub
+  설정을 모른다. **그래서 켜는 자리를 명령에 두는 것이 유일한 못이다.**
+- **`test_hygiene`이 700줄 상한을 넘었다.** 못을 올리는 대신 쪼갰다 (D-0117) —
+  설정 켜기는 위생과 다른 일이고, `test_gh_setup`으로 나갔다.
+
+재현
+    cd core && uv run pytest tests/unit/test_gh_setup.py -q
+    make gh-setup
+
+강제자
+    `core/tests/unit/test_gh_setup.py::test_전역_쓰기를_안_켠다`
+    `core/tests/unit/test_gh_setup.py::test_설정_켜기가_gh_setup에_걸려_있다`
+
+자료  실물 그의 저장소 — 봇 PR 생성 실패 1회 · 전역 권한 read 유지

@@ -93,10 +93,42 @@ def private_reporting() -> str:
     return f"비공개 취약점 보고: 못 켰다 — {said[-1] if said else '사유 없음'}"
 
 
+def actions_can_open_pulls() -> str:
+    """봇이 PR을 열 수 있게 한다 (D-0427).
+
+    D-0426에서 `papers` 워크플로가 가지까지 밀고 **PR 생성에서 죽었다** —
+    *«GitHub Actions is not permitted to create or approve pull requests»*. 저장소
+    설정이라 파일로 흔적이 안 남는다. `private_reporting`과 같은 자리다.
+
+    **전역 쓰기는 안 켠다.** `default_workflow_permissions`를 **읽어서 그대로 되돌린다** —
+    워크플로마다 `permissions:`를 적어 두므로 전역은 좁을수록 좋다. 한 줄 고치러 와서
+    다른 줄을 넓히면 그것이 느슨해진 래칫이다 (D-0422).
+    """
+    slug = gh("repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner").strip()
+    where = f"repos/{slug}/actions/permissions/workflow"
+    try:
+        now = json.loads(gh("api", where))
+    except (RuntimeError, json.JSONDecodeError) as exc:
+        return f"봇 PR 생성: 지금 값을 못 읽었다 — {exc}"
+    if now.get("can_approve_pull_request_reviews"):
+        return "봇 PR 생성: 이미 켜져 있다"
+    keep = str(now.get("default_workflow_permissions", "read"))
+    try:
+        gh(
+            "api", "-X", "PUT", where,
+            "-f", f"default_workflow_permissions={keep}",
+            "-F", "can_approve_pull_request_reviews=true",
+        )  # fmt: skip
+    except RuntimeError as exc:
+        return f"봇 PR 생성: 못 켰다 — {exc}"
+    return f"봇 PR 생성: 켬 (전역 권한 {keep} 그대로)"
+
+
 def setup() -> int:
     gh("repo", "edit", "--delete-branch-on-merge")
     print("머지 뒤 브랜치 자동 삭제: 켬")
     print(private_reporting())
+    print(actions_can_open_pulls())
     print("기획서 배포:")
     return dispatch(PAGES)
 
