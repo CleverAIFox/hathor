@@ -88,6 +88,40 @@ def _describe_keys(path: Path) -> str:
     return " · ".join(marks)
 
 
+ACCELERATORS = (
+    (
+        "CUDA",
+        "엔진 실측(G0)이 이 자리를 쓴다. bf16은 compute capability 8.0부터다 — "
+        "1660 Ti(7.5)가 거기서 떨어졌다 (D-0218)",
+    ),
+    (
+        "MPS",
+        "Apple Metal. **통합 메모리라 모델 크기 한도가 시스템 RAM이다** — 별도 VRAM 풀이 "
+        "아니다. 추론은 돈다. 연산자 일부가 CPU로 되돌아가고(`PYTORCH_ENABLE_MPS_FALLBACK=1`) "
+        "학습은 느리다. **엔진이 실제로 도는지는 재 봐야 안다** (GR-0.5)",
+    ),
+)
+"""가속기와 그 한 줄. **순서가 우선순위다** — CUDA가 있으면 그것을 쓴다."""
+
+
+def accelerator() -> tuple[str, str]:
+    """`(이름, 한 줄)`. **`torch.cuda`만 묻던 자리다** (D-0425).
+
+    맥에서 `cuda.is_available()`은 `False`다. 그것만 찍으면 화면이 *«가속기가 없다»*로
+    읽히는데 **Metal이 있을 수 있다** — 도구가 못 보는 것을 사람이 「없다」로 읽는다.
+    """
+    try:
+        import torch
+    except Exception:
+        return "확인 불가", "torch를 못 불렀다"
+    if torch.cuda.is_available():
+        return ACCELERATORS[0]
+    backend = getattr(torch.backends, "mps", None)
+    if backend is not None and backend.is_available():
+        return ACCELERATORS[1]
+    return "없음", "CPU만 돈다. 추출 배치가 몇 배 느려진다"
+
+
 def run_doctor(args: argparse.Namespace) -> int:
     """**기록된 규약과 지금 이 기기가 맞는지 검사한다** (D-0067).
 
@@ -250,15 +284,9 @@ def run_doctor(args: argparse.Namespace) -> int:
     print(f"    설치 프로파일  {profile}")
     for name, present in heavy.items():
         print(f"      {name:<14}{'있음' if present else '없음'}")
-    cuda = None
-    if heavy["torch"]:
-        try:
-            import torch
-
-            cuda = torch.cuda.is_available()
-        except Exception:
-            cuda = None
-    print(f"      CUDA          {'있음' if cuda else '없음' if cuda is False else '확인 불가'}")
+    name, note = accelerator() if heavy["torch"] else ("확인 불가", "torch가 없다")
+    print(f"      가속기          {name}")
+    print(f"        {note}")
     if not heavy["torch"]:
         notes.append("torch가 없어 ML 검사가 건너뛰어진다")
         print("    !! ML 검사가 건너뛰어진다. **여기서 초록이어도 리전에서 깨질 수 있다**")

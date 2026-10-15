@@ -369,3 +369,56 @@ def test_셸이_env를_따로_가르지_않는다():
     assert "grep" not in body or ".env" not in body.split("grep")[1][:80], (
         "셸이 `.env`를 직접 가른다. `parse_dotenv` 하나만 쓴다"
     )
+
+
+# ------------------------------------- 가속기를 CUDA만 묻던 자리 (D-0425)
+
+
+class _Torch:
+    """`torch`의 자리. **`backends.mps`가 아예 없는 옛 판도 흉내 낸다.**"""
+
+    def __init__(self, *, cuda: bool, mps: bool | None) -> None:
+        self.cuda = type("Cuda", (), {"is_available": staticmethod(lambda: cuda)})()
+        if mps is not None:
+            backend = type("Mps", (), {"is_available": staticmethod(lambda: mps)})()
+            self.backends = type("Backends", (), {"mps": backend})()
+        else:
+            self.backends = type("Backends", (), {})()
+
+
+def _accelerator(monkeypatch, **kwargs):
+    import sys
+
+    from hathor.interfaces.cli.doctor import accelerator
+
+    monkeypatch.setitem(sys.modules, "torch", _Torch(**kwargs))
+    return accelerator()
+
+
+def test_CUDA가_있으면_CUDA다(monkeypatch):
+    assert _accelerator(monkeypatch, cuda=True, mps=True)[0] == "CUDA"
+
+
+def test_CUDA가_없고_Metal이_있으면_MPS다(monkeypatch):
+    """**맥에서 `cuda.is_available()`은 `False`다** (D-0425).
+
+    그것만 찍으면 화면이 *«가속기가 없다»*로 읽힌다 — **도구가 못 보는 것을 사람이
+    「없다」로 읽고**, 그 읽기가 장비 판단을 끈다.
+    """
+    name, note = _accelerator(monkeypatch, cuda=False, mps=True)
+
+    assert name == "MPS"
+    assert "통합 메모리" in note, "VRAM 한도와 다른 점을 안 적었다"
+
+
+def test_둘_다_없으면_CPU라고_말한다(monkeypatch):
+    """**«없음»과 «확인 불가»를 가른다.** 못 본 것과 없는 것은 다르다 (GR-0.5)."""
+    name, note = _accelerator(monkeypatch, cuda=False, mps=False)
+
+    assert name == "없음"
+    assert "CPU" in note
+
+
+def test_mps_백엔드가_없는_옛_torch도_견딘다(monkeypatch):
+    """**없는 것을 묻다 터지면 `doctor` 전체가 죽는다.**"""
+    assert _accelerator(monkeypatch, cuda=False, mps=None)[0] == "없음"
