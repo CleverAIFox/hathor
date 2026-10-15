@@ -28,19 +28,10 @@ from hathor.domain.services.stem_sets import (
 )
 from hathor.domain.value_objects.key import Key
 from hathor.infrastructure.batch_lock import BatchAlreadyRunningError
-from hathor.infrastructure.chroma_series_store import (
-    find_series_root,
-    load_transition_priors,
-)
 from hathor.infrastructure.ffmpeg_audio_decoder import FfmpegAudioDecoder
 from hathor.infrastructure.filesystem_scanner import FilesystemLibraryScanner
 from hathor.infrastructure.jsonl_resolution_store import JsonlResolutionStore
 from hathor.infrastructure.jsonl_scan_store import JsonlScanStore
-from hathor.infrastructure.keys_jsonl_store import (
-    find_keys_store,
-    load_stem_priors,
-    load_tonics,
-)
 from hathor.infrastructure.musicbrainz_lookup import (
     MusicBrainzClient,
     MusicBrainzLookup,
@@ -70,6 +61,10 @@ from hathor.interfaces.cli.lyrics import (
     _run_lyrics_extract,
     _run_lyrics_structure,
 )
+from hathor.interfaces.cli.prior_sources import (
+    _resolve_harmony_prior,
+    _resolve_transition_prior,
+)
 from hathor.interfaces.cli.registry import (
     Command,
     Entry,
@@ -83,6 +78,7 @@ from hathor.interfaces.cli.roots import (
     DEFAULT_LIBRARY_ROOT_ENV,
     DEFAULT_OUTPUT_ROOT,
     DEFAULT_SEARCH_KEY,
+    missing_given_path,
     resolve_root,
 )
 from hathor.interfaces.cli.tables import parse_key
@@ -501,106 +497,6 @@ def _run_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-def _resolve_harmony_prior(
-    args: argparse.Namespace, source_keys: list[str], estimates: dict[str, KeyEstimate]
-) -> tuple[tuple[float, ...] | None, str]:
-    """화성 사전을 고른다. **스템 저장분이 있으면 그것을 쓴다** (D-0074).
-
-    스템 크로마가 전체 믹스보다 세 배 낫다 — 조건화 이득이 K-K 폭 대비 14.1%에서
-    44.3%로 올랐다 (D-0063 · D-0074, 200곡). 다만 **생성할 때 Demucs를 돌리지는
-    않는다.** 미리 뽑아 둔 것을 조회하고, 없으면 전체 믹스로 물러난다.
-
-    참조곡이 저장분에 하나도 없으면 전체 믹스를 쓴다. **일부만 있으면 그 일부만
-    쓴다** — 섞으면 스템과 믹스가 한 사전 안에서 더해져 무엇을 재는지 알 수 없다.
-    """
-    from hathor.shared.config.paths import repo_root as _root
-
-    if args.stem_set == "mix":
-        return _harmony_prior(estimates), "전체 믹스"
-
-    store = args.priors if args.priors else find_keys_store(_root(), args.stem_set)
-    if store is not None and store.exists():
-        table = load_stem_priors(store, args.stem_set)
-        picked = [table[key] for key in source_keys if key in table]
-        if picked:
-            from hathor.domain.services.harmony_prior import merge_degree_priors
-
-            if len(picked) < len(source_keys):
-                print(
-                    f"참조곡 {len(source_keys)}곡 중 {len(picked)}곡만 스템 저장분에 있다.",
-                    file=sys.stderr,
-                )
-            merged = merge_degree_priors([(vector, tonic) for vector, tonic in picked])
-            return tuple(float(value) for value in merged), f"{args.stem_set} 스템"
-        print(
-            f"참조곡이 스템 저장분에 없다. 전체 믹스로 물러난다: {store.name}",
-            file=sys.stderr,
-        )
-    return _harmony_prior(estimates), "전체 믹스"
-
-
-def _resolve_transition_prior(
-    args: argparse.Namespace, source_keys: list[str]
-) -> tuple[tuple[tuple[float, ...], ...] | None, str]:
-    """배열 사전을 고른다 (O-32 · D-0110).
-
-    **참조곡이 여럿이면 곡마다 으뜸음으로 돌린 뒤 더한다** (D-0063 · D-0213).
-    *"이미 으뜸음 기준"*이라 적고 안 돌려 절대음을 도수로 읽었다. 없으면 `None`이다.
-    """
-    from hathor.domain.services.transition_prior import averaged
-    from hathor.shared.config.paths import repo_root as _root
-
-    if not args.transitions:
-        return None, "없음"
-    root = args.series if args.series else find_series_root(_root(), args.stem_set)
-    if root is None or not root.is_dir():
-        print("시계열 산출물을 찾지 못했다. 배열 조건화를 건너뛴다.", file=sys.stderr)
-        return None, "없음"
-
-    store = getattr(args, "priors", None) or find_keys_store(_root(), args.stem_set)
-    if store is None:
-        print("조성 산출물이 없어 회전 기준이 없다. 배열 조건화를 건너뛴다.", file=sys.stderr)
-        return None, "없음"
-    table = load_transition_priors(root, args.stem_set, source_keys, tonics=load_tonics(store))
-    found = len(table)
-    if found == 0:
-        print(f"참조곡이 시계열 저장분에 없다: {root.name}", file=sys.stderr)
-        return None, "없음"
-    if found < len(source_keys):
-        print(
-            f"참조곡 {len(source_keys)}곡 중 {found}곡만 시계열 저장분에 있다.",
-            file=sys.stderr,
-        )
-    # **합치는 것은 도메인이 한다** (D-0279). 여기 `numpy`가 있었고 GR-2.2가 금지한다.
-    blended = averaged(table.values())
-    if blended is None:
-        print(f"시계열 저장분의 전이 무게가 0이다: {root.name}", file=sys.stderr)
-        return None, "없음"
-    return blended, f"{root.name} ({found}곡)"
-
-
-def _harmony_prior(estimates: dict[str, KeyEstimate]) -> tuple[float, ...] | None:
-    """참조곡들의 크로마를 도수 사전 하나로 합친다 (O-21 · D-0063).
-
-    **각 곡을 자기 으뜸음으로 회전시킨 뒤 평균한다.** 피치클래스 공간에서 더하면
-    서로 다른 조성이 겹쳐 뭉개진다.
-
-    조성을 추정하지 못했으면 `None`이고, 그러면 화성은 이전처럼 시드만 따른다 —
-    조건화가 조용히 반쯤 걸리는 것보다 아예 안 걸리는 편이 낫다.
-    """
-    from hathor.domain.services.harmony_prior import merge_degree_priors
-    from hathor.domain.value_objects.key import PITCH_CLASSES
-
-    usable = [
-        (estimate.chroma, PITCH_CLASSES.index(estimate.key.tonic))
-        for estimate in estimates.values()
-        if len(estimate.chroma) == 12
-    ]
-    if not usable:
-        return None
-    return tuple(float(value) for value in merge_degree_priors(usable))
-
-
 def _run_generate_midi(args: argparse.Namespace) -> int:
     """참조곡 구조를 조건으로 MIDI를 만든다 (D-0052).
 
@@ -612,6 +508,13 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
     from hathor.application.orchestrator.generation_pipeline import render
     from hathor.domain.services.lyrics_segmentation import split_segments
     from hathor.domain.services.song_structure import extract_pattern
+
+    # **내가 적은 경로가 없으면 오타다. 우리가 찾은 것이 없으면 물러나도 된다** (D-0429).
+    # 섞으면 오타가 기본값으로 둔갑한다 — 실제로 한 판을 그렇게 버렸다.
+    for given, flag in ((args.priors, "--priors"), (args.series, "--series")):
+        if given is not None and not given.exists():
+            missing_given_path(given, flag)
+            return 1
 
     songs: list[tuple[str, list[str]]] = []
     for track in JsonlScanStore(Path(args.scan_out)).read_tracks():
@@ -628,8 +531,22 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
             for song in songs
             if any(needle.lower() in song[0].lower() for needle in args.reference)
         ]
-        if not chosen:
-            print(f"참조곡을 찾지 못했다: {args.reference}", file=sys.stderr)
+        missed = [
+            needle
+            for needle in args.reference
+            if not any(needle.lower() in song[0].lower() for song in songs)
+        ]
+        if missed:
+            # **낱말마다 본다** (D-0429). 셋을 대고 하나가 안 걸려도 나머지로 곡이
+            # 나왔고 **아무 말이 없었다.** 「바다가자」가 라이브러리에 없는 줄 모른
+            # 채로 69곡 퓨전을 돌렸다 — 하나라도 빠지면 퓨전이 달라진다 (D-0011).
+            print(f"참조곡을 못 찾은 낱말: {' · '.join(missed)}", file=sys.stderr)
+            print(
+                f"  스캔한 {len(songs)}곡에 그 낱말이 없다. 하나라도 빠지면 "
+                "퓨전이 달라진다 (D-0011)",
+                file=sys.stderr,
+            )
+            print(f"  무엇이 있는지 본다 : hathor scan --out {args.scan_out}", file=sys.stderr)
             return 1
     else:
         # 참조가 없으면 시드로 고른다. 무작위가 아니라 시드 함수여야 재현된다.

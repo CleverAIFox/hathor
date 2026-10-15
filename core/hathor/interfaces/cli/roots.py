@@ -85,6 +85,25 @@ def resolve_root(raw: Path | None) -> Path:
     return Path(value)
 
 
+def missing_given_path(given: Path, flag: str) -> None:
+    """**준 경로에 파일이 없다**고 적는다. 그 문구는 여기 하나다 (D-0043 · D-0429).
+
+    D-0326이 `--priors`에 이 메시지를 달았고, **`generate`는 그 길을 안 탔다.**
+    같은 것을 또 만들 뻔했다 — 새 `argparse` 타입을 하나 짜 놓고 보니 D-0326의
+    시험이 빨개졌다. **이미 푼 문제를 103판 뒤에 다시 풀고 있었다.**
+    """
+    import sys
+
+    from hathor.shared.config.paths import repo_root
+
+    print(
+        f"{flag}로 준 경로에 파일이 없다: {given}\n"
+        "  **상대 경로는 저장소 루트 기준이다** (cwd 아님) —"
+        f" 지금 루트는 {repo_root()}이다.",
+        file=sys.stderr,
+    )
+
+
 def resolve_priors(given: Path | None, stem_set: str) -> Path | None:
     """`--priors`를 풀고 **못 찾으면 왜 못 찾았는지 적는다** (D-0326).
 
@@ -110,12 +129,7 @@ def resolve_priors(given: Path | None, stem_set: str) -> Path | None:
     if given is not None:
         if given.exists():
             return given
-        print(
-            f"준 사전 경로에 파일이 없다: {given}\n"
-            "  **상대 경로는 저장소 루트 기준이다** (cwd 아님) —"
-            f" 지금 루트는 {repo_root()}이다.",
-            file=sys.stderr,
-        )
+        missing_given_path(given, "--priors")
         return None
     found = find_keys_store(repo_root(), stem_set)
     if found is None:

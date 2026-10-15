@@ -327,7 +327,7 @@ def test_생성_경로가_곡의_으뜸음으로_돌린다(
     """`generate --transitions`가 `keys.jsonl`의 조성으로 회전하는지 끝에서 끝까지 본다."""
     import argparse
 
-    from hathor.interfaces.cli.main import _resolve_transition_prior
+    from hathor.interfaces.cli.prior_sources import _resolve_transition_prior
 
     ingest = tmp_path / "var" / "ingest"
     arrays = _arrays()
@@ -354,7 +354,7 @@ def test_회전_기준이_없으면_배열을_안_건다(
     """**C장조로 읽지 않는다** (D-0213). 그렇게 읽은 것이 결함이었다."""
     import argparse
 
-    from hathor.interfaces.cli.main import _resolve_transition_prior
+    from hathor.interfaces.cli.prior_sources import _resolve_transition_prior
 
     monkeypatch.setattr("hathor.shared.config.paths.repo_root", lambda: tmp_path)
     _write_progression(tmp_path / "s", "곡.flac", 0, (0, 5, 7))

@@ -2885,6 +2885,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0426 | **봇이 연 첫 PR이 우리 관문을 못 지났다** | `core/tests/unit/test_watch_papers.py::test_줄이_문서_상한을_안_넘는다` | 실물 그의 저장소 — 후보 41줄 · 216~376자 · 강조 43개 · CI 작업 2개 실패 |
 | D-0427 | **손으로 켠 설정은 다음 기기에서 없다** | `core/tests/unit/test_gh_setup.py::test_전역_쓰기를_안_켠다` | 실물 그의 저장소 — 봇 PR 생성 실패 1회 · 전역 권한 read 유지 |
 | D-0428 | **「나중에」를 「없다」로 읽고 죽었다** | `core/tests/unit/test_watch_papers.py::test_429면_쉬고_다시_부른다` | 실물 그의 저장소 — 한 시간에 dispatch 3회 · 429로 16초 만에 실패 · SHA 핀 2개(checkout v5 · setup-python v5.6.0) |
+| D-0429 | **조용히 물러난 자리가 셋이었다** | `core/tests/unit/test_cli.py::test_명시한_사전_경로가_없으면_생성이_죽는다` | 실물 그의 기기 — 69곡 퓨전 1판 폐기 · `--priors` 무시 1회 · 안 걸린 낱말 1개 |
 
 <!-- decision-ledger:end -->
 

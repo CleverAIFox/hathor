@@ -517,7 +517,7 @@ def test_배열_사전을_읽어_생성에_건다(tmp_path, capsys):
     읽는다 (D-0110). 리포트가 배열 출처를 따로 찍는다.
     """
     from hathor.domain.services.transition_prior import is_empty
-    from hathor.interfaces.cli.main import _resolve_transition_prior
+    from hathor.interfaces.cli.prior_sources import _resolve_transition_prior
 
     names = ["아티스트-곡000.flac", "아티스트-곡001.flac"]
     root = write_series(tmp_path / "keys-20260823T000000Z.series", names)
@@ -531,7 +531,7 @@ def test_배열_사전을_읽어_생성에_건다(tmp_path, capsys):
 
 
 def test_배열_조건화를_안_켜면_없음이다(tmp_path):
-    from hathor.interfaces.cli.main import _resolve_transition_prior
+    from hathor.interfaces.cli.prior_sources import _resolve_transition_prior
 
     args = argparse.Namespace(transitions=False, series=None, stem_set="other")
     matrix, source = _resolve_transition_prior(args, ["곡.flac"])
@@ -541,7 +541,7 @@ def test_배열_조건화를_안_켜면_없음이다(tmp_path):
 
 def test_참조곡이_시계열에_없으면_물러난다(tmp_path, capsys):
     """**조건화가 조용히 반쯤 걸리는 것보다 아예 안 걸리는 편이 낫다** (D-0063)."""
-    from hathor.interfaces.cli.main import _resolve_transition_prior
+    from hathor.interfaces.cli.prior_sources import _resolve_transition_prior
 
     root = write_series(tmp_path / "keys-20260823T000000Z.series", ["있는곡.flac"])
     priors = c_major_keys(tmp_path / "keys.jsonl", ["있는곡.flac", "없는곡.flac"])
@@ -552,7 +552,7 @@ def test_참조곡이_시계열에_없으면_물러난다(tmp_path, capsys):
 
 
 def test_일부만_있으면_알린다(tmp_path, capsys):
-    from hathor.interfaces.cli.main import _resolve_transition_prior
+    from hathor.interfaces.cli.prior_sources import _resolve_transition_prior
 
     root = write_series(tmp_path / "keys-20260823T000000Z.series", ["있는곡.flac"])
     priors = c_major_keys(tmp_path / "keys.jsonl", ["있는곡.flac", "없는곡.flac"])
