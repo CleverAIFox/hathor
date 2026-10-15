@@ -47,6 +47,7 @@ import datetime as dt
 import pathlib
 import re
 import sys
+import textwrap
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -165,13 +166,30 @@ def arxiv(days: int, cap: int = 300) -> list[Candidate]:
     return found
 
 
+WIDTH = 96
+"""접는 자리. **문서 줄이 100자를 넘으면 `check_decisions`가 막는다** (D-0426).
+
+세샤트 양식을 그대로 옮겼더니 한 줄이 200~380자였고 **봇이 연 PR이 우리 관문을
+못 지났다.** 남의 양식을 옮길 때는 **받는 쪽 규칙을 같이 본다.**
+"""
+
+
 def lines(found: list[Candidate]) -> list[str]:
-    """한 줄에 하나. **요약이 아니라 후보다.**"""
-    return [
-        f"- **arXiv {one.when}** [{one.title}]({one.link}) — {one.line} "
-        f"(걸린 주제 {' · '.join(one.topics)})"
-        for one in found
-    ]
+    """후보 하나에 여러 줄. **요약이 아니라 후보다.**
+
+    **강조를 안 쓴다.** 후보가 수십이면 `**`도 수십이고, `check_doc_style`이 한 절의
+    강조를 16으로 막는다 — 봇이 쓴 줄이 절을 터뜨리면 사람이 쓴 줄까지 막힌다.
+    """
+    out: list[str] = []
+    for one in found:
+        out.append(f"- {one.when} · {' · '.join(one.topics)} · {one.link}")
+        out += textwrap.wrap(
+            f"{one.title} — {one.line}",
+            width=WIDTH,
+            initial_indent="  ",
+            subsequent_indent="  ",
+        )
+    return out
 
 
 def write(text: str, fresh: list[str], today: str) -> str:

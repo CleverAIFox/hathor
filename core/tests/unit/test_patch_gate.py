@@ -404,3 +404,49 @@ def test_뒤처리_목표가_생성물을_전부_만든다() -> None:
 
     assert "build_proposal.py" in block, "docx를 안 만든다"
     assert "render_proposal.py" in block, "화면을 안 만든다 — 받는 쪽에서 훅이 막는다"
+
+
+def test_합본_커밋이면_뽑기를_건너뛴다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**PR 빌드의 `HEAD`는 깃허브가 만든 합본이다** (D-0426).
+
+    우리가 보낼 패치가 아니라서 거기서 뽑기를 보면 *«제목이 `D-XXXX.`로 시작하지
+    않는다»*가 늘 난다. `main`에 바로 미는 흐름이라 **PR 경로가 한 번도 안 밟혀서**
+    봇이 첫 PR을 연 날 처음 났다.
+    """
+    folder = tmp_path / "repo"
+    folder.mkdir()
+    run = ["git", "-C", str(folder)]
+    subprocess.run([*run, "init", "-q", "-b", "main"], check=True)
+    subprocess.run([*run, "config", "user.email", "t@t"], check=True)
+    subprocess.run([*run, "config", "user.name", "t"], check=True)
+    (folder / "a").write_text("1\n", encoding="utf-8")
+    subprocess.run([*run, "add", "-A"], check=True)
+    subprocess.run([*run, "commit", "-qm", "D-0001. 첫 기록"], check=True)
+    subprocess.run([*run, "switch", "-qc", "곁가지"], check=True)
+    (folder / "b").write_text("2\n", encoding="utf-8")
+    subprocess.run([*run, "add", "-A"], check=True)
+    subprocess.run([*run, "commit", "-qm", "D-0002. 곁가지"], check=True)
+    subprocess.run([*run, "switch", "-q", "main"], check=True)
+    subprocess.run([*run, "merge", "--no-ff", "-q", "-m", "Merge 곁가지", "곁가지"], check=True)
+
+    monkeypatch.setattr(CHECKER, "ROOT", folder)
+
+    assert CHECKER.merged_head() is True
+    assert CHECKER.pull_once() == [], "합본에서 뽑기를 돌렸다"
+
+
+def test_보통_커밋이면_안_건너뛴다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**건너뛰기가 늘 참이면 뽑기가 영영 안 돈다** (D-0230)."""
+    folder = tmp_path / "repo"
+    folder.mkdir()
+    run = ["git", "-C", str(folder)]
+    subprocess.run([*run, "init", "-q", "-b", "main"], check=True)
+    subprocess.run([*run, "config", "user.email", "t@t"], check=True)
+    subprocess.run([*run, "config", "user.name", "t"], check=True)
+    (folder / "a").write_text("1\n", encoding="utf-8")
+    subprocess.run([*run, "add", "-A"], check=True)
+    subprocess.run([*run, "commit", "-qm", "D-0001. 첫 기록"], check=True)
+
+    monkeypatch.setattr(CHECKER, "ROOT", folder)
+
+    assert CHECKER.merged_head() is False

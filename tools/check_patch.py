@@ -211,8 +211,31 @@ def touched_by_head() -> list[str]:
     ).stdout.split()
 
 
+def merged_head() -> bool:
+    """`HEAD`가 **합본 커밋**인가 (D-0426).
+
+    PR 빌드의 `HEAD`는 깃허브가 만든 `Merge <sha> into <sha>`다. **우리가 보낼 패치가
+    아니므로** 거기서 뽑기를 보면 *«제목이 `D-XXXX.`로 시작하지 않는다»*가 늘 난다 —
+    `main`에 바로 미는 흐름이라 **PR 경로가 한 번도 안 밟혀서** 오늘 처음 났다.
+    """
+    done = subprocess.run(
+        ["git", "rev-list", "--parents", "-n", "1", "HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    return len(done.stdout.split()) > 2
+
+
 def pull_once() -> list[str]:
-    """**`HEAD`를 실제로 뽑아 본다.** 뽑기 자신이 기준 위에서 붙여 보고 트리까지 맞춘다."""
+    """**`HEAD`를 실제로 뽑아 본다.** 뽑기 자신이 기준 위에서 붙여 보고 트리까지 맞춘다.
+
+    합본 커밋에서는 **건너뛴다.** 조용히는 아니다 — 요약 줄이 «건너뜀»을 찍는다 (D-0230).
+    """
+    if merged_head():
+        return []
     with tempfile.TemporaryDirectory() as box:
         out = Path(box) / "시험.patch"
         done = subprocess.run(
@@ -263,7 +286,12 @@ def main() -> int:
         return 1
 
     # **못 잰 것을 통과로 적지 않는다** (GR-0.5). 안 돌렸으면 안 돌렸다고 찍는다.
-    ran = "뽑기 실측 1판" if live else "뽑기 **안 돌렸다**(부모 없음 · 얕은 클론)"
+    if not live:
+        ran = "뽑기 **안 돌렸다**(부모 없음 · 얕은 클론)"
+    elif merged_head():
+        ran = "뽑기 **건너뜀**(합본 커밋 — PR 빌드다 · D-0426)"
+    else:
+        ran = "뽑기 실측 1판"
     print(
         f"패치 검사 통과 · 머리 {len(HEADS) + len(OPTIONAL_HEADS)}종 x 곳 {len(places())}개 · "
         f"뒤처리 규칙 {len(AFTER_RULES)}개 · 소급 바닥 D-{BASE_REQUIRED_FROM:04d} · {ran}"

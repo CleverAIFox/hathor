@@ -123,3 +123,40 @@ def test_실제_PLAN에_자리가_있다() -> None:
 
     assert plan.exists(), f"{plan}가 없다"
     assert WATCH.HEADING in plan.read_text(encoding="utf-8")
+
+
+# ------------------------------- 봇이 쓴 줄이 우리 관문을 못 지났다 (D-0426)
+
+
+def test_줄이_문서_상한을_안_넘는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**`check_decisions`가 문서 줄을 100자로 막는다** (D-0426).
+
+    세샤트 양식을 그대로 옮겼더니 200~380자가 나왔고 **봇이 연 PR이 우리 관문을
+    못 지났다.** 남의 양식을 옮길 때는 받는 쪽 규칙을 같이 본다.
+    """
+    body = _feed(
+        _entry("2610.00009", "music " + "가" * 120, "preference " + "나" * 300 + ". 뒷문장.")
+    )
+    (one,) = _served(monkeypatch, body).arxiv(8)
+
+    for row in WATCH.lines([one]):
+        assert len(row) < 100, f"{len(row)}자다: {row[:40]}"
+
+
+def test_강조를_안_쓴다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**한 절의 강조는 16까지다.** 후보가 수십이면 봇이 절을 터뜨린다 (`check_doc_style`)."""
+    body = _feed(_entry("2610.00010", "Music taste", "Preference study of music."))
+    (one,) = _served(monkeypatch, body).arxiv(8)
+
+    assert all("**" not in row for row in WATCH.lines([one]))
+
+
+def test_링크와_제목이_둘_다_남는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """접느라 **무엇을 읽을지 못 알아보면** 후보가 아니다."""
+    body = _feed(_entry("2610.00011", "Chord generation", "Symbolic music MIDI study."))
+    (one,) = _served(monkeypatch, body).arxiv(8)
+    rows = "\n".join(WATCH.lines([one]))
+
+    assert one.link in rows
+    assert "Chord generation" in rows
+    assert "상징" in rows, "걸린 주제가 사라졌다"
