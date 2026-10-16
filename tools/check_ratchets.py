@@ -359,6 +359,7 @@ BASELINE: dict[str, int] = {
     "check_compose.CEILING[ml]": 2304,
     "check_compose.CEILING[obs]": 768,
     "check_decisions.FORMAT_ENFORCED_FROM": 80,
+    "check_decisions.RUNNABLE_FROM": 431,
     "check_doc_style.ALLOWED_TREES": 0,
     "check_doc_style.ENFORCER_FROM": 1,
     "check_doc_style.FLOOR_DOCS": 3,

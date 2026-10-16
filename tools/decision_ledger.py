@@ -91,6 +91,30 @@ def keeper_text(body: str) -> str | None:
     return " · ".join(parts) if parts else ""
 
 
+REPRO_HEAD = re.compile(r"^재현(?:  (.+))?$", re.MULTILINE)
+"""`재현` 칸의 머리. `강제자`와 같은 두 꼴을 쓴다."""
+
+
+def repro_lines(body: str) -> list[str]:
+    """`재현` 칸의 명령 줄들. 칸이 없으면 빈 목록이다 (D-0431).
+
+    **파서를 한 자리에 둔다** — `keeper_text`가 세 군데서 각자 틀렸던 그 자리다
+    (D-0304). 첫 판에 본문 전체를 정규식으로 긁었더니 **배경에 붙인 터미널 출력까지**
+    명령으로 읽었다. 칸을 먼저 찾고 그 안만 본다.
+    """
+    found = REPRO_HEAD.search(body)
+    if found is None:
+        return []
+    lines = [found.group(1).strip()] if found.group(1) else []
+    rest = body[found.end() :].splitlines()
+    for line in rest[1:] if rest and not rest[0].strip() else rest:
+        if not line.startswith(("    ", "\t")):
+            break
+        if stripped := line.strip():
+            lines.append(stripped)
+    return lines
+
+
 def records_with_body(text: str) -> list[tuple[str, str, str]]:
     """`(번호, 표제, 본문)`. **본문 길이를 재려고 쓴다** (D-0188)."""
     found: list[tuple[str, str, str]] = []

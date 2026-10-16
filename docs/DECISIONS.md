@@ -35381,3 +35381,68 @@ D-0377이 *«패치에 안 싣고 받는 쪽이 다시 만드는 것»*을 `AFTE
     `core/tests/unit/test_thumbnails_cli.py::test_창_길이_선언이_없으면_죽는다`
 
 자료  실물 그의 기기 — POPM 1004/1004 · 별점 255 하나 · 재생수 0 하나 · 변량 0 · 합성 (셈 검증)
+
+---
+
+## D-0431. **재현이 그대로 안 돌았다** — `hathor …`는 없는 명령이다
+
+> **갱신 — D-0430 · D-0418 · D-0413.** 세 기록의 `재현` 절을 정정한다. **고쳐 쓰지
+> 않고 새 번호로 적는다** (GR-0.2).
+
+- **배경**: 사람이 D-0430의 재현 줄을 그대로 쳤다.
+
+      hathor ingest thumbnails --stem-set other
+      hathor: command not found
+
+  `core/pyproject.toml`에 **`[project.scripts]`가 없다.** 콘솔 스크립트가 아예 안
+  만들어진다. `README`와 `Makefile`은 줄곧 `uv run python -m hathor.cli …`로 적어
+  왔고, **짧은 꼴은 결정 기록의 `재현` 절에만 살았다** — 세 건이다.
+
+  `재현`은 **여기서 다시 낼 수 있다**는 약속이다. 그 자리의 명령이 `command not found`로
+  끝나면 읽는 사람은 **기록이 아니라 저장소를 의심한다** (D-0292).
+
+- **결과**: 세 줄을 여기서 정정하고, 다시 나지 않게 관문을 건다.
+
+  **앞에 `cd core && uv run python -m hathor.cli`를 두고 뒤를 그대로 쓴다.**
+
+  | 기록 | `재현`에 적혀 있던 머리 |
+  |---|---|
+  | D-0413 | `hathor eval retrieval --keys mert/mixture/layer00 …` |
+  | D-0418 | `hathor eval retrieval --keys clap:mixture,mfcc:mixture …` |
+  | D-0430 | `hathor ingest thumbnails --stem-set other` |
+
+  - `check_decisions.check_runnable`이 `재현` 절의 `hathor <명령>` 꼴을 막는다.
+  - **소급 바닥 `RUNNABLE_FROM = 431`** (D-0351 · D-0352와 같은 규율). 위 셋을
+    소급해 고치면 추가 전용이 깨진다 — **정정은 이 본문이 한다.**
+
+- **후보**: `[project.scripts]`를 넣어 `hathor`를 진짜 명령으로 만드는 길도 있었다.
+- **선택**: **안 넣는다.** 넣어도 `uv run hathor …`이거나 가상환경을 켜야 하고,
+  `cd core`는 여전히 필요하다 — **짧아지지 않으면서 호출 꼴만 둘이 된다** (D-0043).
+  `README`·`Makefile`·`재현`이 **한 꼴**인 쪽이 싸다.
+
+### 남기는 것
+
+- **내 재현 줄을 내가 한 번도 안 쳐 봤다.** 내 컨테이너에서는 `cd core && uv run
+  python -m hathor.cli …`로 돌려 놓고 기록에는 짧은 꼴을 적었다 — **돌린 것과 적은
+  것이 달랐다.** GR-0.7이 *«손으로 안 적는다»*로 막는 부류가 바로 이것이다.
+- **두 판이나 조용히 지나갔다.** D-0413과 D-0418에도 같은 줄이 있었고 아무도 안
+  쳤다. **안 쳐 본 안내는 틀린 줄도 모른다** — 관문이 없으면 세 번째도 조용했다.
+- **`doc_fsck`는 `python3 tools/x.py`만 본다.** 도구 경로는 실재를 확인하는데 CLI
+  명령은 **아무도 안 봤다.** 그물이 반쪽이면 반쪽은 늘 통과한다 (D-0230).
+- **`test_check_decisions`가 700줄을 넘었다.** 못을 올리는 대신 쪼갰다 (D-0117) —
+  `test_decision_repro`로 나갔다. D-0427과 같은 자리이고, **예외표에 한 줄 더하는
+  것이 더 싸 보였다**는 점까지 같다.
+- **첫 판의 관문이 제 기록을 물었다.** 본문 전체를 정규식으로 긁었더니 **배경에 붙인
+  터미널 출력**(`hathor: command not found`)까지 명령으로 읽었다. 칸을 먼저 찾고 그
+  안만 보도록 고쳤고, 파서는 `decision_ledger.repro_lines` 한 자리에 뒀다 — `강제자`
+  파서가 세 군데서 각자 틀렸던 그 자리다 (D-0304).
+
+재현
+    cd core && uv run pytest tests/unit/test_decision_repro.py -q
+    python3 tools/check_decisions.py --check
+
+강제자
+    `core/tests/unit/test_decision_repro.py::test_그대로_안_도는_재현을_잡는다`
+    `core/tests/unit/test_decision_repro.py::test_지금_저장소가_바닥_뒤로는_깨끗하다`
+
+자료  실물 그의 기기 — `command not found` 1회 · 같은 꼴 3건 · 소급 바닥 D-0431

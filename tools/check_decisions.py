@@ -86,6 +86,7 @@ from decision_ledger import (
     LEDGER_END,
     Record,
     build_ledger,
+    repro_lines,
     scan_records,
 )
 
@@ -228,6 +229,42 @@ def check_sections(records: list[Record]) -> list[str]:
         if has_candidates != has_choice:
             missing = "선택" if has_candidates else "후보"
             problems.append(f"{record.identifier}에 `- **{missing}**`이 없다. 둘은 짝이다")
+    return problems
+
+
+RUNNABLE_FROM = 431
+"""`재현` 절의 명령이 **그대로 쳐서 돌아야** 하는 첫 결정 번호 (D-0431).
+
+**소급 바닥이다** (D-0351 · D-0352와 같은 규율). 그 앞에 셋이 있고 소급해 고치지
+않는다 — GR-0.2가 *«고쳐 쓰지 않고 새 번호로 정정한다»*이고, 정정은 D-0431이 한다.
+"""
+
+BARE_CLI = re.compile(r"^hathor\s+[a-z]")
+"""`hathor <명령>`. **콘솔 스크립트가 없어서 그대로 치면 `command not found`다.**
+
+돌아가는 꼴은 `cd core && uv run python -m hathor.cli <명령>`이고 `README`와
+`Makefile`이 줄곧 그 꼴이었다. 결정 기록의 `재현` 절만 **짧은 꼴로 적혀 왔다** —
+사람이 그대로 쳤고 안 돌았다 (D-0292).
+"""
+
+
+def check_runnable(records: list[Record]) -> list[str]:
+    """`재현` 절의 명령이 그대로 돌아가는 꼴인가 (D-0431 · D-0292).
+
+    **틀린 안내는 안내가 없는 것보다 나쁘다.** `재현`은 *«여기서 다시 보라»*는
+    약속인데, 그 자리의 명령이 `command not found`로 끝나면 읽는 사람은 **기록이
+    아니라 저장소를 의심한다.**
+    """
+    problems: list[str] = []
+    for record in records:
+        if record.number < RUNNABLE_FROM:
+            continue
+        for line in repro_lines(record.body):
+            if BARE_CLI.match(line):
+                problems.append(
+                    f"{record.identifier}의 재현 `{line[:40]}…`은 그대로 치면 안 돈다. "
+                    "`cd core && uv run python -m hathor.cli …`로 적는다 (D-0431)"
+                )
     return problems
 
 
@@ -425,6 +462,7 @@ def run_checks(parts: list[tuple[str, str]], design_text: str) -> list[str]:
         *check_numbering(records),
         *check_references(records),
         *check_sections(records),
+        *check_runnable(records),
         *check_evidence(records),
         *check_attribution(records),
         *check_keeper_text(records),
