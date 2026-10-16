@@ -83,6 +83,7 @@ from hathor.interfaces.cli.roots import (
 )
 from hathor.interfaces.cli.tables import parse_key
 from hathor.interfaces.cli.tempo_source import resolve_tempo
+from hathor.interfaces.cli.thumbnails import build_thumbnails, run_thumbnails
 from hathor.shared.config.paths import (
     LIBRARY_ROOT_ENV,
     load_dotenv,
@@ -966,6 +967,12 @@ def entries() -> tuple[Entry, ...]:
                     "오디오 특징 추출 (GPU)",
                     _build_ingest_features,
                     _run_ingest_features,
+                ),
+                Command(
+                    "thumbnails",
+                    "곡마다 후렴 20여 초를 고른다 (D-0430)",
+                    build_thumbnails,
+                    run_thumbnails,
                 ),
                 Command(
                     "compact",

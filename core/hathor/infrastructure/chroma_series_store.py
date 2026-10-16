@@ -129,13 +129,23 @@ def load_series(root: Path, stem_set: str) -> list[NDArray[np.float64]]:
     창 묶기(`group_series`)는 둘 다 **같은 곡 안의 순서**를 쓰므로 경계가 필요하다 —
     곡 경계를 넘어 묶으면 마지막 창과 다음 곡 첫 창이 한 화음으로 평균된다.
     """
-    found: list[NDArray[np.float64]] = []
+    return [series for _, series in load_named_series(root, stem_set)]
+
+
+def load_named_series(root: Path, stem_set: str) -> list[tuple[str, NDArray[np.float64]]]:
+    """곡 이름을 달고 읽는다 (D-0430). **`load_series`가 이것을 쓴다** (D-0043).
+
+    `write_series`가 `source_key`를 같이 넣어 뒀는데 읽는 쪽이 버리고 있었다. 썸네일은
+    «어느 곡의 몇 초»를 내놔야 하므로 그 칸이 필요하다 — **파일 이름은 해시라 못 쓴다.**
+    """
+    found: list[tuple[str, NDArray[np.float64]]] = []
     for path in sorted(root.glob(f"*-{stem_set}.npz")):
         with np.load(path, allow_pickle=False) as bundle:
             series = np.asarray(bundle["series"], dtype=np.float64)
+            name = str(bundle["source_key"]) if "source_key" in bundle else path.stem
         if series.ndim != 2 or series.shape[0] == 0 or series.shape[1] != DEGREE_COUNT:
             continue
-        found.append(series)
+        found.append((name, series))
     return found
 
 
