@@ -150,6 +150,26 @@ uv run python -m hathor.cli eval musicfm --home ~ --limit 3
 이상이면 `--fusion min`으로 결합 규칙을 바꾼다 (D-0033). 평가는 M0 게이트(0.95)를 못 넘으면
 M1 · M2를 안 낸다 (D-0023). 리포트는 `var/ingest/eval/<시각>-<라벨>.eval.json`에 쌓인다.
 
+## 후렴 20초 (D-0430 · D-0437)
+
+```bash
+cd core
+uv run python -m hathor.cli ingest thumbnails --stem-set other
+# 폴더를 직접 준다 — 「가장 최근」이 「가장 많은」이 아니다 (D-0435)
+uv run python -m hathor.cli ingest thumbnails --stem-set other \
+    --series var/ingest/keys-20260916T115536Z.series
+```
+
+**Bartsch & Wakefield 2001을 옮겼다.** 크로마 자기유사 행렬의 대각선 이동평균이 전부이고,
+**새로 뽑는 것이 없다** — `keys-*.series`가 있으면 1004곡을 몇 분에 낸다.
+
+고른 폴더와 곡 수를 먼저 찍고, **더 큰 후보가 있으면 그것도 적는다** (D-0435). 점수가
+낮은 쪽부터 보여 준다 — **맞는 것을 백 번 확인해도 새로 아는 것이 없다.**
+
+사람 판정 6곡에서 **5곡이 맞았고 틀린 하나가 점수 최저였다** (D-0437). 표본이 6이라
+정확도를 수로 적지 않는다. 낮은 점수는 *«집은 자리가 틀렸다»*일 수도 있고 *«그 곡에
+뚜렷한 후렴이 없다»*일 수도 있다 — **뒤쪽이면 도구 잘못이 아니다.**
+
 ## 기획서 (D-0221 · D-0222)
 
 ```bash

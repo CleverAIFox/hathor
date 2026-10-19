@@ -101,6 +101,17 @@ store = true
 state = "있음"
 
 
+[series."keys-*.series.thumbnails.jsonl"]
+what = "곡마다 후렴 23초 — 시작·끝·짝·점수 (D-0430)"
+made = "core/hathor/interfaces/cli/thumbnails.py"
+regen = "cd core && uv run python -m hathor.cli ingest thumbnails --stem-set other"
+reads = ["사람 — 참조곡·생성물을 20초로 들려주는 자리 (O-80 · D-0437)", "D-0430"]
+store = false
+state = "있음"
+why = """곡 이름이 들어가므로 **교두보에 안 올린다** (D-0015). 23초를 고른 수일 뿐이고
+`keys-*.series`가 있으면 1004곡을 2분에 다시 낸다 — 옮길 값이 없다."""
+
+
 [series."keys-*.onsets"]
 what = "곡별 온셋 포락선과 대역 스펙트럼 (O-46 · D-0145)"
 made = "core/hathor/infrastructure/onset_store.py"
