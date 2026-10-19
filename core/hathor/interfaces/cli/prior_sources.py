@@ -28,6 +28,7 @@ from hathor.infrastructure.keys_jsonl_store import (
     load_stem_priors,
     load_tonics,
 )
+from hathor.interfaces.cli.roots import announce_series
 
 if TYPE_CHECKING:  # pragma: no cover - 형만 쓴다
     from hathor.domain.services.key_estimation import KeyEstimate
@@ -103,6 +104,7 @@ def _resolve_transition_prior(
     if store is None:
         print("조성 산출물이 없어 회전 기준이 없다. 배열 조건화를 건너뛴다.", file=sys.stderr)
         return None, "없음"
+    announce_series(root, args.stem_set)
     table = load_transition_priors(root, args.stem_set, source_keys, tonics=load_tonics(store))
     found = len(table)
     if found == 0:

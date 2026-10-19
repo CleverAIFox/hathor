@@ -104,6 +104,31 @@ def missing_given_path(given: Path, flag: str) -> None:
     )
 
 
+def announce_series(chosen: Path, stem_set: str) -> None:
+    """고른 시계열 폴더와 곡 수를 적는다. **더 큰 후보가 있으면 그것도 말한다** (D-0435).
+
+    40곡짜리가 1004곡짜리를 가렸는데 화면에는 *«곡 40»*만 떴다. **그 수가 적다는 것을
+    말해 주는 자가 없었다** — 사람이 1004를 기대하고 40을 읽으면 못 알아챈다 (D-0325).
+
+    **고르는 규칙은 안 바꾼다** (`series_candidates` 참고). 여기서 하는 일은 적는 것뿐이다.
+    """
+    import sys
+
+    from hathor.infrastructure.chroma_series_store import series_candidates
+    from hathor.shared.config.paths import repo_root
+
+    songs = len(list(chosen.glob(f"*-{stem_set}.npz")))
+    print(f"시계열 {chosen.name} · {stem_set} {songs}곡")
+    for path, count in series_candidates(repo_root(), stem_set):
+        if count <= songs or path == chosen:
+            continue
+        where = path.relative_to(repo_root()) if path.is_relative_to(repo_root()) else path
+        print(
+            f"  **더 큰 폴더가 있다**: {path.name} · {count}곡 — 쓰려면 --series {where}",
+            file=sys.stderr,
+        )
+
+
 def resolve_priors(given: Path | None, stem_set: str) -> Path | None:
     """`--priors`를 풀고 **못 찾으면 왜 못 찾았는지 적는다** (D-0326).
 

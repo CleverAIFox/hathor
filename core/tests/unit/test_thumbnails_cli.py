@@ -128,3 +128,48 @@ def test_한_곡도_못_고르면_죽는다(tmp_path: Path, capsys: pytest.Captu
 
     assert main(["ingest", "thumbnails", "--series", str(series), "--seconds", "24"]) == 1
     assert "못 골랐다" in capsys.readouterr().err
+
+
+# ----------------------------------- 40곡이 1004곡을 가렸다 (D-0435)
+
+
+def test_고른_폴더와_곡_수를_적는다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**화면에 «곡 40»만 떴고 그 수가 적다는 것을 말해 주는 자가 없었다** (D-0325).
+
+    사람이 1004를 기대하고 40을 읽으면 못 알아챈다. 고른 폴더 이름과 곡 수를 먼저
+    적고, **더 큰 후보가 있으면 그것도 적는다** (D-0203).
+    """
+    ingest = tmp_path / "var" / "ingest"
+    big = ingest / "keys-20260916T115536Z.series"
+    small = ingest / "keys-20260930T081155Z.series"
+    for index in range(3):
+        write_series(big, f"큰{index}.mp3", "other", _series(length=120, motif=12, at=(20, 80)))
+    write_series(small, "작은.mp3", "other", _series(length=120, motif=12, at=(20, 80)))
+    for folder in (big, small):
+        (folder / f"{folder.name}{artifact_manifest.SUFFIX}").write_text(
+            json.dumps({"series_seconds": SPAN}), encoding="utf-8"
+        )
+    monkeypatch.setattr("hathor.shared.config.paths.repo_root", lambda: tmp_path)
+
+    assert main(["ingest", "thumbnails", "--series", str(small), "--sample", "0"]) == 0
+    out, err = capsys.readouterr()
+
+    assert "other 1곡" in out, "고른 폴더의 곡 수를 안 적는다"
+    assert "더 큰 폴더가 있다" in err, "1004곡이 있는데 40곡을 골랐다고 말을 안 한다"
+    assert "keys-20260916T115536Z.series · 3곡" in err
+
+
+def test_가장_큰_것을_골랐으면_조용하다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**경보가 늘 울면 아무도 안 본다** (GR-0.8). 더 큰 것이 없으면 말하지 않는다."""
+    series = _folder(tmp_path / "var" / "ingest", songs=2)
+    monkeypatch.setattr("hathor.shared.config.paths.repo_root", lambda: tmp_path)
+
+    assert main(["ingest", "thumbnails", "--series", str(series), "--sample", "0"]) == 0
+    out, err = capsys.readouterr()
+
+    assert "other 2곡" in out
+    assert "더 큰 폴더" not in err

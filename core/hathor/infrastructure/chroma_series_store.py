@@ -56,13 +56,33 @@ def find_series_root(root: Path, stem_set: str) -> Path | None:
     `keys-*.series` 안에 `<해시>-<스템>.npz`가 있다. 그 스템이 하나도 없으면 건너뛴다 —
     **`other`로 뽑은 폴더에 `bass`를 찾으러 가면 0곡이 된다** (D-0100이 겪은 부류다).
     """
+    found = series_candidates(root, stem_set)
+    return found[0][0] if found else None
+
+
+def series_candidates(root: Path, stem_set: str) -> list[tuple[Path, int]]:
+    """그 스템을 가진 시계열 폴더와 **곡 수**, 최신 순 (D-0435).
+
+    **`find_series_root`가 고르는 것은 가장 최근이지 가장 큰 것이 아니다.** 9월 30일에
+    40곡으로 돌린 배치가 9월 16일 1004곡을 **가렸고**, 썸네일이 40곡만 보고도
+    *«곡 40»*이라고만 찍어서 사람이 그 수를 그냥 지나쳤다.
+
+    **D-0325가 적은 문장 그대로다** — *«40곡이 1004곡을 가렸다»*. 그때는 사람이
+    그랬고 이번엔 도구가 그랬다. D-0422도 같은 뿌리다: **최신은 정본이 아니다.**
+
+    고르는 규칙은 안 바꾼다. 새로 뽑은 작은 배치가 **의도일 수 있고**, 크기로 고르면
+    그 의도를 조용히 뒤집는다. 대신 **후보를 세어 돌려준다** — 부르는 쪽이 고른 것과
+    안 고른 것을 같이 화면에 적는다 (D-0203).
+    """
     ingest = root / "var" / "ingest"
     if not ingest.is_dir():
-        return None
+        return []
+    found: list[tuple[Path, int]] = []
     for path in sorted(ingest.glob("keys-*.series"), reverse=True):
-        if any(path.glob(f"*-{stem_set}.npz")):
-            return path
-    return None
+        songs = len(list(path.glob(f"*-{stem_set}.npz")))
+        if songs:
+            found.append((path, songs))
+    return found
 
 
 def load_transition_priors(

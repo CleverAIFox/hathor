@@ -32,7 +32,7 @@ from hathor.infrastructure.chroma_series_store import (
     load_named_series,
     series_settings,
 )
-from hathor.interfaces.cli.roots import missing_given_path
+from hathor.interfaces.cli.roots import announce_series, missing_given_path
 from hathor.shared.config.paths import repo_root, resolve_path
 
 DEFAULT_SECONDS = 23.0
@@ -106,6 +106,7 @@ def run_thumbnails(args: argparse.Namespace) -> int:
     root = _series_root(args)
     if root is None:
         return 1
+    announce_series(root, args.stem_set)
     span = _seconds_per_window(root)
     if span is None:
         return 1
