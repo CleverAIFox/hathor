@@ -174,6 +174,126 @@ D-0199는 **WSL에서 31개를 돌려 갚았다.**
 
 ## 4. 읽을 후보
 
+### 훑은 날 2026-10-19
+- 2026-10-16 · 표현 · http://arxiv.org/abs/2610.23745v1
+  VocalGrad: Evaluating Acoustic Perception in Audio Language Models — Recent large audio
+  language models (LALMs) have extended their capabilities beyond lexical speech understanding
+  to tasks requiring paralinguistic and non-linguistic audio understanding, such as emotion
+  recognition
+- 2026-10-16 · 조건부 생성 · 평가 · http://arxiv.org/abs/2610.23678v1
+  Beyond the Benchmark: Conditioning, Domains and Failure Modes of Qwen3-TTS — Qwen3-TTS reports
+  state-of-the-art zero-shot voice cloning, but its technical report leaves open how the model
+  should be conditioned, how it behaves outside read speech, and how it fails
+- 2026-10-16 · 표현 · http://arxiv.org/abs/2610.23526v1
+  Interpreting SSL Representations for Spoof Detection: a WavLM Study — Self-supervised speech
+  models such as WavLM achieve strong spoofing detection performance, yet which layers encode
+  the most spoof-relevant information and what acoustic properties they capture remain opaque
+- 2026-10-16 · 조건부 생성 · http://arxiv.org/abs/2610.23021v1
+  Semantic-Critical Regions for Video-to-Audio Generation — In real-world videos, sound events
+  are often associated with localized and fine-grained visual cues, such as object motion,
+  object-part dynamics, contact events, and interactions between objects
+- 2026-10-15 · 표현 · http://arxiv.org/abs/2610.22221v1
+  How Much Physics Can Vision Learn from Audio? Probing and Distilling Damping Structure —
+  Physical understanding is crucial for decision making, yet vision models struggle to infer
+  properties such as damping that govern how materials behave
+- 2026-10-15 · 표현 · http://arxiv.org/abs/2610.21588v1
+  Hear, Localize, and Reason: Spatially Aware Scene Understanding for Audio-Visual LLMs — Audio-
+  visual large language models (AV-LLMs) have made strong progress in multimodal understanding,
+  yet most treat audio as monaural semantic content, limiting their ability to reason about
+  where sounds originate and how
+- 2026-10-15 · 조건부 생성 · 표현 · http://arxiv.org/abs/2610.21520v1
+  Hierarchical Interpretable Multitask Audio Representation Learning: An Analysis of Event-Scene
+  Relationships through the Information Bottleneck — Joint Acoustic Scene Classification (ASC)
+  and Audio Tagging (AT) models traditionally rely on unconstrained multihead architectures
+- 2026-10-15 · 상징 · http://arxiv.org/abs/2610.21467v1
+  DuET: Note-Frame Dual Encoding for Piano Performance-to-Score Transcription — Transcribing
+  expressive piano performances into scores requires interpreting individual note timings within
+  an underlying metrical structure
+- 2026-10-14 · 상징 · http://arxiv.org/abs/2610.22416v1
+  From Individual Songs to Music Corpora: Evaluating Explainable Harmonic Decision-Making on
+  HookTheory — Automatic melody harmonization is often evaluated through individual compositions
+  or data-driven corpus models
+- 2026-10-14 · 조건부 생성 · 상징 · http://arxiv.org/abs/2610.20967v1
+  MIDI-REPA: Improving Text-to-Music Generation with Symbolic Representation Alignment — State-
+  of-the-art text-to-music models increasingly rely on scaling model capacity, data, and
+  compute, while still learning musical structure directly from dense audio
+- 2026-10-14 · 표현 · http://arxiv.org/abs/2610.20955v1
+  Probing Neural Audio Codecs with Speaker Traits and Speech Characteristics — Neural audio
+  codecs are increasingly used for low-bitrate speech coding and serve as tokenizers for speech
+  language models, yet it remains unclear how their codebook hierarchies encode speaker traits
+  and speech character
+- 2026-10-14 · 상징 · http://arxiv.org/abs/2610.20465v1
+  vst-bench-ml: Auditable Dataset Generation for Audio Plugins — Generating datasets with audio
+  plugins requires preserving how each audio observation was produced
+- 2026-10-14 · 취향 · http://arxiv.org/abs/2610.20400v1
+  HRTF Upsampling and Personalization via Neural Operators — Head-related transfer function
+  (HRTF) spatial upsampling from sparse measurements is a fundamental challenge in personalized
+  binaural audio
+- 2026-10-14 · 취향 · http://arxiv.org/abs/2610.22405v1
+  MedSonor: Learning to Use Clinical Audio in Medical LLMs — Clinical audio conveys medical
+  information that transcripts may not preserve, but using it in medical responses requires
+  interpreting it alongside clinical requests and dialogue context
+- 2026-10-14 · 표현 · http://arxiv.org/abs/2610.19559v1
+  Learning Visual Speech Representations via Cross-Modal Distillation and Joint Face-Lip
+  Modeling — Lipreading remains challenging due to the inherent ambiguity of visual speech cues
+  and their sensitivity to head pose and video resolution
+- 2026-10-13 · 취향 · http://arxiv.org/abs/2610.18010v2
+  Fish Audio Drama 3 Technical Report — We introduce Fish Audio Drama 3, an open-source speech
+  generation model that turns text into directed performances, built on a 35B-parameter mixture-
+  of-experts backbone that activates 3B parameters per token
+- 2026-10-13 · 평가 · http://arxiv.org/abs/2610.17821v2
+  FLOMSS: Generative Music Source Separation by Flow Matching — Music source separation (MSS)
+  has been conventionally addressed by discriminative methods
+- 2026-10-13 · 표현 · http://arxiv.org/abs/2610.17617v1
+  What Do Deepfake Audio Detectors Hear? From Self-Supervised Models to Audio LLMs — Real-world
+  audio recordings for deepfake detection rarely consist solely of speech; they often are
+  mixtures of speech and background events that themselves may also be synthetic
+- 2026-10-12 · 조건부 생성 · 표현 · http://arxiv.org/abs/2610.17187v1
+  MSVAE: Rethinking Musical Semantics in Continuous Latent Spaces — Continuous latent
+  representations underlie recent diffusion-based lyrics-to-song and text-to-music systems, yet
+  aligning lyric conditions with these latents remains difficult: existing systems resort to
+  generator-side ma
+- 2026-10-12 · 취향 · http://arxiv.org/abs/2610.17036v1
+  PitchIn: Natural-Language Vocal Coaching from Unstructured Community Feedback — Effective
+  vocal coaching connects performance issues with corrective advice, but recordings paired with
+  expert diagnoses and advice are scarce
+- 2026-10-12 · 조건부 생성 · 평가 · http://arxiv.org/abs/2610.16382v1
+  Behavior-Conditioned Animal Vocalization Generation: Event-Aware Modeling and Multidimensional
+  Evaluation — Behavior-conditioned animal vocalization generation aims to synthesize
+  vocalizations from natural-language descriptions of animal behaviors, social interactions, and
+  contexts
+- 2026-10-11 · 조건부 생성 · http://arxiv.org/abs/2610.15967v1
+  Controllable Mono-to-Stereo Upmixing using Reward-tilted Flows — We consider the problem of
+  mono-to-stereo audio upmixing: generating a high-fidelity two-channel stereo signal from a
+  single-channel recording
+- 2026-10-11 · 취향 · 조건부 생성 · 상징 · http://arxiv.org/abs/2610.15960v1
+  TASTE: Taxonomy-Aware Symbolic Piano Generation from Textual Description — Text-conditioned
+  symbolic music generation has attracted growing interest with the development of generative
+  models
+- 2026-10-11 · 조건부 생성 · 상징 · http://arxiv.org/abs/2610.15957v1
+  Harmonic Representations in Symbolic Music Transformers are Localized and Controllable —
+  Transformer models trained on symbolic music have become remarkably capable
+- 2026-10-11 · 취향 · http://arxiv.org/abs/2610.15665v2
+  AnyEdit: A Unified Framework for Speech and Singing Voice Editing with Real-World
+  Environmental Consistency — We present AnyEdit, a unified, separation-free framework for
+  speech and singing voice editing that preserves real-world acoustic environments, including
+  noise, reverberation, and background music
+- 2026-10-11 · 조건부 생성 · 상징 · http://arxiv.org/abs/2610.15474v1
+  Sori: Streamable and Controllable Model for Non-musical Audio to Symbolic Music Transformation
+  — We introduce Non-musical Audio to Symbolic Music Transformation (NASMT), a novel task that
+  converts non-musical audio into symbolic music representations
+- 2026-10-11 · 평가 · http://arxiv.org/abs/2610.15464v1
+  The NPU-ASLP System for Music Restoration in the CCF-AATC 2026 Challenge — This paper presents
+  the NPU-ASLP music restoration system developed for Track 1 of the China Computer Federation
+  (CCF) Advanced Audio Technology Competition (AATC) 2026 Challenge
+- 2026-10-11 · 상징 · http://arxiv.org/abs/2610.15356v1
+  JSIR: An Audio-Aligned, Multi-Task Dataset of Jazz Standard Recordings — Beat tracking, chord
+  estimation, and structure analysis are staple tasks of music information retrieval
+- 2026-10-11 · 표현 · http://arxiv.org/abs/2610.15350v1
+  Gugak-VocalSet: A Multi-Genre Studio-Quality Dataset of Korean Traditional Singing with
+  Sigimsae Annotations — We present Gugak-VocalSet, the first publicly available audio dataset
+  for Korean traditional singing with dense annotations of sigimsae, a structured pitch contour
+  system of vocal expressions
 **`tools/watch_papers.py`가 주 1회 붙인다** (D-0424). **요약이 아니라 후보다** — 제목과
 초록 첫 문장과 걸린 주제만 있다. 읽고 나면 줄을 여기서 빼고 `MASTER` §3 「읽은 논문」에
 *«무엇을 했나 · 주장한 결과 · 가져올 것»*을 적는다 (D-0423).
