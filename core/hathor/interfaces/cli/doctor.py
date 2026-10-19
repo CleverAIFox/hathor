@@ -38,6 +38,42 @@ CONVENTIONAL_REPO_SUFFIX = Path("projects/hathor")
 HOOKS = ("pre-commit", "credential-check")
 """기기에 걸려 있어야 하는 훅. **`credential-check`가 `.env`와 푸시 사이에 선다.**"""
 
+HOOK_PROBE = "HATHOR_HOOK_PROBE"
+"""전역 훅을 **돌려 보는** 스위치 (D-0440). `.githooks/pre-commit`이 이 변수를 읽는다."""
+
+SENTINEL = "[hathor] pre-commit 체인 진입"
+"""탐침이 찾는 줄. **저장소 훅만 찍을 수 있다** — 전역 훅은 이 글자를 모른다."""
+
+
+def chain_reaches(folder: Path, root: Path) -> bool | None:
+    """전역 훅이 이 저장소의 `.githooks/pre-commit`에 **실제로 닿는가** (D-0440).
+
+    돌려 볼 수 없으면 `None`이다 — 전역 훅이 없거나 실행권한이 없는 경우이고,
+    그것은 위의 `HOOKS` 검사가 이미 말한다. 여기서 또 말하면 경보가 두 번 운다.
+
+    **파일 존재로는 못 센다.** 전역 훅이 저장소 훅을 부르기 전에 끝나도 파일은
+    멀쩡히 있다 — fire-lane이 그 꼴로 한 판을 속았다. 그래서 **실행 결과**를 본다.
+    """
+    import os
+    import subprocess
+
+    hook = folder / "pre-commit"
+    if not (hook.is_file() and os.access(hook, os.X_OK)):
+        return None
+    try:
+        done = subprocess.run(
+            ("bash", str(hook)),
+            cwd=root,
+            env={**os.environ, HOOK_PROBE: "1"},
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return SENTINEL in done.stdout
+
 
 def _git(root: Path, *arguments: str) -> str | None:
     """git 한 줄. 실패하면 `None`이다."""
@@ -226,6 +262,18 @@ def run_doctor(args: argparse.Namespace) -> int:
                 name,
                 str(hook) if hook.exists() else "없다",
                 "파일이 없거나 실행권한이 없다. 훅은 조용히 건너뛰어진다" if not usable else "",
+            )
+        # **걸려 있는 것과 닿는 것은 다르다** (D-0440).
+        reached = chain_reaches(folder, root)
+        if reached is not None:
+            check(
+                reached,
+                "훅 도달",
+                "전역 → .githooks/pre-commit" if reached else "전역 훅이 저장소 훅을 안 부른다",
+                ""
+                if reached
+                else "전역 훅이 끝나기 전에 저장소 훅을 못 찾는다 — 커밋 시점 검사가"
+                f" 하나도 안 돌고 있다. `bash -x {folder / 'pre-commit'}`로 추적한다",
             )
 
     print("\n== git ==")

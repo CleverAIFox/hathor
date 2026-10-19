@@ -148,6 +148,13 @@ def hooks(tmp_path_factory, monkeypatch):
         hook = folder / name
         hook.write_text("#!/bin/sh\n", encoding="utf-8")
         hook.chmod(0o755)
+    # **닿는 전역 훅 흉내다** (D-0440). 빈 파일을 두면 「걸려 있다」는 통과하고
+    # 「도달」은 실패하는데, 실물에서 그 조합이 바로 고장 난 기기다.
+    (folder / "pre-commit").write_text(
+        f'#!/bin/sh\n[ -n "${{{module.HOOK_PROBE}:-}}" ] && echo "{module.SENTINEL}"\n',
+        encoding="utf-8",
+    )
+    (folder / "pre-commit").chmod(0o755)
     monkeypatch.setattr(
         module,
         "_git",
@@ -422,3 +429,108 @@ def test_둘_다_없으면_CPU라고_말한다(monkeypatch):
 def test_mps_백엔드가_없는_옛_torch도_견딘다(monkeypatch):
     """**없는 것을 묻다 터지면 `doctor` 전체가 죽는다.**"""
     assert _accelerator(monkeypatch, cuda=False, mps=None)[0] == "없음"
+
+
+# ---------------------------------------------- 훅 도달 (D-0440)
+
+
+def _global_hook(folder: Path, body: str) -> Path:
+    """전역 훅 흉내. `body`가 저장소 훅에 닿는 부분이다."""
+    hook = folder / "pre-commit"
+    hook.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+    hook.chmod(0o755)
+    return hook
+
+
+def test_전역_훅이_저장소_훅을_부르면_닿는다(tmp_path):
+    """**도달은 실행으로 잰다** (D-0440).
+
+    전역 훅이 저장소의 `.githooks/pre-commit`을 부르면 탐침 한 줄이 나온다.
+    """
+    from hathor.interfaces.cli import doctor as module
+
+    repo = tmp_path / "repo"
+    (repo / ".githooks").mkdir(parents=True)
+    probe = repo / ".githooks" / "pre-commit"
+    probe.write_text(
+        f'#!/bin/sh\n[ -n "${{{module.HOOK_PROBE}:-}}" ] && echo "{module.SENTINEL}"\n',
+        encoding="utf-8",
+    )
+    probe.chmod(0o755)
+    folder = tmp_path / "githooks"
+    folder.mkdir()
+    _global_hook(folder, "exec ./.githooks/pre-commit")
+
+    assert module.chain_reaches(folder, repo) is True
+
+
+def test_저장소_훅_앞에서_끝나면_안_닿는다(tmp_path):
+    """**fire-lane이 한 판을 속은 자리다.**
+
+    전역 훅이 `exit 0` 뒤에 저장소 훅 호출을 달고 있으면 파일은 멀쩡하고
+    「걸려 있다」도 통과한다. **커밋 시점 검사는 하나도 안 돈다.**
+    """
+    from hathor.interfaces.cli import doctor as module
+
+    folder = tmp_path / "githooks"
+    folder.mkdir()
+    _global_hook(folder, "exit 0\nexec ./.githooks/pre-commit")
+
+    assert module.chain_reaches(folder, tmp_path) is False
+
+
+def test_전역_훅이_없으면_판정을_안_한다(tmp_path):
+    """**경보를 두 번 울리지 않는다** (GR-0.8). 없다는 것은 `HOOKS` 검사가 말한다."""
+    from hathor.interfaces.cli import doctor as module
+
+    folder = tmp_path / "githooks"
+    folder.mkdir()
+
+    assert module.chain_reaches(folder, tmp_path) is None
+
+
+def test_도달_검사가_화면에_걸려_있다(hooks, tmp_path, monkeypatch, capsys):
+    """**안 걸면 안 돈다** (D-0126). `run_doctor`가 `chain_reaches`를 부르는지 본다."""
+    from hathor.interfaces.cli import doctor as module
+    from hathor.interfaces.cli.main import main
+
+    fake = tmp_path / "projects" / "hathor"
+    (fake / "core").mkdir(parents=True)
+    (fake / "docs").mkdir()
+    (fake / "Makefile").write_text("x", encoding="utf-8")
+    (fake / ".env").write_text("", encoding="utf-8")
+    monkeypatch.setattr("hathor.interfaces.cli.doctor.repo_root", lambda: fake)
+    monkeypatch.setattr(module, "chain_reaches", lambda folder, root: False)
+
+    main(["doctor"])
+
+    assert "훅 도달" in capsys.readouterr().out, "도달 검사가 화면에 없다"
+
+
+def test_우리_훅이_탐침에_답한다():
+    """**우리 쪽 고리를 실물로 잰다** (D-0440).
+
+    위의 셋은 가짜 훅을 세워 `chain_reaches`의 셈만 본다 — 탐침을 `.githooks/pre-commit`
+    에서 떼어도 전부 초록이고, 그러면 **멀쩡한 기기에서 「안 닿는다」가 뜬다**
+    (D-0292 · 거짓 경보는 안내가 없는 것보다 나쁘다). 실물을 돌려 그 자리를 막는다.
+
+    **검사를 하나도 안 돌린다** — 탐침은 찍고 바로 끝낸다.
+    """
+    import subprocess
+
+    from hathor.interfaces.cli import doctor as module
+    from hathor.shared.config.paths import repo_root
+
+    root = repo_root()
+    done = subprocess.run(
+        ("bash", str(root / ".githooks" / "pre-commit")),
+        cwd=root,
+        env={**os.environ, module.HOOK_PROBE: "1"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert module.SENTINEL in done.stdout, "저장소 훅이 탐침에 답을 안 한다"
+    assert done.returncode == 0
