@@ -35446,3 +35446,62 @@ D-0377이 *«패치에 안 싣고 받는 쪽이 다시 만드는 것»*을 `AFTE
     `core/tests/unit/test_decision_repro.py::test_지금_저장소가_바닥_뒤로는_깨끗하다`
 
 자료  실물 그의 기기 — `command not found` 1회 · 같은 꼴 3건 · 소급 바닥 D-0431
+
+---
+
+## D-0432. **시험이 셈을 재고 배선은 안 쟀다** — 안 운 자리 9곳
+
+> **갱신 — D-0424 · D-0426.** 그 둘이 넣은 배선 넷이 여기 들어 있다. 당시
+> `make check`은 초록이었다 — **배선 검사는 주 1회라 판마다 안 돈다.**
+
+- **배경**: 월요일 `wiring` 전수가 빨개졌다.
+
+      안 운 배선 9곳 (천장 0): ['check_patch:merged_head', 'probe_tempo:envelopes',
+        'tree_guard:fingerprint', 'tree_guard:where', 'tree_guard:where',
+        'tree_guard:changed', 'watch_papers:arxiv', 'watch_papers:lines',
+        'watch_papers:write']
+
+  **넷이 내 것이다** — `watch_papers` 셋(D-0424)과 `check_patch:merged_head`(D-0426).
+  나머지 다섯(`tree_guard` 넷 · `probe_tempo` 하나)은 그 전부터 있었다.
+
+  **아홉 다 시험은 있었다.** `test_watch_papers`는 `arxiv()`를 열두 번 부르고
+  `test_tree_guard`는 `changed()`를 직접 부른다. 다만 **전부 함수를 바로 불렀다** —
+  `main()` 안의 그 줄을 지워도 시험은 멀쩡하다. **재는 것이 셈이지 배선이 아니었다**
+  (D-0126).
+
+- **결과**: `test_wiring_entrypoints`를 만들었다. 네 도구를 **입구로만 몬다.**
+
+  - 셈은 다시 안 잰다 — 각 도구의 시험 파일이 이미 본다. 여기서 보는 것은
+    **그 셈이 `main()`에 걸려 있는가**뿐이다.
+  - `tree_guard`는 `ROOT`·`WATCHED`를 가짜로 돌린다. 이 도구가 막으려는 사고가
+    *«시험이 실물 저장소를 고쳤다»*이므로 **이 시험이 그 사고를 내면 안 된다** (D-0398).
+  - 끊어 보기 재실측: **9곳 → 0곳.** `check_patch:has_parent`는 1건에서 2건으로
+    늘었다 — 새 시험이 그 자리도 같이 문다.
+
+- **후보**: `WIRING_CEILING`을 9로 올리고 기록을 쓰는 길이 열려 있었다 (D-0353이
+  그렇게 적어 뒀다).
+- **선택**: **안 올렸다** (D-0117). 천장을 올리면 **다음 판의 안 운 배선이 그 9 안에
+  숨는다** — 래칫이 세는 것은 수인데, 수가 느슨해지면 이름이 안 찍힌다.
+
+### 남기는 것
+
+- **주 1회짜리 관문은 네 판 뒤에 빨개진다.** D-0424가 심었고 D-0426이 하나 더
+  얹었는데 터진 것은 D-0431 다음이다. 그 사이 다섯 판이 *«전부 초록»*을 보고 지나갔다.
+  **판마다 도는 것과 주 1회 도는 것은 다른 관문이다** — 후자는 빚이 쌓이는 자리다.
+- **시험이 있다는 것과 배선을 문다는 것은 다르다.** 아홉 전부 시험이 있었고 전부
+  초록이었다. `mutate_gate`가 없었으면 **배선이 끊긴 날 아무도 몰랐을 것이다.**
+- **내가 새 도구를 넣을 때마다 이 자리를 안 봤다.** `watch_papers`를 만들며 시험을
+  열세 개 썼는데 **`main()`을 한 번도 안 불렀다.** 도구를 넣으면 입구를 한 번은
+  지나는 시험이 필요하다 — 그것이 D-0126의 모양이다.
+
+재현
+    ONLY="watch_papers check_patch tree_guard probe_tempo" WIRING=1 python3 tools/mutate_gate.py
+    cd core && uv run pytest tests/unit/test_wiring_entrypoints.py -q
+
+강제자
+    `core/tests/unit/test_wiring_entrypoints.py::test_논문_훑기_입구가_셋을_다_부른다`
+    `core/tests/unit/test_wiring_entrypoints.py::test_나무_지킴이_입구가_넷을_다_부른다`
+    `core/tests/unit/test_wiring_entrypoints.py::test_패치_검사_입구가_합본을_가른다`
+    `core/tests/unit/test_wiring_entrypoints.py::test_템포_반쪽_입구가_포락선을_읽는다`
+
+자료  실물 이 저장소 — 안 운 배선 9 → 0 · 천장 0 유지 · 도구 4개 재실측
