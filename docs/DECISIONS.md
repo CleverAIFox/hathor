@@ -35868,3 +35868,60 @@ D-0377이 *«패치에 안 싣고 받는 쪽이 다시 만드는 것»*을 `AFTE
     `core/tests/unit/test_doc_speech.py::test_그물이_안_비었다`
 
 자료  실물 이 저장소 — 구어체 인용 53 → 0 · 고친 기록 47판 · 후보 5갈래 75건 중 오탐 2 → 0 · 발화 동사 분기 오탐 25/50으로 기각
+
+---
+
+## D-0439. **맥북이 설 길을 아무도 안 재고 있었다** — 설정 예외를 지우고 원인을 고쳤다
+
+> **갱신 — D-0061.** `warn_unused_ignores = false` 예외를 **지웠다.** 환경 차이를
+> 덮는 대신 두 환경이 같은 답을 내게 고쳤다.
+
+- **배경**: D-0425로 맥북 M5가 들어왔고 **거기는 `gpu` 추가분을 안 깐다.** 그 환경에서
+  `mypy`가 도는지 아무도 안 봤다 — 로컬 `make check`는 전부 깔린 기기에서 돌고,
+  **CI 일곱 잡이 모두 `--all-extras`다.** 안 재면 없는 것이 아니라 **안 본 것이다**
+  (GR-0.5 · D-0305).
+
+- **결과**: `uv sync --extra music --extra api --group dev`로 따로 깔아 재니
+  **죽은 `type: ignore` 둘**이 나왔다. 넷으로 갈라 쟀다.
+
+  | | gpu 있음 | gpu 없음 |
+  |---|---|---|
+  | 고치기 전 (예외 살아 있음) | 0건 | **1건** — `clap` |
+  | 고치기 전 (예외 지움) | 0건 | **2건** — `clap` · `mert` |
+  | 고친 뒤 (예외 지움) | **0건** | **0건** |
+
+  `transformers`가 없으면 `AutoProcessor`가 `Any`가 되고, 그러면 `no-untyped-call`이
+  안 나서 **그 표지가 죽은 것이 된다.** 한쪽에서 필요한 표지가 다른 쪽에서 오류다.
+
+- **예외를 늘리지 않고 지웠다.** D-0061이 `mert` 한 모듈에 `warn_unused_ignores =
+  false`를 걸어 덮어 뒀고, **CLAP은 나중에 생겨 빠졌다.** 같은 꼴이 셋째가 되기 전에
+  원인을 고친다 — 호출 대상을 `Any` 이름으로 한 번 받으면 표지가 필요 없다.
+
+      factory: Any = AutoProcessor
+      self._processor: Any = factory.from_pretrained(model_name)
+
+  **덮는 쪽이 더 나쁜 이유**는 그 모듈의 **진짜 죽은 ignore도 같이 안 보이기**
+  때문이다. 예외표는 늘리는 것이 아니라 비우는 것이다 (D-0117).
+
+- **관문**: `ci.yml`에 `no-gpu` 잡을 **새로 걸었다.** `--all-extras`를 안 쓰는 것이
+  이 잡의 전부다. torch를 안 받으므로 가볍다.
+
+### 남기는 것
+
+- **로컬 `make check`는 여전히 한쪽만 본다.** 이 길은 CI에서만 돈다 — 그가 맥에서
+  `make check`를 돌리면 그때 로컬에서도 돈다. **두 기기가 같은 명령으로 같은 답을
+  내는지**는 아직 안 쟀고, 그것이 장비 계획이 답할 물음이다 (D-0425).
+- **`tools`는 이 잡이 안 본다.** gpu 없는 환경에서 `mypy ../tools`를 돌리면 `docs`
+  묶음이 없어 **21건**이 뜬다 — `python-docx`·`pypandoc` 미설치다. 그것은 이 결정이
+  다루는 환경 차이가 아니라 **그룹 선택의 문제**라 섞지 않았다. 재려면 묶음을 같이
+  깔아야 하고, 그러면 이 잡이 가벼운 이유가 사라진다.
+
+재현
+    cd core && UV_PROJECT_ENVIRONMENT=/tmp/venv_nogpu uv sync --extra music --extra api --group dev
+    cd core && UV_PROJECT_ENVIRONMENT=/tmp/venv_nogpu uv run mypy hathor --strict
+
+강제자
+    `core/tests/unit/test_gh_setup.py::test_gpu_없는_환경을_재는_잡이_있다`
+    `core/tests/unit/test_gh_setup.py::test_죽은_표지를_설정으로_안_덮는다`
+
+자료  실물 이 컨테이너 — 162개 모듈 · gpu 없이 죽은 ignore 2건 → 0건 · 설정 예외 1건 → 0건 · CI 잡 7 → 8

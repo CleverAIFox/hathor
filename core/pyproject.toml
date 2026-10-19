@@ -120,12 +120,10 @@ ignore_missing_imports = true
 warn_unreachable = true
 disallow_any_generics = true
 
-# GPU 엑스트라가 없는 기기에서는 torch 스텁이 없어 이 파일의 `type: ignore`가
-# 불필요해 보인다. **환경 차이이며 결함이 아니다** (D-0061). 전역으로 끄지 않고
-# 이 모듈에서만 끈다 — 다른 곳의 죽은 ignore는 계속 잡아야 한다.
-[[tool.mypy.overrides]]
-module = ["hathor.infrastructure.mert_feature_extractor"]
-warn_unused_ignores = false
+# D-0061이 여기에 `warn_unused_ignores = false` 예외를 뒀다 — GPU 추가분이 없는
+# 기기에서 `type: ignore`가 죽은 것처럼 보이는 **환경 차이**를 덮으려던 것이다.
+# **D-0439가 예외를 지우고 원인을 고쳤다.** 호출 대상을 `Any`로 받으면 두 환경이
+# 같은 답을 내므로 표지 자체가 필요 없다. 예외표는 늘리는 것이 아니라 비우는 것이다.
 
 # D-0263. `tools/`를 검사에 넣으면서 걸린 둘. **상류가 주석을 안 내보낸다.**
 # `psutil`은 선택 의존이고(step0_check이 없어도 돌게 만든 자리다) 깔린 기기와 안 깔린

@@ -91,7 +91,12 @@ class ClapFeatureExtractor:
         # MERT와 같은 모양이다 — 먼저 받고 나서 옮긴다. 이어 붙이면 타입이 `Any`를 벗어난다.
         model: Any = ClapModel.from_pretrained(model_name)
         self._model: Any = model.to(device).eval()
-        self._processor: Any = AutoProcessor.from_pretrained(model_name)  # type: ignore[no-untyped-call]
+        # **`type: ignore`를 안 쓴다.** `transformers`에 형 정보가 붙는지 여부가
+        # `gpu` 추가분 설치에 따라 갈려서, 한쪽에서는 필요한 표지가 다른 쪽에서는
+        # *«안 쓰는 ignore»*가 됐다 — mypy가 그것도 오류로 센다. `Any`로 받으면
+        # 두 환경에서 같은 답이 나온다 (D-0009).
+        factory: Any = AutoProcessor
+        self._processor: Any = factory.from_pretrained(model_name)
         self._device = device
         if self.dimension != CLAP_DIMENSION:
             # 체크포인트를 바꾸면 여기서 먼저 죽는다. 조용히 다른 차원을 쌓으면

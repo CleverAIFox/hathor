@@ -87,9 +87,11 @@ class MertFeatureExtractor:
 
         self._model: Any = AutoModel.from_pretrained(model_name, trust_remote_code=True)
         self._model = self._model.to(device).eval()
-        self._processor: Any = AutoFeatureExtractor.from_pretrained(  # type: ignore[no-untyped-call]
-            model_name, trust_remote_code=True
-        )
+        # **`type: ignore`를 안 쓴다** (D-0439). 이 표지가 필요한지가 `gpu` 추가분
+        # 설치에 따라 갈려서, 한쪽에서 필요한 것이 다른 쪽에서는 죽은 ignore가 됐다.
+        # `Any`로 받으면 두 환경이 같은 답을 낸다 — 설정 예외가 필요 없어진다.
+        factory: Any = AutoFeatureExtractor
+        self._processor: Any = factory.from_pretrained(model_name, trust_remote_code=True)
         self._device = device
         self._layers = tuple(sorted(set(layers)))
 

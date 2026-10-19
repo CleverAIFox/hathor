@@ -227,6 +227,25 @@ jobs:
         working-directory: .
         run: python3 tools/check_under_load.py --check
 
+  # gpu 추가분 없는 기기를 재는 유일한 자리다 (D-0439). 도는 도구는 `mypy`로
+  # `make check`와 같다 — **다른 것은 깐 것뿐**이라 CI 전용 선언을 안 단다.
+  # 맥북(M5)이 정확히 이 환경이고, 거기서 깨지면 여기서 먼저 빨개져야 한다.
+  no-gpu:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      # **`--all-extras`를 쓰지 않는다.** 그것이 이 잡의 전부다 (D-0439).
+      - run: uv sync --extra music --extra api --group dev
+        working-directory: core
+
+      - name: Types without the gpu extra
+        working-directory: core
+        run: uv run mypy hathor --strict
+
   secret-scan:
     runs-on: ubuntu-24.04
     steps:
