@@ -95,7 +95,7 @@ state = "있음"
 [series."keys-*.series"]
 what = "곡별 크로마 시계열 — 창 단위 (D-0105)"
 made = "core/hathor/infrastructure/chroma_series_store.py"
-regen = "cd core && uv run python -m hathor.cli ingest keys --from-bundles --series"
+regen = "cd core && uv run python -m hathor.cli ingest keys --from-bundles"
 reads = ["generate --transitions", "eval harmony-order", "D-0098"]
 store = true
 state = "있음"

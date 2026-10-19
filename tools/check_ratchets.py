@@ -390,6 +390,7 @@ BASELINE: dict[str, int] = {
     "mutate_gate.UNAIMED_CEILING": 1,
     "mutate_gate.WIRING_CEILING": 0,
     "render_proposal.FLOOR_SLOTS": 5,
+    "test_artifacts_regen.FLOOR": 10,
     "test_gate_tools.UNTESTED": 0,
     "test_gate_types.UNTYPED_FAKES": 0,
     "test_hygiene.SYNC_ALLOWED": 5,
