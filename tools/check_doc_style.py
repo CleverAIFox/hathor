@@ -21,6 +21,16 @@
 **레이아웃은 다르다.** 줄 길이·행끝 공백·표 앞 빈 줄을 고쳐도 **주장이 한 글자도
 안 바뀐다.** 그래서 소급해서 고쳐도 D-0081에 안 걸린다.
 
+**말투도 소급한다** (D-0438). 나는 위 기준을 들어 *«인용문은 증거라서 못 고친다»*고
+했고 **사용자가 뒤집었다.** 둘을 가르는 선은 「주장이 바뀌는가」지 「인용인가」가
+아니다 — *«왜 두 벌이 되는 거야?»*를 *«왜 두 벌이 되는가»*로 옮겨도 **그 세션이
+생각한 것은 한 글자도 안 바뀐다.** 바뀌는 것은 정본이 사람 말투를 흉내 내는가뿐이고,
+그것은 기록이 져야 할 것이 아니다. 실제로 소급한 52곳에서 **주장이 달라진 자리는
+없다** — D-0438이 전후를 나란히 둔다.
+
+**발화가 자료인 자리는 예외다.** 귀 판정은 원문이 측정값이라 옮기면 자료가 사라진다.
+그 여섯 곳은 `ALLOW` 표지를 달았다.
+
 ### 규칙 여섯
 
 1. 행끝 공백 금지
@@ -32,6 +42,7 @@
 7. 살아 있는 문서 하위 절의 `**강조**`가 열여섯을 넘지 않을 것
 8. 결정 기록에 `강제자` (전수) · `재현` (D-0135 이후분)
 9. **여섯 번째 문서 금지** — `docs/`에 축 셋 말고 다른 문서가 생기지 않는가
+10. **결정 기록의 인용에 구어체가 없을 것** (D-0438). 셈은 `doc_speech`에 산다
 
 **넷은 이미 위반 0이었다.** 규칙을 새로 만든 것이 아니라 **지켜지고 있던 것을
 적어 둔 것이다** — 그래서 다음 세션이 어길 때만 빨개진다.
@@ -50,6 +61,7 @@ import sys
 from pathlib import Path
 
 from decision_ledger import keeper_text
+from doc_speech import record_of, speech
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -254,6 +266,19 @@ def _has_keeper(body: str) -> bool:
     줄 머리로 묻는다 — 둘은 다른 질문이고, 한 함수로 합치면 «없음»이 «칸이 없다»가 된다.
     """
     return bool(_field(body, "강제자"))
+
+
+def check_speech(name: str, text: str) -> list[str]:
+    """규칙 10 — **결정 기록은 구어를 그대로 담지 않는다** (D-0438).
+
+    셈은 `doc_speech`에 산다. **인용 덩어리가 줄을 넘기 때문**이고, 이 파일의 검사는
+    전부 줄 단위다 (D-0304 — 파서를 한 자리에).
+    """
+    return [
+        f"{name}:{line} {record_of(text, line)} 구어체 인용. 간접 서술로 옮긴다"
+        f" — «{quoted[:50]}» (D-0438)"
+        for line, quoted in speech(text, ALLOW)
+    ]
 
 
 def check_records(name: str, text: str) -> list[str]:
@@ -486,6 +511,7 @@ def check() -> list[str]:
             problems.extend(check_bold_density(name, text))
         if name.startswith(PAST):
             problems.extend(check_records(name, text))
+            problems.extend(check_speech(name, text))
     return problems
 
 
