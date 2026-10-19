@@ -154,6 +154,22 @@ store = true
 state = "있음"
 
 
+[series."musicfm"]
+what = "MusicFM 임베딩 — 셋째 취향 축 후보, 1004곡 (O-68 · D-0413 · D-0417)"
+made = "core/hathor/interfaces/cli/eval_musicfm.py"
+regen = "cd core && uv run python -m hathor.cli eval musicfm"
+reads = ["O-79 — 지도학습 축의 입력 후보 (D-0418)", "eval retrieval --features", "D-0418"]
+store = true
+state = "있음"
+why = """**검색 축으로는 닫혔다** (D-0418). `layer03` M2 MAP@10 0.0859가 40차원 MFCC
+0.0899에 졌고 MERT는 0.2145다. **그런데 안 지운다** — 지도학습 축을 세울 때 입력
+후보로 다시 쓴다. 비지도 검색에서 졌다고 지도학습에서 진다는 근거는 없다 (GR-0.5).
+
+**교두보에 올린다.** 다시 뽑는 값이 **78.6분 + CUDA**이고(D-0417 실측) 맥북에는 CUDA가
+없다 (D-0425). 리전이 죽으면 O-79가 입력 후보를 잃는다 — 275.8MB가 그보다 싸다.
+음원이 아니라 임베딩이므로 D-0015에 안 걸린다."""
+
+
 [series."clap"]
 what = "CLAP 임베딩 — 상업 가능한 취향 축 (O-68 · D-0231)"
 made = "core/hathor/interfaces/cli/eval_clap.py"
