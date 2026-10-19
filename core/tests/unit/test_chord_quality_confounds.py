@@ -228,6 +228,26 @@ def test_선언이_있으면_선언이_이긴다(tmp_path: Path) -> None:
     assert series_settings(series)["window_seconds"] == 2.0
 
 
+def test_선언에_없는_칸은_형제가_채운다(tmp_path: Path) -> None:
+    """**«선언이 없으면»만 보고 «칸이 없으면»을 안 봤다** (D-0434 · D-0305를 넓힌다).
+
+    2026-09-30 폴더는 **선언은 있는데 `series_seconds`가 없었다.** 선언이 있다는
+    이유로 거기서 돌아서는 바람에 형제 `jsonl`에 적힌 2.0을 못 봤고,
+    `ingest thumbnails`가 *«창 번호를 초로 못 옮긴다»*로 죽었다 — **길이 둘인데
+    하나를 밟으면 다른 하나가 닫혔다.**
+    """
+    series = _plant_jsonl(tmp_path, series_seconds=2.0, chroma_mode="cq")
+    (series / f"{series.name}.manifest.json").write_text(
+        json.dumps({"revision": "abc1234", "stem": "other"}), encoding="utf-8"
+    )
+
+    found = series_settings(series)
+
+    assert found["window_seconds"] == 2.0, "선언이 있다고 형제를 안 봤다"
+    assert found["chroma_mode"] == "cq"
+    assert found["revision"] == "abc1234", "선언을 덮었다"
+
+
 def test_형제가_깨졌어도_터지지_않는다(tmp_path: Path) -> None:
     """**보고가 조건 한 칸 때문에 죽지 않는다.** 끊긴 배치는 마지막 줄이 잘려 있다 (D-0077)."""
     series = tmp_path / "keys-20260916T115536Z.series"

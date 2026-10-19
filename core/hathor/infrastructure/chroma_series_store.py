@@ -157,19 +157,25 @@ def series_settings(root: Path) -> dict[str, object]:
 
     ### 선언이 없어도 형제 `jsonl`이 안다 (D-0305)
 
-    `artifact_manifest`는 D-0295부터 쓰므로 **그 전에 뽑은 시계열에는 선언이 없다.** 첫
+    **선언이 이기고, 없는 칸만 행이 채운다** (D-0434). `artifact_manifest`는 D-0295부터
+    쓰므로 **그 전에 뽑은 시계열에는 선언이 없다.** 첫
     실측이 그 자리에 `?`를 찍었는데, `series_seconds`는 D-0073부터 **`keys.jsonl`의 매
     행에 적혀 있었다.** 선언이 없으면 거기서 읽는다 — *"없는 것"*이 아니라 *"안 본 것"*
     이었다.
 
     형제 파일 이름은 `ingest_keys`가 `.keys.jsonl` -> `.series`로 만든 짝이다.
     """
+    declared: dict[str, object] = {}
     path = root / f"{root.name}{artifact_manifest.SUFFIX}"
     if path.exists():
         loaded: object = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(loaded, dict):
-            return loaded
-    return _from_rows(root.with_suffix(".keys.jsonl"))
+            declared = loaded
+    # **선언이 있어도 그 칸이 없을 수 있다** (D-0434). D-0305는 *«선언이 없으면»*만
+    # 봤고, 2026-09-30 폴더는 **선언은 있는데 `series_seconds`가 없었다.** 거기서
+    # 일찍 돌아서는 바람에 형제 `jsonl`에 적힌 2.0을 못 봤다 — **길이 둘인데 하나를
+    # 밟으면 다른 하나가 닫혔다.** 선언이 이기되 **없는 칸만 행이 채운다.**
+    return {**_from_rows(root.with_suffix(".keys.jsonl")), **declared}
 
 
 SETTING_KEYS = ("series_seconds", "chroma_mode", "aggregate", "profile", "separated")
