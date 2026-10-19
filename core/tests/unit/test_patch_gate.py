@@ -27,6 +27,16 @@ def _problems(name: str) -> list[str]:
     return cast("list[str]", getattr(CHECKER, name)())
 
 
+def _not_merged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**합본 커밋 위에서도 뽑기 자체를 재게 한다** (D-0433).
+
+    `pull_once`는 합본에서 건너뛴다 (D-0426). 그 규율은 맞지만, **가짜 뽑기를 먹여
+    출력 처리를 보는 시험**까지 건너뛰면 그 시험들이 PR 빌드에서 **빈 목록을 받고
+    빨개진다.** 건너뛰기는 제 시험이 따로 본다 (`test_합본_커밋이면_뽑기를_건너뛴다`).
+    """
+    monkeypatch.setattr(CHECKER, "merged_head", lambda: False)
+
+
 # ------------------------------------------------------------------ 저장소
 
 
@@ -169,6 +179,7 @@ def test_이_저장소도_뽑힌다() -> None:
 
 def test_뽑기가_망가지면_운다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """**뽑기가 터지는데 통과하면 그것이 빈 그물이다** (D-0230)."""
+    _not_merged(monkeypatch)
     broken = tmp_path / "make_patch.sh"
     broken.write_text("#!/usr/bin/env bash\nexit 7\n", encoding="utf-8")
     monkeypatch.setattr(CHECKER, "MAKER", broken)
@@ -180,6 +191,7 @@ def test_뽑기가_망가지면_운다(tmp_path: Path, monkeypatch: pytest.Monke
 
 def test_머리를_안_쓰는_뽑기를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """머리 없이 성공하는 뽑기는 **통과시키면 안 된다.**"""
+    _not_merged(monkeypatch)
     silent = tmp_path / "make_patch.sh"
     silent.write_text(
         '#!/usr/bin/env bash\nprintf "diff --git a/x b/x\\n" > "$OUT"\n', encoding="utf-8"
@@ -302,6 +314,7 @@ def test_뒤처리를_빠뜨린_뽑기를_잡는다(tmp_path: Path, monkeypatch:
     **건드린 경로를 손에 쥔다** (D-0379 · D-0353). `HEAD`에 물으면 그날 커밋이
     제출본을 건드렸느냐에 따라 판정이 갈린다.
     """
+    _not_merged(monkeypatch)
     blind = tmp_path / "make_patch.sh"
     blind.write_text(
         "#!/usr/bin/env bash\n"
@@ -325,8 +338,11 @@ def test_뽑은_패치가_산출물을_안_담는다(tmp_path: Path) -> None:
     docx는 받는 기기의 blob과 달라 **담으면 `git apply`가 이진 전제에서 터진다** —
     실측으로 한 번 터졌다. 빼는 것과 「뒤처리를 적는 것」은 **같이** 일어나야 한다:
     빼고 안 적으면 산출물이 낡고, 적고 안 빼면 패치가 안 붙는다.
+
+    **실물 `HEAD`를 뽑으므로 합본 커밋에서는 못 돈다** (D-0433). 깃허브가 만든 합본도,
+    그 아래 봇 커밋도 제목이 `D-XXXX.`가 아니다 — **뽑을 커밋이 아예 없다.**
     """
-    if not cast("bool", CHECKER.has_parent()):
+    if not cast("bool", CHECKER.has_parent()) or cast("bool", CHECKER.merged_head()):
         return
 
     out = tmp_path / "뽑은.patch"

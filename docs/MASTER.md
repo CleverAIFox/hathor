@@ -2890,6 +2890,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0430 | **취향을 먼저 재지 않는다** | `core/tests/unit/test_thumbnail.py::test_반복되는_구간을_집는다` | 실물 그의 기기 — POPM 1004/1004 · 별점 255 하나 · 재생수 0 하나 · 변량 0 · 합성 (셈 검증) |
 | D-0431 | **재현이 그대로 안 돌았다** | `core/tests/unit/test_decision_repro.py::test_그대로_안_도는_재현을_잡는다` | 실물 그의 기기 — `command not found` 1회 · 같은 꼴 3건 · 소급 바닥 D-0431 |
 | D-0432 | **시험이 셈을 재고 배선은 안 쟀다** | `core/tests/unit/test_wiring_entrypoints.py::test_논문_훑기_입구가_셋을_다_부른다` | 실물 이 저장소 — 안 운 배선 9 → 0 · 천장 0 유지 · 도구 4개 재실측 |
+| D-0433 | **도구는 건너뛰는데 시험은 안 건너뛰었다** | `core/tests/unit/test_patch_gate.py::test_머리를_안_쓰는_뽑기를_잡는다` | 실물 그의 저장소 — PR #15 quality 실패 4건 · 미러 합본 재현 4/4 · 고친 뒤 34/34 통과 |
 
 <!-- decision-ledger:end -->
 
