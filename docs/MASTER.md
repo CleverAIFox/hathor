@@ -2893,6 +2893,7 @@ fire-lane에 있었고 — *«서식이 곧 스키마인데 아무도 그렇게 
 | D-0433 | **도구는 건너뛰는데 시험은 안 건너뛰었다** | `core/tests/unit/test_patch_gate.py::test_머리를_안_쓰는_뽑기를_잡는다` | 실물 그의 저장소 — PR #15 quality 실패 4건 · 미러 합본 재현 4/4 · 고친 뒤 34/34 통과 |
 | D-0434 | **길이 둘인데 하나를 밟으면 다른 하나가 닫혔다** | `core/tests/unit/test_chord_quality_confounds.py::test_선언에_없는_칸은_형제가_채운다` | 실물 그의 기기 — 형제 jsonl `series_seconds: 2.0` · 도구는 «선언이 없다» · 합성 (셈 재현) |
 | D-0435 | **40곡이 1004곡을 가렸다, 이번엔 도구가** | `core/tests/unit/test_thumbnails_cli.py::test_고른_폴더와_곡_수를_적는다` | 실물 그의 기기 — 폴더 3개(1004 · 40 · 0곡) · 고른 것 40곡 · 1004곡 점수 0.728~1.000 |
+| D-0436 | **합친 뒤에 또 빨개졌다** | `core/tests/unit/test_patch_gate.py::test_봇이_쓴_커밋이면_뽑기를_건너뛴다` | 실물 그의 저장소 — push CI 실패 2잡(quality · gates-under-load) · 같은 메시지 5회 |
 
 <!-- decision-ledger:end -->
 

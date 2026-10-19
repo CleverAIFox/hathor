@@ -229,12 +229,48 @@ def merged_head() -> bool:
     return len(done.stdout.split()) > 2
 
 
+BOT = "github-actions[bot]"
+"""봇의 이름. `papers.yml`이 `git config user.name`에 적는 값과 **같아야 한다** (D-0043).
+
+`test_patch_gate.py::test_봇_이름이_워크플로와_같다`가 둘을 대조한다.
+"""
+
+
+def bot_head() -> bool:
+    """`HEAD`를 **봇이 썼나** (D-0436).
+
+    봇 PR을 스쿼시로 합치면 **부모가 하나라 합본이 아니다.** `merged_head`가 못 잡고,
+    올라간 제목은 `읽을 후보: …`라 `make patch`가 거절한다 — **main의 push CI가
+    빨개졌다.** D-0426이 본 것은 PR 빌드였고 이것은 합친 **뒤**다.
+    """
+    done = subprocess.run(
+        ["git", "log", "-1", "--format=%an", "HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    return done.stdout.strip() == BOT
+
+
+def ours() -> bool:
+    """`HEAD`가 **우리가 보낼 패치인가** (D-0436).
+
+    뽑기 관문은 *«우리가 보낸 패치가 기준 위에서 붙나»*를 묻는다. 우리가 안 쓴
+    커밋에서는 **물음 자체가 성립하지 않는다.** 아닌 경우가 둘로 늘었고 셋째가 올
+      때마다 조건을 또 덧붙이지 않도록 **이름을 하나 둔다.**
+    """
+    return not merged_head() and not bot_head()
+
+
 def pull_once() -> list[str]:
     """**`HEAD`를 실제로 뽑아 본다.** 뽑기 자신이 기준 위에서 붙여 보고 트리까지 맞춘다.
 
-    합본 커밋에서는 **건너뛴다.** 조용히는 아니다 — 요약 줄이 «건너뜀»을 찍는다 (D-0230).
+    우리가 안 쓴 커밋에서는 **건너뛴다.** 조용히는 아니다 — 요약 줄이 «건너뜀»을
+    찍는다 (D-0230).
     """
-    if merged_head():
+    if not ours():
         return []
     with tempfile.TemporaryDirectory() as box:
         out = Path(box) / "시험.patch"
@@ -290,6 +326,8 @@ def main() -> int:
         ran = "뽑기 **안 돌렸다**(부모 없음 · 얕은 클론)"
     elif merged_head():
         ran = "뽑기 **건너뜀**(합본 커밋 — PR 빌드다 · D-0426)"
+    elif bot_head():
+        ran = f"뽑기 **건너뜀**({BOT}가 쓴 커밋이다 · D-0436)"
     else:
         ran = "뽑기 실측 1판"
     print(

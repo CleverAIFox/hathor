@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import cast
 
@@ -466,3 +467,54 @@ def test_보통_커밋이면_안_건너뛴다(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(CHECKER, "ROOT", folder)
 
     assert CHECKER.merged_head() is False
+
+
+# ----------------------------------- 합친 뒤의 봇 커밋 (D-0436)
+
+
+def test_봇이_쓴_커밋이면_뽑기를_건너뛴다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**스쿼시로 합치면 부모가 하나라 합본이 아니다** (D-0436).
+
+    D-0426이 본 것은 PR 빌드였고 이것은 **합친 뒤 `main`의 push CI**다. 올라간 제목이
+    `읽을 후보: …`라 `make patch`가 거절했고 관문이 빨개졌다 — **우리가 안 쓴
+    커밋에서는 뽑기라는 물음 자체가 성립하지 않는다.**
+
+    **돌았는지를 자국으로 본다.** 첫 판은 빈 목록만 봤고, 그래서 `ours()`에서
+    `bot_head()`를 떼어 내도 **시험이 초록이었다** — 미러의 `HEAD`가 진짜로 뽑히는
+    커밋이라 뽑기가 성공하고 빈 목록이 돌아왔다. **빈 그물이었다** (D-0230).
+    """
+    mark = tmp_path / "돌았다"
+    maker = tmp_path / "make_patch.sh"
+    maker.write_text(f'#!/usr/bin/env bash\ntouch "{mark}"\nexit 7\n', encoding="utf-8")
+    for name in ("check_heads", "check_floor", "check_after_table"):
+        monkeypatch.setattr(CHECKER, name, lambda: [])
+    monkeypatch.setattr(CHECKER, "MAKER", maker)
+    monkeypatch.setattr(CHECKER, "has_parent", lambda: True)
+    monkeypatch.setattr(CHECKER, "merged_head", lambda: False)
+    monkeypatch.setattr(CHECKER, "bot_head", lambda: True)
+    monkeypatch.setattr(sys, "argv", ["check_patch.py", "--check"])
+
+    assert _problems("pull_once") == []
+    assert not mark.exists(), "봇 커밋인데 뽑기를 실제로 돌렸다"
+    assert CHECKER.main() == 0
+    said = capsys.readouterr().out
+
+    assert "건너뜀" in said
+    assert CHECKER.BOT in said, "누가 쓴 커밋이라 건너뛰는지 안 적는다"
+
+
+def test_우리가_쓴_커밋이면_안_건너뛴다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**그물이 늘 비면 관문이 아니다** (D-0230). 둘 다 아니면 실제로 뽑는다."""
+    monkeypatch.setattr(CHECKER, "merged_head", lambda: False)
+    monkeypatch.setattr(CHECKER, "bot_head", lambda: False)
+
+    assert cast("bool", CHECKER.ours())
+
+
+def test_봇_이름이_워크플로와_같다() -> None:
+    """**두 곳에 적으면 어긋난다** (D-0043). 봇이 이름을 바꾸면 여기가 먼저 운다."""
+    flow = (CHECKER.ROOT / ".github" / "workflows" / "papers.yml").read_text(encoding="utf-8")
+
+    assert f'git config user.name  "{CHECKER.BOT}"' in flow
