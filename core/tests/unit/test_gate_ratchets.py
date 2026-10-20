@@ -14,6 +14,8 @@ from tests.conftest import tool_module as _tool
 
 COVERAGE = _tool("check_coverage")
 DEAD = _tool("deadcheck")
+CONTROL = _tool("deadcheck_control")
+"""양성 대조는 **따로 산다** (D-0444). 관문 경로가 아니라 임시 트리를 짓는 기계다."""
 
 
 # ------------------------------------------------------------------ check_coverage
@@ -70,7 +72,33 @@ def test_그물이_심은_결함에_운다() -> None:
     프로브가 조용히 죽으면 «무검증 시험 0»이 **아무것도 못 본 0**이 된다. `positive_control`이
     임시 폴더에 결함을 심고 우는지 보는데, 그것을 아무도 안 불렀다 (D-0257).
     """
-    assert DEAD.positive_control() == []
+    assert CONTROL.positive_control() == []
+
+
+def test_늘_참인_단언을_잡는다(tmp_path: Path) -> None:
+    """`assert … or True` (D-0444).
+
+    **`무검증 시험`이 못 잡는다** — `assert`가 있기 때문이다. 왼쪽에 진짜 조건이
+    적혀 있어 읽는 사람은 그것이 검사되는 줄 안다.
+    """
+    tests = tmp_path / DEAD.TEST_TREE
+    tests.mkdir(parents=True)
+    (tests / "test_x.py").write_text(
+        "def test_늘_통과한다():\n    assert 1 == 2 or True\n", encoding="utf-8"
+    )
+
+    assert DEAD.probe_always_true(tmp_path), "늘 참인 단언을 못 잡는다"
+
+
+def test_늘_거짓인_단언은_안_본다(tmp_path: Path) -> None:
+    """**바로 빨개지므로 숨지 않는다** (D-0444). 숨는 것은 늘 참인 쪽뿐이다."""
+    tests = tmp_path / DEAD.TEST_TREE
+    tests.mkdir(parents=True)
+    (tests / "test_x.py").write_text(
+        "def test_늘_죽는다():\n    assert 1 == 2 and False\n", encoding="utf-8"
+    )
+
+    assert DEAD.probe_always_true(tmp_path) == []
 
 
 def test_천장이_프로브를_전부_덮는다() -> None:
@@ -119,7 +147,7 @@ def test_낮은_파이썬이면_돌기를_거부한다(monkeypatch: pytest.Monke
 
 def test_못_읽는_파일을_센다() -> None:
     """**양성 대조** (D-0230). 어느 파이썬도 못 읽는 파일을 심어 우는지 본다."""
-    assert DEAD.planted_unreadable()
+    assert CONTROL.planted_unreadable()
     assert DEAD.unreadable() == [], "이 파이썬이 저장소를 다 못 읽는다"
 
 
@@ -179,7 +207,7 @@ def test_이름_뒤에_숨은_건너뜀도_센다(tmp_path: Path) -> None:
     양성 대조가 인라인 꼴만 심고 있어서 **죽은 가지를 초록으로 덮고 있었다** — 그래서
     심는 트리에 이 꼴을 같이 넣고, 여기서 **둘 다** 잡히는지 본다.
     """
-    DEAD._plant(tmp_path)
+    CONTROL._plant(tmp_path)
     caught = {hit.what for hit in DEAD.probe_skipped(tmp_path)}
     assert "test_건너뛴다" in caught, "인라인 꼴을 놓쳤다"
     assert "test_이름_뒤에_숨어_건너뛴다" in caught, "이름 뒤에 숨은 꼴을 놓쳤다"

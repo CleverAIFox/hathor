@@ -112,6 +112,17 @@ SPOKEN = (
 QUOTE = re.compile(r'\*?[«"]([^»"\n]{2,}(?:\n[^»"\n]*){0,4}?)[»"]\*?')
 """인용 덩어리. **네 줄까지 넘는다** — 실측 최대가 세 줄이다."""
 
+NESTED = re.compile(r'\*"((?:[^"\n]|\n)*?)"\*', re.S)
+"""큰따옴표 인용을 **중첩 괄호와 무관하게** 다시 본다 (D-0445).
+
+`QUOTE`는 `«`·`»`도 끝으로 보므로 **인용 안에 인용이 있으면 거기서 끊긴다** — 실측으로
+`*"… «Automatically delete head branches» … 못 하냐?"*`의 뒷부분이 통째로 span 밖에
+있었다. 이 꼴은 `*"`와 `"*`만 보고 묶는다.
+"""
+
+SPEAKER = re.compile(r"사용자|그가|그는|사람이|판정자")
+"""발화의 주체. **사람을 가리키는 꼴로만 둔다** — `그 기록이`는 안 걸린다."""
+
 SAID = re.compile(
     r"(사용자|그가|그는|사람이|판정자)[^«\"]{0,60}?"
     r"(말했다|물었다|짚었다|지적했다|했다|잘랐다|반대했다|뒤집었다|되물었다|덧붙였다"
@@ -126,6 +137,14 @@ D-0438은 이 분기를 **앞 70자를 훑는 꼴**로 써 보고 **50건 중 25
 **29건에 오탐 0**이다. 버릴 분기가 아니라 **잘못 쓴 분기였다.**
 
 `그 기록이 적었다`는 안 걸린다 — 주체가 사람을 가리키는 꼴일 때만 본다.
+"""
+
+
+AFTER = re.compile(r"^\s*(라[고는]?|고)\s*(했다|물었다|적었다|짚었다|한 그|하는)")
+"""인용 **뒤**에 붙은 발화 서술 (D-0445).
+
+`사용자가 *"…"*라 한 그 더미다` 꼴이다. `SAID`는 인용 앞만 보므로 **주체가 앞에 있고
+동사가 뒤에 있으면** 둘 다 못 본다. 실측으로 한 곳이 그렇게 빠져나갔다.
 """
 
 
@@ -151,16 +170,20 @@ def speech(text: str, allow: str = SPEECH_OK) -> list[tuple[int, str]]:
     for line in lines:
         starts.append(starts[-1] + len(line) + 1)
     found: list[tuple[int, str]] = []
-    for match in QUOTE.finditer(text):
+    seen: set[int] = set()
+    for match in [*QUOTE.finditer(text), *NESTED.finditer(text)]:
         first = _line_of(starts, match.start())
         if SKIP.match(lines[first]) or _marked(lines[first], allow):
             continue
         quoted = " ".join(match.group(1).split())
-        if re.search(SPOKEN, quoted):
-            found.append((first + 1, quoted))
-            continue
-        # **말투가 격식이어도 발화를 그대로 옮긴 것은 막는다** (D-0443).
-        if SAID.search(text[: match.start()].rsplit("\n", 1)[-1]):
+        before = text[: match.start()].rsplit("\n", 1)[-1]
+        behind = text[match.end() :].split("\n", 1)[0]
+        spoken = bool(re.search(SPOKEN, quoted))
+        # **말투가 격식이어도 발화를 그대로 옮긴 것은 막는다** (D-0443 · D-0445).
+        # 동사는 인용 앞에도 뒤에도 온다 — 뒤에 올 때는 주체가 앞에 있다.
+        said = SAID.search(before) or (SPEAKER.search(before) and AFTER.match(behind))
+        if (spoken or said) and first not in seen:
+            seen.add(first)
             found.append((first + 1, quoted))
     return found
 
@@ -214,6 +237,42 @@ def profanity(root: Path, tracked: list[str]) -> list[tuple[str, int, str]]:
     return found
 
 
+def speech_everywhere(root: Path, tracked: list[str]) -> list[tuple[str, int, str]]:
+    """**과거 축 밖의 발화 인용** (D-0445).
+
+    말투 검사는 결정 기록만 본다. 그런데 **기록의 인용이 코드 주석에 복사된다** —
+    실측으로 `check_artifacts.py`와 `test_gate_types.py`가 그랬다. 같은 눈으로 본다.
+
+    `.py`만 본다. 마크다운은 과거 축을 빼면 살아 있는 문서 셋이고, 거기는
+    `check_doc_style`의 다른 규칙이 이미 든다.
+    """
+    import ast
+
+    found: list[tuple[str, int, str]] = []
+    for name in tracked:
+        if name == SELF or not name.endswith(".py"):
+            continue
+        try:
+            text = (root / name).read_text(encoding="utf-8")
+            tree = ast.parse(text)
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef)):
+                continue
+            body = ast.get_docstring(node, clean=False)
+            if not body:
+                continue
+            # **귀속이 붙은 것만 센다.** 말투 낱말만 보면 정규식 리터럴이 걸린다 —
+            # 실측 오탐 4건이 전부 그 꼴이었다 (D-0445).
+            found += [
+                (name, line, quoted)
+                for line, quoted in speech(body)
+                if SPEAKER.search(body.rsplit(quoted[:12], 1)[0][-80:] if quoted else "")
+            ]
+    return found
+
+
 def tracked_files(root: Path) -> list[str]:
     """`git ls-files`. **추적 안 되는 것은 정본이 아니다.**"""
     import subprocess
@@ -229,16 +288,22 @@ def main() -> int:
     from check_doc_style import PAST
 
     text = (ROOT / PAST).read_text(encoding="utf-8")
-    dirty = profanity(ROOT, tracked_files(ROOT))
+    tracked = tracked_files(ROOT)
+    dirty = profanity(ROOT, tracked)
+    copied = speech_everywhere(ROOT, tracked)
+    for name, number, quoted in copied:
+        print(f"  {name}:{number} 코드로 복사된 발화 — {quoted[:50]}", file=sys.stderr)
     for name, number, word in dirty:
         print(f"  {name}:{number} 욕설·은어 — {word}", file=sys.stderr)
 
     problems = speech(text)
     for line, quoted in problems:
         print(f"  {record_of(text, line)} {PAST}:{line} — {quoted[:70]}", file=sys.stderr)
-    if problems or dirty:
+    if problems or dirty or copied:
         if dirty:
             print(f"욕설·은어 {len(dirty)}곳. 정본에 안 적는다 (D-0443)", file=sys.stderr)
+        if copied:
+            print(f"코드로 복사된 발화 {len(copied)}곳 (D-0445)", file=sys.stderr)
         if problems:
             print(f"구어체 인용 {len(problems)}곳. 간접 서술로 옮긴다 (D-0438)", file=sys.stderr)
         return 1

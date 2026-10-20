@@ -23,7 +23,7 @@
 
 **말투도 소급한다** (D-0438). 나는 위 기준을 들어 *«인용문은 증거라서 못 고친다»*고
 했고 **사용자가 뒤집었다.** 둘을 가르는 선은 「주장이 바뀌는가」지 「인용인가」가
-아니다 — *«왜 두 벌이 되는 거야?»*를 *«왜 두 벌이 되는가»*로 옮겨도 **그 세션이
+아니다 — 구어체 물음을 평어체로 옮겨도 **그 세션이
 생각한 것은 한 글자도 안 바뀐다.** 바뀌는 것은 정본이 사람 말투를 흉내 내는가뿐이고,
 그것은 기록이 져야 할 것이 아니다. 실제로 소급한 52곳에서 **주장이 달라진 자리는
 없다** — D-0438이 전후를 나란히 둔다.
@@ -61,7 +61,14 @@ import sys
 from pathlib import Path
 
 from decision_ledger import keeper_text
-from doc_speech import SPEECH_OK, profanity, record_of, speech, tracked_files
+from doc_speech import (
+    SPEECH_OK,
+    profanity,
+    record_of,
+    speech,
+    speech_everywhere,
+    tracked_files,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -483,6 +490,14 @@ FLOOR_DOCS = 3
 결함으로 재니 그 자리가 비어 있었다 — 「전부 맞다」가 거짓으로 참이 되는 꼴이다.
 """
 
+FLOOR_TRACKED = 300
+"""규칙 10이 훑는 **추적 파일의 바닥** (D-0445의 빚).
+
+`FLOOR_DOCS`가 문서 쪽에 세워졌는데 **추적 파일 쪽은 안 세웠다.** `tracked_files()`가
+git을 못 불러 빈손이면 욕설·발화 둘 다 **아무것도 안 보고 0건**이 되고, 통과 줄은
+`문서 4개`만 찍으니 **화면으로도 못 가른다** — 같은 D-0230을 한쪽만 막았다.
+"""
+
 
 def check() -> list[str]:
     # **지연 임포트다.** `doc_style_repo`가 이 모듈의 상수를 쓰므로 위에서 부르면 순환한다.
@@ -513,9 +528,20 @@ def check() -> list[str]:
             problems.extend(check_records(name, text))
             problems.extend(check_speech(name, text))
     # **문서가 아니라 추적 파일 전부를 본다** (D-0443). 욕설은 어디 있든 안 된다.
+    tracked = tracked_files(ROOT)
+    if len(tracked) < FLOOR_TRACKED:
+        problems.append(
+            f"추적 파일을 {len(tracked)}개 읽었다(바닥 {FLOOR_TRACKED}). **그물이 비었다**"
+        )
+        return problems
     problems += [
         f"{name}:{number} 욕설·은어 — {word}. 정본에 안 적는다 (D-0443)"
-        for name, number, word in profanity(ROOT, tracked_files(ROOT))
+        for name, number, word in profanity(ROOT, tracked)
+    ]
+    # **기록의 인용이 코드 문서 문자열로 복사된다** (D-0445).
+    problems += [
+        f"{name}:{number} 코드로 복사된 발화 — «{quoted[:40]}». 간접 서술로 (D-0445)"
+        for name, number, quoted in speech_everywhere(ROOT, tracked)
     ]
     return problems
 
@@ -537,7 +563,12 @@ def main() -> int:
         for text in problems:
             print(f"  - {text}", file=sys.stderr)
         return 1
-    print(f"문서 레이아웃 검사 통과 · 문서 {len(targets())}개")
+    # **센 것을 화면에 올린다** (D-0230 · D-0358). 「문서 4개」만 찍으면 규칙 10이
+    # 420개를 훑었는지 0개를 훑었는지 **통과 줄로는 못 가른다.**
+    print(
+        f"문서 레이아웃 검사 통과 · 문서 {len(targets())}개 · "
+        f"말투·은어 훑은 파일 {len(tracked_files(ROOT))}개"
+    )
     return 0
 
 

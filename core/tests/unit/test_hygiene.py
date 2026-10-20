@@ -20,6 +20,7 @@ if str(ROOT / "tools") not in sys.path:
 
 
 import deadcheck  # noqa: E402
+import deadcheck_control  # noqa: E402
 import encoding_check  # noqa: E402
 import gh_ops  # noqa: E402
 import tidy  # noqa: E402
@@ -223,8 +224,10 @@ def test_프로브는_심은_결함에_운다() -> None:
 
     fire-lane은 이 둘을 섞어 «결함이 많을수록 확실히 통과하는» 관문을 돌렸다. 생사는 합성
     트리에서 묻고, 저장소의 수는 래칫이 본다.
+
+    대조는 `deadcheck_control`에 산다 — 관문 경로가 아니라 임시 트리를 짓는 기계다 (D-0444).
     """
-    assert deadcheck.positive_control() == []
+    assert deadcheck_control.positive_control() == []
 
 
 def test_죽은_검사_래칫은_양방향이다() -> None:

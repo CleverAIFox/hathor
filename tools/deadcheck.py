@@ -19,6 +19,7 @@
 | 삼킨 예외 | `except …: pass` — 실패가 소리 없이 사라진다 |
 | 빈 그물 | 코드에 박힌 경로 · 글롭이 **아무것도 안 가리킨다** — 훑을 것이 0개다 |
 | 버려진 문서 문자열 | 파이썬이 그냥 버리는 문자열 — **적어 둔 근거가 아무 데도 안 붙어 있다** |
+| 항상 참인 단언 | `assert … or True` — 조건이 적혀 있는데 **늘 통과한다** (D-0444) |
 
 ### 생사는 합성 트리에서 묻는다
 
@@ -41,7 +42,6 @@ import argparse
 import ast
 import re
 import sys
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,6 +64,7 @@ CEILING = {
     "빈 그물": 0,
     "버려진 문서 문자열": 0,
     "눈먼 접두사": 0,
+    "항상 참인 단언": 0,
 }
 """프로브별 천장. **정본은 여기 하나다** (D-0223).
 
@@ -406,6 +407,39 @@ def probe_dropped_doc(root: Path = ROOT) -> list[Hit]:
     return found
 
 
+def _always_true(node: ast.expr) -> bool:
+    """`… or True` 꼴인가. **왼쪽이 무엇이든 참이다.**
+
+    `and False`는 안 본다 — 늘 거짓인 단언은 **바로 빨개지므로 숨지 않는다.**
+    """
+    if not isinstance(node, ast.BoolOp) or not isinstance(node.op, ast.Or):
+        return False
+    return any(isinstance(side, ast.Constant) and side.value is True for side in node.values)
+
+
+def probe_always_true(root: Path = ROOT) -> list[Hit]:
+    """`assert … or True`. **단언이 적혀 있는데 아무것도 안 본다** (D-0444).
+
+    `무검증 시험`이 못 잡는다 — `assert`가 **있기** 때문이다. 왼쪽에 진짜 조건이
+    적혀 있어서 읽는 사람은 그것이 검사되는 줄 안다. **제일 나쁜 꼴이다.**
+    """
+    found: list[Hit] = []
+    for tree_name in (TEST_TREE, *CODE_TREES):
+        for path in python_files(root, tree_name):
+            tree = parsed(path)
+            if tree is None:
+                continue
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Assert) or not _always_true(node.test):
+                    continue
+                if exempt(lines, node.lineno, node.end_lineno or node.lineno):
+                    continue
+                where = f"{path.name}:{node.lineno}"
+                found.append(Hit("항상 참인 단언", where, "assert … or True"))
+    return found
+
+
 PROBES: dict[str, Callable[[Path], list[Hit]]] = {
     "무검증 시험": probe_unchecked,
     "건너뛴 시험": probe_skipped,
@@ -413,63 +447,8 @@ PROBES: dict[str, Callable[[Path], list[Hit]]] = {
     "빈 그물": probe_empty_net,
     "버려진 문서 문자열": probe_dropped_doc,
     "눈먼 접두사": probe_blind_prefix,
+    "항상 참인 단언": probe_always_true,
 }
-
-
-def _plant(folder: Path) -> None:
-    """프로브마다 결함 하나씩을 심은 합성 트리. **여기서 안 울면 프로브가 죽은 것이다.**"""
-    tests = folder / TEST_TREE
-    tests.mkdir(parents=True)
-    (tests / "test_planted.py").write_text(
-        "import pytest\n\n\n"
-        "def test_아무것도_안_본다():\n"
-        "    value = 1 + 1\n"
-        "    print(value)\n\n\n"
-        "@pytest.mark.skipif(True, reason='심은 것')\n"
-        "def test_건너뛴다():\n"
-        "    assert True\n\n\n"
-        # **이름 뒤에 숨은 건너뜀도 심는다** (D-0289). 이 꼴을 프로브가 한 건도 못 봤고,
-        # 양성 대조는 인라인만 심고 있어서 **죽은 가지를 초록으로 덮고 있었다.**
-        "필요하다 = pytest.mark.skipif(True, reason='이름 뒤에 숨었다')\n\n\n"
-        "@필요하다\n"
-        "def test_이름_뒤에_숨어_건너뛴다():\n"
-        "    assert True\n",
-        encoding="utf-8",
-    )
-    code = folder / "tools"
-    code.mkdir(parents=True)
-    (code / "planted.py").write_text(
-        "FILES = ('tools/xxx-없는파일.py',)\n"
-        '"""붙는 문서 문자열 — 이것은 정상이다."""\n'
-        '"""심은 것 — 대입 뒤 둘째 문자열은 파이썬이 버린다."""\n\n\n'
-        "def run() -> None:\n"
-        "    try:\n"
-        "        open('x')\n"
-        "    except OSError:\n"
-        "        pass\n\n\n"
-        # **늘 참인 조건을 심는다** (D-0349). 이 꼴이 실물에서 세 번 났고 그중 둘은
-        # **가지가 한 번도 안 도는** 꼴이었다 — 어떤 수 눈금에도 안 걸린다.
-        "def blind(name: str) -> bool:\n"
-        '    return name.startswith("")\n',
-        encoding="utf-8",
-    )
-
-
-def planted_unreadable() -> list[str]:
-    """**양성 대조** (D-0275). 어느 파이썬도 못 읽는 파일을 심어 `unreadable`이 우는지 본다."""
-    with tempfile.TemporaryDirectory() as raw:
-        folder = Path(raw)
-        (folder / "tools").mkdir(parents=True)
-        (folder / "tools" / "broken.py").write_text("def (:\n", encoding="utf-8")
-        return unreadable(folder)
-
-
-def positive_control() -> list[str]:
-    """심은 결함에 안 우는 프로브의 이름. 비어야 살아 있다."""
-    with tempfile.TemporaryDirectory() as raw:
-        folder = Path(raw)
-        _plant(folder)
-        return [name for name, probe in PROBES.items() if not probe(folder)]
 
 
 def survey(root: Path = ROOT) -> list[Hit]:
@@ -514,6 +493,8 @@ def main() -> int:
         return 1
 
     if args.selftest:
+        from deadcheck_control import planted_unreadable, positive_control
+
         dead = positive_control()
         if dead:
             print(f"심은 결함에 안 우는 프로브: {' · '.join(dead)}", file=sys.stderr)

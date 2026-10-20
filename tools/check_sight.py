@@ -15,7 +15,7 @@ D-0230이 이미 적었다 — ***그물이 비면 「전부 맞다」가 거짓
 
 | | 무엇을 잡나 | 언제 |
 |---|---|---|
-| 카나리아 (`deadcheck.positive_control`) | 시야는 그대로인데 **잡는 능력**을 잃었다 | 다음 판 |
+| 카나리아 (`deadcheck_control`) | 시야는 그대로인데 **잡는 능력**을 잃었다 | 다음 판 |
 | **시야 못 (여기)** | **시야 자체**가 조용히 줄었다 | **바꾸는 판** |
 
 `SKIP_TREES` 사고는 **뒤쪽**이었다. 검사는 멀쩡히 돌았고 볼 것이 없었다. 카나리아를
@@ -119,7 +119,7 @@ PINNED = {
     "check_sight.WIDENS": 4,
     "check_under_load.PAIRED": 1,
     "deadcheck.BLIND": 2,
-    "deadcheck.CEILING": 6,
+    "deadcheck.CEILING": 7,
     "deadcheck.CODE_TREES": 2,
     "deadcheck.NET_TREES": 7,
     "debts.SECURITY_SETUP": 2,

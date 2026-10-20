@@ -19,6 +19,7 @@ import pytest
 from tests.conftest import tool_module
 
 DEAD = tool_module("deadcheck")
+CONTROL = tool_module("deadcheck_control")
 ISSUES = tool_module("check_issue_mentions")
 STEP0 = tool_module("step0_check")
 SYNC = tool_module("sync_artifacts")
@@ -68,9 +69,13 @@ def test_못_읽은_파일이_있으면_수를_믿지_말라고_한다(
 def test_양성_대조가_프로브를_본다(
     dead_quiet: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """**심은 결함에 안 우는 프로브** (D-0069). `positive_control()`을 안 거치면 늘 통과다."""
-    monkeypatch.setattr(DEAD, "positive_control", lambda: [PLANTED])
-    monkeypatch.setattr(DEAD, "planted_unreadable", lambda: True)
+    """**심은 결함에 안 우는 프로브** (D-0069). `positive_control()`을 안 거치면 늘 통과다.
+
+    대조는 `deadcheck_control`에 산다 (D-0444). `main()`이 거기서 당겨 쓰니 **거기를 고친다** —
+    `deadcheck`를 고쳐 봐야 안 먹는다.
+    """
+    monkeypatch.setattr(CONTROL, "positive_control", lambda: [PLANTED])
+    monkeypatch.setattr(CONTROL, "planted_unreadable", lambda: True)
     monkeypatch.setattr("sys.argv", ["deadcheck.py", "--selftest"])
 
     assert DEAD.main() == 1
@@ -81,14 +86,14 @@ def test_양성_대조가_못_읽는_파일도_본다(
     dead_quiet: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`planted_unreadable()` 자리. **못 읽는 파일을 심었는데 조용하면** 그쪽 눈이 멀었다."""
-    monkeypatch.setattr(DEAD, "positive_control", list)
-    monkeypatch.setattr(DEAD, "planted_unreadable", lambda: True)
+    monkeypatch.setattr(CONTROL, "positive_control", list)
+    monkeypatch.setattr(CONTROL, "planted_unreadable", lambda: True)
     monkeypatch.setattr("sys.argv", ["deadcheck.py", "--selftest"])
 
     assert DEAD.main() == 0
     assert "양성 대조 통과" in _spoke(capsys)
 
-    monkeypatch.setattr(DEAD, "planted_unreadable", lambda: False)
+    monkeypatch.setattr(CONTROL, "planted_unreadable", lambda: False)
     assert DEAD.main() == 1
     assert "조용하다" in _spoke(capsys)
 

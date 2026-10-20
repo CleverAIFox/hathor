@@ -244,3 +244,51 @@ def test_욕설_검사가_입구에_걸려_있다(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(style, "profanity", lambda root, tracked: [("a.md", 7, "x")])
 
     assert [one for one in style.check() if "D-0443" in one], "욕설 검사가 입구에 없다"
+
+
+# ------------------------------------------------- 감사가 짚은 구멍 셋 (D-0445)
+
+
+def test_인용_뒤_동사도_본다() -> None:
+    """`사용자가 *"…"*라 한` 꼴 (D-0445).
+
+    `SAID`는 인용 **앞**만 본다. 주체가 앞, 동사가 뒤에 있으면 둘 다 못 봤다.
+    """
+    assert _said('사용자가 *"main에다가 다 쌓아 놨었네"*라 한 그 더미다.\n')
+
+
+def test_중첩_인용에_안_끊긴다() -> None:
+    """**덩어리가 안쪽 괄호에서 끊기면 뒷부분이 통째로 검사 밖이다** (D-0445).
+
+    실측으로 세 줄짜리 인용의 마지막 줄이 그렇게 빠졌다.
+    """
+    nested = (
+        '- **배경**: 사용자가 물었다 — *"앞은 멀쩡하다. «바깥 말»이 끼어 있고\n'
+        '  뒤에 가서 이거 맞아?"*\n'
+    )
+
+    assert _said(nested), "중첩 괄호에서 끊긴다"
+
+
+def test_코드_문서_문자열도_본다(tmp_path: Path) -> None:
+    """**기록의 인용이 코드로 복사된다** (D-0445). 실측 다섯 곳이 그랬다."""
+    (tmp_path / "t.py").write_text(
+        '"""사용자가 물었다 — *"이거 맞나? 저거 아니라?"* 저장소가 답을 못 했다."""\n',
+        encoding="utf-8",
+    )
+
+    assert SPEECH.speech_everywhere(tmp_path, ["t.py"]), "코드 문서 문자열을 안 본다"
+
+
+def test_정규식_리터럴은_안_문다(tmp_path: Path) -> None:
+    """**`.py` 전체를 말투로 보면 오탐이 절반이다** (실측 8건 중 4건 · D-0445).
+
+    정규식 리터럴이 인용처럼 보인다. 문서 문자열만, 그중 **귀속이 붙은 것만** 센다.
+    """
+    (tmp_path / "t.py").write_text(
+        'HEAD = r"HEAD(?:~(\\d+)|(\\^+)(?!\\{))"\n\n\ndef f() -> None:\n'
+        '    """붙는 설명. 여기엔 발화가 없다."""\n',
+        encoding="utf-8",
+    )
+
+    assert SPEECH.speech_everywhere(tmp_path, ["t.py"]) == []

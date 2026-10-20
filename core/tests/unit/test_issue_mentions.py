@@ -161,7 +161,7 @@ def test_빈_접두사를_건너뛰기로_쓰지_않는다():
 
 
 def test_심은_맨몸_참조를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """**카나리아다** (D-0349 · `deadcheck.positive_control`과 같은 꼴).
+    """**카나리아다** (D-0349 · `deadcheck_control.positive_control`과 같은 꼴).
 
     닫힌 질문을 일부러 맨몸으로 심고 **검사가 우는지** 본다. 안 울면 그 검사는
     「통과」를 찍을 자격이 없다 — 오늘 그 상태로 348판이 지났다.

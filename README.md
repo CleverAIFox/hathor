@@ -380,7 +380,7 @@ infra/ · docker/    postgres init · prometheus · mlflow 이미지
 | `tools/check_retired.py` | 지운 말이 근거 없이 살아 있나 — 같은 줄에 지운 결정이 있으면 통과 (D-0349) |
 | `tools/check_requirements.py` | **요구사항 정의서가 자기 규약을 지키나** — 상태 집합 · 그룹 양방향 · 결번 · 선언 안 된 M/P5+ · 끝났는데 근거 없는 행 (D-0350) |
 | `tools/check_args.py` | **주는 인자를 받는 쪽이 받나** — 플래그 · `$(MAKE)` 넘기기 · **화면이 알려 주는 명령이 그 일을 하나** (D-0350) |
-| `tools/deadcheck.py` | 검사가 죽었는가 — 프로브 6종 · 양방향 래칫 |
+| `tools/deadcheck.py` | 검사가 죽었는가 — 프로브 7종 · 양방향 래칫 |
 | `tools/encoding_check.py` | BOM · CRLF · 비 UTF-8 · 끝 개행 (`--fix`) |
 | `tools/release_notes.py` | 결정 기록에서 태그 · 릴리스 본문 |
 | `tools/check_workflow_paths.py` | 워크플로가 읽는 자리를 git이 나르나 |

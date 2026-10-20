@@ -68,6 +68,23 @@ def test_지금_문서를_바닥_넘게_본다() -> None:
     assert len(cast("list[Any]", STYLE.targets())) >= STYLE.FLOOR_DOCS
 
 
+def test_훑을_파일이_없으면_통과시키지_않는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**규칙 10 쪽에는 바닥이 없었다.** 문서 쪽만 막고 추적 파일 쪽을 안 막았다.
+
+    `tracked_files()`가 빈손이면 욕설도 코드 속 발화도 **안 보고 0건**이 되는데, 통과
+    줄은 문서 수만 찍으니 화면으로도 못 가른다 (D-0230).
+    """
+    monkeypatch.setattr(STYLE, "tracked_files", lambda *_: [])
+
+    problems = cast("list[str]", STYLE.check())
+
+    assert problems and "그물이 비었다" in problems[-1]
+
+
+def test_지금_추적_파일을_바닥_넘게_본다() -> None:
+    assert len(cast("list[Any]", STYLE.tracked_files(STYLE.ROOT))) >= STYLE.FLOOR_TRACKED
+
+
 def test_화면이_문서_수를_말한다(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -75,7 +92,11 @@ def test_화면이_문서_수를_말한다(
     monkeypatch.setattr("sys.argv", ["check_doc_style.py", "--check"])
 
     assert STYLE.main() == 0
-    assert f"문서 {len(cast('list[Any]', STYLE.targets()))}개" in capsys.readouterr().out
+    spoke = capsys.readouterr().out
+    assert f"문서 {len(cast('list[Any]', STYLE.targets()))}개" in spoke
+    # **규칙 10이 훑은 수도 같이 올린다.** 그 수가 없으면 420개를 본 통과와 0개를 본
+    # 통과가 화면에서 같아 보인다.
+    assert f"{len(cast('list[Any]', STYLE.tracked_files(STYLE.ROOT)))}개" in spoke
 
 
 # ----------------------------------------------- encoding_check (배선 3곳)

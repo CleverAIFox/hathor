@@ -76,7 +76,8 @@ def test_그림의_다른_구간은_안_센다() -> None:
     """**파이프 그림만 겨눈다.** 파일 전체로 보면 다른 그림이나 주석이 대신 만족시킨다."""
     body = cast("str", CHECKER.figure())
 
-    assert "patch_pipe" not in body.split("def patch_pipe", 1)[1].split("\n", 1)[0] or True
+    # **`def patch_pipe` 줄 자체는 안 본다** (D-0444). 거기 이름이 있는 것이 당연해서
+    # 조건이 성립하지 않았고, `or True`로 덮여 있었다. 겨냥은 아래 둘이 든다.
     assert "leak_gate" not in body, "다른 그림이 섞였다 — 대조가 거짓이 된다"
     assert all(f"# {head}:" in body for head in CHECKER.HEADS)
 

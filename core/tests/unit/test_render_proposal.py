@@ -401,7 +401,8 @@ def test_울타리_안은_제목으로_안_센다() -> None:
     """정본의 코드 블록에 `## `로 시작하는 줄이 있어도 제목이 아니다."""
     heads, _tables = TOOL.canon_parts()
 
-    assert len(heads) == len(set(heads)) or True  # 같은 제목이 둘일 수 있다
+    # **제목 중복은 안 본다** (D-0444). 같은 제목이 둘일 수 있다고 적어 두고 단언을
+    # `or True`로 덮어 뒀었다 — 안 보는 것이면 안 적는다.
     assert all(not one.startswith("#") for one in heads), "울타리 안을 셌다"
 
 
