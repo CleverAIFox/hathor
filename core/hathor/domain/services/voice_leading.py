@@ -35,6 +35,7 @@ D-0058이 기각한 것은 *값을 실험으로 고르는 것*이다. 여기에�
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import pairwise
 
 OCTAVE = 12
 
@@ -80,18 +81,43 @@ def lead(
     return min(found, key=lambda option: (distance(before, option), option))
 
 
-def bass(pitches: Sequence[int], *, octave_base: int) -> int:
-    """화음의 근음을 아래 옥타브에 놓는다 (D-0139).
+THIRDS = (3, 4)
+"""3화음을 쌓는 음정 (단3도 · 장3도).
 
-    **근음은 전위와 무관하다.** `pitches`가 어떤 전위든 그 화음의 근음은 하나이며,
-    `chord_pitches`가 근음 위치로 낸 것을 `voicings`가 회전시킨 것이므로 **가장 낮은
-    음이 아니라 음이름 집합이 근음을 정한다.** 그래서 근음을 인자로 받는다.
+**근음 자리면 이웃 간격이 전부 여기 든다.** 전위는 어딘가에 4도(5반음) 이상을 만든다 —
+`bass`가 근음 자리를 요구하는지 보는 자가 이것이다.
+"""
+
+
+def rooted(pitches: Sequence[int]) -> bool:
+    """근음 자리인가. **3도만 쌓여 있으면 맨 아래가 근음이다** (D-0446)."""
+    return all(high - low in THIRDS for low, high in pairwise(sorted(pitches)))
+
+
+def bass(pitches: Sequence[int], *, octave_base: int) -> int:
+    """**근음 자리** 화음의 근음을 아래 옥타브에 놓는다 (D-0139 · D-0446).
+
+    **근음은 전위와 무관하다** — 그런데 이 함수는 그렇게 안 돌았다. 문서는 *«가장 낮은
+    음이 아니라 음이름 집합이 근음을 정한다»*, *«그래서 근음을 인자로 받는다»*라고
+    적었는데 **서명에 그 인자가 없고 구현은 `min(pitches)`**였다. 전위를 넣으면
+    **21개 중 14개(67%)가 근음 아닌 음**을 깐다 (실측, 다장조 7도수 곱하기 전위 3).
+
+    쓰는 곳이 `arrangement`의 `rooted` 하나뿐이라 **소리는 멀쩡했다.** 적히지 않은
+    전제였고, 그것을 지키는 자가 없었다 — 「전위를 안 따른다」는 시험은 **같은 근음
+    자리 화음을 세 번 넣고** 결과가 같다고 적고 있었다 (D-0230).
+
+    그래서 전제를 **글이 아니라 자로 둔다** (D-0126). 전위를 넣으면 운다.
 
     자리는 `octave_base` 바로 아래 옥타브다. **새 값이 아니다** — 화음이 쓰는 것을
     한 옥타브 내린 것뿐이고, 베이스가 화음과 겹치면 베이스가 아니다.
     """
     if not pitches:
         raise ValueError("빈 화음은 근음이 없다")
+    if not rooted(pitches):
+        raise ValueError(
+            f"근음 자리가 아니다: {tuple(sorted(pitches))}. "
+            "맨 아래 음을 근음으로 읽으므로 전위를 넣으면 틀린다 (D-0446)"
+        )
     root = min(pitches) % OCTAVE
     low = octave_base - OCTAVE
     return low + (root - low % OCTAVE) % OCTAVE

@@ -121,3 +121,48 @@ def test_허용된_접점이_사유를_적는다():
 
 def test_저장소가_통과한다():
     assert CHECKER.check() == []
+
+
+# ------------------------------------------------------- 내역 (D-0446)
+
+
+def test_내역이_총합_안에_있다():
+    """`OUTWARD`는 `ALLOWED`의 부분집합이다. 어긋나면 밖+로컬이 총합과 안 맞는다."""
+    assert CHECKER.pairing_problems() == []
+    assert set(CHECKER.OUTWARD) <= set(CHECKER.ALLOWED)
+
+
+def test_내역이_어긋나면_운다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**양성 대조** (D-0259). 심은 어긋남에 안 울면 이 자가 장식이다."""
+    monkeypatch.setattr(CHECKER, "OUTWARD", frozenset({"tools/없는것.py"}))
+
+    problems = cast("list[str]", CHECKER.pairing_problems())
+
+    assert len(problems) == 1
+    assert "없는것.py" in problems[0]
+
+
+def test_내역을_훑기와_안_섞는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**`check()`는 나무만 본다** (D-0446).
+
+    처음엔 이 약속을 `check()`에 끼웠고, `ALLOWED`를 비우고 부르는 시험 셋이 **심은
+    나무마다 경고 세 줄**을 받았다 — 진짜 발견을 덮는다.
+    """
+    target = tmp_path / "core" / "hathor" / "a.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("import httpx\n", encoding="utf-8")
+    monkeypatch.setattr(CHECKER, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECKER, "ALLOWED", {})
+
+    problems = cast("list[str]", CHECKER.check())
+
+    assert len(problems) == 1
+    assert "OUTWARD" not in problems[0]
+
+
+def test_밖과_로컬의_합이_총합이다():
+    """축 셋이 같은 정본을 본다 (D-0304). 하나만 고쳐지는 날을 막는다."""
+    counts = tool_module("doc_counts")
+
+    assert counts.outward_points() + counts.local_points() == counts.egress_points()
+    assert counts.outward_points() == len(CHECKER.OUTWARD)

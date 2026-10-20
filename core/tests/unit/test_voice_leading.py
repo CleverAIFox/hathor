@@ -19,6 +19,7 @@ from hathor.domain.services.voice_leading import (
     parallel_fifths,
     voicings,
 )
+from hathor.domain.services.voice_leading import rooted as is_rooted
 from hathor.domain.value_objects.key import Key, Mode
 from hathor.engines.compose.harmony_generator import generate_harmony
 
@@ -151,11 +152,31 @@ def test_베이스는_근음이다():
         assert bass(rooted, octave_base=MIDDLE_C) % 12 == min(rooted) % 12
 
 
-def test_베이스는_전위를_안_따른다():
-    """근음은 화음의 성질이고 전위는 자리다 (D-0139)."""
-    rooted = chord_pitches(KEY, "V")
-    low = bass(rooted, octave_base=MIDDLE_C)
-    assert all(bass(rooted, octave_base=MIDDLE_C) == low for _ in range(3))
+def test_전위를_넣으면_운다():
+    """**「전위를 안 따른다」는 시험이 전위를 안 넣고 있었다** (D-0446 · D-0230).
+
+    같은 근음 자리 화음을 세 번 불러 결과가 같다고 적었다 — 그 단언은 함수가 무슨
+    짓을 해도 참이다. 진짜 전위를 넣으니 **21개 중 14개가 근음 아닌 음**을 깔았다.
+
+    `min(pitches)`를 근음으로 읽으므로 **근음 자리가 전제**이고, 이제 자가 그것을 본다.
+    """
+    chord = chord_pitches(KEY, "V")
+    turned = [one for one in voicings(chord, octave_base=MIDDLE_C) if not is_rooted(one)]
+
+    assert turned, "양성 대조: 전위가 하나는 나와야 이 시험이 무언가를 본다"
+    for voiced in turned:
+        with pytest.raises(ValueError, match="근음 자리가 아니다"):
+            bass(voiced, octave_base=MIDDLE_C)
+
+
+def test_근음_자리는_3도만_쌓인다():
+    """`is_rooted`의 자. **전위는 어딘가에 4도를 만든다.**"""
+    for degree in ("I", "ii", "iii", "IV", "V", "vi", "vii"):
+        chord = chord_pitches(KEY, degree)
+        assert is_rooted(chord), f"{degree}의 `chord_pitches`는 근음 자리여야 한다"
+
+    low, mid, high = sorted(chord_pitches(KEY, "I"))
+    assert not is_rooted((mid, high, low + 12)), "1전위는 근음 자리가 아니다"
 
 
 def test_빈_화음은_근음이_없다():

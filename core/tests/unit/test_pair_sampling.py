@@ -1,11 +1,13 @@
 """쌍대비교 라벨 수집 테스트."""
 
+import numpy as np
 import pytest
 
 from hathor.domain.entities.preference_comparison import PreferenceComparison, Side, agreement
 from hathor.domain.services.pair_sampling import (
     canonical,
     presentation_order,
+    sample_index_pairs,
     sample_pairs,
     with_repeats,
 )
@@ -202,3 +204,39 @@ def test_세_번_물으면_언제나_첫_답과_견준다():
     said = _said(("가", "나", Side.LEFT), ("가", "나", Side.RIGHT), ("가", "나", Side.LEFT))
 
     assert agreement(said) == (2, 1)
+
+
+# ------------------------------------------------- 자리 번호 쌍 (D-0446)
+
+
+def test_자리_번호_쌍은_겹치지_않는다():
+    """**`evaluate_harmony_output`이 여기 있던 것을 제 안에 다시 짰다** (D-0424).
+
+    베끼면서 `seen`/`continue`가 빠져 매 바퀴 무조건 담았고, 그래서 `limit`과
+    `raise`가 **닿지 않는 코드**가 돼 있었다.
+    """
+    pairs = sample_index_pairs(12, 20, generator=np.random.default_rng([7, 0]))
+    keyed = [tuple(sorted(pair)) for pair in pairs]
+
+    assert len(pairs) == 20
+    assert len(keyed) == len(set(keyed))
+    assert all(left != right for left, right in pairs)
+
+
+def test_자리_번호_쌍은_시드가_같으면_같다():
+    first = sample_index_pairs(30, 15, generator=np.random.default_rng([3, 0]))
+    again = sample_index_pairs(30, 15, generator=np.random.default_rng([3, 0]))
+
+    assert first == again
+
+
+def test_쌍이_모자라면_조용히_덜_내지_않는다():
+    """**풀이 마르면 운다** (D-0230). 덜 내면 적은 표본으로 잰 것이 되고 수만 작아진다."""
+    # 곡 넷이면 가능한 쌍이 여섯뿐이다.
+    with pytest.raises(ValueError, match="겹치지 않는 쌍 20개를 못 만들었다"):
+        sample_index_pairs(4, 20, generator=np.random.default_rng([1, 0]))
+
+
+def test_곡이_하나면_쌍이_없다():
+    with pytest.raises(ValueError, match="둘 이상"):
+        sample_index_pairs(1, 5, generator=np.random.default_rng([1, 0]))

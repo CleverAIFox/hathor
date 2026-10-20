@@ -238,17 +238,45 @@ def rule_mentions() -> int:
     return found + len(re.findall(r"GR-\d[\d.]*", readme))
 
 
+def _egress_block(name: str, closing: str) -> str:
+    """`check_egress`의 상수 블록을 **글자로** 꺼낸다 (D-0223 · D-0446).
+
+    **임포트로 안 바꾼다.** 한 번 그렇게 고쳤다가 시험이 잡았다 —
+    `test_정본이_사라지면_터진다`가 정본 파일을 치우고 **축이 터지는지** 보는데,
+    임포트는 이미 끝나 있어 **파일이 사라져도 태연히 수를 낸다.** 축이 조용히 사는
+    것이 이 시험이 막는 바로 그것이다 (D-0230).
+    """
+    body = (ROOT / "tools" / "check_egress.py").read_text(encoding="utf-8")
+    if name not in body:
+        raise LookupError(f"`check_egress.{name}`을 못 찾았다. 정본이 사라졌다")
+    return body.split(name, 1)[1].split(closing, 1)[0]
+
+
 def egress_points() -> int:
     """망 접점 허용 목록의 수. **정본은 `check_egress.ALLOWED`다** (D-0223).
 
     `MASTER` 두 곳과 README 한 곳이 「4곳」을 손으로 적고 있었다. 지금 맞지만 **늘어도
     아무 일이 안 일어난다** — 그리고 이 수는 **보안 주장**이다 (NFR-SEC-007).
     """
-    body = (ROOT / "tools" / "check_egress.py").read_text(encoding="utf-8")
-    if "ALLOWED" not in body:
-        raise LookupError("`check_egress.ALLOWED`를 못 찾았다. 정본이 사라졌다")
-    inside = body.split("ALLOWED", 1)[1].split("\n}", 1)[0]
-    return len(re.findall(r'(?m)^    "', inside))
+    return len(re.findall(r'(?m)^    "', _egress_block("ALLOWED", "\n}")))
+
+
+def outward_points() -> int:
+    """**기기 밖으로** 나가는 접점의 수 (D-0446).
+
+    총합만 축에 걸려 있었고 내역은 글로만 있었다. `README`는 한 줄 안에서
+    **「5곳 (밖 2 · 로컬 2)」**이었는데 축이 `5`만 읽어 초록이었다 — 산수가 그 줄
+    안에서 안 맞는데 아무도 안 울었다.
+    """
+    return len(re.findall(r'(?m)^        "', _egress_block("OUTWARD", "\n)")))
+
+
+def local_points() -> int:
+    """**로컬 주소만** 받는 접점의 수 (D-0446 · D-0224).
+
+    빼서 낸다. 따로 세면 둘을 다 고쳐야 하고, 한쪽만 고치는 날이 온다 (D-0043).
+    """
+    return egress_points() - outward_points()
 
 
 def grandfathered_records() -> int:
@@ -473,6 +501,10 @@ COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("GR 참조", re.compile(rf"저장소 안에서\s*{BOLD}곳"), rule_mentions),
     ("과거 축 GR 참조", re.compile(rf"기록에\s*{BOLD}곳이 더"), past_rule_mentions),
     ("망 접점", re.compile(rf"허용 목록\s*{BOLD}곳"), egress_points),
+    # **총합만 걸려 있었다** (D-0446). 내역은 글로만 살아 D-0424가 arXiv를 더한 뒤
+    # 네 자리가 *«밖 둘»*로 남았다 — 그 중 하나는 제 줄 안에서 5 ≠ 2+2였다.
+    ("망 접점 밖", re.compile(rf"밖\s*{BOLD}곳"), outward_points),
+    ("망 접점 로컬", re.compile(rf"로컬\s*{BOLD}곳"), local_points),
     ("MVP 예외", re.compile(rf"예외가\s*{BOLD}이고"), mvp_exemptions),
     ("요구사항 행", re.compile(rf"요구사항\s*{BOLD}행"), requirement_rows),
     ("관문 도구", re.compile(rf"관문 도구\s*{BOLD}개"), gate_count),

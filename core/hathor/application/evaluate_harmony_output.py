@@ -72,6 +72,7 @@ from itertools import pairwise
 import numpy as np
 
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
+from hathor.domain.services.pair_sampling import sample_index_pairs
 from hathor.domain.value_objects.key import Key, Mode
 from hathor.engines.compose.harmony_generator import (
     DIATONIC_ROOT_SEMITONES,
@@ -560,20 +561,14 @@ class EvaluateHarmonyOutput:
     def _sample_pairs(
         self, count: int, generator: np.random.Generator
     ) -> tuple[tuple[int, int], ...]:
-        """서로 다른 두 곡을 뽑는다. **시드가 같으면 같은 쌍이 나온다.**
+        """서로 다른 두 곡을 **겹치지 않게** 뽑는다. 시드가 같으면 같은 쌍이 나온다.
 
         같은 곡을 짝지으면 `paired`가 `identical`이 되어 재려는 것이 사라진다.
+
+        **여기 있던 거절 표본을 `pair_sampling`으로 옮겼다** (D-0446 · D-0424).
+        베껴 적은 것이 `seen`/`continue`를 빠뜨려 `limit`과 `raise`가 닿지 않았다.
         """
-        picked: list[tuple[int, int]] = []
-        attempts = 0
-        limit = max(self._condition.pair_count * 50, 1000)
-        while len(picked) < self._condition.pair_count and attempts < limit:
-            attempts += 1
-            left, right = (int(value) for value in generator.choice(count, 2, replace=False))
-            picked.append((left, right))
-        if not picked:
-            raise ValueError("참조곡 쌍을 만들 수 없다")
-        return tuple(picked)
+        return sample_index_pairs(count, self._condition.pair_count, generator=generator)
 
 
 def cell_spread(references: Sequence[ReferencePrior], cells: Sequence[int]) -> float:

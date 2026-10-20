@@ -29,8 +29,42 @@ DEGREES = 12
 FAST = OutputCondition(seed_count=120, bar_count=8, pair_count=12)
 
 
+def _effective(rows: object) -> float:
+    """유효 칸 수 = `exp(엔트로피)`의 평균. 균등 12칸이면 12.00이다."""
+    stacked = np.asarray(rows, dtype=np.float64)
+    entropy = -(stacked * np.log(np.maximum(stacked, 1e-12))).sum(axis=1)
+    return float(np.exp(entropy).mean())
+
+
+NULL_EFFECTIVE = _effective(np.random.default_rng(0).dirichlet(np.ones(DEGREES), 20000))
+"""`random` 선이 쓰는 `dirichlet(1)`의 유효 칸 수 — **실측 8.26** (D-0446).
+
+판정 규칙 3은 `paired <= random`이다. 그 규칙이 설 수 있으려면 **표본의 곡들이 귀무선
+사전보다 서로 덜 벌어져 있어야** 한다. 유효 칸이 이보다 작으면 표본이 더 뾰족하고,
+뾰족한 사전끼리는 서로 다른 칸에 몰려 **출력이 귀무선보다 더 갈린다.**
+
+**실물 코퍼스는 이보다 평평하다** — 1004곡에서 `other` 10.56 · `mix` 11.36이다. 규칙
+3은 실물에서 멀쩡했고 **틀린 것은 합성 표본뿐이었다.**
+"""
+
+
 def _references(count: int, *, contrast: float, seed: int = 7) -> list[ReferencePrior]:
-    """곡마다 다른 도수 사전. `contrast`가 클수록 균등에서 멀다."""
+    """곡마다 다른 도수 사전. `contrast`가 클수록 균등에서 멀다.
+
+    **`contrast=0.9`는 판정 규칙 3을 세울 수 없는 표본이었다** (D-0446). 유효 칸이
+    8.01로 귀무선 8.28보다 작아 합성 곡들이 무작위 사전보다 **더** 벌어졌고, 규칙 3이
+    12판 중 3판만 섰다. 그런데 시험은 기본 시드 하나로 돌아 **초록이었다.**
+
+    | contrast | 유효 칸 | 규칙 3 | paired | random |
+    |---|---|---|---|---|
+    | 0.3 | 11.45 | 12/12 | 0.2499 | 0.5309 |
+    | 0.5 | 10.58 | **12/12** | 0.3604 | 0.5309 |
+    | 0.7 | 9.42 | 12/12 | 0.4592 | 0.5309 |
+    | 0.9 | 8.01 | 3/12 | 0.5643 | 0.5309 |
+
+    경계가 귀무선의 8.26에 정확히 걸린다. **수를 고른 것이 아니라 전제를 적고 그
+    전제를 자로 세웠다** — 아래 `_conditioned`가 매 판 그것을 본다 (GR-6.5).
+    """
     rng = np.random.default_rng(seed)
     made: list[ReferencePrior] = []
     for index in range(count):
@@ -38,6 +72,39 @@ def _references(count: int, *, contrast: float, seed: int = 7) -> list[Reference
         mixed = (1.0 - contrast) * np.full(DEGREES, 1.0 / DEGREES) + contrast * shape
         made.append(
             ReferencePrior(f"곡{index:03d}.flac", tuple(float(v) for v in mixed / mixed.sum()))
+        )
+    return made
+
+
+CORPUS_EFFECTIVE = 10.56
+"""실물 1004곡의 도수 사전 유효 칸 — `other` 스템 (D-0446).
+
+**`contrast`를 이 수로 고른다.** 통과하는 값이 아니라 **실물을 닮는 값**이다 —
+0.5가 10.58로 여기 붙고, 내가 처음 쓴 0.7은 9.42로 실물보다 뾰족했다. 「통과하니까」로
+고르면 D-0325가 다시 난다. (`mix`는 11.36으로 더 평평하다.)
+"""
+
+CORPUS_CONTRAST = 0.5
+"""`CORPUS_EFFECTIVE`에 가장 가까운 `contrast`. 아래 자가 매 판 그 거리를 본다."""
+
+
+def _conditioned(count: int, *, seed: int = 7) -> list[ReferencePrior]:
+    """판정 규칙 3을 **물을 수 있는** 표본 (D-0446).
+
+    귀무선보다 평평한지, 그리고 **실물에서 멀지 않은지** 여기서 확인하고 낸다. 확인
+    없이 `contrast`만 적으면 그 수가 왜 그 값인지가 글에만 남고, 글은 썩는다 (D-0126).
+    """
+    made = _references(count, contrast=CORPUS_CONTRAST, seed=seed)
+    mine = _effective([item.prior for item in made])
+    if mine <= NULL_EFFECTIVE:
+        raise AssertionError(
+            f"표본이 귀무선보다 뾰족하다(유효 칸 {mine:.2f} <= {NULL_EFFECTIVE:.2f}). "
+            "이 표본으로는 판정 규칙 3을 물을 수 없다 (D-0446)"
+        )
+    if abs(mine - CORPUS_EFFECTIVE) > 0.5:
+        raise AssertionError(
+            f"표본 유효 칸 {mine:.2f}이 실물 {CORPUS_EFFECTIVE:.2f}에서 멀다. "
+            "통과하는 값이 아니라 실물을 닮는 값으로 고른다 (D-0446 · D-0325)"
         )
     return made
 
@@ -164,7 +231,8 @@ def test_사전을_무시하는_생성기를_끼우면_하네스가_빨갛게_�
 
 
 def test_곡마다_사전이_다르면_출력이_갈린다():
-    report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
+    """**규칙 3을 물으려면 표본이 귀무선보다 평평해야 한다** (D-0446)."""
+    report = EvaluateHarmonyOutput(FAST).run(_conditioned(30), "test")
     paired = report.line("paired")
     assert paired.mean_distance > 0.0
     assert paired.positive_share > 0.5
@@ -179,12 +247,27 @@ def test_사전이_전부_같으면_정보_없음을_낸다():
 
 
 def test_무작위_사전_쌍이_실측보다_느슨하다():
-    """`random`은 단체 위 균등분포라 실측보다 훨씬 뾰족하다. 귀무선이 실측에 지면
+    """귀무선이 실측에 지면 사전이 아니라 지표나 배관을 의심한다 — 판정 규칙 3항이다.
 
-    사전이 아니라 지표나 배관을 의심해야 한다 — 판정 규칙 3항이 그것이다.
+    **옛 글은 `random`을 *«단체 위 균등분포라 실측보다 훨씬 뾰족하다»*라고 적었다**
+    (D-0446). 거꾸로다 — 단체 위 균등이라서 **평평하다.** 뾰족한 쪽은 `dirichlet(0.6)`로
+    짠 표본이었고, 그래서 이 단언은 **28%만 참인 동전던지기**였다 (쌍 12 · 시드 25판).
+
+    규칙이 설 수 있는 표본에서 묻는다. 그러면 **쌍을 늘려도 뒤집히지 않는다.**
     """
-    report = EvaluateHarmonyOutput(FAST).run(_references(30, contrast=0.9), "test")
+    report = EvaluateHarmonyOutput(FAST).run(_conditioned(30), "test")
     assert report.line("paired").mean_distance < report.line("random").mean_distance
+
+
+def test_귀무선보다_뾰족한_표본은_규칙_3을_못_묻는다():
+    """**양성 대조** (D-0259). 옛 표본이 실제로 걸리는지 본다.
+
+    이 단언이 깨지면 위의 자가 **아무것도 안 가르는 것**이고, 그때부터 `_conditioned`는
+    장식이다.
+    """
+    mine = _effective([item.prior for item in _references(30, contrast=0.9)])
+
+    assert mine <= NULL_EFFECTIVE, f"옛 표본 유효 칸 {mine:.2f}이 귀무선보다 커졌다"
 
 
 # ------------------------------------------------------------------ 극한과 마디 수

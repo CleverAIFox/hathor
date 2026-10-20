@@ -53,13 +53,51 @@ PERMUTATIONS = 200
 """라벨 뒤섞기 횟수. **귀무를 먼저 돌린다** (O-25 (4))."""
 
 
+ARTISTS: dict[str, str] = {}
+"""`source_key` → 아티스트. **`load_artists()`가 채운다** (D-0446).
+
+표를 아홉 자리에 인자로 꿰면 `report()` 서명이 넷째 위치 인자를 받게 되고, 그 자리가
+라벨·키와 섞인다. **채우는 곳이 하나(`main`)이고 읽는 곳이 둘**이므로 모듈에 둔다.
+"""
+
+
+def load_artists(out: Path) -> dict[str, str]:
+    """`source_key` → TPE1 글자. **파일명을 안 자른다** (D-0374 · D-0446).
+
+    옛 자는 `stem.split("-", 1)[0]`이었다. `G-DRAGON-무제`가 `g`가 되고, 첫 토막이
+    같은 서로 다른 아티스트가 **한 사람으로 뭉친다** — 제외 마스크가 그만큼 넓어져
+    **후보를 과하게 덜어낸다.** D-0374가 `probe_artist`와 `probe_id3`에서 같은 자를
+    고쳤는데 **이 도구는 손이 안 갔다** — 고친 것은 결함이 아니라 *그 파일의* 결함이었다.
+
+    정본은 인제스트가 적은 태그다. `probe_artist`가 이미 그 줄을 읽으므로 **그 둘을
+    다시 안 만든다** (D-0424).
+    """
+    from probe_artist import latest_jsonl, load_records
+
+    latest = latest_jsonl(out)
+    if latest is None:
+        return {}
+    return {
+        str(record["source_key"]): str(record["tags"]["artist"]).strip().casefold()  # type: ignore[index]
+        for record in load_records(latest)
+    }
+
+
 def artist_of(source_key: str) -> str:
-    """파일 이름 앞부분. **같은 아티스트를 후보에서 빼려고 쓴다.**
+    """`ARTISTS`에서 꺼낸다. **같은 아티스트를 후보에서 빼려고 쓴다.**
 
     같은 조성이 같은 아티스트일 수 있고, 그러면 조성이 아니라 음색을 재게 된다 —
     D-0099가 *"겹치면 잡음도 함께 움직인다"*고 적은 부류다. **제외이지 문턱이 아니다.**
+
+    **없으면 운다.** 파일명으로 되돌아가면 옛 자가 조용히 살아나고, 화면에는 아무
+    표시도 안 남는다 (D-0292).
     """
-    return Path(source_key).stem.split("-", 1)[0].strip().casefold()
+    try:
+        return ARTISTS[source_key]
+    except KeyError:
+        raise LookupError(
+            f"{source_key}의 아티스트가 표에 없다. `load_artists`를 먼저 부른다 (D-0446)"
+        ) from None
 
 
 def chroma_of(out: Path) -> dict[str, np.ndarray]:
@@ -369,6 +407,18 @@ def main() -> int:
         return 1
     if args.clear:
         labels = {key: name for key, name in labels.items() if AMBIGUOUS not in name}
+
+    # **아티스트는 태그에서 온다** (D-0446). 표가 라벨을 다 못 덮으면 멈춘다 —
+    # 파일명으로 되돌아가면 D-0374가 고친 자가 이 도구에서만 조용히 살아난다.
+    ARTISTS.update(load_artists(args.out))
+    missing = sorted(set(labels) - set(ARTISTS))
+    if missing:
+        print(
+            f"아티스트 표가 {len(missing)}곡을 못 덮는다(예: {missing[0]}). "
+            f"`{args.out}`에 `scan-*.jsonl`이 최신인지 본다 (D-0446)",
+            file=sys.stderr,
+        )
+        return 1
 
     mine, home = vectors_of(args.out, args.keys)
     if not mine:

@@ -68,7 +68,7 @@ NETWORK = (
     "prefect",
 )
 """망 라이브러리. **`urllib.parse`만 쓰는 것도 잡는다** — 파서만 쓰는지 요청도 보내는지
-가르려면 호출을 따라가야 하고, 접점 파일이 하나뿐인 지금은 **넓게 잡는 쪽이 싸다.**
+가르려면 호출을 따라가야 하고, 접점이 손에 꼽는 지금은 **넓게 잡는 쪽이 싸다.**
 
 **`mlflow` · `prefect`도 센다** (D-0224). 둘 다 서버에 HTTP로 붙는 클라이언트인데 이름에
 `requests`가 안 보인다 — 여기 없으면 새 구멍이 검사를 그냥 지난다."""
@@ -98,8 +98,25 @@ ALLOWED = {
 """망을 타도 되는 자리. **사유와 보내는 것을 함께 적는다.**
 
 **늘리지 않는 것이 목표다.** 한 줄이 늘면 오디오가 나갈 수 있는 자리가 하나 는다.
-**밖으로 가는 것은 MusicBrainz 둘이다.** MLflow · Prefect 둘은 로컬 서버에만 붙는다 (D-0224).
+어디로 가는지는 아래 `OUTWARD`가 가른다 — **이 글로 세지 않는다** (D-0446).
 서버를 붙이는 날 여기에 줄이 생기고, 그때 D-0015의 스키마가 함께 와야 한다."""
+
+OUTWARD = frozenset(
+    {
+        "tools/probe_musicbrainz.py",
+        "core/hathor/infrastructure/musicbrainz_lookup.py",
+        "tools/watch_papers.py",
+    }
+)
+"""**기기 밖으로 나가는** 접점. 나머지는 로컬 주소만 받는다 (D-0224).
+
+이 집합이 없던 동안 내역은 **글로만 있었다.** D-0424가 `watch_papers`를 `ALLOWED`에
+넣고 **바로 위 문단은 안 고쳤다** — 그 문단도, `MASTER` 두 줄도, `README` 한 줄도
+*«밖 둘 · 로컬 둘»*로 남았다. `README`는 **한 줄 안에서 「5곳 (밖 2 · 로컬 2)」**이었고
+축은 `5`만 읽어 초록이었다 (D-0126: 안 걸면 안 돈다).
+
+**내역을 데이터로 둔다.** 그래야 `doc_counts`가 밖과 로컬을 따로 세고, 글이 썩으면
+운다. 줄을 더할 때 여기 넣을지 말지를 **반드시 한 번 고르게 되는 것**이 목적이다."""
 
 IMPORT = re.compile(r"^\s*(?:import|from)\s+([\w.]+)", re.M)
 
@@ -138,6 +155,21 @@ def check() -> list[str]:
     return problems
 
 
+def pairing_problems() -> list[str]:
+    """`OUTWARD`가 `ALLOWED` 밖을 가리키는가 (D-0446).
+
+    **`check()`에 안 넣는다.** 저쪽은 *나무를 훑어* 안 적힌 접점을 찾는 일이고 시험이
+    `ALLOWED`를 비워 두고 부른다 — 거기 끼우면 **심은 나무마다 이 경고가 세 줄씩**
+    따라 나와 진짜 발견을 덮는다. 이것은 나무가 아니라 **두 상수 사이의 약속**이다.
+
+    어긋나면 밖과 로컬의 합이 총합과 안 맞고, 그 둘을 세는 축이 조용히 틀린 수를 낸다.
+    """
+    return [
+        f"`OUTWARD`의 {name}이 허용 목록에 없다. 둘이 어긋났다 (D-0446)"
+        for name in sorted(OUTWARD - set(ALLOWED))
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="망 송신 접점 검사 (D-0134)")
     parser.add_argument("--check", action="store_true", help="기본 동작. 배선을 위해 받는다")
@@ -149,13 +181,18 @@ def main() -> int:
             print(f"  {name}\n      {reason}")
         return 0
 
-    problems = check()
+    problems = pairing_problems() + check()
     if problems:
         print(f"허용되지 않은 망 접점이 {len(problems)}곳 있다.", file=sys.stderr)
         for text in problems:
             print(f"  - {text}", file=sys.stderr)
         return 1
-    print(f"망 접점 검사 통과 · 허용 {len(ALLOWED)}곳")
+    # **내역을 같이 찍는다** (D-0446). 총합만 올리면 밖이 둘인지 셋인지 화면으로 못
+    # 가르고, 그 틈에서 문서 네 자리가 *«밖 둘»*로 썩었다.
+    print(
+        f"망 접점 검사 통과 · 허용 {len(ALLOWED)}곳 · "
+        f"밖 {len(OUTWARD)}곳 · 로컬 {len(ALLOWED) - len(OUTWARD)}곳"
+    )
     return 0
 
 

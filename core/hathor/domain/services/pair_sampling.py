@@ -62,6 +62,44 @@ def sample_pairs(
     return picked
 
 
+def sample_index_pairs(
+    count: int, want: int, *, generator: np.random.Generator
+) -> tuple[tuple[int, int], ...]:
+    """자리 번호로 된 중복 없는 쌍. **거절 표본은 위와 같은 꼴이다** (D-0446).
+
+    `evaluate_harmony_output`이 같은 일을 제 안에서 다시 짰고, 베끼면서 `seen`과
+    `continue`를 빠뜨려 **`limit`과 `raise`가 닿지 않는 코드**가 돼 있었다. 바퀴를
+    다시 안 만든다 (D-0424) — 그쪽은 참조곡 **자리 번호**를 쓰고 `exclude`가 없어서
+    `sample_pairs`를 그대로 못 쓴다. 그래서 **알고리즘을 이 파일에 모으고** 얼굴만 둘로 둔다.
+
+    모자라면 **운다.** 조용히 덜 내면 그만큼 적은 표본으로 잰 것이 되고, 수는 아무
+    표시 없이 작아진다 (D-0230).
+    """
+    if want < 1:
+        raise ValueError("쌍 수는 1 이상이어야 한다")
+    if count < 2:
+        raise ValueError("곡이 둘 이상이어야 쌍을 만들 수 있다")
+
+    seen: set[tuple[int, int]] = set()
+    picked: list[tuple[int, int]] = []
+    attempts = 0
+    limit = max(want * 50, 1000)
+    while len(picked) < want and attempts < limit:
+        attempts += 1
+        left, right = (int(value) for value in generator.choice(count, 2, replace=False))
+        key = (left, right) if left <= right else (right, left)
+        if key in seen:
+            continue
+        seen.add(key)
+        picked.append((left, right))
+    if len(picked) < want:
+        raise ValueError(
+            f"참조곡 {count}개로 겹치지 않는 쌍 {want}개를 못 만들었다 "
+            f"({len(picked)}개까지. 가능한 쌍은 {count * (count - 1) // 2}개다)"
+        )
+    return tuple(picked)
+
+
 def presentation_order(pair: Pair, *, seed: int) -> Pair:
     """화면에 보여줄 좌우 순서를 섞는다.
 
