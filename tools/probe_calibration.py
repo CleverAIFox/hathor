@@ -55,7 +55,10 @@ SEEDS = 24
 """시드 판 수. **D-0327이 오경보율에 쓴 수다** — 새로 안 골랐다 (D-0058)."""
 
 WIDE = 4
-"""쌍을 몇 배로 늘려 볼 것인가. **넉 배면 오차가 반이 되어야 한다.**"""
+"""쌍을 몇 배로 늘려 볼 것인가. **넉 배면 오차가 반이 되어야 한다.**
+
+`--wide`로 바꾼다. 두 배가 궁금하면 `--wide 2`다 — **고르는 값이 아니라 묻는 값이고,
+재지 않고 답하면 그것이 D-0450에서 틀린 그 짓이다.**"""
 
 SOURCE = "other"
 """`eval harmony-output`의 기본 출처. 판정이 걸린 쪽이다 (D-0450)."""
@@ -115,10 +118,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="보고된 오차가 제 변동을 담는가 (D-0451)")
     parser.add_argument("--seeds", type=int, default=SEEDS, help="시드 판 수")
     parser.add_argument("--source", default=SOURCE, help="사전 출처")
+    parser.add_argument("--wide", type=int, default=WIDE, help="쌍을 몇 배로 늘려 볼까")
     args = parser.parse_args()
 
     narrow = DEFAULT_PAIR_COUNT
-    wide = DEFAULT_PAIR_COUNT * WIDE
+    wide = DEFAULT_PAIR_COUNT * args.wide
     try:
         print(f"쌍 {narrow} · 시드 {args.seeds}판 · 출처 {args.source}")
         thin = report_on(f"쌍 {narrow}", *sweep(args.source, narrow, args.seeds))
