@@ -116,6 +116,12 @@ def run_eval_harmony_order(args: argparse.Namespace) -> int:
         rows,
     ):
         print(text)
+    # **사전 등록 규칙은 화면에 온다** (D-0447). 셋(`other>self` · `t>3` · 곡 과반)의
+    # 재료는 위 표에 다 있었는데 **그 AND를 읽는 사람이 머리로 하고 있었다** — 판정이
+    # 안 보이면 없는 판정이다 (D-0191 · D-0266).
+    for label, report in reports.items():
+        mark = "통과" if report.carries_reference_order else "실패"
+        print(f"  `carries_reference_order` [{label}] {mark} — 혼자로는 O-72를 못 닫는다 (D-0311)")
     gain = PairedGain(without=reports["전이 없음"], with_transition=reports["전이 있음"])
     print()
     for text in render_table(

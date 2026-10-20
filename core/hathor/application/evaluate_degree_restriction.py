@@ -108,6 +108,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hathor.application.compare_output import PAIRED_T_FLOOR
 from hathor.application.evaluate_harmony_output import (
     EvaluateHarmonyOutput,
     Histogram,
@@ -295,6 +296,24 @@ class RestrictionReport:
         """쌍마다 실측 몫이 전체 치환보다 작았는가 (D-0083)."""
         return self._win_rate("shuffled")
 
+    def paired_t(self, null: str) -> float:
+        """짝지은 차이의 `t`. **오차를 못 재면 0이다** (D-0447).
+
+        나눗셈 하나다. 재료는 **D-0087이 이미 들여왔는데**(`paired_standard_error`)
+        판정 규칙 셋이 그것을 안 보고 **쌍 단위 승률 0.5**를 보고 있었다.
+
+        **0.5는 문턱이 아니라 동전의 중앙값이다** (D-0327). 합성으로 쟀다 — 차이가
+        -0.0064일 때 옛 자가 **12판 중 6판**을 통과시킨다. 더 나쁜 자리도 있다:
+        차이 +0.0113에서 옛 자는 **12판 전부** 통과시키는데 `t`는 한 번도 2를 못
+        넘는다. 효과가 클 때는 둘이 같고 **갈리는 곳은 0 근처뿐이다.**
+
+        그 판 자신이 리포트에 *«쌍 단위 승률이 60%를 못 넘으면 동전 던지기와
+        구분되지 않는다»*를 적어 두고 **문턱은 0.5로 뒀다** — 화면의 글은 규칙이
+        아니다 (D-0126).
+        """
+        error = self.paired_standard_error(null)
+        return self._gap(null) / error if error > 0.0 else 0.0
+
     def paired_standard_error(self, null: str) -> float:
         """**짝지은 차이의 표준오차** (D-0087). 같은 쌍이므로 선별 표준오차를 못 쓴다."""
         observed = np.asarray(self.line("observed").shares)
@@ -375,6 +394,42 @@ class RestrictionReport:
         -0.208에서 +0.003까지 단조로 올라왔다.
         """
         return self.gap < 0.0 and self.win_rate > 0.5
+
+    # ----------------------------------------------- `t` 자 (D-0447)
+    #
+    # **옆에 둔다. 위 셋을 안 지운다.** D-0084가 그 처방을 적어 뒀다 — *통과했다는
+    # 사실은 그대로 두고 새 규칙을 옆에 둔다.* 결과를 보고 규칙을 고치면 다음에
+    # 무엇을 믿을지 알 수 없게 된다 (GR-6.5 · GR-0.2).
+    #
+    # 셋 다 `|t| >= 2.0`을 더할 뿐 부호 조건은 그대로다. 문턱은 **이미 서 있던
+    # 값**이고 새로 안 골랐다 (D-0327 · D-0102).
+
+    @property
+    def specificity_t(self) -> float:
+        return self.paired_t("matched")
+
+    @property
+    def mass_matched_t(self) -> float:
+        return self.paired_t("within")
+
+    @property
+    def restriction_t(self) -> float:
+        return self.paired_t("shuffled")
+
+    @property
+    def off_scale_exceeds_matched_by_t(self) -> bool:
+        """`off_scale_exceeds_matched`를 `t`로 다시 묻는다 (D-0447)."""
+        return self.specificity_gap > 0.0 and self.specificity_t >= PAIRED_T_FLOOR
+
+    @property
+    def off_scale_is_shared_by_t(self) -> bool:
+        """`off_scale_is_shared`를 `t`로 다시 묻는다 (D-0447)."""
+        return self.mass_matched_gap < 0.0 and -self.mass_matched_t >= PAIRED_T_FLOOR
+
+    @property
+    def restriction_is_sound_by_t(self) -> bool:
+        """`restriction_is_sound`를 `t`로 다시 묻는다 (D-0447)."""
+        return self.gap < 0.0 and -self.restriction_t >= PAIRED_T_FLOOR
 
 
 def _average(lines: Sequence[RestrictionLine], field: str) -> tuple[float, ...]:

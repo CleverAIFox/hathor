@@ -213,16 +213,43 @@ def run_eval_degree_restriction(args: argparse.Namespace) -> int:
     )
     from hathor.application.evaluate_degree_restriction import NULL_REPEATS
 
+    # **사전 등록 규칙 셋이 다 화면에 온다** (D-0447). `restriction_is_sound`와
+    # `off_scale_is_shared`는 **한 글자도 안 나오고 있었다** — 시험만 봤다. 안 보이는
+    # 판정은 없는 판정이다 (D-0191 · D-0266).
+    #
+    # **`t` 자를 옆에 적는다.** 옛 자가 0 근처에서 동전이다 (D-0327 · D-0447). 둘이
+    # 갈리면 그 줄이 **「아직 모른다」**이지 통과가 아니다.
+    matched_by_t = report.off_scale_exceeds_matched_by_t
+
+    def _verdicts(old: bool, new: bool) -> str:
+        if old == new:
+            return "통과" if old else "실패"
+        says = "통과" if old else "실패"
+        reads = "통과" if new else "실패"
+        return f"**갈린다** — 승률 자는 {says}, `t` 자는 {reads}"
+
     print(
         f"\n등가선 대비 = {report.specificity_gap:+.4f}"
         f" ±{report.specificity_standard_error:.4f} (짝지은 표준오차)"
+        f" · t = {report.specificity_t:+.2f}"
         f" · 쌍 단위 승률 {report.specificity_win_rate:.1%}\n"
         f"판정: {verdict}\n"
+        f"      {_verdicts(report.off_scale_exceeds_matched, matched_by_t)}\n"
         f"\n[참고] 조 내 치환 대비 = {report.mass_matched_gap:+.4f}"
-        f" · 승률 {report.mass_matched_win_rate:.1%}"
-        f" · 전체 치환 대비 = {report.gap:+.4f}\n"
+        f" ±{report.paired_standard_error('within'):.4f}"
+        f" · t = {report.mass_matched_t:+.2f}"
+        f" · 승률 {report.mass_matched_win_rate:.1%}\n"
+        f"       `off_scale_is_shared`: "
+        f"{_verdicts(report.off_scale_is_shared, report.off_scale_is_shared_by_t)}\n"
+        f"[참고] 전체 치환 대비 = {report.gap:+.4f}"
+        f" ±{report.paired_standard_error('shuffled'):.4f}"
+        f" · t = {report.restriction_t:+.2f}"
+        f" · 승률 {report.win_rate:.1%}\n"
+        f"       `restriction_is_sound`: "
+        f"{_verdicts(report.restriction_is_sound, report.restriction_is_sound_by_t)}\n"
         f"       **둘 다 0점이 0이 아니라 단독으로 읽지 않는다** (D-0084 · D-0086).\n"
         f"\n귀무선은 {NULL_REPEATS}회 뽑아 쌍별로 평균했다. 선마다 난수 흐름이 따로다 (D-0087).\n"
+        f"**승률 0.5는 문턱이 아니라 동전의 중앙값이다** — `t` 자를 옆에 뒀다 (D-0447).\n"
     )
     print("--- 읽는 법 ---")
     print("**전변동은 칸별 절댓값의 합이라 다이어토닉과 비음계로 정확히 쪼개진다.** 모형이")

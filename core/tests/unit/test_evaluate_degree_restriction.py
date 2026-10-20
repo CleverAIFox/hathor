@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -347,3 +350,87 @@ def test_짝지은_표준오차를_낸다():
     report = EvaluateDegreeRestriction(OutputCondition(pair_count=60)).run(made, "test")
     assert report.specificity_standard_error > 0.0
     assert report.specificity_standard_error < report.line("observed").standard_error * 3
+
+
+# ------------------------------------------------- 판정이 화면에 온다 (D-0447)
+
+PREREGISTERED = "사전 등록한"
+"""판정 규칙을 가리키는 말. **표식이 아니라 이미 쓰고 있던 문구다** — 새 표식을
+만들면 그것을 안 붙인 규칙이 생긴다 (D-0219)."""
+
+RULE_FLOOR = 12
+"""전수로 찾은 사전 등록 규칙의 **바닥** (D-0230). 실측 15개다.
+
+파서가 어긋나 0개를 찾으면 아래 시험이 **아무것도 안 보고 통과한다.**
+"""
+
+
+def _preregistered() -> list[tuple[str, str]]:
+    """`(파일, 이름)`. **전수로 찾는다** — 셋을 손으로 적으면 넷째가 빠진다 (D-0358)."""
+    app = Path(__file__).resolve().parents[2] / "hathor"
+    found: list[tuple[str, str]] = []
+    for path in sorted(app.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and PREREGISTERED in (
+                ast.get_docstring(node) or ""
+            ):
+                found.append((path.relative_to(app).as_posix(), node.name))
+    return found
+
+
+def _reads(node: ast.AST) -> set[str]:
+    """그 조각이 읽는 속성 이름."""
+    return {item.attr for item in ast.walk(node) if isinstance(item, ast.Attribute)}
+
+
+def _screen() -> set[str]:
+    """**화면까지 닿는** 속성 이름 (D-0447).
+
+    글자로 찾으면 주석이 화면 행세를 한다. 처음엔 파일 본문에서 이름을 찾았고, 내가
+    *«이 둘은 한 글자도 안 나왔다»*라고 적은 **주석 자신이** 그물을 통과시켰다 —
+    심은 결함에 안 울어서 알았다 (D-0259).
+
+    그다음엔 화면 코드의 **직접** 읽기만 셌더니 `beats`가 걸렸다. 그것은 멀쩡하다 —
+    `compare_aggregation`이 읽어 제 속성으로 내고 그쪽이 화면에 간다. **한 다리
+    건너는 닿는 것이다.** 그래서 화면에서 시작해 읽기를 따라간다.
+    """
+    app = Path(__file__).resolve().parents[2] / "hathor"
+    bodies: dict[str, list[ast.AST]] = {}
+    found: set[str] = set()
+    for path in sorted(app.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        if "interfaces" in path.relative_to(app).parts:
+            found |= _reads(tree)
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                bodies.setdefault(node.name, []).append(node)
+    growing = True
+    while growing:
+        growing = False
+        for name in sorted(found & bodies.keys()):
+            for node in bodies.pop(name):
+                added = _reads(node) - found
+                if added:
+                    found |= added
+                    growing = True
+    return found
+
+
+def test_사전_등록_규칙을_전수로_찾는다() -> None:
+    """**그물이 안 비었다** (D-0230). 0개를 찾고 통과하는 것이 가장 나쁘다."""
+    assert len(_preregistered()) >= RULE_FLOOR
+
+
+def test_사전_등록_규칙은_전부_화면에_온다() -> None:
+    """**안 보이는 판정은 없는 판정이다** (D-0191 · D-0266).
+
+    셋이 빠져 있었다 — `restriction_is_sound`와 `off_scale_is_shared`는 **한 글자도**
+    안 나왔고 `carries_reference_order`는 **재료만** 표에 있어 AND를 사람이 머리로
+    했다. 셋 다 시험은 통과하고 있었다.
+    """
+    screen = _screen()
+    missing = [f"{where}:{name}" for where, name in _preregistered() if name not in screen]
+
+    assert missing == [], f"화면에 안 오는 판정: {' · '.join(missing)}"
