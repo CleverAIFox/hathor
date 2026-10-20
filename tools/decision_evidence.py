@@ -147,6 +147,16 @@ D-0133이 *"결정의 근거는 사람이 아니라 논거다"*라고 적고 **�
 PLAN은 그 뒤로 «25곳»이라고 적어 뒀는데 실측은 **26건 귀속 · 근거 없는 것 0건**이다 —
 갚혀 있는 빚을 두 해 가까이 장부에 남겨 둔 셈이다."""
 
+NARRATED = re.compile(
+    r"(반대했|골랐|정했|택했|판정했|지시했|승인했|거부했|요구했|물었|짚었|시켰)다\s*—\s*\S"
+)
+"""**간접 서술로 적은 근거** (D-0443).
+
+D-0438·D-0443이 발화 인용을 간접 서술로 옮기면서 **따옴표가 사라졌다.** 아래 규칙의
+의도는 *«무엇이 판단을 움직였는지 기록 안에서 확인할 수 있는가»*이고 간접 서술은 그것을
+만족한다 — **못 보는 것은 정규식뿐이었다.** 귀속 동사 바로 뒤에 붙은 서술을 센다.
+"""
+
 QUOTED = re.compile(r'\*"[^"]+"\*|«[^»]+»|"[^"]{4,}"')
 """그 사람의 말이 기록 안에 남아 있는가.
 
@@ -167,7 +177,8 @@ def check_attribution(records: list[Record]) -> list[str]:
     """
     problems: list[str] = []
     for record in records:
-        if ATTRIBUTION.search(record.body) and not QUOTED.search(record.body):
+        shown = QUOTED.search(record.body) or NARRATED.search(record.body)
+        if ATTRIBUTION.search(record.body) and not shown:
             problems.append(
                 f"{record.identifier}이 판단을 사람에게 귀속시키면서 그 사람의 말이 없다. "
                 "무엇이 판단을 움직였는지 그 자리에 적는다 (D-0133 · D-0285)"

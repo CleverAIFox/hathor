@@ -23,8 +23,9 @@ ALLOW = STYLE.ALLOW
 ROOT = Path(STYLE.ROOT)
 
 
-def _said(body: str) -> list[tuple[int, str]]:
-    found: list[tuple[int, str]] = SPEECH.speech(body, ALLOW)
+def _said(body: str, marker: str = "") -> list[tuple[int, str]]:
+    """규칙 10의 표지는 **규칙 4와 다르다** (D-0443)."""
+    found: list[tuple[int, str]] = SPEECH.speech(body, marker or SPEECH.SPEECH_OK)
     return found
 
 
@@ -40,7 +41,7 @@ def _said(body: str) -> list[tuple[int, str]]:
         "빚 상환은 건수가 중요하지 라인 수가 중요한 게 아니지 않나",
         "돌리는 속도가 너무 오래 걸리는 느낌인데 이거 맞아?",
         "문서 4축은 디시즌 마스터 플랜 프로포절인데? 흡수 가능하잖아.",
-        "아키텍처가 완전 개 엉망진창이네.",
+        "이거 왜 하는지 모르겠다. 그냥 넘겨도 되냐?",
     ],
 )
 def test_구어체_인용을_잡는다(quoted: str) -> None:
@@ -87,7 +88,7 @@ def test_자료인_발화는_표지로_남는다() -> None:
     """
     typed = "> *«바다가자, You(=i), 처음부터 너와 나 좋아하는데 이런 노래 만들어줘»*"
     assert _said(typed + "\n")
-    assert not _said(f"{typed}  {ALLOW}\n")
+    assert not _said(f"{typed}  {SPEECH.SPEECH_OK}\n")
 
 
 def test_귀_판정_대부분은_그물_밖이다() -> None:
@@ -158,3 +159,88 @@ def test_입구에_걸려_있다(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert [one for one in problems if "D-0438" in one], "구어체 검사가 입구에 없다"
     assert sum("D-0438" in one for one in problems) == 1, "과거 축 말고 다른 문서에도 걸었다"
+
+
+# ------------------------------------------------- D-0443이 연 구멍 셋
+
+
+def test_뒷줄_표지가_앞_인용을_안_덮는다() -> None:
+    """**표지는 인용이 시작하는 줄에서만 센다** (D-0443).
+
+    걸친 줄을 전부 보면 다음 인용을 위해 붙인 표지가 앞 인용까지 덮는다. 실측으로
+    D-0368이 그렇게 빠져나갔고, **D-0438은 그것을 0건이라 적었다.**
+    """
+    shielded = (
+        "- **배경**: 꾸러미로 보냈다 — *«보면 바로 이해가 될거임\n"
+        f"  백문이불여일견»*. 그가 짚었다:  {SPEECH.SPEECH_OK}\n"
+    )
+    assert _said(shielded), "뒷줄 표지가 앞 인용을 덮는다"
+
+
+def test_표지가_규칙마다_따로다() -> None:
+    """**표지 하나가 규칙 둘을 겸하면 한쪽이 다른 쪽을 덮는다** (D-0443).
+
+    규칙 4(경어체·명령형)의 표지가 붙은 자리 다섯이 규칙 10에서 조용히 빠졌다.
+    """
+    assert SPEECH.SPEECH_OK != ALLOW
+    line = '사용자가 물었다 — *"이거 맞아?"*'
+    assert _said(f"{line}  {ALLOW}\n"), "규칙 4 표지가 규칙 10을 덮는다"
+    assert not _said(f"{line}  {SPEECH.SPEECH_OK}\n")
+
+
+def test_격식체여도_발화를_옮기면_잡는다() -> None:
+    """**말투만 보면 모자란다** (D-0443).
+
+    D-0437의 표가 그랬다 — 걸릴 낱말이 없는 발화 인용이다. 귀속 서술이 **인용 바로
+    앞**에 붙어 있을 때만 센다. 창으로 훑으면 오탐이 반이 된다 (D-0438 실측 25/50).
+    """
+    assert _said('- **배경**: 사용자가 말했다 — *"잘 잡은 것 같다"*\n')
+    assert not _said('- **배경**: 그 기록이 *"지표가 목표가 된다"*고 적었다.\n')
+    assert not _said('- **배경**: D-0094가 *"지표가 목표가 된다"*고 적었다.\n')
+
+
+# ------------------------------------------------- 욕설은 어디 있든 (D-0443)
+
+# **글자를 쪼개 쓴다.** 이 파일에 통째로 적으면 검사가 제 시험을 문다 — 예외를
+# 둘로 늘리면 숨을 자리가 둘이 된다.
+CURSE = "씨" + "발"
+SLANG = "졸" + "라"
+
+
+def test_욕설을_잡는다(tmp_path: Path) -> None:
+    """**사용자가 넷을 찾아 왔고 내 검사는 0건을 찍고 있었다** (D-0443)."""
+    (tmp_path / "a.md").write_text(f"사용자의 말 그대로 *«뭐여 {CURSE}.»*\n", encoding="utf-8")
+
+    assert SPEECH.profanity(tmp_path, ["a.md"]), "욕설을 못 잡는다"
+
+
+def test_문서_밖도_본다(tmp_path: Path) -> None:
+    """**시험 파일에 복사돼 있었다** (D-0443).
+
+    말투 검사는 결정 기록만 본다. 욕설은 **추적 파일 전부**에서 0이어야 한다.
+    """
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "t.py").write_text(f'"""{SLANG} 좋은데."""\n', encoding="utf-8")
+
+    assert SPEECH.profanity(tmp_path, ["core/t.py"]), "문서 밖을 안 본다"
+
+
+@pytest.mark.parametrize("line", ["동시발음 3", "장비가 있어야 도는 도구라면", "개인 연구라도"])
+def test_앞_글자가_붙으면_낱말이_아니다(tmp_path: Path, line: str) -> None:
+    """실측 오탐 6건이 전부 이 꼴이다 — `동시발음` · `도구라면` · `연구라도`."""
+    (tmp_path / "a.md").write_text(line + "\n", encoding="utf-8")
+
+    assert not SPEECH.profanity(tmp_path, ["a.md"]), f"오탐: {line}"
+
+
+def test_저장소에_욕설이_0건이다() -> None:
+    """**지금 0이 아니면 이 관문을 켤 수 없다.**"""
+    assert SPEECH.profanity(ROOT, SPEECH.tracked_files(ROOT)) == []
+
+
+def test_욕설_검사가_입구에_걸려_있다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**안 걸면 안 돈다** (D-0126). `check()`가 들고 오는지 본다."""
+    style: ModuleType = STYLE
+    monkeypatch.setattr(style, "profanity", lambda root, tracked: [("a.md", 7, "x")])
+
+    assert [one for one in style.check() if "D-0443" in one], "욕설 검사가 입구에 없다"

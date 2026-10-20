@@ -61,7 +61,7 @@ import sys
 from pathlib import Path
 
 from decision_ledger import keeper_text
-from doc_speech import record_of, speech
+from doc_speech import SPEECH_OK, profanity, record_of, speech, tracked_files
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -277,7 +277,7 @@ def check_speech(name: str, text: str) -> list[str]:
     return [
         f"{name}:{line} {record_of(text, line)} 구어체 인용. 간접 서술로 옮긴다"
         f" — «{quoted[:50]}» (D-0438)"
-        for line, quoted in speech(text, ALLOW)
+        for line, quoted in speech(text, SPEECH_OK)
     ]
 
 
@@ -512,6 +512,11 @@ def check() -> list[str]:
         if name.startswith(PAST):
             problems.extend(check_records(name, text))
             problems.extend(check_speech(name, text))
+    # **문서가 아니라 추적 파일 전부를 본다** (D-0443). 욕설은 어디 있든 안 된다.
+    problems += [
+        f"{name}:{number} 욕설·은어 — {word}. 정본에 안 적는다 (D-0443)"
+        for name, number, word in profanity(ROOT, tracked_files(ROOT))
+    ]
     return problems
 
 

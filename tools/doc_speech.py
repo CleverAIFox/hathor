@@ -48,6 +48,36 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+PROFANITY = re.compile(
+    r"씨발|(?<![가-힣])시발|(?<![가-힣])졸라|존나|(?<![가-힣])구라"
+    r"|개같|개많|병신|지랄|좆|(?<![가-힣])새끼"
+)
+"""**추적 파일 전체에서 0건이어야 하는 말** (D-0443).
+
+### 왜 말투 검사와 따로인가
+
+말투 검사는 **결정 기록의 인용 안**만 본다. 욕설은 **어디에 있든 안 된다** — 실측으로
+사용자가 넷을 찾아 왔고 **그중 하나가 시험 파일**이었다. *«죄다 구라에 가짜에 Mock에»*가
+`test_gate_types.py`의 머리말에 복사돼 있었고 내 검사는 `docs/`만 보고 있었다.
+
+### 앞 글자를 본다
+
+`동시발음`의 «시발» · `도구라면`과 `연구라도`의 «구라»가 오탐이다. 앞에 한글이 붙어
+있으면 낱말이 아니다 — 실측 오탐 6건이 전부 그 꼴이고 경계로 0이 된다.
+
+**탈출구가 없다.** 인용이든 아니든 정본에 안 적는다.
+"""
+
+
+SPEECH_OK = "<!--speech-ok-->"
+"""**발화 원문이 자료인 자리**의 표지 (D-0443).
+
+규칙 4의 `check_doc_style.ALLOW`를 같이 쓰다가 **표지 하나가 규칙 둘을 겸했다** —
+경어체·명령형 때문에 붙인 표지가 발화 인용까지 덮었고, 실측으로 다섯 곳이 그렇게
+빠져나갔다. **규칙마다 제 표지를 둔다.**
+"""
+
+
 SPOKEN = (
     # 채팅 기호
     r";;|ㅋ|ㅠ|ㅡㅡ|\?\?|\?!"
@@ -82,18 +112,39 @@ SPOKEN = (
 QUOTE = re.compile(r'\*?[«"]([^»"\n]{2,}(?:\n[^»"\n]*){0,4}?)[»"]\*?')
 """인용 덩어리. **네 줄까지 넘는다** — 실측 최대가 세 줄이다."""
 
+SAID = re.compile(
+    r"(사용자|그가|그는|사람이|판정자)[^«\"]{0,60}?"
+    r"(말했다|물었다|짚었다|지적했다|했다|잘랐다|반대했다|뒤집었다|되물었다|덧붙였다"
+    r"|보냈다|평했다|적었다|막았다|멈춰 세웠다|밀어붙였다|의 말|:|—)\s*$"
+)
+"""**인용 바로 앞**에 붙은 발화 서술. 말투가 격식이어도 발화를 옮긴 것은 막는다 (D-0443).
+
+### 창을 쓰면 못 쓴다
+
+D-0438은 이 분기를 **앞 70자를 훑는 꼴**로 써 보고 **50건 중 25건이 오탐**이라 버렸다 —
+다른 절의 동사가 창에 들어왔고 짧은 명사구 인용까지 물었다. **줄 끝에 붙여** 다시 재니
+**29건에 오탐 0**이다. 버릴 분기가 아니라 **잘못 쓴 분기였다.**
+
+`그 기록이 적었다`는 안 걸린다 — 주체가 사람을 가리키는 꼴일 때만 본다.
+"""
+
+
 RECORD = re.compile(r"^## (D-\d{4})\.", re.M)
 
 SKIP = re.compile(r"^(?:    |\t|```)")
 """안 보는 줄. **들여쓴 블록은 산문이 아니다** — `재현`·`강제자` 칸과 코드다."""
 
 
-def _marked(lines: list[str], first: int, last: int, allow: str) -> bool:
-    """인용이 걸친 줄 가운데 하나라도 탈출구 표지를 달았는가."""
-    return any(allow in lines[index] for index in range(first, last + 1))
+def _marked(line: str, allow: str) -> bool:
+    """**인용이 시작하는 줄**에만 표지를 인정한다 (D-0443).
+
+    걸친 줄을 전부 보면 **다음 인용을 위해 붙인 표지가 앞 인용까지 덮는다.** 실측으로
+    D-0368이 그렇게 빠져나갔다 — 두 줄짜리 인용의 끝줄에 뒷인용의 표지가 있었다.
+    """
+    return allow in line
 
 
-def speech(text: str, allow: str) -> list[tuple[int, str]]:
+def speech(text: str, allow: str = SPEECH_OK) -> list[tuple[int, str]]:
     """`(줄 번호, 인용)`. **빈 목록이 통과다.**"""
     lines = text.splitlines()
     starts = [0]
@@ -102,11 +153,14 @@ def speech(text: str, allow: str) -> list[tuple[int, str]]:
     found: list[tuple[int, str]] = []
     for match in QUOTE.finditer(text):
         first = _line_of(starts, match.start())
-        last = _line_of(starts, match.end() - 1)
-        if SKIP.match(lines[first]) or _marked(lines, first, last, allow):
+        if SKIP.match(lines[first]) or _marked(lines[first], allow):
             continue
         quoted = " ".join(match.group(1).split())
         if re.search(SPOKEN, quoted):
+            found.append((first + 1, quoted))
+            continue
+        # **말투가 격식이어도 발화를 그대로 옮긴 것은 막는다** (D-0443).
+        if SAID.search(text[: match.start()].rsplit("\n", 1)[-1]):
             found.append((first + 1, quoted))
     return found
 
@@ -133,18 +187,62 @@ def record_of(text: str, line: int) -> str:
     return "(머리말)"
 
 
+SELF = "tools/doc_speech.py"
+"""패턴을 든 파일. **여기만 뺀다** — 막을 말을 적으려면 그 말을 써야 한다.
+
+`check_retired`는 보는 범위가 문서 셋이라 제 파일을 애초에 안 본다. 이 검사는 추적
+파일 전부를 보므로 **한 파일을 이름으로 뺀다.** 그 파일의 시험은 글자를 쪼개 써서
+예외 없이 돈다 — 예외가 둘이 되면 숨을 자리가 둘이 된다.
+"""
+
+
+def profanity(root: Path, tracked: list[str]) -> list[tuple[str, int, str]]:
+    """`(경로, 줄, 걸린 말)`. **추적 파일 전부를 본다** (D-0443)."""
+    found: list[tuple[str, int, str]] = []
+    for name in tracked:
+        if name == SELF:
+            continue
+        path = root / name
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            hit = PROFANITY.search(line)
+            if hit:
+                found.append((name, number, hit.group()))
+    return found
+
+
+def tracked_files(root: Path) -> list[str]:
+    """`git ls-files`. **추적 안 되는 것은 정본이 아니다.**"""
+    import subprocess
+
+    done = subprocess.run(
+        ("git", "ls-files"), cwd=root, capture_output=True, text=True, timeout=60, check=False
+    )
+    return [name for name in done.stdout.splitlines() if name]
+
+
 def main() -> int:
     """홀로 돌 때. `make check`는 `check_doc_style`을 거쳐 부른다."""
-    from check_doc_style import ALLOW, PAST
+    from check_doc_style import PAST
 
     text = (ROOT / PAST).read_text(encoding="utf-8")
-    problems = speech(text, ALLOW)
+    dirty = profanity(ROOT, tracked_files(ROOT))
+    for name, number, word in dirty:
+        print(f"  {name}:{number} 욕설·은어 — {word}", file=sys.stderr)
+
+    problems = speech(text)
     for line, quoted in problems:
         print(f"  {record_of(text, line)} {PAST}:{line} — {quoted[:70]}", file=sys.stderr)
-    if problems:
-        print(f"구어체 인용 {len(problems)}곳. 간접 서술로 옮긴다 (D-0438)", file=sys.stderr)
+    if problems or dirty:
+        if dirty:
+            print(f"욕설·은어 {len(dirty)}곳. 정본에 안 적는다 (D-0443)", file=sys.stderr)
+        if problems:
+            print(f"구어체 인용 {len(problems)}곳. 간접 서술로 옮긴다 (D-0438)", file=sys.stderr)
         return 1
-    print("구어체 인용 검사 통과 · 0건")
+    print(f"구어체 인용 검사 통과 · 0건 · 욕설 0건 (추적 {len(tracked_files(ROOT))}개)")
     return 0
 
 
