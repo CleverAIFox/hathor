@@ -34,8 +34,12 @@ def test_거울이_정본과_같다() -> None:
     assert _other(TOOL.check()) == []
 
 
-def test_세_블록이_다_거울이다() -> None:
-    """표식이 없는 블록은 **손으로 적힌 표**다 — 그것을 막는 것이 이 도구다."""
+def test_블록이_다_거울이다() -> None:
+    """표식이 없는 블록은 **손으로 적힌 표**다 — 그것을 막는 것이 이 도구다.
+
+    **이름에 수를 안 적는다** (D-0449). 셋일 때 적은 이름이 여섯이 되도록 남았다 —
+    `BLOCKS`를 전수로 도니 수는 이름에 있을 까닭이 없다 (D-0358).
+    """
     master = (TOOL.ROOT / "docs" / "MASTER.md").read_text(encoding="utf-8")
 
     for name in TOOL.BLOCKS:
@@ -101,7 +105,7 @@ def test_정본이_비면_막는다(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert any("그물이 비었다" in one for one in TOOL.check())
 
 
-def test_곡_수가_세_블록에서_같다() -> None:
+def test_곡_수가_블록마다_같다() -> None:
     """**1004는 한 번만 재는 수다.** 블록마다 다르면 어느 판의 실측인지 알 수 없다."""
     data = TOOL.canon()
     tracks = {name: data[name]["tracks"] for name in ("corpus", "id3", "artist")}

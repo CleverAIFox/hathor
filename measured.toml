@@ -438,3 +438,60 @@ of = "split_other_mid_permille"
 label = "전수 · 다른 곡 중앙 (돌림)"
 kind = "rate"
 of = "split_turned_mid_permille"
+
+[restriction]
+stamp = "2026-10-20"
+ruler = "2026-10-20 · 쌍 100 · 시드 7 · 귀무 20회 · 다장조 (D-0449)"
+tracks = 1004
+
+# **`MASTER`가 재현 안 되는 수를 「실측」이라 들고 있었다** (D-0449). `other` 0.4357 ·
+# `mix` 0.4670을 내는 산출물이 살아남은 여섯 중 **하나도 없다.** 손으로 적은 수는
+# 자료가 사라져도 안 운다 — 그래서 블록으로 내린다.
+#
+# 아래 수는 `probe_restriction`이 낸 두 판을 옮긴 것이고, `--emit`이 그 옮김을
+# **검산한다.** 바뀐 수가 나오면 내가 잘못 옮긴 것이다.
+[restriction.counts]
+other_observed_permille = 377
+other_matched_permille = 377
+other_mass_permille = 347
+mix_observed_permille = 433
+mix_matched_permille = 433
+mix_mass_permille = 408
+pairs = 100
+
+[[restriction.display]]
+label = "**버리는 몫** — `other` 실측"
+kind = "rate"
+of = "other_observed_permille"
+bold = true
+
+[[restriction.display]]
+label = "`other` 등가선"
+kind = "rate"
+of = "other_matched_permille"
+
+[[restriction.display]]
+label = "`other` 비음계 질량"
+kind = "rate"
+of = "other_mass_permille"
+
+[[restriction.display]]
+label = "**버리는 몫** — `mix` 실측"
+kind = "rate"
+of = "mix_observed_permille"
+bold = true
+
+[[restriction.display]]
+label = "`mix` 등가선"
+kind = "rate"
+of = "mix_matched_permille"
+
+[[restriction.display]]
+label = "`mix` 비음계 질량"
+kind = "rate"
+of = "mix_mass_permille"
+
+[[restriction.display]]
+label = "견준 쌍"
+kind = "count"
+of = "pairs"
