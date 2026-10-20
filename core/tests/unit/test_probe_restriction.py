@@ -12,14 +12,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from pathlib import Path
+from typing import cast
 
 import pytest
 
 from tests.conftest import tool_module
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 TOOL = tool_module("probe_restriction")
 CANON = tool_module("measured")
@@ -88,3 +86,38 @@ class _Exploding:
 
     def emit(self, *_: object) -> list[str]:
         raise AssertionError("못 쟀는데 정본을 썼다")
+
+
+# ------------------------------------------------- 시드 (D-0450)
+
+
+def test_시드를_새로_안_짓는다() -> None:
+    """**정본에서 든다** (D-0043 · D-0424).
+
+    D-0449의 이 탐침이 `DEFAULT_SEED`가 있는데 `7`을 새로 적었다. 정본에 CLI와 다른
+    수가 들어갔고, **그 둘의 차이가 판정을 뒤집는 크기**였다 — `other` 대비가
+    -0.0005에서 +0.0245로, `t`가 -0.05에서 +2.88로 간다.
+    """
+    from hathor.application.evaluate_harmony_output import DEFAULT_PAIR_COUNT, DEFAULT_SEED
+
+    assert TOOL.SEED == DEFAULT_SEED
+    assert TOOL.PAIRS == DEFAULT_PAIR_COUNT
+
+
+def test_시드가_한_곳에만_적혀_있다() -> None:
+    """**여덟 곳에 손으로 박혀 있었다** (D-0450). CLI 다섯 · 응용 둘 · 정본 하나.
+
+    한 곳만 고치는 날이 오면 **같은 자료가 다른 판정을 낸다.**
+    """
+    from hathor.application.evaluate_harmony_output import DEFAULT_SEED
+
+    app = Path(__file__).resolve().parents[2] / "hathor"
+    written = [
+        f"{path.relative_to(app).as_posix()}:{number}"
+        for path in sorted(app.rglob("*.py"))
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if str(DEFAULT_SEED) in line
+    ]
+
+    assert len(written) == 1, f"시드를 손으로 적은 자리: {' · '.join(written)}"
+    assert written[0].startswith("application/evaluate_harmony_output.py")

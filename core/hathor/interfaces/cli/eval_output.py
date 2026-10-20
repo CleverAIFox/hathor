@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, cast
 
+from hathor.application.evaluate_harmony_output import DEFAULT_SEED
 from hathor.domain.services.stem_sets import DEFAULT_STEM_SET
 from hathor.infrastructure.keys_jsonl_store import (
     load_degree_priors,
@@ -389,7 +390,7 @@ def _build_harmony_output(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--bars", type=int, default=DEFAULT_OUTPUT_BARS, help="마디 수")
     parser.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
     parser.add_argument("--key", default="C major", help="출력 조성. 고정한다")
-    parser.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추첨·치환 시드")
     parser.add_argument(
         "--vocabulary",
         choices=("base", "mixture", "control"),

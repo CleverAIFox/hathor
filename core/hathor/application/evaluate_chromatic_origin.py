@@ -96,7 +96,11 @@ from hathor.application.evaluate_degree_restriction import (
     chromatic_indices,
     off_scale_indices,
 )
-from hathor.application.evaluate_harmony_output import Histogram, ReferencePrior
+from hathor.application.evaluate_harmony_output import (
+    DEFAULT_SEED,
+    Histogram,
+    ReferencePrior,
+)
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.domain.value_objects.key import Mode
 
@@ -137,7 +141,7 @@ class OriginCondition:
     """실험 조건 한 묶음. **모든 선이 이 객체 하나를 받는다** (O-25)."""
 
     key_mode: Mode = Mode.MAJOR
-    seed: int = 20260822
+    seed: int = DEFAULT_SEED
     null_repeats: int = NULL_REPEATS
     bootstrap: int = DEFAULT_BOOTSTRAP
     rotated_share: float = DEFAULT_ROTATED_SHARE

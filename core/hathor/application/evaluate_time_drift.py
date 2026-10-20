@@ -54,6 +54,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hathor.application.evaluate_harmony_output import DEFAULT_SEED
 from hathor.domain.services.chroma_drift import DriftObservation
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 
@@ -132,7 +133,7 @@ class EvaluateTimeDrift:
 
     def __init__(
         self,
-        seed: int = 20260822,
+        seed: int = DEFAULT_SEED,
         null_repeats: int = DEFAULT_NULL_REPEATS,
         bootstrap: int = DEFAULT_BOOTSTRAP,
     ) -> None:

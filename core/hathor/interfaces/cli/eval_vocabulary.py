@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
+from hathor.application.evaluate_harmony_output import DEFAULT_SEED
 from hathor.domain.services.stem_sets import DEFAULT_STEM_SET
 from hathor.infrastructure.keys_jsonl_store import (
     load_degree_priors,
@@ -286,7 +287,7 @@ def _build_degree_restriction(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
     parser.add_argument("--key", default="C major", help="선법을 정한다. 버리는 칸이 달라진다")
-    parser.add_argument("--seed", type=int, default=20260822, help="쌍 추첨·치환 시드")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추첨·치환 시드")
 
 
 def _build_chromatic_origin(parser: argparse.ArgumentParser) -> None:
@@ -299,7 +300,9 @@ def _build_chromatic_origin(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스")
     parser.add_argument("--key", default="C major", help="선법을 정한다. 치환 짝이 달라진다")
-    parser.add_argument("--seed", type=int, default=20260822, help="귀무선·회전·부트스트랩 시드")
+    parser.add_argument(
+        "--seed", type=int, default=DEFAULT_SEED, help="귀무선·회전·부트스트랩 시드"
+    )
     parser.add_argument(
         "--rotated-share", type=float, default=0.30, help="눈금선에서 일부러 회전시킬 곡 비율"
     )

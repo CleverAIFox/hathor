@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
+from hathor.application.evaluate_harmony_output import DEFAULT_SEED
 from hathor.domain.services.stem_sets import DEFAULT_STEM_SET
 from hathor.infrastructure.chroma_series_store import (
     find_series_root,
@@ -321,7 +322,7 @@ def _build_harmony_order(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seeds", type=int, default=200, help="시드 수")
     parser.add_argument("--bars", type=int, default=64, help="마디 수")
     parser.add_argument("--key", default="C major", help="출력 조성. 고정한다")
-    parser.add_argument("--seed", type=int, default=20260822, help="추첨 시드")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="추첨 시드")
     parser.add_argument(
         "--use-hold",
         action="store_true",

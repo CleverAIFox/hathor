@@ -35,6 +35,8 @@ from hathor.application.evaluate_degree_restriction import (  # noqa: E402
     EvaluateDegreeRestriction,
 )
 from hathor.application.evaluate_harmony_output import (  # noqa: E402
+    DEFAULT_PAIR_COUNT,
+    DEFAULT_SEED,
     OutputCondition,
     ReferencePrior,
 )
@@ -46,11 +48,15 @@ from hathor.interfaces.cli.roots import resolve_priors  # noqa: E402
 
 SECTION = "restriction"
 
-RULER = "2026-10-20 · 쌍 100 · 시드 7 · 귀무 20회 · 다장조 (D-0449)"
+RULER = "2026-10-20 · 쌍 100 · 시드 20260822 · 귀무 20회 · 다장조 (D-0450)"
 """`[restriction.counts]`를 낸 자의 이름 (D-0374).
 
 **쌍 수와 시드가 둘 다 자다.** 쌍을 바꾸면 표준오차가 바뀌고, 시드를 바꾸면 어느
 쌍을 봤는지가 바뀐다. 귀무 반복 수도 같은 부류다 (D-0087).
+
+**D-0449에서 내가 시드를 새로 지었다** — `DEFAULT_SEED`가 이미 있는데 `7`을 적었고,
+정본에 CLI와 다른 수가 들어갔다. 그 둘의 차이가 **판정을 뒤집는 크기**였다 (D-0450).
+이제 둘 다 `DEFAULT_*`를 든다 — 두 곳에 적으면 어긋난다 (D-0043 · D-0424).
 """
 
 EMITS = (
@@ -69,8 +75,8 @@ EMITS = (
 구별이 안 된다** (GR-0.5). 실측과 등가선을 **따로** 넣고 거울이 둘을 나란히 찍는다.
 """
 
-PAIRS = 100
-SEED = 7
+PAIRS = DEFAULT_PAIR_COUNT
+SEED = DEFAULT_SEED
 
 
 def _permille(value: float) -> int:

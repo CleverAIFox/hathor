@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from hathor.application.evaluate_fusion import EvaluateFusion
+from hathor.application.evaluate_harmony_output import DEFAULT_SEED
 from hathor.domain.services.harmony_prior import HalfChroma
 from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
 from hathor.domain.services.seed_search import FusionMode
@@ -468,7 +469,7 @@ def _build_time_drift(parser: argparse.ArgumentParser) -> None:
         "--left", default="other", help="첫째 관측. **둘째와 겹치면 안 된다** (D-0099)"
     )
     parser.add_argument("--right", default="bass", help="둘째 관측. mix면 전체 믹스 크로마")
-    parser.add_argument("--seed", type=int, default=20260822, help="귀무선·부트스트랩 시드")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="귀무선·부트스트랩 시드")
 
 
 COMMANDS: tuple[Command, ...] = (

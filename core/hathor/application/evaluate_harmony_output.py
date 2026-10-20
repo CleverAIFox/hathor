@@ -141,7 +141,7 @@ class OutputCondition:
     **선마다 흐름이 따로다** (O-34 · D-0094). 예전에는 난수기 하나에서 차례로 뽑아
     **비교선을 하나 더하면 뒤 선의 추첨이 통째로 밀렸다.** `evaluate_degree_restriction`
     에서 실제로 그 일이 났고(D-0086 → D-0087) 여기도 같은 상태였다.
-    **어휘 선을 더하는 이번이 그것을 고칠 때다.**
+    **어휘 선을 더하는 이번이 그것을 고칠 때다.** 정본은 `DEFAULT_SEED` 하나다 (D-0450).
     """
 
     vocabulary: Vocabulary = Vocabulary.BASE
