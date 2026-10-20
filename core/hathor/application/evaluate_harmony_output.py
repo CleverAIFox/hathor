@@ -95,7 +95,7 @@ Grid = np.ndarray[tuple[int, int], np.dtype[np.float64]]
 
 DEFAULT_SEED_COUNT = 1000
 DEFAULT_BAR_COUNT = 8
-DEFAULT_PAIR_COUNT = 100
+DEFAULT_PAIR_COUNT = 400
 DEFAULT_SEED = 20260822
 DEFAULT_KEY = Key(tonic="C", mode=Mode.MAJOR)
 
@@ -130,7 +130,7 @@ class OutputCondition:
     """마디 수. 늘리면 실측이 극한으로 내려간다."""
 
     pair_count: int = DEFAULT_PAIR_COUNT
-    """참조곡 쌍을 몇 개 볼 것인가."""
+    """참조곡 쌍 수. **검정력으로 골랐다** — 100은 8/24, 400은 23/24다 (D-0453)."""
 
     key: Key = DEFAULT_KEY
     """출력 조성. **고정한다** — 조성이 갈리면 화성만 떼어 볼 수 없다 (D-0063)."""

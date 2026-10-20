@@ -48,7 +48,7 @@ from hathor.interfaces.cli.roots import resolve_priors  # noqa: E402
 
 SECTION = "restriction"
 
-RULER = "2026-10-20 · 쌍 100 · 시드 20260822 · 귀무 20회 · 다장조 (D-0450)"
+RULER = "2026-10-21 · 쌍 400 · 시드 20260822 · 귀무 20회 · 다장조 (D-0453)"
 """`[restriction.counts]`를 낸 자의 이름 (D-0374).
 
 **쌍 수와 시드가 둘 다 자다.** 쌍을 바꾸면 표준오차가 바뀌고, 시드를 바꾸면 어느

@@ -440,8 +440,8 @@ kind = "rate"
 of = "split_turned_mid_permille"
 
 [restriction]
-stamp = "2026-10-20"
-ruler = "2026-10-20 · 쌍 100 · 시드 20260822 · 귀무 20회 · 다장조 (D-0450)"
+stamp = "2026-10-21"
+ruler = "2026-10-21 · 쌍 400 · 시드 20260822 · 귀무 20회 · 다장조 (D-0453)"
 tracks = 1004
 
 # **`MASTER`가 재현 안 되는 수를 「실측」이라 들고 있었다** (D-0449). `other` 0.4357 ·
@@ -451,13 +451,13 @@ tracks = 1004
 # 아래 수는 `probe_restriction`이 낸 두 판을 옮긴 것이고, `--emit`이 그 옮김을
 # **검산한다.** 바뀐 수가 나오면 내가 잘못 옮긴 것이다.
 [restriction.counts]
-other_observed_permille = 377
-other_matched_permille = 377
-other_mass_permille = 347
-mix_observed_permille = 433
-mix_matched_permille = 433
+other_observed_permille = 386
+other_matched_permille = 378
+other_mass_permille = 353
+mix_observed_permille = 422
+mix_matched_permille = 421
 mix_mass_permille = 408
-pairs = 100
+pairs = 400
 
 [[restriction.display]]
 label = "**버리는 몫** — `other` 실측"

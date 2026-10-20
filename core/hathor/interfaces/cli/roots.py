@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from hathor.application.evaluate_harmony_output import DEFAULT_PAIR_COUNT
 from hathor.infrastructure.track_bundle_store import BUNDLE_DIRNAME
 from hathor.shared.config.paths import LIBRARY_ROOT_ENV
 
@@ -61,11 +62,12 @@ DEFAULT_SEARCH_KEY = "layer00"
 
 DEFAULT_OUTPUT_SEEDS = 1000
 DEFAULT_OUTPUT_BARS = 8
-DEFAULT_OUTPUT_PAIRS = 100
+DEFAULT_OUTPUT_PAIRS = DEFAULT_PAIR_COUNT
 """O-29 표본. **8마디 하나는 표본이 아니다** (D-0078).
 
-100쌍 곱하기 1000시드가 CPU로 약 16초다. D-0078에 "수 초"라고 적었으나 실측은 그보다
-느리다 — 음원도 GPU도 안 쓰는 것은 맞다.
+**같은 수가 두 곳에 있었다** (D-0453). 여기와 `evaluate_harmony_output`이 각각 100을
+들었고, 쌍 수를 올릴 때 한 곳만 고치면 **화면과 기본값이 갈린다** — 시드가 여덟 곳에
+박혀 판정을 뒤집은 것과 같은 부류다 (D-0043 · D-0450).
 """
 
 

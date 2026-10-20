@@ -121,3 +121,36 @@ def test_시드가_한_곳에만_적혀_있다() -> None:
 
     assert len(written) == 1, f"시드를 손으로 적은 자리: {' · '.join(written)}"
     assert written[0].startswith("application/evaluate_harmony_output.py")
+
+
+def test_쌍_수도_한_곳에만_적혀_있다() -> None:
+    """**시드와 같은 병이 쌍 수에도 있었다** (D-0453).
+
+    `roots.DEFAULT_OUTPUT_PAIRS`와 `evaluate_harmony_output.DEFAULT_PAIR_COUNT`가
+    각각 100을 들었다. 올릴 때 한 곳만 고치면 **화면과 기본값이 갈린다** (D-0043).
+    """
+    from hathor.application.evaluate_harmony_output import DEFAULT_PAIR_COUNT
+    from hathor.interfaces.cli.roots import DEFAULT_OUTPUT_PAIRS
+
+    assert DEFAULT_OUTPUT_PAIRS is DEFAULT_PAIR_COUNT
+
+    app = Path(__file__).resolve().parents[2] / "hathor"
+    written = [
+        f"{path.relative_to(app).as_posix()}:{number}"
+        for path in sorted(app.rglob("*.py"))
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if f"= {DEFAULT_PAIR_COUNT}" in line and "PAIR" in line.upper()
+    ]
+
+    assert len(written) == 1, f"쌍 수를 손으로 적은 자리: {' · '.join(written)}"
+
+
+def test_쌍_수가_검정력으로_정해졌다() -> None:
+    """**100은 24판 중 8판만 통과한다** (D-0452 실측).
+
+    기준은 D-0327이 문턱을 고를 때 쓴 «양성을 놓치지 않는다»다 — 효과를 보고 올린
+    것이 아니라 **서 있던 기준을 다른 손잡이에 댄 것이다** (D-0058).
+    """
+    from hathor.application.evaluate_harmony_output import DEFAULT_PAIR_COUNT
+
+    assert DEFAULT_PAIR_COUNT == 400
