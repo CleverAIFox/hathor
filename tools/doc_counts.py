@@ -279,6 +279,18 @@ def local_points() -> int:
     return egress_points() - outward_points()
 
 
+def push_jobs() -> int:
+    """`ci.yml`의 잡 수. **정본은 워크플로 파일이다** (D-0448).
+
+    문서 **네 곳**이 「CI 세 잡」을 손으로 적고 있었고 실물은 다섯이다 —
+    `gates-under-load`와 `no-gpu`가 빠졌다. D-0439가 `no-gpu`를 넣을 때도 안 고쳤다.
+    **세는 자가 없으면 늘어도 아무 일이 안 일어난다** (D-0126).
+    """
+    from check_workflow_paths import FLOWS, job_names
+
+    return len(job_names((FLOWS / "ci.yml").read_text(encoding="utf-8")))
+
+
 def grandfathered_records() -> int:
     """형식 검사가 **안 걸리는** 옛 기록의 수 (D-0349).
 
@@ -501,6 +513,7 @@ COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("GR 참조", re.compile(rf"저장소 안에서\s*{BOLD}곳"), rule_mentions),
     ("과거 축 GR 참조", re.compile(rf"기록에\s*{BOLD}곳이 더"), past_rule_mentions),
     ("망 접점", re.compile(rf"허용 목록\s*{BOLD}곳"), egress_points),
+    ("CI 잡", re.compile(rf"CI\s*{BOLD}잡"), push_jobs),
     # **총합만 걸려 있었다** (D-0446). 내역은 글로만 살아 D-0424가 arXiv를 더한 뒤
     # 네 자리가 *«밖 둘»*로 남았다 — 그 중 하나는 제 줄 안에서 5 ≠ 2+2였다.
     ("망 접점 밖", re.compile(rf"밖\s*{BOLD}곳"), outward_points),

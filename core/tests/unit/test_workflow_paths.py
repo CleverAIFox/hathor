@@ -162,3 +162,55 @@ def test_목록이_읽는_자리와_만드는_자리를_찍는다(
     assert f"덮는 최상위 {len(TOOL.ignored_roots())}개" in spoke, spoke
     assert "proposal.yml" in spoke, "덮인 자리를 읽는 잡이 안 찍혔다"
     assert spoke.count("_site/figures") >= 2, "읽는 자리와 만드는 자리 둘 다 찍는다"
+
+
+# ------------------------------------------------- 잡 세기 (D-0448)
+
+FLOW = """\
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+env:
+  UV: 1
+jobs:
+  quality:
+    steps:
+      - run: echo 가
+  secret-scan:
+    steps:
+      - run: echo 나
+permissions:
+  contents: read
+"""
+
+
+def test_잡만_센다() -> None:
+    """**`jobs()`는 들여쓰기 두 칸을 전부 자른다** — `on:` 아래 `push:`도 걸린다.
+
+    셸 줄을 긁는 데는 그래도 되지만 **세는 데는 못 쓴다.** 그 둘을 구별 안 하면 수가
+    조용히 부풀고, 그것이 「CI 세 잡」이 네 곳으로 복사되는 동안 아무도 안 센
+    까닭이다 (D-0126 · D-0448).
+    """
+    assert cast("list[str]", TOOL.job_names(FLOW)) == ["quality", "secret-scan"]
+
+
+def test_잡_블록_밖은_안_센다() -> None:
+    """**양성 대조** (D-0259). `on:`과 `permissions:` 아래가 섞이면 이 자가 장식이다."""
+    names = cast("list[str]", TOOL.job_names(FLOW))
+
+    assert "push" not in names
+    assert "contents" not in names
+    assert len(cast("list[str]", TOOL.jobs(FLOW))) > len(names), (
+        "옛 자가 더 많이 세야 둘을 가른 뜻이 있다"
+    )
+
+
+def test_실물_워크플로를_센다() -> None:
+    """저장소의 `ci.yml`. **축이 이 수를 든다** (`doc_counts.push_jobs`)."""
+    text = (cast("Path", TOOL.FLOWS) / "ci.yml").read_text(encoding="utf-8")
+    names = cast("list[str]", TOOL.job_names(text))
+
+    assert len(names) >= 3, "그물이 비었다"
+    assert "quality" in names

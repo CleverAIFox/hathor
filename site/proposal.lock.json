@@ -4,7 +4,7 @@
     "tools/build_proposal.py": "5d4f2e934a97cee5",
     "tools/proposal_body.py": "f0a306f38a9d187c",
     "tools/proposal_source.py": "5f1586da2cc9792e",
-    "tools/render_figures.py": "150f979d0c19539f",
+    "tools/render_figures.py": "68fc0fb3c1f8f184",
     "tools/render_charts.py": "b841da088aee675f",
     "site/proposal.template.html": "be43f8109e708d2f"
   },
@@ -35,7 +35,7 @@
     "leak_gate.png": "5212d19069bf5d65d2ac9e46e160a43b74f08f917e22d375b67ba356c0cf15d1",
     "listening.png": "b80d44e1ef5664eb2b794dcfe0e0358920090c2d2b63c1990ab90896a2dc9ff1",
     "musicbrainz.png": "3ccf5cb01cdf2d41241621f12312d31f61d0a75c044ee612bd8c6f464acd1733",
-    "patch_pipe.png": "222a16e898fe061d54f7f0865a1b6da73cad6e10c0d31e2851e7c079a18ae61c",
+    "patch_pipe.png": "4922ca974432ad1e9b70a27508c1927a8814f42cc45e1e200a817ee055a9e5d9",
     "pipeline.png": "97e0da976e3ae4bc1e6acf5e55704f529dd0420472e92f1e56af714fb678f7cf",
     "plan_render.png": "77910ea2467e71b5874e86439f0bda2132f704a049a334536b83f879b8daa196",
     "requirement_status.png": "6e629df141558733f320162b195d9dcffba6194b9b5179083fbfb7a7b99df817",

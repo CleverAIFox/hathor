@@ -77,6 +77,30 @@ def jobs(text: str) -> list[str]:
     return ["\n".join(lines[a:b]) for a, b in zip(starts, [*starts[1:], len(lines)], strict=True)]
 
 
+def job_names(text: str) -> list[str]:
+    """`jobs:` 블록 안의 **잡 이름** (D-0448).
+
+    위 `jobs()`는 들여쓰기 두 칸을 전부 자른다 — `on:` 아래 `push:`도 걸린다. 셸 줄을
+    긁는 데는 그래도 되지만 **세는 데는 못 쓴다.** 그 둘을 구별 안 하면 수가 조용히
+    부풀고, 그것이 「CI 세 잡」이 넷으로 복사되는 동안 아무도 안 센 까닭이다 (D-0126).
+
+    `yaml`을 안 쓴다 — 도구는 시스템 파이썬으로 도는데 **그 기기에 있다는 보장이
+    없다** (D-0066 계열).
+    """
+    found: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        if re.match(r"^jobs:\s*$", line):
+            inside = True
+            continue
+        if inside and line.strip() and not line.startswith(" "):
+            break
+        matched = re.match(r"^  (\w[\w-]*):\s*$", line) if inside else None
+        if matched:
+            found.append(matched.group(1))
+    return found
+
+
 def shell_text(job: str) -> str:
     """잡 안에서 **셸로 도는 줄만** 모은다 — `uses:`나 주석은 뺀다."""
     kept, inside = [], False

@@ -157,7 +157,7 @@ measure:       ## 실측 정본을 기기에서 다시 잰다. 음원 1004곡 ·
 load:          ## 관문 전부를 부하 아래서 돌려 거짓 실패를 잡는다. 1분 (D-0355)
 	python3 tools/check_under_load.py --check $(if $(ROUNDS),--rounds $(ROUNDS),)
 
-mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 25분 · WIRING=1은 배선만 (D-0259 · D-0353)
+mutate:        ## 관문 도구를 망가뜨려 시험이 우는지 본다. 오래 걸린다 — 실측은 `tools/mutate_gate.py` 머리말 · WIRING=1은 배선만 (D-0259 · D-0353 · D-0448)
 	WIRING=$(WIRING) ONLY="$(ONLY)" python3 tools/mutate_gate.py
 
 apply:         ## 패치 적용 + 커밋. make apply [PATCH=이름.patch] [WHICH=1] [NOCOMMIT=1] (D-0070 · D-0249)
