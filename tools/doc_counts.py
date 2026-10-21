@@ -132,6 +132,23 @@ def ledger_rows() -> int:
     return len(_ledger())
 
 
+def decision_records() -> int:
+    """결정 기록의 **전수** (D-0457). `ledger_rows`와 다른 수다 — 그쪽은 강제자를
+    적은 것만 센다(386 대 456).
+
+    **기획서가 이 수를 든다.** 「AI와 협업하되 모든 판단을 기록에 남긴다」가
+    개발 형태에 적히면서 그 근거가 **수 하나**가 됐고, 손으로 적으면 **다음 기록
+    하나에 낡는다** (GR-0.7).
+
+    **「감사 추적」이 자물쇠다.** 「결정 기록 N건」으로 걸면 과거 기록의 `자료` 칸
+    수십 줄이 같이 걸리고 **`doc_fsck --fix`가 과거를 다시 쓴다** — 추가 전용
+    문서에 그것은 사고다 (GR-0.2).
+    """
+    from decision_ledger import scan_records
+
+    return len(scan_records((ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")))
+
+
 def synthetic_rows() -> int:
     """대장에서 **`자료 합성`으로만 선 판단**의 수 (D-0265). PLAN §3이 이 수를 든다.
 
@@ -503,6 +520,7 @@ COUNTED: tuple[tuple[str, re.Pattern[str], Callable[[], int]], ...] = (
     ("deadcheck 프로브", re.compile(rf"프로브\s*{BOLD}종"), probe_count),
     ("결정 기록 검사", re.compile(rf"결정 기록에서\s*{BOLD}종"), record_check_count),
     ("결정 대장", re.compile(rf"대장\s*{BOLD}건\s*중"), ledger_rows),
+    ("결정 기록 전수", re.compile(rf"감사 추적\s*{BOLD}건"), decision_records),
     ("합성으로만 선 판단", re.compile(rf"합성\s*{BOLD}\s*·"), synthetic_rows),
     ("합성+실물 판단", re.compile(rf"합성\+실물\s*{BOLD}\s*·"), mixed_rows),
     ("실물만 선 판단", re.compile(rf"실물\s*{BOLD}\s*·\s*해당없음"), real_rows),

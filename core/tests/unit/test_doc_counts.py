@@ -347,3 +347,25 @@ def test_고치는_쪽도_면제를_본다(tmp_path: Path, monkeypatch: pytest.M
     FSCK.fix_counts()
 
     assert page.read_text(encoding="utf-8") == kept, "면제한 줄의 수를 갈았다"
+
+
+def test_결정_기록_전수는_대장_행과_다른_수다() -> None:
+    """**둘을 섞으면 기획서가 틀린 수를 든다** (D-0457).
+
+    `ledger_rows`는 **강제자를 적은 기록**만 센다. 기획서의 「감사 추적 N건」이
+    가리키는 것은 **전수**이며 둘은 70건쯤 벌어져 있다.
+    """
+    assert CHECKER.decision_records() > CHECKER.ledger_rows()
+
+
+def test_감사_추적이_자물쇠다() -> None:
+    """**「결정 기록 N건」으로 걸면 과거를 다시 쓴다** (D-0457 · GR-0.2).
+
+    그 말은 지난 기록의 `자료` 칸 수십 줄에 있고, `doc_fsck --fix`는 축이 무는
+    자리를 전부 고친다 — **추가 전용 문서에 그것은 사고다.** 「감사 추적」은
+    저장소에서 이 자리 하나뿐이라 과거에 안 닿는다.
+    """
+    axis = next(one for one in CHECKER.COUNTED if one[0] == "결정 기록 전수")
+    body = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+
+    assert axis[1].search(body) is None, "축이 과거 문서를 문다"
