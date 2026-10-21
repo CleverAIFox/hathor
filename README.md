@@ -318,9 +318,9 @@ make artifacts-push ONLY=keys # 화성 작업이 읽는 keys-*만 (74MB)
 |---|---|---|
 | 크로마 대비 — 창별 중앙값 · 타악 분리 (O-27) | `ingest keys --halves` · `eval harmony-prior --against` | D-0064 · D-0065 · D-0073 · D-0074 · **D-0337 ~ D-0340** |
 | 참조곡이 화성 어휘에 반영되는가 (O-21) | `eval harmony-prior --replay` | D-0062 · D-0063 · **D-0338 (1004곡 확인)** |
-| 화음 칸이 새로운가 — 반음계 대 다이어토닉 | `eval harmony-output --compare-vocabulary` | D-0333 · **D-0334 (합성이 수준을 못 맞췄다)** |
-| 참조곡을 바꾸면 출력이 갈리는가 (O-29) | `eval harmony-output` | D-0079 · D-0082 |
-| 다이어토닉 제한이 버리는 몫 (O-31) | `eval degree-restriction` | D-0083 ~ D-0088 |
+| 화음 칸이 새로운가 — 반음계 대 다이어토닉 | `eval harmony-output --compare-vocabulary` | D-0333 · **D-0334 (합성이 수준을 못 맞췄다)** · **D-0455 (쌍 400에서 이득이 네 배로 움직였다 · `t` +1.36 — 여전히 실패)** |
+| 참조곡을 바꾸면 출력이 갈리는가 (O-29) | `eval harmony-output` | D-0079 · D-0082 · **D-0455 (쌍 400 · 이득 +0.0689 ±0.0052 · `t` +13.38 — 전달된다)** |
+| 다이어토닉 제한이 버리는 몫 (O-31) | `eval degree-restriction` | D-0083 ~ D-0088 · **D-0449 (수를 정본으로)** · **D-0454 ~ D-0455** — 쌍 400에서 `other` `t` +1.87 · `mix` +0.28로 **둘 다 사전 등록 문턱 미달.** `mix`는 쌍 1600에서도 0/24라 **효과가 없다**, `other`는 48판 전부 양수라 **분해능 문제**다 |
 | 반음계 질량의 정체 (O-33 · O-35) | `eval chromatic-origin` | D-0089 ~ D-0093 |
 | 순서 조건화 게이트 · 배열 (O-32) | `eval time-drift` · `generate --transitions` | D-0098 ~ D-0113 |
 | 화성 리듬 (O-37) | `tools/probe_chord_rhythm.py` | D-0123 ~ D-0125 |
