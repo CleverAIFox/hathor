@@ -154,3 +154,48 @@ def test_쌍_수가_검정력으로_정해졌다() -> None:
     from hathor.application.evaluate_harmony_output import DEFAULT_PAIR_COUNT
 
     assert DEFAULT_PAIR_COUNT == 400
+
+
+# ------------------------------------------------- 대비·적용 범위 (D-0454)
+
+
+def test_만분율로_접는다() -> None:
+    """**대비는 몫과 자릿수가 다르다** (D-0454). 0.0074를 천분율로 접으면 7이다."""
+    assert TOOL._per10k(0.0074) == 74
+    assert TOOL._per10k(0.0011) == 11
+    assert TOOL._per10k(-0.0005) == -5
+
+
+def test_대비와_오차가_정본으로_내려왔다() -> None:
+    """**D-0449가 안 담아 `MASTER`에 손으로 남아 있었다** (GR-0.7 · D-0454).
+
+    쌍이 400이 되자 그 줄만 쌍 100의 수로 남았다 — `±0.0083`이 거기 있었다.
+    안 담은 까닭(*«천분율에서 둘 다 0»*)은 대비가 +0.0074가 되며 사라졌다.
+    """
+    emits = cast("tuple[str, ...]", TOOL.EMITS)
+
+    for source in ("other", "mix"):
+        assert f"{source}_gap_per10k" in emits
+        assert f"{source}_error_per10k" in emits
+
+
+def test_덮은_곡을_정본이_든다() -> None:
+    """표 아래 딱지가 **「1004곡 전수」**였다. 쌍 400은 566곡만 건드린다 (D-0454)."""
+    assert "tracks_touched" in cast("tuple[str, ...]", TOOL.EMITS)
+
+
+def test_출처마다_다른_수가_나오면_안_쓴다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`tracks_touched`는 **두 출처가 함께 쓰는 칸**이다 (D-0230).
+
+    그냥 덮으면 둘이 다를 때 뒤엣것이 조용히 이기고, 사전이 다른 곡 수로 쌓인 날
+    **거울만 틀린다.**
+    """
+    counts = iter(({"tracks_touched": 566}, {"tracks_touched": 400}))
+    monkeypatch.setattr(TOOL, "survey", lambda _source: next(counts))
+    monkeypatch.setattr(TOOL, "measured", _Exploding())
+    monkeypatch.setattr("sys.argv", ["probe_restriction.py", "--emit"])
+
+    assert TOOL.main() == 1
+    assert "출처마다 다른 수" in capsys.readouterr().err

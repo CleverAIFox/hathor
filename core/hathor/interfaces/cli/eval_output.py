@@ -23,7 +23,7 @@ from hathor.interfaces.cli.roots import (
     DEFAULT_OUTPUT_SEEDS,
     resolve_priors,
 )
-from hathor.interfaces.cli.tables import parse_key, render_table
+from hathor.interfaces.cli.tables import pair_coverage, parse_key, render_table
 from hathor.shared.config.paths import resolve_path
 
 if TYPE_CHECKING:
@@ -164,7 +164,7 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
     result = reports[target]
 
     print(
-        f"곡 {len(shared)}개 · 쌍 {result.line('paired').pair_count}"
+        f"{pair_coverage(condition, len(shared))} · 쌍 {result.line('paired').pair_count}"
         f" · 시드 {condition.seed_count} · {condition.bar_count}마디"
         f" · {condition.key} · 출처 {target}"
         f"{f' (기준 {baseline})' if baseline else ''}\n"

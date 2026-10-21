@@ -21,7 +21,7 @@ from hathor.infrastructure.keys_jsonl_store import (
 )
 from hathor.interfaces.cli.registry import Command
 from hathor.interfaces.cli.roots import DEFAULT_OUTPUT_PAIRS, resolve_priors
-from hathor.interfaces.cli.tables import parse_key, render_table
+from hathor.interfaces.cli.tables import pair_coverage, parse_key, render_table
 from hathor.shared.config.paths import resolve_path
 
 if TYPE_CHECKING:
@@ -170,8 +170,8 @@ def run_eval_degree_restriction(args: argparse.Namespace) -> int:
     chromatic_cells = chromatic_indices(condition.key.mode)
 
     print(
-        f"곡 {len(references)}개 · 쌍 {len(observed.shares)} · {condition.key}"
-        f" · 출처 {source}\n사전: {store.name}\n"
+        f"{pair_coverage(condition, len(references))} · 쌍 {len(observed.shares)}"
+        f" · {condition.key} · 출처 {source}\n사전: {store.name}\n"
         f"버리는 칸 {len(off)}개 (반음 {', '.join(str(value) for value in off)})\n"
         f"  그중 온음계 음 {scale_cells} — **반음계음이 아니다.** 화음 근음에서만 빠졌다\n"
         f"  진짜 반음계 음 {chromatic_cells}\n"

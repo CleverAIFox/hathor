@@ -450,14 +450,23 @@ tracks = 1004
 #
 # 아래 수는 `probe_restriction`이 낸 두 판을 옮긴 것이고, `--emit`이 그 옮김을
 # **검산한다.** 바뀐 수가 나오면 내가 잘못 옮긴 것이다.
+#
+# **대비와 오차는 만분율이다** (D-0454). 몫과 자릿수가 다르다 — 0.007을 천분율로
+# 접으면 7이 되고 `t`가 반올림에서 갈린다. 그 둘은 D-0449가 안 담아 `MASTER`에
+# **손으로** 남아 있었고, 쌍이 400이 되자 그 줄만 쌍 100의 수로 남았다 (GR-0.7).
 [restriction.counts]
 other_observed_permille = 386
 other_matched_permille = 378
 other_mass_permille = 353
+other_gap_per10k = 74
+other_error_per10k = 40
 mix_observed_permille = 422
 mix_matched_permille = 421
 mix_mass_permille = 408
+mix_gap_per10k = 11
+mix_error_per10k = 40
 pairs = 400
+tracks_touched = 566
 
 [[restriction.display]]
 label = "**버리는 몫** — `other` 실측"
@@ -469,6 +478,12 @@ bold = true
 label = "`other` 등가선"
 kind = "rate"
 of = "other_matched_permille"
+
+[[restriction.display]]
+label = "`other` 등가선 대비"
+kind = "points-span"
+of = ["other_gap_per10k", "other_error_per10k"]
+bold = true
 
 [[restriction.display]]
 label = "`other` 비음계 질량"
@@ -487,6 +502,12 @@ kind = "rate"
 of = "mix_matched_permille"
 
 [[restriction.display]]
+label = "`mix` 등가선 대비"
+kind = "points-span"
+of = ["mix_gap_per10k", "mix_error_per10k"]
+bold = true
+
+[[restriction.display]]
 label = "`mix` 비음계 질량"
 kind = "rate"
 of = "mix_mass_permille"
@@ -495,3 +516,8 @@ of = "mix_mass_permille"
 label = "견준 쌍"
 kind = "count"
 of = "pairs"
+
+[[restriction.display]]
+label = "그 쌍이 덮은 곡"
+kind = "share-tracks"
+of = "tracks_touched"

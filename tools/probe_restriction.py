@@ -37,14 +37,17 @@ from hathor.application.evaluate_degree_restriction import (  # noqa: E402
 from hathor.application.evaluate_harmony_output import (  # noqa: E402
     DEFAULT_PAIR_COUNT,
     DEFAULT_SEED,
+    EvaluateHarmonyOutput,
     OutputCondition,
     ReferencePrior,
 )
+from hathor.domain.services.pair_sampling import touched_count  # noqa: E402
 from hathor.infrastructure.keys_jsonl_store import (  # noqa: E402
     load_degree_priors,
     priors_stem_set,
 )
 from hathor.interfaces.cli.roots import resolve_priors  # noqa: E402
+from hathor.interfaces.cli.tables import pair_coverage  # noqa: E402
 
 SECTION = "restriction"
 
@@ -63,16 +66,27 @@ EMITS = (
     "other_observed_permille",
     "other_matched_permille",
     "other_mass_permille",
+    "other_gap_per10k",
+    "other_error_per10k",
     "mix_observed_permille",
     "mix_matched_permille",
     "mix_mass_permille",
+    "mix_gap_per10k",
+    "mix_error_per10k",
     "pairs",
+    "tracks_touched",
 )
 """`[restriction.counts]`에 넣는 수. **전부 정수다** — 곡명·경로는 안 나간다 (D-0366).
 
-비율은 **천분율 정수**다. 등가선 대비는 **안 넣는다** — `other`가 -0.0005,
-`mix`가 -0.0004로 천분율에서 둘 다 0이고, **0을 적으면 「쟀더니 0」과 「못 쟀다」가
-구별이 안 된다** (GR-0.5). 실측과 등가선을 **따로** 넣고 거울이 둘을 나란히 찍는다.
+비율은 **천분율 정수**다. 대비와 오차는 **만분율**이다 — 자릿수가 다르기 때문이다.
+몫은 0.4 근처라 천분율로 네 자리가 남지만 **대비는 0.007 근처**라 천분율이면 한 자리가
+되고, 거기서 반올림하면 `t`가 1.85와 1.87로 갈린다.
+
+**D-0449는 대비를 안 넣었다.** 까닭이 *«`other` -0.0005 · `mix` -0.0004로 천분율에서
+둘 다 0이고, 0을 적으면 「쟀더니 0」과 「못 쟀다」가 구별이 안 된다»*(GR-0.5)였다.
+**쌍 400에서 그 까닭이 사라졌다** — +0.0074와 +0.0011이다. 그동안 대비와 오차는
+`MASTER`에 **손으로** 적혀 있었고, 쌍이 400이 되자 그 줄만 쌍 100의 수로 남았다
+(GR-0.7 · D-0454). 까닭이 사라졌으면 그 결정도 따라간다.
 """
 
 PAIRS = DEFAULT_PAIR_COUNT
@@ -81,6 +95,10 @@ SEED = DEFAULT_SEED
 
 def _permille(value: float) -> int:
     return round(value * 1000)
+
+
+def _per10k(value: float) -> int:
+    return round(value * 10000)
 
 
 def survey(source: str) -> dict[str, int] | None:
@@ -98,7 +116,7 @@ def survey(source: str) -> dict[str, int] | None:
     )
     observed = report.line("observed")
     print(
-        f"{source:6s} {store.name} · 곡 {len(table)} · "
+        f"{source:6s} {store.name} · {pair_coverage(condition, len(table))} · "
         f"실측 {observed.mean_share:.4f} · 등가선 {report.line('matched').mean_share:.4f} · "
         f"대비 {report.specificity_gap:+.4f} ±{report.specificity_standard_error:.4f} "
         f"· t {report.specificity_t:+.2f}"
@@ -107,6 +125,9 @@ def survey(source: str) -> dict[str, int] | None:
         f"{source}_observed_permille": _permille(observed.mean_share),
         f"{source}_matched_permille": _permille(report.line("matched").mean_share),
         f"{source}_mass_permille": _permille(float(np.mean(observed.masses))),
+        f"{source}_gap_per10k": _per10k(report.specificity_gap),
+        f"{source}_error_per10k": _per10k(report.specificity_standard_error),
+        "tracks_touched": touched_count(EvaluateHarmonyOutput(condition).pair_indices(len(table))),
     }
 
 
@@ -120,6 +141,14 @@ def main() -> int:
         found = survey(source)
         if found is None:
             print(f"`{source}`를 못 쟀다. 정본을 안 건드린다 (GR-0.5)", file=sys.stderr)
+            return 1
+        # **`tracks_touched`는 두 출처가 함께 쓰는 칸이다.** 그냥 덮으면 둘이 다를 때
+        # 뒤엣것이 조용히 이긴다 — 사전이 다른 곡 수로 쌓인 날 거울만 틀린다 (D-0230).
+        clash = {
+            key: found[key] for key in counts.keys() & found.keys() if counts[key] != found[key]
+        }
+        if clash:
+            print(f"출처마다 다른 수가 나왔다: {clash}. 정본을 안 건드린다", file=sys.stderr)
             return 1
         counts.update(found)
 

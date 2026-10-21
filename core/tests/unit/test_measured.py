@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -353,13 +354,22 @@ def test_상류_판정이_입구까지_닿는다(
 
 
 def test_표가_언제_잰_수인지_말한다() -> None:
-    """**수만 있고 날짜가 없으면 낡았는지 알 수 없다** (D-0269)."""
+    """**수만 있고 날짜가 없으면 낡았는지 알 수 없다** (D-0269).
+
+    **적용 범위도 같다** (D-0454). 전에는 여섯 표가 다 「전수」라 적었는데
+    `[restriction]`은 쌍 400이 1004곡 중 566곡만 건드린다 — 참인 표와 거짓인 표가
+    **같은 딱지**를 달고 있었다.
+    """
     data = TOOL.canon()
 
     for name in TOOL.BLOCKS:
         body = TOOL.table(name, data[name])
+        counts = cast("dict[str, dict[str, int]]", data[name])["counts"]
+        covered = counts.get("tracks_touched")
+        reach = "전수" if covered is None else f"중 {covered}곡"
+
         assert f"{data[name]['stamp']} 실측" in body, name
-        assert f"{data[name]['tracks']}곡 전수" in body, name
+        assert f"{data[name]['tracks']}곡 {reach}" in body, name
 
 
 def test_날짜가_없으면_막는다() -> None:
@@ -584,3 +594,60 @@ def test_rate_span이_두_키가_아니면_막는다() -> None:
 
     with pytest.raises(LookupError):
         TOOL.cell("rate-span", {"of": ["아래", "위"]}, {"아래": 272}, 1004)
+
+
+# ------------------------------------------------- 대비·적용 범위 (D-0454)
+
+
+def test_대비와_오차가_한_칸이다() -> None:
+    """**만분율 두 수**다 (D-0454). 몫과 자릿수가 다르다 — 0.0074는 천분율에서 7이다."""
+    row = {"kind": "points-span", "of": ["대비", "오차"]}
+
+    assert TOOL.cell("points-span", row, {"대비": 74, "오차": 40}, 1004) == "+0.74%p ±0.40%p"
+    assert TOOL.cell("points-span", {**row, "bold": True}, {"대비": 74, "오차": 40}, 1004) == (
+        "**+0.74%p ±0.40%p**"
+    )
+
+
+def test_오차에는_부호가_안_붙는다() -> None:
+    """**양성 대조.** 오차는 크기다 — `+0.40%p`로 찍으면 *«오차가 양수»*라는 없는 말이 된다."""
+    cell = TOOL.cell("points-span", {"of": ["대비", "오차"]}, {"대비": -5, "오차": 40}, 1004)
+
+    assert cell == "-0.05%p ±0.40%p"
+    assert "±+" not in cell
+
+
+def test_points_span이_두_키가_아니면_막는다() -> None:
+    with pytest.raises(LookupError):
+        TOOL.cell("points-span", {"of": "대비"}, {"대비": 74}, 1004)
+
+
+def test_정본이_음수를_든다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**`(\\d+)`라 음수 줄을 아예 못 봤다** (D-0454).
+
+    `emit`이 *«정본에 없는 키»*로 넘겨 **조용히 안 썼다** — 정본은 옛 수, 화면은 새 수다.
+    없는 줄과 못 읽은 줄이 같은 꼴로 끝나는 것이 결함이다 (D-0230).
+    """
+    fake = tmp_path / "measured.toml"
+    fake.write_text(TOOL.CANON.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(TOOL, "CANON", fake)
+
+    assert TOOL.emit("restriction", {"mix_gap_per10k": -5}) == ["mix_gap_per10k 11 → -5"]
+    assert "mix_gap_per10k = -5" in fake.read_text(encoding="utf-8")
+    # **음수에서 다시 양수로도 간다** — 한 방향만 되면 되돌릴 때 조용히 막힌다.
+    assert TOOL.emit("restriction", {"mix_gap_per10k": 11}) == ["mix_gap_per10k -5 → 11"]
+
+
+def test_덮은_곡을_들면_전수라_안_한다() -> None:
+    """**「전수」를 여섯 표에 다 찍고 있었다** (D-0454 · D-0292).
+
+    다섯은 참이나 `[restriction]`은 쌍 400이 1004곡 중 566곡만 건드린다.
+    """
+    head = {"stamp": "2026-10-21", "tracks": 1004, "display": []}
+
+    full = TOOL.table("id3", {**head, "counts": {}})
+    part = TOOL.table("id3", {**head, "counts": {"tracks_touched": 566}})
+
+    assert "1004곡 전수" in full
+    assert "1004곡 중 566곡" in part
+    assert "전수" not in part

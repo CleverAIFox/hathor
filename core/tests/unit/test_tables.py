@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from hathor.application.key_distribution import ambiguity
-from hathor.interfaces.cli.tables import _display_width, ambiguity_report, render_table
+from hathor.interfaces.cli.tables import (
+    _display_width,
+    ambiguity_report,
+    pair_coverage,
+    render_table,
+)
 
 
 def _numbers(modes, ambiguous, relative, floor=0.30, tunings=()):
@@ -130,3 +135,32 @@ def test_조율이_정확히_0센트인_곡을_센다():
     assert found.tuning is not None
     assert found.tuning.median_cents == 0.0
     assert found.tuning.off_count == 0
+
+
+# ------------------------------------------------- 머리줄의 적용 범위 (D-0454)
+
+
+def test_머리줄이_덮은_곡을_같이_낸다():
+    """`곡 1004개 · 쌍 400`은 전수로 읽힌다. **566곡이다** (D-0454)."""
+    from hathor.application.evaluate_harmony_output import OutputCondition
+
+    assert pair_coverage(OutputCondition(), 1004) == "곡 1004개(쌍이 덮은 곡 566)"
+    assert pair_coverage(OutputCondition(pair_count=100), 1004) == "곡 1004개(쌍이 덮은 곡 182)"
+
+
+def test_머리줄이_판정이_본_그_쌍을_센다():
+    """**다른 쌍을 세면 안내가 거짓이 된다** (D-0292).
+
+    `pair_indices`는 `run()`이 쓰는 바로 그 줄을 다시 낸다 — 그 계약이 깨지면
+    화면의 「덮은 곡」이 실제로 본 곡과 달라지고, **틀린 안내는 안내 없는 것보다 나쁘다.**
+    """
+    import numpy as np
+
+    from hathor.application.evaluate_harmony_output import EvaluateHarmonyOutput, OutputCondition
+    from hathor.domain.services.pair_sampling import touched_count
+
+    harness = EvaluateHarmonyOutput(OutputCondition())
+    used = harness._sample_pairs(1004, np.random.default_rng([OutputCondition().seed, 0]))
+
+    assert harness.pair_indices(1004) == used
+    assert f"덮은 곡 {touched_count(used)}" in pair_coverage(OutputCondition(), 1004)

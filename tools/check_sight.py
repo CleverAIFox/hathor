@@ -142,7 +142,7 @@ PINNED = {
     "probe_id3.CORPUS_EMITS": 8,
     "probe_id3.DATE_FRAMES": 6,
     "probe_id3.ID3_EMITS": 20,
-    "probe_restriction.EMITS": 7,
+    "probe_restriction.EMITS": 12,
     "probe_stems.PITCH_STEMS": 2,
     "probe_stems.PREFIXES": 2,
     "probe_tempo.EMITS": 15,

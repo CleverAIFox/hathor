@@ -100,6 +100,19 @@ def sample_index_pairs(
     return tuple(picked)
 
 
+def touched_count(pairs: Sequence[tuple[int, int]]) -> int:
+    """그 쌍 표본이 **실제로 건드린 곡 수** (D-0454).
+
+    화면은 `곡 1004개 · 쌍 400`을 찍는데 그 400쌍은 **1004곡 중 566곡**만 건드린다.
+    쌍 100이면 182곡 — **18%**다. 「곡 1004개」가 전수로 읽히지만 전수가 아니다
+    (D-0325가 40곡이 1004곡을 가린 자리에서 본 것과 같은 꼴이다).
+
+    **맞는 안내가 기대와 다를 때 안 읽힌다** (D-0292 · D-0325). 그래서 가린 쪽이
+    아니라 **덮은 쪽**을 같이 적는다.
+    """
+    return len({index for pair in pairs for index in pair})
+
+
 def presentation_order(pair: Pair, *, seed: int) -> Pair:
     """화면에 보여줄 좌우 순서를 섞는다.
 

@@ -222,6 +222,22 @@ def cell(kind: str, row: dict[str, object], counts: dict[str, int], tracks: int)
         if missing:
             raise LookupError(f"`counts`에 없는 센 수를 부른다: {missing}")
         return f"{counts[low] / 10:.1f}% ~ {counts[high] / 10:.1f}%"
+    if kind == "points-span":
+        # **대비와 그 오차는 한 칸이다** (D-0454). `+0.74%p ±0.40%p` — 만분율 두 수로
+        # 들어온다. 대비에는 부호가 붙고 오차는 크기라 **`±`가 붙는다**: 따로 칸을
+        # 내면 오차에도 `+`가 찍혀 *«오차가 양수»*라는 없는 말이 된다.
+        #
+        # 비율(`rate`)과 **자릿수가 다르다.** 몫은 0.4 근처라 천분율로 네 자리가
+        # 남지만 대비는 0.007 근처라 천분율이면 **7**이 되고, 거기서 반올림하면
+        # `t`가 1.85와 1.87로 갈린다. **판정이 자릿수에 걸리면 자릿수가 자다.**
+        if not isinstance(name, list) or len(name) != 2:
+            raise LookupError(f"`points-span`의 `of`가 두 키가 아니다: {name!r}")
+        gap, error = (str(one) for one in name)
+        missing = [one for one in (gap, error) if one not in counts]
+        if missing:
+            raise LookupError(f"`counts`에 없는 센 수를 부른다: {missing}")
+        text = f"{counts[gap] / 100:+.2f}%p ±{abs(counts[error]) / 100:.2f}%p"
+        return f"**{text}**" if row.get("bold") else text
     if kind == "span":
         # **두 수 사이** (D-0397). 사분위처럼 아래와 위가 한 칸인 값이다.
         if not isinstance(name, list) or len(name) != 2:
@@ -299,7 +315,13 @@ def table(name: str, section: dict[str, object]) -> str:
     stamp, tracks = section.get("stamp"), section.get("tracks")
     if not isinstance(stamp, str) or not isinstance(tracks, int):
         raise LookupError(f"{name}에 `stamp`나 `tracks`가 없다 — 언제 잰 수인지 모른다")
-    lines += ["", f"<small>{tracks}곡 전수 · {stamp} 실측</small>"]
+    # **「전수」를 모든 표에 찍고 있었다** (D-0454). 다섯 표는 참이나 `[restriction]`은
+    # 쌍 400이 1004곡 중 **566곡**만 건드린다 — 표 아래 딱지가 **거짓 안내**다
+    # (D-0292 · D-0325). 덮은 곡을 **센 수로** 들면 그 딱지가 손으로 안 적힌다.
+    touched = section.get("counts", {})
+    covered = touched.get("tracks_touched") if isinstance(touched, dict) else None
+    reach = "전수" if covered is None else f"중 {covered}곡"
+    lines += ["", f"<small>{tracks}곡 {reach} · {stamp} 실측</small>"]
     return "\n".join(lines)
 
 
@@ -373,8 +395,13 @@ def fix() -> list[str]:
     return changed
 
 
-COUNT_LINE = re.compile(r'(?m)^([A-Za-z_][\w.]*|"[^"]+")( = )(\d+)$')
-"""`counts` 표의 한 줄. **값만 간다** — 주석도 순서도 그대로 둔다 (D-0288과 같은 규율)."""
+COUNT_LINE = re.compile(r'(?m)^([A-Za-z_][\w.]*|"[^"]+")( = )(-?\d+)$')
+"""`counts` 표의 한 줄. **값만 간다** — 주석도 순서도 그대로 둔다 (D-0288과 같은 규율).
+
+**음수를 못 들고 있었다** (D-0454). `(\\d+)`라 `-5`인 줄은 이 자가 아예 못 봤고,
+`emit()`이 *«정본에 없는 키»*로 넘겨 **조용히 안 썼다** — 정본은 옛 수를 들고 화면은
+새 수를 찍는다. 센 것이 음수일 수 있는 자리(대비·차이)가 들어오면서 드러났다.
+**없는 줄과 못 읽은 줄이 같은 꼴로 끝나는 것이 결함이다** (D-0230)."""
 
 
 STAMP_LINE = re.compile(r'(?m)^(stamp = ")(\d{4}-\d{2}-\d{2})(")')

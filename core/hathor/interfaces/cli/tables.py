@@ -18,7 +18,25 @@ from hathor.domain.services.key_estimation import KEY_MARGIN_FLOOR
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from hathor.application.evaluate_harmony_output import OutputCondition
     from hathor.domain.value_objects.key import Key
+
+
+def pair_coverage(condition: OutputCondition, total: int) -> str:
+    """머리줄의 곡 수. **쌍이 덮은 곡을 같이 적는다** (D-0454).
+
+    `곡 1004개 · 쌍 400`은 전수로 읽힌다. **아니다** — 그 400쌍은 1004곡 중 **566곡**만
+    건드리고, 쌍 100이면 **182곡(18%)**이다. D-0325가 *«40곡이 1004곡을 가렸다»*로 적은
+    자리와 같은 병이며, 거기서 배운 것은 **맞는 안내가 기대와 다를 때 안 읽힌다**였다.
+
+    **한 자리에 둔다.** `eval harmony-output`과 `eval degree-restriction`이 같은 쌍
+    추첨을 쓰므로 머리줄도 같아야 한다 — 부르는 쪽마다 적으면 한 쪽이 빠진다 (D-0325).
+    """
+    from hathor.application.evaluate_harmony_output import EvaluateHarmonyOutput
+    from hathor.domain.services.pair_sampling import touched_count
+
+    covered = touched_count(EvaluateHarmonyOutput(condition).pair_indices(total))
+    return f"곡 {total}개(쌍이 덮은 곡 {covered})"
 
 
 def parse_key(text: str) -> Key:

@@ -9,6 +9,7 @@ from hathor.domain.services.pair_sampling import (
     presentation_order,
     sample_index_pairs,
     sample_pairs,
+    touched_count,
     with_repeats,
 )
 
@@ -240,3 +241,40 @@ def test_쌍이_모자라면_조용히_덜_내지_않는다():
 def test_곡이_하나면_쌍이_없다():
     with pytest.raises(ValueError, match="둘 이상"):
         sample_index_pairs(1, 5, generator=np.random.default_rng([1, 0]))
+
+
+# ------------------------------------------------- 적용 범위 (D-0454)
+
+
+def test_덮은_곡을_센다():
+    """쌍 셋이 곡 넷을 건드린다. 겹치면 한 번만 센다."""
+    assert touched_count([(0, 1), (1, 2), (2, 3)]) == 4
+    assert touched_count([(0, 1), (0, 1)]) == 2
+    assert touched_count([]) == 0
+
+
+def test_쌍_400이_1004곡의_절반만_건드린다():
+    """**머리줄의 「곡 1004개」가 전수로 읽힌다 — 아니다** (D-0454 · D-0325).
+
+    쌍 100이면 **182곡(18%)**이다. 「4% 표본으로 판정이 났다」를 적은 D-0325와 같은
+    병이고, 거기 배운 것은 **맞는 안내가 기대와 다를 때 안 읽힌다**였다.
+    """
+    hundred = sample_index_pairs(1004, 100, generator=np.random.default_rng(20260822))
+    four = sample_index_pairs(1004, 400, generator=np.random.default_rng(20260822))
+
+    assert touched_count(hundred) == 182
+    assert touched_count(four) == 566
+
+
+def test_쌍_표본이_중첩된다():
+    """**같은 시드면 쌍 100이 쌍 400의 앞 100이다** (D-0454).
+
+    거절 표본이 한 흐름에서 순서대로 뽑으므로 쌍 수를 올려도 **다시 뽑는 것이
+    아니다.** 그래서 운 나쁜 시드는 쌍을 늘려도 사라지지 않고 **묽어질 뿐이다** —
+    `DEFAULT_SEED`가 쌍 100에서 24판 어느 것보다 낮았고 쌍 400에서도 아래쪽이다
+    (D-0452). 쌍을 올려 판정이 바뀌는 것을 «다시 뽑았다»로 읽으면 안 된다.
+    """
+    four = sample_index_pairs(1004, 400, generator=np.random.default_rng(20260822))
+    sixteen = sample_index_pairs(1004, 1600, generator=np.random.default_rng(20260822))
+
+    assert sixteen[:400] == four
