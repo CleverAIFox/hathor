@@ -101,3 +101,39 @@ def test_승률은_판정이_아니다() -> None:
     assert gap.win_rate > 0.8
     assert gap.gain < 0.0
     assert gap.beats is False
+
+
+# ------------------------------------------------------------------ 쌍 수는 공짜가 아니다 (D-0456)
+
+
+def _alarm_rate(size: int, *, shift: float, trials: int) -> float:
+    hit = sum(gap_of(*_noise(size, shift=shift, seed=seed)).beats for seed in range(trials))
+    return hit / trials
+
+
+def test_참_0이면_쌍을_늘려도_오경보가_안_오른다() -> None:
+    """**문턱의 오경보율은 쌍 수에 안 걸린다 — 참 차이가 0일 때만** (D-0456).
+
+    `t`는 `차이 / (표준편차/√n)`이라 참 차이가 0이면 분자도 같이 줄어 `t`의 분포가
+    `n`에 안 움직인다. **이것이 `t>=2`를 쌍 수와 무관하게 쓸 수 있는 근거다.**
+    """
+    assert _alarm_rate(100, shift=0.0, trials=200) <= 0.10
+    assert _alarm_rate(1600, shift=0.0, trials=200) <= 0.10
+
+
+def test_음성이_조금_치우치면_쌍을_늘릴수록_통과한다() -> None:
+    """**양성 대조다** (D-0259). 위 시험만 있으면 «쌍 수는 공짜»로 읽힌다 — 아니다.
+
+    참 차이가 0이 아니면 분자는 그대로인데 분모만 `1/√n`으로 줄어 **`t`가 √n으로
+    자란다.** 그래서 **음성 대조에 작은 치우침이 있으면 쌍을 늘리는 것이 그 치우침을
+    유의하게 만든다** — 오경보가 쌍 수를 타고 오른다.
+
+    **D-0327의 음성 대조가 이득 +0.0032였다.** 그것이 참 치우침인지 24판의 잡음인지
+    그 기록으로는 안 갈린다(± 표기가 모호하다). **갈리기 전에는 쌍 수를 못 올린다**
+    (PLAN O-81).
+    """
+    small = _alarm_rate(100, shift=0.004, trials=200)
+    large = _alarm_rate(1600, shift=0.004, trials=200)
+
+    assert large > small * 3.0, f"쌍 100에서 {small:.0%}, 쌍 1600에서 {large:.0%}"
+    assert large >= 0.80
