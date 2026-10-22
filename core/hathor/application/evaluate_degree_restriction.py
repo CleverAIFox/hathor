@@ -111,11 +111,10 @@ import numpy as np
 from hathor.application.compare_output import PAIRED_T_FLOOR
 from hathor.application.evaluate_harmony_output import (
     EvaluateHarmonyOutput,
-    Histogram,
     OutputCondition,
     ReferencePrior,
-    total_variation,
 )
+from hathor.application.progression_distance import Histogram, total_variation
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.domain.value_objects.key import Mode
 from hathor.engines.compose.harmony_generator import (

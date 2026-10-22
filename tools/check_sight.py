@@ -118,6 +118,7 @@ PINNED = {
     "check_secrets.SKIP_SUFFIXES": 2,
     "check_sight.WIDENS": 4,
     "check_under_load.PAIRED": 1,
+    "control_corpus.NEIGHBOUR": 3,
     "deadcheck.BLIND": 2,
     "deadcheck.CEILING": 7,
     "deadcheck.CODE_TREES": 2,

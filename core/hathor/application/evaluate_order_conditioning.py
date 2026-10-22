@@ -46,13 +46,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from hathor.application.evaluate_harmony_output import (
-    Grid,
-    OutputCondition,
-    ReferencePrior,
-    bigram_matrix,
-    total_variation,
-)
+from hathor.application.evaluate_harmony_output import OutputCondition, ReferencePrior
+from hathor.application.progression_distance import Grid, bigram_matrix, total_variation
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.engines.compose.harmony_generator import generate_harmony, vocabulary_roots
 

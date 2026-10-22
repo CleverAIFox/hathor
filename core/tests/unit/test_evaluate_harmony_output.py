@@ -18,8 +18,10 @@ from hathor.application.evaluate_harmony_output import (
     EvaluateHarmonyOutput,
     OutputCondition,
     ReferencePrior,
-    degree_histogram,
     sweep_bar_counts,
+)
+from hathor.application.progression_distance import (
+    degree_histogram,
     total_variation,
     weight_distance,
 )
@@ -449,7 +451,7 @@ def test_칸_흔들림을_잰다():
 
 def test_전이_행렬은_순서를_본다():
     """**도수 히스토그램은 순서에 눈이 없다.** `I V vi IV`와 `IV vi V I`의 거리가 0이다."""
-    from hathor.application.evaluate_harmony_output import bigram_matrix
+    from hathor.application.progression_distance import bigram_matrix
 
     forward = ("I", "V", "vi", "IV")
     backward = ("IV", "vi", "V", "I")
@@ -463,14 +465,14 @@ def test_전이_행렬은_순서를_본다():
 
 
 def test_전이_행렬은_합이_1이다():
-    from hathor.application.evaluate_harmony_output import bigram_matrix
+    from hathor.application.progression_distance import bigram_matrix
 
     assert bigram_matrix(("I", "V", "I"), Mode.MAJOR).sum() == pytest.approx(1.0)
 
 
 def test_한_마디짜리_진행은_전이가_없다():
     """**0으로 나누지 않는다.**"""
-    from hathor.application.evaluate_harmony_output import bigram_matrix
+    from hathor.application.progression_distance import bigram_matrix
 
     assert bigram_matrix(("I",), Mode.MAJOR).sum() == 0.0
 
@@ -507,7 +509,7 @@ def test_대각선을_빼면_구간_길이에_불변이다():
     같은 화음을 몇 구간 유지하는지는 **자르는 방식이 정한다.** 그것이 대각선을
     통째로 부풀리고, 대각선을 빼면 사라진다.
     """
-    from hathor.application.evaluate_harmony_output import bigram_matrix
+    from hathor.application.progression_distance import bigram_matrix
 
     quick = ("I", "V", "vi", "IV")
     held = tuple(name for name in quick for _ in range(3))

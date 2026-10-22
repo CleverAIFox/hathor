@@ -96,11 +96,8 @@ from hathor.application.evaluate_degree_restriction import (
     chromatic_indices,
     off_scale_indices,
 )
-from hathor.application.evaluate_harmony_output import (
-    DEFAULT_SEED,
-    Histogram,
-    ReferencePrior,
-)
+from hathor.application.evaluate_harmony_output import DEFAULT_SEED, ReferencePrior
+from hathor.application.progression_distance import Histogram
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.domain.value_objects.key import Mode
 

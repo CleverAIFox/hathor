@@ -64,43 +64,33 @@ D-0062가 `other` 선을 넣은 것과 같은 이유다. 둘 다 낸다.
 
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
-from itertools import pairwise
 
 import numpy as np
 
+from hathor.application.progression_distance import (
+    DegreePrior,
+    Progression,
+    bigram_matrix,
+    degree_histogram,
+    total_variation,
+    weight_distance,
+)
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
 from hathor.domain.services.pair_sampling import sample_index_pairs
 from hathor.domain.value_objects.key import Key, Mode
 from hathor.engines.compose.harmony_generator import (
     DIATONIC_ROOT_SEMITONES,
     Vocabulary,
-    degree_weights,
     generate_harmony,
-    vocabulary_degrees,
 )
-
-Histogram = np.ndarray[tuple[int], np.dtype[np.float64]]
-"""창 하나의 12칸 또는 도수 히스토그램. **1차원이다.**"""
-
-Grid = np.ndarray[tuple[int, int], np.dtype[np.float64]]
-"""전이 행렬 같은 2차원.
-
-**1차원 별칭을 2차원에 쓰다가 `make check`가 리전에서만 빨갛게 뜬 적이 있다**
-(D-0108). 기기마다 넘파이 판이 달라 한쪽에서만 통과한다 — **이름이 맞으면 판이
-관대하든 아니든 잡는다.**
-"""
 
 DEFAULT_SEED_COUNT = 1000
 DEFAULT_BAR_COUNT = 8
 DEFAULT_PAIR_COUNT = 400
 DEFAULT_SEED = 20260822
 DEFAULT_KEY = Key(tonic="C", mode=Mode.MAJOR)
-
-DegreePrior = tuple[float, ...]
-Progression = tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +137,20 @@ class OutputCondition:
     vocabulary: Vocabulary = Vocabulary.BASE
     """코드 풀. **`MIXTURE`는 `CONTROL`과 견주지 않으면 읽을 수 없다** (D-0094)."""
 
+    seed_offset: int = 0
+    """생성 시드를 **몇부터 세나** (D-0461).
+
+    **`seed`는 생성기에 안 닿는다.** 쌍 추첨·치환·무작위 사전만 탄다 — 생성은 늘
+    `range(seed_count)`를 썼다. 그래서 같은 코퍼스를 다른 `seed`로 여러 판 돌려도
+    **곡마다 뽑히는 진행 1000개가 전 판에 똑같았고**, 판 사이 흔들림이 생성 쪽
+    변동을 한 번도 못 봤다. 고정된 치우침은 전부 평균에 남아 **판을 늘릴수록
+    `√판`으로 자란다** — 효과가 아니라 인공물 위에서.
+
+    **기본값 0이 옛 자를 그대로 둔다** (D-0374). M5 · M6 · M9가 전부
+    `range(0, 1000)`에서 났고 그 수들은 안 움직인다 — 자를 바꾸면 다시 재야 하고,
+    여기서 바꿀 까닭이 없다.
+    """
+
     def __post_init__(self) -> None:
         if self.seed_count < 1:
             raise ValueError(f"시드 수는 1 이상이어야 한다: {self.seed_count}")
@@ -157,70 +161,7 @@ class OutputCondition:
 
     @property
     def seeds(self) -> tuple[int, ...]:
-        return tuple(range(self.seed_count))
-
-
-def degree_histogram(
-    progression: Progression, mode: Mode, vocabulary: Vocabulary = Vocabulary.BASE
-) -> Histogram:
-    """진행을 코드 풀의 도수 히스토그램으로. 합이 1이다.
-
-    **칸 수가 어휘마다 다르다.** 칸이 늘면 두 진행이 겹칠 확률이 낮아져 거리가
-    기계적으로 오르므로 **같은 칸 수의 대조군과만 견준다** (D-0094).
-    """
-    counts = Counter(progression)
-    pool = vocabulary_degrees(mode, vocabulary)
-    vector = np.asarray([counts.get(name, 0) for name in pool], dtype=np.float64)
-    total = float(vector.sum())
-    return vector / total if total > 0 else vector
-
-
-def bigram_matrix(
-    progression: Progression,
-    mode: Mode,
-    vocabulary: Vocabulary = Vocabulary.BASE,
-    *,
-    drop_diagonal: bool = False,
-) -> Grid:
-    """이웃한 두 마디의 도수 쌍 분포 (O-32 · D-0102).
-
-    **도수 히스토그램은 순서에 눈이 없다** — `I V vi IV`와 `IV vi V I`의 거리가 0이다.
-    전이 행렬은 이웃 관계를 보므로 배열이 달라지면 값이 달라진다.
-    """
-    pool = vocabulary_degrees(mode, vocabulary)
-    index = {name: position for position, name in enumerate(pool)}
-    matrix = np.zeros((len(pool), len(pool)), dtype=np.float64)
-    for left, right in pairwise(progression):
-        matrix[index[left], index[right]] += 1.0
-    if drop_diagonal:
-        # **자기 전이를 빼면 구간 길이에 불변이다** (D-0103). 같은 화음을 몇 구간
-        # 유지하는지는 자르는 방식이 정하고, 그것이 대각선을 통째로 부풀린다.
-        np.fill_diagonal(matrix, 0.0)
-    total = float(matrix.sum())
-    result: Grid = matrix / total if total > 0 else matrix
-    return result
-
-
-def total_variation(left: Histogram | Grid, right: Histogram | Grid) -> float:
-    """전변동 거리. 0~1이며 **`TV * 마디 수`가 옮겨야 하는 마디 수다.**"""
-    return 0.5 * float(np.abs(left - right).sum())
-
-
-def weight_distance(
-    left: DegreePrior,
-    right: DegreePrior,
-    mode: Mode,
-    vocabulary: Vocabulary = Vocabulary.BASE,
-) -> float:
-    """두 사전의 **가중치 벡터** 거리. 마디 수를 늘렸을 때의 극한이다 (O-25 (3)).
-
-    생성기가 실제로 쓰는 `degree_weights`를 그대로 부른다. 여기서 6도수 정규화를
-    다시 구현하면 생성기와 어긋날 수 있고, **어긋나도 아무도 모른다.**
-    """
-    return total_variation(
-        np.asarray(degree_weights(left, mode, vocabulary), dtype=np.float64),
-        np.asarray(degree_weights(right, mode, vocabulary), dtype=np.float64),
-    )
+        return tuple(range(self.seed_offset, self.seed_offset + self.seed_count))
 
 
 @dataclass(frozen=True, slots=True)

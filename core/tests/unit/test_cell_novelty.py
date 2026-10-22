@@ -7,7 +7,6 @@ D-0095의 `cell_spread`는 날것의 퍼짐이라 **다른 칸과 함께 움직�
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from hathor.application.cell_novelty import (
@@ -21,6 +20,7 @@ from hathor.application.cell_novelty import (
 )
 from hathor.application.evaluate_harmony_output import ReferencePrior
 from hathor.domain.value_objects.key import Mode
+from tests.conftest import tool_module
 
 DEGREES = 12
 DIATONIC = (0, 2, 4, 5, 7, 9)
@@ -36,21 +36,25 @@ NEIGHBOUR = {3: 2, 8: 7, 10: 9}
 """
 
 
+CORPUS = tool_module("control_corpus")
+"""**빌더가 두 벌이었다** (D-0461).
+
+이 파일이 제 `_corpus`를 들고 있었고 `control_corpus`가 같은 일을 다시 했다. 둘은
+이미 갈려 있었다 — 이쪽은 `exp(sigma*z)`로 **평균이 1이 아닌** 옛 흔들림을 썼다.
+`BORROWED`가 바뀌는 날 **한쪽만 따라가고 다른 쪽은 초록으로 남는다** (D-0043).
+"""
+
+
 def _corpus(count: int, *, seed: int, sigma: float, follows: bool) -> list[ReferencePrior]:
-    """`follows`면 차용 칸이 **이웃 온음계 칸에 비례**한다 — `base`가 이미 아는 모양이다."""
-    rng = np.random.default_rng(seed)
-    made: list[ReferencePrior] = []
-    for index in range(count):
-        shape = rng.dirichlet(np.full(DEGREES, 3.385))
-        if sigma > 0.0:
-            for cell in BORROWED:
-                noise = float(rng.standard_normal())
-                if follows:
-                    shape[cell] = shape[NEIGHBOUR[cell]] * np.exp(0.15 * noise)
-                else:
-                    shape[cell] *= np.exp(sigma * noise)
-        made.append(ReferencePrior(f"곡{index:03d}", tuple(float(v) for v in shape / shape.sum())))
-    return made
+    """`follows`면 차용 칸이 **이웃 온음계 칸에 비례**한다 — `base`가 이미 아는 모양이다.
+
+    **질량 0.5는 밀지 않는다는 뜻이다** (`k = m/(1-m) = 1`). 이 파일의 질문은
+    잔차이지 무게가 아니므로 옛 모양을 그대로 둔다 (D-0334는 다른 질문이다).
+    """
+    found: list[ReferencePrior] = CORPUS.build(
+        count, seed=seed, sigma=sigma, follows=follows, diatonic_mass=0.5
+    )
+    return found
 
 
 def test_곡이_모자라면_거부한다() -> None:
