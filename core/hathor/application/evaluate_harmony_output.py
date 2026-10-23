@@ -69,6 +69,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hathor.application.paired_output import output_distances
 from hathor.application.progression_distance import (
     DegreePrior,
     Progression,
@@ -498,6 +499,31 @@ class EvaluateHarmonyOutput:
     def pair_indices(self, count: int) -> tuple[tuple[int, int], ...]:
         """쌍 추첨을 밖에서도 볼 수 있게 낸다. **두 출처가 같은 쌍을 써야 한다.**"""
         return self._sample_pairs(count, np.random.default_rng([self._condition.seed, 0]))
+
+    def paired_distances(self, references: Sequence[ReferencePrior]) -> tuple[float, ...]:
+        """`run().line("paired").distances`와 **같은 수를 싸게 낸다** (D-0463).
+
+        `run()`은 선 일곱을 다 돈다. 문턱을 재는 쪽이 읽는 것은 **`paired` 하나**라
+        나머지 여섯의 생성과 전이 행렬이 통째로 버려진다.
+
+        **쌍과 시드를 `run()`과 같은 자리에서 가져온다.** 베껴 적으면 어긋나고
+        (D-0043), 그러면 이 길로 모은 판과 저 길로 모은 판을 **같이 못 센다.**
+        `test_빠른_길이_느린_길과_비트까지_같다`가 그 동일성을 건다.
+
+        **선이 아니라 거리 목록이다** — 불일치율·전이·계량 상한을 안 낸다. 그것들이
+        필요하면 `run()`을 쓴다 (GR-0.5: 안 낸 것을 0이라 안 한다).
+        """
+        settings = self._condition
+        if len(references) < 2:
+            raise ValueError(f"참조곡이 2개 이상 필요하다: {len(references)}")
+        return output_distances(
+            [item.prior for item in references],
+            self.pair_indices(len(references)),
+            seeds=settings.seeds,
+            key=settings.key,
+            vocabulary=settings.vocabulary,
+            bar_count=settings.bar_count,
+        )
 
     def _sample_pairs(
         self, count: int, generator: np.random.Generator

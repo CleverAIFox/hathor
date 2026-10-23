@@ -44,18 +44,13 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from control_corpus import REAL_DIATONIC_MASS, build, diatonic_mass_of  # noqa: E402
 
-from hathor.application.compare_output import gap_of  # noqa: E402
+from hathor.application.compare_output import NORMAL_95, gap_of  # noqa: E402
 from hathor.application.evaluate_harmony_output import ReferencePrior  # noqa: E402
-from hathor.application.progression_distance import (  # noqa: E402
-    Histogram,
-    degree_histogram,
-    total_variation,
-)
+from hathor.application.paired_output import output_distances  # noqa: E402
 from hathor.domain.services.pair_sampling import sample_index_pairs  # noqa: E402
 from hathor.domain.value_objects.key import Key, Mode  # noqa: E402
 from hathor.engines.compose.harmony_generator import (  # noqa: E402
     Vocabulary,
-    generate_harmony,
     vocabulary_degrees,
 )
 
@@ -112,7 +107,7 @@ class Run:
     @property
     def ceiling(self) -> float:
         """인공물의 **95% 상한.** 아래로 묶는 수이지 실측된 바닥이 아니다 (GR-0.5)."""
-        return self.mean + 1.96 * self.error
+        return self.mean + NORMAL_95 * self.error
 
 
 def distances(
@@ -121,30 +116,19 @@ def distances(
     pairs: tuple[tuple[int, int], ...],
     offset: int,
 ) -> tuple[float, ...]:
-    """그 어휘로 쌍마다 전변동 거리. **짝지은 두 곡이 같은 시드 흐름을 쓴다.**"""
-    vocabulary = Vocabulary(word)
-    cache: dict[int, tuple[Histogram, ...]] = {}
+    """그 어휘로 쌍마다 전변동 거리. **짝지은 두 곡이 같은 시드 흐름을 쓴다.**
 
-    def made(index: int) -> tuple[Histogram, ...]:
-        if index not in cache:
-            prior = corpus[index].prior
-            cache[index] = tuple(
-                degree_histogram(
-                    generate_harmony(
-                        seed, KEY, bar_count=BAR_COUNT, prior=prior, vocabulary=vocabulary
-                    ).degrees,
-                    Mode.MAJOR,
-                    vocabulary,
-                )
-                for seed in range(offset, offset + SEEDS)
-            )
-        return cache[index]
-
-    return tuple(
-        float(
-            np.mean([total_variation(a, b) for a, b in zip(made(left), made(right), strict=True)])
-        )
-        for left, right in pairs
+    **이 고리를 여기에 베껴 적었었다** (D-0462). 같은 질문을 재는 `probe_threshold`와
+    **다른 코드**로 돌아 한쪽을 고쳐도 다른 쪽이 안 움직였다 — D-0463이 한자리로
+    모았고 이 함수는 이제 **인자를 맞춰 주는 껍데기**다 (D-0424 · D-0043).
+    """
+    return output_distances(
+        [item.prior for item in corpus],
+        pairs,
+        seeds=range(offset, offset + SEEDS),
+        key=KEY,
+        vocabulary=Vocabulary(word),
+        bar_count=BAR_COUNT,
     )
 
 

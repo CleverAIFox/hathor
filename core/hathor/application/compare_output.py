@@ -56,6 +56,13 @@ PAIRED_T_FLOOR = 2.0
 **`carries_order`가 이미 쓰던 값이다** (D-0102). 새로 고르면 그것이 D-0058이다.
 """
 
+NORMAL_95 = 1.96
+"""95% 구간의 정규 계수. **상한을 내는 자리가 둘 이상이라 여기 둔다** (D-0043).
+
+`probe_layout.Run.ceiling`과 `probe_threshold.Sweep.ceiling`이 같은 양을 낸다.
+두 곳에 적으면 한쪽만 바뀐다 — D-0462가 고리를 베껴 적어 당한 자리와 같다.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class PairedGap:

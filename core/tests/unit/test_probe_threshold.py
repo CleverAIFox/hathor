@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import re
 from typing import Any, cast
 
 import pytest
@@ -62,6 +63,54 @@ def test_읽는_법이_문턱에서_갈린다() -> None:
     assert "0이 아니다" in TOOL.verdict(biased)
     assert "쌍 수를 못 올린다" in TOOL.verdict(biased)
     assert "안 갈린다" in TOOL.verdict(centred)
+
+
+def test_상한이_문턱_아래면_승인한다() -> None:
+    """**승인 쪽 가지가 PLAN에만 있었다** (D-0464).
+
+    *«95% 상한이 +0.001 아래면 쌍 1600이 승인된다»*가 문서에만 있어 읽는 사람이
+    **반올림된 화면 수를 곱해야** 했다. 문턱이 넷째 자리인데 화면이 넷째 자리까지라
+    실제로 그렇게 읽다가 +0.000988로 **승인 쪽으로 잘못 읽었다** — 전체 자릿수는
+    +0.001030이었다 (GR-0.7).
+    """
+    tight = _sweep((0.0002, -0.0008, 0.0012, -0.0004, 0.0008, 0.0002))
+
+    assert abs(tight.mean_t) < 2.0, "동결 쪽이 켜지면 승인 가지를 안 밟는다"
+    assert tight.ceiling < TOOL.CEILING_FLOOR
+    assert "승인된다" in TOOL.verdict(tight)
+
+
+def test_치우침이_확정이면_상한이_낮아도_동결이다() -> None:
+    """**두 가지가 같이 켜진다** (D-0464). 엄한 쪽을 든다.
+
+    참 치우침이 0만 아니면 판을 늘릴수록 상한은 점추정으로 내려가 **승인**을 켜고
+    `t`는 `√판`으로 자라 **동결**을 켠다. 참이 정확히 0일 때만 양립하는 규칙이라
+    순서를 박아야 하고, *«작지만 확실히 0이 아니다»*는 **동결**로 읽는다.
+    """
+    small_but_certain = _sweep((0.00040, 0.00041, 0.00039, 0.00040, 0.00041, 0.00039))
+
+    assert small_but_certain.ceiling < TOOL.CEILING_FLOOR, "상한은 승인 쪽을 켠다"
+    assert abs(small_but_certain.mean_t) >= 2.0, "t는 동결 쪽을 켠다"
+    assert "쌍 수를 못 올린다" in TOOL.verdict(small_but_certain), "둘이 겹치는데 승인했다"
+
+
+def test_상한을_여섯_자리로_찍는다(capsys: pytest.CaptureFixture[str]) -> None:
+    """**판정 문턱이 넷째 자리다** (D-0464). 넷째 자리까지 찍으면 읽는 사람이 못 가른다."""
+    TOOL.report(_sweep((0.0002, -0.0008, 0.0012, -0.0004, 0.0008, 0.0002)))
+
+    printed = capsys.readouterr().out
+    assert re.search(r"95% 상한 [+-]0\.\d{6}", printed), f"자릿수가 모자란다: {printed}"
+    assert re.search(r"평균 이득 [+-]0\.\d{6}", printed), (
+        f"평균도 넷째 자리로는 못 읽는다: {printed}"
+    )
+
+
+def test_못_쟀으면_상한도_nan이다() -> None:
+    """`mean_t`와 **같은 관례다** (D-0461). 0을 내면 봐주는 쪽으로 열린다."""
+    one = _sweep((0.01,))
+
+    assert math.isnan(one.ceiling)
+    assert "못 쟀다" in TOOL.verdict(one)
 
 
 def test_못_갈랐다를_0이라_안_한다() -> None:
@@ -161,7 +210,14 @@ def test_판마다_코퍼스를_새로_뽑는다(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(TOOL, "build", spy)
     monkeypatch.setattr(TOOL, "EvaluateHarmonyOutput", watch)
     args = argparse.Namespace(
-        songs=8, pairs=3, trials=3, mass=0.7237, corpus_seed=1000, sigma=0.9, trial_seed=0
+        songs=8,
+        pairs=3,
+        trials=3,
+        mass=0.7237,
+        corpus_seed=1000,
+        sigma=0.9,
+        trial_seed=0,
+        hold_corpus=False,
     )
 
     TOOL.sweep("시험", sigma=0.0, args=args)
@@ -170,6 +226,120 @@ def test_판마다_코퍼스를_새로_뽑는다(monkeypatch: pytest.MonkeyPatch
     # **생성 시드가 판마다 밀리는지가 이 시험의 반쪽이다** (D-0461). 처음엔 코퍼스만
     # 보고 있었고, 그 사이 `seed`가 생성기에 안 닿아 **전 판이 같은 진행을 봤다.**
     assert len(set(drawn)) == 3, f"판마다 생성 시드가 같다: {sorted(set(drawn))}"
+
+
+def test_잘린_로그에서_요약을_되살린다(tmp_path: Any) -> None:
+    """**판 120개짜리가 104개에서 잘렸다** (D-0464). 요약은 끝에만 찍힌다.
+
+    손으로 합치면 GR-0.7이라 도구가 되읽는다. **요약 줄의 「평균 이득」을 판으로
+    세면 안 된다** — 한 번 그 함정에 빠져 93판을 94판으로 셌다.
+    """
+    log = tmp_path / "잘린.log"
+    log.write_text(
+        "코퍼스 1000곡 · 쌍 800 · 판 120\n"
+        "  음성 판   0 · 이득 +0.001000 ±0.002000 · t +0.50 · 실패\n"
+        "  음성 판   1 · 이득 +0.003000 ±0.002000 · t +1.50 · 실패\n"
+        "  음성 판   2 · 이득 +0.005000 ±0.002000 · t +2.50 · 통과\n"
+        "음성: 통과 **1/3** · 평균 이득 +0.003000 ±0.001155(판 사이) · 평균의 t +2.60\n",
+        encoding="utf-8",
+    )
+
+    revived = TOOL.summarize(log)
+
+    assert len(revived.gains) == 3, "요약 줄을 판으로 셌다"
+    assert revived.passed == 1
+    assert revived.mean == pytest.approx(0.003)
+    assert math.isnan(revived.mass), "로그에 없는 질량을 수처럼 채웠다 (GR-0.5)"
+    assert "3판" in revived.name, "몇 판에서 잘렸는지가 이름에 있어야 읽는 사람이 안다"
+
+
+def test_판_줄이_모자라면_요약을_거부한다(tmp_path: Any) -> None:
+    """**양성 대조** (D-0259). 위 시험만 있으면 «빈 로그도 요약»이 통과한다."""
+    log = tmp_path / "빈.log"
+    log.write_text("코퍼스 1000곡 · 쌍 800 · 판 120\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="판 줄이 둘 미만"):
+        TOOL.summarize(log)
+
+
+def test_찍은_줄을_되읽으면_같은_수가_나온다(
+    tmp_path: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**왕복이다** (D-0464). 찍는 쪽과 되읽는 쪽이 **같은 꼴**이어야 한다.
+
+    따로 걸면 서식이 바뀌어도 시험이 조용히 헛돈다 — 손으로 쓴 로그는 **내가
+    기억하는 꼴**을 검사하지 도구가 내는 꼴을 검사하지 않는다 (D-0043).
+
+    그리고 자릿수가 여기서 걸린다: 넷째 자리로 찍으면 되읽은 평균이 안 맞는다.
+    """
+    args = argparse.Namespace(
+        songs=8,
+        pairs=3,
+        trials=3,
+        mass=0.7237,
+        corpus_seed=1000,
+        sigma=0.9,
+        trial_seed=0,
+        hold_corpus=False,
+    )
+
+    live = TOOL.sweep("음성", sigma=0.0, args=args)
+    log = tmp_path / "찍힌.log"
+    log.write_text(capsys.readouterr().out, encoding="utf-8")
+    revived = TOOL.summarize(log)
+
+    # **비트까지 같을 수는 없다** — 찍는 순간 여섯째 자리에서 반올림된다. 걸 것은
+    # *«얼마나 틀리나»*이고, 그것이 **판정 눈금보다 훨씬 작아야** 되살린 요약을 쓴다.
+    half = 5e-7
+    assert revived.passed == live.passed
+    assert len(revived.gains) == len(live.gains)
+    for got, want in zip(revived.gains, live.gains, strict=True):
+        assert got == pytest.approx(want, abs=half), "되읽은 이득이 반올림 폭을 넘는다"
+    # 판정이 걸리는 자리는 `CEILING_FLOOR`(0.001)와 평균의 오차(1e-4 자리)다.
+    assert abs(revived.mean - live.mean) < TOOL.CEILING_FLOOR / 1000
+
+
+def test_코퍼스를_붙들면_쌍만_움직인다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**정직성이 무엇을 재는지가 모드에 달렸다** (D-0464).
+
+    기본 모드의 판 사이 흔들림에는 **코퍼스 사이 흔들림**이 섞여 있어, 짝이 완벽히
+    독립이어도 보고오차와의 비가 쌍 수와 함께 오른다. 코퍼스와 생성 시드를 붙들면
+    그 섞임이 사라지고 **쌍 표집만** 남는다 — 그래야 「쌍 겹침이 정보를 깎나」를 묻는다.
+    """
+    seeds: list[int] = []
+    offsets: list[int] = []
+    pairs_seen: list[tuple[int, ...]] = []
+    built: Any = TOOL.build
+    ran: Any = TOOL.EvaluateHarmonyOutput
+
+    def spy(count: int, **kwargs: Any) -> Any:
+        seeds.append(int(kwargs["seed"]))
+        return built(count, **kwargs)
+
+    def watch(condition: Any) -> Any:
+        offsets.append(condition.seed_offset)
+        evaluator = ran(condition)
+        pairs_seen.append(evaluator.pair_indices(8))
+        return evaluator
+
+    monkeypatch.setattr(TOOL, "build", spy)
+    monkeypatch.setattr(TOOL, "EvaluateHarmonyOutput", watch)
+    args = argparse.Namespace(
+        songs=8,
+        pairs=3,
+        trials=3,
+        mass=0.7237,
+        corpus_seed=1000,
+        sigma=0.9,
+        trial_seed=0,
+        hold_corpus=True,
+    )
+
+    TOOL.sweep("시험", sigma=0.0, args=args)
+
+    assert set(seeds) == {1000}, f"코퍼스를 붙들라 했는데 시드가 움직인다: {seeds}"
+    assert set(offsets) == {0}, f"생성 시드가 움직이면 쌍 표집만 보는 것이 아니다: {offsets}"
+    assert len(set(pairs_seen)) == 3, "쌍은 판마다 달라야 한다 — 안 그러면 흔들림이 0이다"
 
 
 class _Exploding:
