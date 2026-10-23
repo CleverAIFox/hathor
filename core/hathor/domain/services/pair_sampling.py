@@ -100,6 +100,41 @@ def sample_index_pairs(
     return tuple(picked)
 
 
+def sample_matching_pairs(
+    count: int, want: int, *, generator: np.random.Generator
+) -> tuple[tuple[int, int], ...]:
+    """곡을 **정확히 한 번씩** 쓰는 쌍 — 무작위 완전 매칭에서 앞의 `want`개 (D-0466).
+
+    ### 왜 이것이 다른가
+
+    `sample_index_pairs`는 곡을 **독립으로** 뽑는다. 그래서 쌍 400이 1004곡 중
+    **566곡**만 덮고(`touched_count`), 나머지 자리는 **같은 곡을 다시 집은 것**이다 —
+    쌍을 늘려도 적용 범위는 겹침보다 느리게 는다(쌍 800이 823곡, 1600이 962곡).
+
+    여기서는 섞은 뒤 앞에서부터 둘씩 묶으므로 **덮는 곡이 정확히 `2 * want`**이고
+    **곡 재사용이 0**이다. 1004곡이면 **쌍 502로 전수**다.
+
+    ### 무엇을 못 하나
+
+    `want`가 `count // 2`를 **못 넘는다.** 더 많은 쌍이 필요하면 곡을 다시 집어야
+    하고, 그 순간 이것이 아니다. **쌍 수와 적용 범위를 맞바꾸는 자이지 둘 다
+    늘리는 자가 아니다.**
+
+    모자라면 **운다** — 조용히 덜 내면 그만큼 적은 표본으로 잰 것이 된다 (D-0230).
+    """
+    if want < 1:
+        raise ValueError("쌍 수는 1 이상이어야 한다")
+    if count < 2:
+        raise ValueError("곡이 둘 이상이어야 쌍을 만들 수 있다")
+    if want > count // 2:
+        raise ValueError(
+            f"곡 {count}개를 한 번씩만 쓰면 쌍은 {count // 2}개가 끝인데 {want}개를 달랬다. "
+            "더 필요하면 곡을 다시 집는 `sample_index_pairs`다"
+        )
+    shuffled = generator.permutation(count)
+    return tuple((int(shuffled[2 * index]), int(shuffled[2 * index + 1])) for index in range(want))
+
+
 def touched_count(pairs: Sequence[tuple[int, int]]) -> int:
     """그 쌍 표본이 **실제로 건드린 곡 수** (D-0454).
 

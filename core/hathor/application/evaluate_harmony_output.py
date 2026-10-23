@@ -79,7 +79,7 @@ from hathor.application.progression_distance import (
     weight_distance,
 )
 from hathor.domain.services.harmony_prior import DEGREE_COUNT
-from hathor.domain.services.pair_sampling import sample_index_pairs
+from hathor.domain.services.pair_sampling import sample_index_pairs, sample_matching_pairs
 from hathor.domain.value_objects.key import Key, Mode
 from hathor.engines.compose.harmony_generator import (
     DIATONIC_ROOT_SEMITONES,
@@ -150,6 +150,20 @@ class OutputCondition:
     **기본값 0이 옛 자를 그대로 둔다** (D-0374). M5 · M6 · M9가 전부
     `range(0, 1000)`에서 났고 그 수들은 안 움직인다 — 자를 바꾸면 다시 재야 하고,
     여기서 바꿀 까닭이 없다.
+    """
+
+    matched_pairs: bool = False
+    """쌍을 **완전 매칭**으로 뽑나 (D-0466).
+
+    기본인 거절 표본은 곡을 **독립으로** 집어 쌍 400이 1004곡 중 **566곡**만 덮는다 —
+    나머지 자리는 같은 곡을 다시 집은 것이다. 매칭은 섞어서 둘씩 묶으므로 덮는 곡이
+    **정확히 `2 * pair_count`**이고 재사용이 0이라 **쌍 502로 1004곡 전수**다.
+
+    **`pair_count`가 곡 수의 절반을 넘으면 거부한다** — 그 위로는 곡을 다시 집어야
+    하고 그러면 이것이 아니다. **쌍 수와 적용 범위를 맞바꾸는 손잡이**다.
+
+    **기본값 `False`가 옛 자를 그대로 둔다** (D-0374). M5 · M6 · M9가 전부 거절
+    표본에서 났고 그 수들은 안 움직인다.
     """
 
     def __post_init__(self) -> None:
@@ -534,8 +548,11 @@ class EvaluateHarmonyOutput:
 
         **여기 있던 거절 표본을 `pair_sampling`으로 옮겼다** (D-0446 · D-0424).
         베껴 적은 것이 `seen`/`continue`를 빠뜨려 `limit`과 `raise`가 닿지 않았다.
+
+        `matched_pairs`면 **완전 매칭**이다 (D-0466) — 곡을 한 번씩만 쓴다.
         """
-        return sample_index_pairs(count, self._condition.pair_count, generator=generator)
+        draw = sample_matching_pairs if self._condition.matched_pairs else sample_index_pairs
+        return draw(count, self._condition.pair_count, generator=generator)
 
 
 def cell_spread(references: Sequence[ReferencePrior], cells: Sequence[int]) -> float:

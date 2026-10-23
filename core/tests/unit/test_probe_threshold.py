@@ -19,6 +19,7 @@ from typing import Any, cast
 
 import pytest
 
+from hathor.shared.config.paths import repo_root
 from tests.conftest import tool_module
 
 TOOL = tool_module("probe_threshold")
@@ -33,6 +34,23 @@ def _sweep(gains: tuple[float, ...], *, passed: int = 0, errors: float = 0.004) 
         mass=0.7237,
         seconds=0.0,
     )
+
+
+def _args(**over: Any) -> Any:
+    base = dict(
+        songs=8,
+        pairs=3,
+        trials=3,
+        mass=0.7237,
+        corpus_seed=1000,
+        sigma=0.9,
+        trial_seed=0,
+        hold_corpus=False,
+        matched=False,
+        first_trial=0,
+    )
+    base.update(over)
+    return argparse.Namespace(**base)
 
 
 def test_평균의_t는_판_사이_흔들림으로_잰다() -> None:
@@ -146,13 +164,11 @@ def test_비용을_먼저_찍는다() -> None:
     """**무거우면 끈다** (D-0129). 끄게 하려면 얼마나 무거운지 보여야 한다."""
     both = cast(
         "str",
-        TOOL.cost(argparse.Namespace(songs=1000, pairs=400, trials=6, only="both", trial_seed=0)),
+        TOOL.cost(_args(pairs=400, songs=1000, trials=6, only="both")),
     )
     one = cast(
         "str",
-        TOOL.cost(
-            argparse.Namespace(songs=1000, pairs=400, trials=6, only="negative", trial_seed=0)
-        ),
+        TOOL.cost(_args(pairs=400, songs=1000, trials=6, only="negative")),
     )
 
     assert "덮는 곡" in both
@@ -209,16 +225,7 @@ def test_판마다_코퍼스를_새로_뽑는다(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(TOOL, "build", spy)
     monkeypatch.setattr(TOOL, "EvaluateHarmonyOutput", watch)
-    args = argparse.Namespace(
-        songs=8,
-        pairs=3,
-        trials=3,
-        mass=0.7237,
-        corpus_seed=1000,
-        sigma=0.9,
-        trial_seed=0,
-        hold_corpus=False,
-    )
+    args = _args(hold_corpus=False)
 
     TOOL.sweep("시험", sigma=0.0, args=args)
 
@@ -272,16 +279,7 @@ def test_찍은_줄을_되읽으면_같은_수가_나온다(
 
     그리고 자릿수가 여기서 걸린다: 넷째 자리로 찍으면 되읽은 평균이 안 맞는다.
     """
-    args = argparse.Namespace(
-        songs=8,
-        pairs=3,
-        trials=3,
-        mass=0.7237,
-        corpus_seed=1000,
-        sigma=0.9,
-        trial_seed=0,
-        hold_corpus=False,
-    )
+    args = _args(hold_corpus=False)
 
     live = TOOL.sweep("음성", sigma=0.0, args=args)
     log = tmp_path / "찍힌.log"
@@ -324,16 +322,7 @@ def test_코퍼스를_붙들면_쌍만_움직인다(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(TOOL, "build", spy)
     monkeypatch.setattr(TOOL, "EvaluateHarmonyOutput", watch)
-    args = argparse.Namespace(
-        songs=8,
-        pairs=3,
-        trials=3,
-        mass=0.7237,
-        corpus_seed=1000,
-        sigma=0.9,
-        trial_seed=0,
-        hold_corpus=True,
-    )
+    args = _args(hold_corpus=True)
 
     TOOL.sweep("시험", sigma=0.0, args=args)
 
@@ -347,3 +336,175 @@ class _Exploding:
 
     def sweep(self, *_args: object, **_kwargs: object) -> object:
         raise AssertionError("마른 실행인데 생성을 돌렸다")
+
+
+@pytest.mark.parametrize("hold", [False, True])
+def test_토막_둘이_한_판과_같다(hold: bool) -> None:
+    """**통이 긴 판을 중간에 거둔다** (D-0466). 토막으로 돌려 이어 붙이려면
+
+    토막의 합이 **한 판과 같아야** 한다. 같지 않으면 이어 붙인 평균에 뜻이 없다
+    (GR-0.5). `--hold-corpus`는 코퍼스와 생성 시드를 붙들고 쌍만 미는 모드라
+    **이어 붙이는 규칙이 다르다** — 그래서 두 모드를 다 건다.
+    """
+    whole = TOOL.sweep("음성", sigma=0.0, args=_args(trials=4, hold_corpus=hold))
+    head = TOOL.sweep("음성", sigma=0.0, args=_args(trials=2, hold_corpus=hold))
+    tail = TOOL.sweep("음성", sigma=0.0, args=_args(trials=2, first_trial=2, hold_corpus=hold))
+
+    assert head.gains + tail.gains == whole.gains, "토막을 이으면 한 판과 달라진다"
+    assert head.errors + tail.errors == whole.errors
+
+
+def test_판_번호가_토막마다_다르다(capsys: pytest.CaptureFixture[str]) -> None:
+    """**이어 붙인 로그에서 판이 겹쳐 보이면 안 센 것을 센다** (D-0230)."""
+    TOOL.sweep("음성", sigma=0.0, args=_args(trials=2, first_trial=7))
+
+    printed = capsys.readouterr().out
+
+    assert "판   7" in printed and "판   8" in printed, printed
+
+
+def _log(tmp_path: Any, body: str, *, mode: str = "코퍼스 새로") -> Any:
+    log = tmp_path / "토막.log"
+    log.write_text(f"코퍼스 1000곡 · 쌍 500 · 판 50 · {mode} · 매칭\n{body}", encoding="utf-8")
+    return log
+
+
+_ROW = "  음성 판 {0:3d} · 이득 {1:+.6f} ±0.002000 · t +0.50 · 실패\n"
+
+
+def test_겹쳐_적힌_판을_한_번만_센다(tmp_path: Any, capsys: pytest.CaptureFixture[str]) -> None:
+    """**두 프로세스가 같은 로그에 겹쳐 썼다** (D-0466).
+
+    판 줄 55개에 번호는 41개였고 세어 보기 전에는 55판으로 읽혔다 — 표본이 부풀고
+    **오차가 가짜로 줄어든다.**
+    """
+    body = _ROW.format(0, 0.001) + _ROW.format(1, 0.003) + _ROW.format(1, 0.003)
+
+    revived = TOOL.summarize(_log(tmp_path, body))
+
+    assert len(revived.gains) == 2, "같은 판을 두 번 셌다"
+    assert "겹쳐 적힌 판 1줄" in capsys.readouterr().err, "조용히 버리면 안 보인다 (D-0191)"
+
+
+def test_같은_판이_다른_수면_운다(tmp_path: Any) -> None:
+    """**고르는 것은 도구가 할 일이 아니다** (D-0230)."""
+    body = _ROW.format(0, 0.001) + _ROW.format(1, 0.003) + _ROW.format(1, 0.009)
+
+    with pytest.raises(ValueError, match="서로 다른 수로 두 번"):
+        TOOL.summarize(_log(tmp_path, body))
+
+
+def test_판_번호에_구멍이_있으면_운다(tmp_path: Any) -> None:
+    """**토막 하나가 통째로 날아간 것**이다 (GR-0.5)."""
+    body = _ROW.format(0, 0.001) + _ROW.format(1, 0.002) + _ROW.format(4, 0.003)
+
+    with pytest.raises(ValueError, match="구멍이 있다"):
+        TOOL.summarize(_log(tmp_path, body))
+
+
+def test_모드를_안_밝힌_로그는_안_읽는다(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**무엇인지 모르면 안 읽는다** (D-0292).
+
+    고정 코퍼스면 `verdict()`가 다른 것을 잰다. 본 실행은 그것을 막는데 **로그로
+    되살리면 막이 사라졌다.** 깃발로 받으면 손으로 적는 것이라(GR-0.7) 로그가
+    스스로 말하게 한다.
+    """
+    log = tmp_path / "옛.log"
+    log.write_text(
+        "코퍼스 1000곡 · 쌍 500 · 판 50\n" + _ROW.format(0, 0.001) + _ROW.format(1, 0.002)
+    )
+    monkeypatch.setattr("sys.argv", ["probe_threshold.py", "--summarize", str(log)])
+
+    assert TOOL.main() == 1
+    assert "모드를 안 밝혔다" in capsys.readouterr().err
+
+
+def test_고정_코퍼스_로그에는_판정을_안_찍는다(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**양성 대조** (D-0259). 위 시험만 있으면 「늘 거부」도 통과한다."""
+    body = "".join(_ROW.format(index, 0.004) for index in range(4))
+    log = _log(tmp_path, body, mode=TOOL.HELD_MARK)
+    monkeypatch.setattr("sys.argv", ["probe_threshold.py", "--summarize", str(log)])
+
+    assert TOOL.main() == 0
+    printed = capsys.readouterr().out
+    assert "판정 안 함" in printed
+    assert "쌍 수를 못 올린다" not in printed, "고정 코퍼스에 쌍 수 판정을 찍었다"
+
+
+def test_머리줄이_모드를_적는다() -> None:
+    """**토막마다 찍히므로 잘린 로그에도 남는다** (D-0466)."""
+    held = cast("str", TOOL.cost(_args(hold_corpus=True, matched=True, only="negative")))
+    free = cast("str", TOOL.cost(_args(hold_corpus=False, matched=False, only="negative")))
+
+    assert TOOL.HELD_MARK in held and "매칭" in held
+    assert TOOL.FREE_MARK in free and "거절표본" in free
+    assert TOOL.HELD_MARK not in free
+
+
+def test_조건에_선_양성이_없으면_음성을_안_읽는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**다른 조건에서 잰 양성에 기대면 기댄 것이 아니다** (D-0259 · D-0325).
+
+    상수 하나이던 때는 *«쌍 500에서 재는데 쌍 400 양성에 기댄다»*를 막으면서
+    *«쌍 500 양성이 이미 있다»*를 같이 말할 수 없었다 (D-0466).
+    """
+    assert TOOL.leaning_on(_args(pairs=777, matched=False)) is None
+
+    monkeypatch.setattr(
+        "sys.argv", ["probe_threshold.py", "--only", "negative", "--pairs", "777", "--trials", "2"]
+    )
+    assert TOOL.main() == 1
+    assert "이 조건에 선 양성이 없다" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "pairs,matched",
+    [(400, False), (800, False), (500, True)],
+)
+def test_기록에_선_양성이면_그것을_집는다(pairs: int, matched: bool) -> None:
+    """**양성 대조** (D-0259). 위 시험만 있으면 「늘 거부」도 통과한다."""
+    label = TOOL.leaning_on(_args(pairs=pairs, matched=matched, songs=TOOL.SONGS))
+
+    assert label is not None
+    assert str(pairs) in label
+    assert ("매칭" if matched else "거절 표본") in label
+
+
+def test_기대는_양성마다_기록이_있다() -> None:
+    """**안 돌린 조건을 적으면 그것이 D-0325다** (40곡으로 1004곡을 판정한 자리).
+
+    목록은 *«이 조건에서 양성이 기록에 섰다»*는 선언이고, 선언만 하고 기록이 없으면
+    `--only negative`가 **없는 것에 기대고 판정을 찍는다.**
+    """
+    import re
+
+    body = (repo_root() / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    for label, _ in TOOL.POSITIVES_ON_RECORD:
+        found = re.match(r"(D-\d{4})의 양성", label)
+        assert found, f"기댈 양성에 기록 번호가 없다: {label}"
+        assert f"## {found.group(1)}." in body, f"{found.group(1)} 기록이 없다: {label}"
+
+
+def test_양성_로그에_음성_판정을_안_찍는다(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**정반대로 읽힌다** (D-0466 · D-0292).
+
+    `verdict()`는 *«음성이 0인가»*를 읽는 자다. 양성에 대면 잘 선 양성이
+    *«대조가 0이 아니다»*로 — 결함으로 — 읽힌다. 실제로 그렇게 찍혔다.
+    """
+    body = "".join(
+        f"  양성 판 {index:3d} · 이득 +0.030000 ±0.000500 · t +60.00 · 통과\n" for index in range(4)
+    )
+    log = _log(tmp_path, body)
+    monkeypatch.setattr("sys.argv", ["probe_threshold.py", "--summarize", str(log)])
+
+    assert TOOL.main() == 0
+    printed = capsys.readouterr().out
+    assert "양성 로그다" in printed
+    assert "0이 아니다" not in printed, "양성을 음성의 읽는 법으로 읽었다"

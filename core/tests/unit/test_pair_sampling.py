@@ -278,3 +278,64 @@ def test_쌍_표본이_중첩된다():
     sixteen = sample_index_pairs(1004, 1600, generator=np.random.default_rng(20260822))
 
     assert sixteen[:400] == four
+
+
+def test_매칭은_곡을_한_번씩만_쓴다() -> None:
+    """**이것이 이 자의 전부다** (D-0466).
+
+    거절 표본은 곡을 독립으로 집어 쌍 400이 1004곡 중 566곡만 덮는다. 매칭은
+    섞어서 둘씩 묶으므로 **덮는 곡이 정확히 쌍의 두 배**다.
+    """
+    from hathor.domain.services.pair_sampling import sample_matching_pairs, touched_count
+
+    pairs = sample_matching_pairs(1004, 502, generator=np.random.default_rng(7))
+
+    assert len(pairs) == 502
+    assert touched_count(pairs) == 1004, "한 곡이라도 두 번 쓰였거나 빠졌다"
+    assert all(left != right for left, right in pairs), "자기 자신과 짝지었다"
+
+
+def test_매칭이_절반을_넘으면_거부한다() -> None:
+    """**곡을 한 번씩만 쓰면 쌍은 절반이 끝이다** (GR-0.5 · D-0230).
+
+    조용히 덜 내면 그만큼 적은 표본으로 잰 것이 되고 수는 표시 없이 작아진다.
+    """
+    from hathor.domain.services.pair_sampling import sample_matching_pairs
+
+    with pytest.raises(ValueError, match="쌍은 50개가 끝인데"):
+        sample_matching_pairs(100, 51, generator=np.random.default_rng(0))
+
+
+def test_매칭도_시드가_같으면_같은_쌍이다() -> None:
+    """**양성 대조** (D-0259). 위 둘만 있으면 「늘 같은 매칭」도 통과한다."""
+    from hathor.domain.services.pair_sampling import sample_matching_pairs
+
+    here = sample_matching_pairs(200, 50, generator=np.random.default_rng(3))
+    again = sample_matching_pairs(200, 50, generator=np.random.default_rng(3))
+    other = sample_matching_pairs(200, 50, generator=np.random.default_rng(4))
+
+    assert here == again
+    assert here != other, "시드를 바꿨는데 같은 매칭이 나온다"
+
+
+def test_매칭은_덜_뽑아도_재사용이_0이다() -> None:
+    """`want`가 절반보다 작아도 **겹치지 않는다** — 섞은 앞머리를 쓴다."""
+    from hathor.domain.services.pair_sampling import sample_matching_pairs, touched_count
+
+    pairs = sample_matching_pairs(1000, 100, generator=np.random.default_rng(11))
+
+    assert touched_count(pairs) == 200, "덜 뽑았는데 곡이 겹쳤다"
+
+
+def test_조건이_매칭을_켜면_덮는_곡이_두_배다() -> None:
+    """**손잡이가 실제로 닿는지** 본다 (D-0466). 기본값은 옛 자 그대로다 (D-0374)."""
+    from hathor.application.evaluate_harmony_output import EvaluateHarmonyOutput, OutputCondition
+    from hathor.domain.services.pair_sampling import touched_count
+
+    old = EvaluateHarmonyOutput(OutputCondition(pair_count=400)).pair_indices(1004)
+    new = EvaluateHarmonyOutput(OutputCondition(pair_count=400, matched_pairs=True)).pair_indices(
+        1004
+    )
+
+    assert touched_count(old) == 566, "기본값이 바뀌었다 — M5·M9의 수가 움직인다"
+    assert touched_count(new) == 800
