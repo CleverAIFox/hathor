@@ -95,7 +95,11 @@ def test_상한이_문턱_아래면_승인한다() -> None:
 
     assert abs(tight.mean_t) < 2.0, "동결 쪽이 켜지면 승인 가지를 안 밟는다"
     assert tight.ceiling < TOOL.CEILING_FLOOR
-    assert "승인된다" in TOOL.verdict(tight)
+    reading = TOOL.verdict(tight)
+    assert "쌍 수를 막지 않는다" in reading
+    # **안 잰 조건을 승인하지 않는다** (D-0467). 문턱은 쌍 1600 질문에서
+    # 골랐는데 이 자가 쌍 500 매칭에서도 돈다.
+    assert "1600" not in reading, "이 판이 안 잰 쌍 수를 승인했다"
 
 
 def test_치우침이_확정이면_상한이_낮아도_동결이다() -> None:
