@@ -692,3 +692,42 @@ def test_움직이는_곡이_없으면_표를_안_읽는다(tmp_path, capsys):
     assert _run_order(tmp_path, ["--use-hold"]) == 0
     out = capsys.readouterr().out
     assert "유지 확률이 판정에 닿지 않았다" in out
+
+
+def test_매칭을_켜면_덮는_곡이_쌍의_두_배다(tmp_path, capsys):
+    """**선언된 인자가 결과를 바꾸는지 본다** (D-0064 · O-25 · D-0466).
+
+    거절 표본은 곡을 독립으로 집어 쌍 10이 40곡 중 일부만 덮는다. 매칭은 곡을
+    한 번씩만 쓰므로 **덮는 곡이 정확히 쌍의 두 배**다 — 그것이 적용 범위가
+    56%에 묶여 있던 까닭이고, 이 줄이 안 바뀌면 손잡이가 안 닿은 것이다.
+    """
+    path = write_keys(tmp_path / "keys.jsonl", count=40)
+
+    assert main(["eval", "harmony-output", "--priors", str(path), *FAST]) == 0
+    loose = capsys.readouterr().out
+
+    assert main(["eval", "harmony-output", "--priors", str(path), "--matched", *FAST]) == 0
+    tight = capsys.readouterr().out
+
+    assert "쌍이 덮은 곡 20)" in tight, tight[:400]
+    assert "쌍이 덮은 곡 20)" not in loose, "거절 표본이 이미 전수를 덮는다 — 시험이 헛돈다"
+
+
+def test_매칭으로_곡의_절반보다_많이_달라면_거부한다(tmp_path, capsys):
+    """**조용히 덜 내지 않는다** (D-0230). 곡을 한 번씩만 쓰면 쌍은 절반이 끝이다."""
+    path = write_keys(tmp_path / "keys.jsonl", count=40)
+
+    with pytest.raises(ValueError, match="쌍은 20개가 끝인데"):
+        main(
+            [
+                "eval",
+                "harmony-output",
+                "--priors",
+                str(path),
+                "--matched",
+                "--seeds",
+                "20",
+                "--pairs",
+                "30",
+            ]
+        )

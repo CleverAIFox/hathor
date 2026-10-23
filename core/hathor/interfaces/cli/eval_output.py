@@ -152,6 +152,7 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
         key=parse_key(args.key),
         seed=args.seed,
         vocabulary=Vocabulary(args.vocabulary),
+        matched_pairs=args.matched,
     )
     harness = EvaluateHarmonyOutput(condition)
 
@@ -389,6 +390,11 @@ def _build_harmony_output(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seeds", type=int, default=DEFAULT_OUTPUT_SEEDS, help="시드 수")
     parser.add_argument("--bars", type=int, default=DEFAULT_OUTPUT_BARS, help="마디 수")
     parser.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
+    parser.add_argument(
+        "--matched",
+        action="store_true",
+        help="쌍을 완전 매칭으로 뽑는다 — 곡을 한 번씩만 쓰고 덮는 곡이 쌍의 두 배다 (D-0466)",
+    )
     parser.add_argument("--key", default="C major", help="출력 조성. 고정한다")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추첨·치환 시드")
     parser.add_argument(

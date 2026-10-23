@@ -58,6 +58,7 @@ EXCEPTIONS: dict[str, int] = {
     "core/hathor/domain/services/key_estimation.py": 808,
     "core/hathor/interfaces/cli/main.py": 1040,
     "core/tests/unit/test_apply_patch.py": 709,
+    "core/tests/unit/test_harmony_output_cli.py": 734,
     "core/tests/unit/test_key_estimation.py": 708,
 }
 # ---------------------------------------------------------------- 예외표 끝

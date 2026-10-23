@@ -161,7 +161,12 @@ def run_eval_degree_restriction(args: argparse.Namespace) -> int:
         print(f"출처 `{source}`의 사전이 {len(table)}개다.", file=sys.stderr)
         return 1
 
-    condition = OutputCondition(pair_count=args.pairs, key=parse_key(args.key), seed=args.seed)
+    condition = OutputCondition(
+        pair_count=args.pairs,
+        key=parse_key(args.key),
+        seed=args.seed,
+        matched_pairs=args.matched,
+    )
     references = [ReferencePrior(key, table[key]) for key in sorted(table)]
     report = EvaluateDegreeRestriction(condition).run(references, source)
     observed = report.line("observed")
@@ -286,6 +291,11 @@ def _build_degree_restriction(parser: argparse.ArgumentParser) -> None:
         "--stem-set", default=DEFAULT_STEM_SET, help="사전 출처. mix면 전체 믹스 크로마다"
     )
     parser.add_argument("--pairs", type=int, default=DEFAULT_OUTPUT_PAIRS, help="참조곡 쌍 수")
+    parser.add_argument(
+        "--matched",
+        action="store_true",
+        help="쌍을 완전 매칭으로 뽑는다 — 곡을 한 번씩만 쓰고 덮는 곡이 쌍의 두 배다 (D-0466)",
+    )
     parser.add_argument("--key", default="C major", help="선법을 정한다. 버리는 칸이 달라진다")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="쌍 추첨·치환 시드")
 
