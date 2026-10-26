@@ -142,6 +142,22 @@ def test_내역이_어긋나면_운다(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "없는것.py" in problems[0]
 
 
+def test_내역_어긋남이_입구까지_올라온다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**함수만 울면 배선이 끊겨도 초록이다** (wiring #81).
+
+    `pairing_problems()`는 `main()`이 불러야 관문이 된다. 호출을 지워도 위 시험은
+    함수를 직접 부르므로 안 울었다 — `make mutate WIRING=1`이 그것을 잡았다.
+    """
+    monkeypatch.setattr(CHECKER, "OUTWARD", frozenset({"tools/없는것.py"}))
+    monkeypatch.setattr(CHECKER, "check", lambda: [])
+    monkeypatch.setattr("sys.argv", ["check_egress.py"])
+
+    assert CHECKER.main() == 1
+    assert "없는것.py" in capsys.readouterr().err
+
+
 def test_내역을_훑기와_안_섞는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """**`check()`는 나무만 본다** (D-0446).
 
