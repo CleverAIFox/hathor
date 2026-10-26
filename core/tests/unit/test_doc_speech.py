@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,13 +36,13 @@ def _said(body: str, marker: str = "") -> list[tuple[int, str]]:
 @pytest.mark.parametrize(
     "quoted",
     [
-        "아니 왜 두 벌이 되는 거야? 기존 걸 날리면 되지 않냐.",
-        "문서 체계 더 늘리기 싫어. 조만간 병합할 거야.",
-        "아니 왜 안막지?? 파이어레인이라도 참고할래? verify의 전문가인데;;",
-        "빚 상환은 건수가 중요하지 라인 수가 중요한 게 아니지 않나",
-        "돌리는 속도가 너무 오래 걸리는 느낌인데 이거 맞아?",
-        "문서 4축은 디시즌 마스터 플랜 프로포절인데? 흡수 가능하잖아.",
-        "이거 왜 하는지 모르겠다. 그냥 넘겨도 되냐?",
+        "왜 이 값이 두 군데 적히는 거야? 하나는 지워도 되지 않냐.",
+        "표 칸을 더 늘리기 싫어. 곧 합칠 거야.",
+        "왜 안 걸리지?? 비슷한 도구를 참고할래? 이 부분은 잘 아는데;;",
+        "정리는 건수가 중요하지 줄 수가 중요한 게 아니지 않나",
+        "처리 속도가 너무 느린 느낌인데 이거 맞아?",
+        "이 축은 기록 계획 제안 셋인데? 하나로 합칠 수 있잖아.",
+        "이 단계가 왜 필요한지 모르겠다. 그냥 건너뛰어도 되냐?",
     ],
 )
 def test_구어체_인용을_잡는다(quoted: str) -> None:
@@ -66,7 +67,7 @@ def test_줄을_넘는_인용도_잡는다() -> None:
         '- **배경**: 기록이 *"지표가 목표가 된다"*고 적었다.',
         "- **배경**: 화면이 *«PLAN 열린 질문 29»*를 찍었다.",
         '- **배경**: *"Environment URL is not a valid http(s) URL"*로 죽었다.',
-        "- **배경**: 그가 물었다 — 왜 두 벌이 되는가, 기존 것을 없애면 되지 않는가.",
+        "- **배경**: 그가 물었다 — 왜 이 값이 두 군데 적히는가, 하나는 지워도 되지 않는가.",
         "- **배경**: *«추가 수집은 하지 않는다»*는 조건이 달려 있었다.",
         "- **배경**: *«붙여 놓으면 아무것도 못 잡는 하네스»*가 D-0353의 이름이다.",
     ],
@@ -86,7 +87,7 @@ def test_자료인_발화는_표지로_남는다() -> None:
     사용자가 친 주문 한 줄이 D-0422의 자료다 — 간접 서술로 옮기면 **그가 무엇을
     입력했는지가 사라진다.** 표지를 단 자리는 안 본다.
     """
-    typed = "> *«바다가자, You(=i), 처음부터 너와 나 좋아하는데 이런 노래 만들어줘»*"
+    typed = "> *«잔잔한 피아노, 처음부터 끝까지 느린 곡으로 만들어줘»*"
     assert _said(typed + "\n")
     assert not _said(f"{typed}  {SPEECH.SPEECH_OK}\n")
 
@@ -123,7 +124,7 @@ def test_그물이_안_비었다() -> None:
     """
     before = (
         "## D-0366. 거울\n\n"
-        "사용자가 그 자리에서 짚었다: *«아니 왜 두 벌이 되는 거야? 기존 걸 날리면 되지 않냐.»*\n"
+        "사용자가 그 자리에서 짚었다: *«왜 값이 두 군데 적히는 거야? 하나는 지워도 되지 않냐.»*\n"
     )
     assert len(_said(before)) == 1
 
@@ -192,8 +193,8 @@ def test_뒷줄_표지가_앞_인용을_안_덮는다() -> None:
     D-0368이 그렇게 빠져나갔고, **D-0438은 그것을 0건이라 적었다.**
     """
     shielded = (
-        "- **배경**: 꾸러미로 보냈다 — *«보면 바로 이해가 될거임\n"
-        f"  백문이불여일견»*. 그가 짚었다:  {SPEECH.SPEECH_OK}\n"
+        "- **배경**: 꾸러미로 보냈다 — *«예시를 보면 바로 알 수 있을거임\n"
+        f"  표 하나를 붙인다»*. 그가 짚었다:  {SPEECH.SPEECH_OK}\n"
     )
     assert _said(shielded), "뒷줄 표지가 앞 인용을 덮는다"
 
@@ -222,17 +223,22 @@ def test_격식체여도_발화를_옮기면_잡는다() -> None:
 
 # ------------------------------------------------- 욕설은 어디 있든 (D-0443)
 
-# **글자를 쪼개 쓴다.** 이 파일에 통째로 적으면 검사가 제 시험을 문다 — 예외를
-# 둘로 늘리면 숨을 자리가 둘이 된다.
-CURSE = "씨" + "발"
-SLANG = "졸" + "라"
+# **욕설 토큰은 검사기의 그물에서 꺼낸다** (D-0471). 이 파일에 글자째 적으면 검사가
+# 제 시험을 문다 — 예외를 둘로 늘리면 숨을 자리가 둘이 된다. 문장은 뜻이 없다.
+TOKENS = [re.sub(r"\(\?<!\[가-힣\]\)", "", one) for one in SPEECH.PROFANITY.pattern.split("|")]
+
+
+def _nonsense(token: str) -> str:
+    """앞에 한글이 안 붙게 띄어 쓴다 — 경계 규칙이 걸려 있는 토큰이 있다."""
+    return f"파랑 {token} 서랍 둘\n"
 
 
 def test_욕설을_잡는다(tmp_path: Path) -> None:
     """**사용자가 넷을 찾아 왔고 내 검사는 0건을 찍고 있었다** (D-0443)."""
-    (tmp_path / "a.md").write_text(f"사용자의 말 그대로 *«뭐여 {CURSE}.»*\n", encoding="utf-8")
+    for token in TOKENS:
+        (tmp_path / "a.md").write_text(_nonsense(token), encoding="utf-8")
 
-    assert SPEECH.profanity(tmp_path, ["a.md"]), "욕설을 못 잡는다"
+        assert SPEECH.profanity(tmp_path, ["a.md"]), f"욕설을 못 잡는다: 토큰 {TOKENS.index(token)}"
 
 
 def test_문서_밖도_본다(tmp_path: Path) -> None:
@@ -241,7 +247,7 @@ def test_문서_밖도_본다(tmp_path: Path) -> None:
     말투 검사는 결정 기록만 본다. 욕설은 **추적 파일 전부**에서 0이어야 한다.
     """
     (tmp_path / "core").mkdir()
-    (tmp_path / "core" / "t.py").write_text(f'"""{SLANG} 좋은데."""\n', encoding="utf-8")
+    (tmp_path / "core" / "t.py").write_text(f'"""{_nonsense(TOKENS[0])}"""\n', encoding="utf-8")
 
     assert SPEECH.profanity(tmp_path, ["core/t.py"]), "문서 밖을 안 본다"
 
@@ -275,7 +281,7 @@ def test_인용_뒤_동사도_본다() -> None:
 
     `SAID`는 인용 **앞**만 본다. 주체가 앞, 동사가 뒤에 있으면 둘 다 못 봤다.
     """
-    assert _said('사용자가 *"main에다가 다 쌓아 놨었네"*라 한 그 더미다.\n')
+    assert _said('사용자가 *"한쪽에 다 쌓아 놨었네"*라 한 그 더미다.\n')
 
 
 def test_중첩_인용에_안_끊긴다() -> None:
@@ -289,6 +295,29 @@ def test_중첩_인용에_안_끊긴다() -> None:
     )
 
     assert _said(nested), "중첩 괄호에서 끊긴다"
+
+
+def test_주석도_본다(tmp_path: Path) -> None:
+    """**`#` 주석으로 옮긴 인용도 샌다** (D-0471). docstring만 보면 주석은 빈 눈이다.
+
+    이어진 주석 줄은 한 덩어리로 본다. 문자열 리터럴 안의 `#`은 주석이 아니다.
+    """
+    (tmp_path / "t.py").write_text(
+        'x = 1\n# 사용자가 물었다 — *"이거 맞나? 저거 아니라?"* 저장소가\n# 답을 못 했다.\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "u.py").write_text(
+        'x = "사용자가 물었다 — # *\\"이거 맞나? 저거 아니라?\\"*"\n', encoding="utf-8"
+    )
+
+    assert SPEECH.speech_everywhere(tmp_path, ["t.py"]), "주석 안의 인용을 못 본다"
+    assert not SPEECH.speech_everywhere(tmp_path, ["u.py"]), "문자열 안의 #을 주석으로 봤다"
+
+
+def test_토큰화가_깨지면_빈손이_아니라_터진다() -> None:
+    """**조용히 0건이 되는 길을 막았다** (D-0471 · D-0230). 못 읽은 파일은 통과가 아니다."""
+    with pytest.raises(Exception, match=r"EOF|token|string"):
+        SPEECH._comment_speech("broken.py", "x = '''열린 채 끝난다\n# 주석\n")
 
 
 def test_코드_문서_문자열도_본다(tmp_path: Path) -> None:

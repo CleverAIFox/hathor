@@ -57,8 +57,8 @@ PROFANITY = re.compile(
 ### 왜 말투 검사와 따로인가
 
 말투 검사는 **결정 기록의 인용 안**만 본다. 욕설은 **어디에 있든 안 된다** — 실측으로
-사용자가 넷을 찾아 왔고 **그중 하나가 시험 파일**이었다. *«죄다 구라에 가짜에 Mock에»*가
-`test_gate_types.py`의 머리말에 복사돼 있었고 내 검사는 `docs/`만 보고 있었다.
+사용자가 넷을 찾아 왔고 **그중 하나가 시험 파일**이었다. 시험이 가짜뿐이라는 그의 지적이
+비속어째 `test_gate_types.py`의 머리말에 복사돼 있었고 내 검사는 `docs/`만 보고 있었다.
 
 ### 앞 글자를 본다
 
@@ -270,6 +270,41 @@ def speech_everywhere(root: Path, tracked: list[str]) -> list[tuple[str, int, st
                 for line, quoted in speech(body)
                 if SPEAKER.search(body.rsplit(quoted[:12], 1)[0][-80:] if quoted else "")
             ]
+        found += _comment_speech(name, text)
+    return found
+
+
+def _comment_speech(name: str, text: str) -> list[tuple[str, int, str]]:
+    """`#` 주석 안의 복사된 발화 (D-0471). docstring만 보면 주석으로 옮긴 인용이 샌다.
+
+    `tokenize`로 뽑으므로 문자열 리터럴 안의 `#`은 주석이 아니다. 줄마다 따로 보면
+    여러 줄에 걸친 인용이 끊기므로 **이어진 주석 줄을 한 덩어리로** 묶는다.
+    """
+    import io
+    import tokenize
+
+    # **터지게 둔다.** 여기서 `return []`로 삼키면 그 파일이 한 글자도 안 읽힌 채 0건이
+    # 된다 (D-0230 · D-0470 셋째 항). `ast.parse`를 통과한 파일은 토큰화도 되므로,
+    # 여기서 터지면 그것이 곧 새로 알아야 할 일이다.
+    blocks: list[tuple[int, list[str]]] = []
+    last = -2
+    for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+        if tok.type != tokenize.COMMENT:
+            continue
+        row = tok.start[0]
+        if row == last + 1 and blocks:
+            blocks[-1][1].append(tok.string.lstrip("# ").rstrip())
+        else:
+            blocks.append((row, [tok.string.lstrip("# ").rstrip()]))
+        last = row
+    found: list[tuple[str, int, str]] = []
+    for row, parts in blocks:
+        body = "\n".join(parts)
+        found += [
+            (name, row + line - 1, quoted)
+            for line, quoted in speech(body)
+            if SPEAKER.search(body.rsplit(quoted[:12], 1)[0][-80:] if quoted else "")
+        ]
     return found
 
 
