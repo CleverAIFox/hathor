@@ -28,14 +28,16 @@ def _problems(name: str) -> list[str]:
     return cast("list[str]", getattr(CHECKER, name)())
 
 
-def _not_merged(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**합본 커밋 위에서도 뽑기 자체를 재게 한다** (D-0433).
+def _ours(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**뽑기 자체를 재게 한다** (D-0433 · D-0472). 조건이 넷째로 늘어도 안 깨진다.
 
-    `pull_once`는 합본에서 건너뛴다 (D-0426). 그 규율은 맞지만, **가짜 뽑기를 먹여
-    출력 처리를 보는 시험**까지 건너뛰면 그 시험들이 PR 빌드에서 **빈 목록을 받고
-    빨개진다.** 건너뛰기는 제 시험이 따로 본다 (`test_합본_커밋이면_뽑기를_건너뛴다`).
+    잎(`merged_head`·`bot_head`)이 아니라 `ours()`를 집는다. `pull_once`는 우리가 안 쓴
+    `HEAD`에서 건너뛰는데(D-0426 · D-0436), 가짜 뽑기를 먹여 **출력 처리를 보는 시험**까지
+    건너뛰면 그 시험들이 PR 빌드에서 **빈 목록을 받고 빨개진다.** D-0433이 잎 하나를 집어
+    합본만 막았고 D-0436이 봇 커밋을 더하자 다시 깨졌다 (ci #341). 건너뛰기는 제 시험이
+    따로 본다 (`test_합본_커밋이면_뽑기를_건너뛴다`).
     """
-    monkeypatch.setattr(CHECKER, "merged_head", lambda: False)
+    monkeypatch.setattr(CHECKER, "ours", lambda: True)
 
 
 # ------------------------------------------------------------------ 저장소
@@ -181,7 +183,7 @@ def test_이_저장소도_뽑힌다() -> None:
 
 def test_뽑기가_망가지면_운다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """**뽑기가 터지는데 통과하면 그것이 빈 그물이다** (D-0230)."""
-    _not_merged(monkeypatch)
+    _ours(monkeypatch)
     broken = tmp_path / "make_patch.sh"
     broken.write_text("#!/usr/bin/env bash\nexit 7\n", encoding="utf-8")
     monkeypatch.setattr(CHECKER, "MAKER", broken)
@@ -193,7 +195,7 @@ def test_뽑기가_망가지면_운다(tmp_path: Path, monkeypatch: pytest.Monke
 
 def test_머리를_안_쓰는_뽑기를_잡는다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """머리 없이 성공하는 뽑기는 **통과시키면 안 된다.**"""
-    _not_merged(monkeypatch)
+    _ours(monkeypatch)
     silent = tmp_path / "make_patch.sh"
     silent.write_text(
         '#!/usr/bin/env bash\nprintf "diff --git a/x b/x\\n" > "$OUT"\n', encoding="utf-8"
@@ -316,7 +318,7 @@ def test_뒤처리를_빠뜨린_뽑기를_잡는다(tmp_path: Path, monkeypatch:
     **건드린 경로를 손에 쥔다** (D-0379 · D-0353). `HEAD`에 물으면 그날 커밋이
     제출본을 건드렸느냐에 따라 판정이 갈린다.
     """
-    _not_merged(monkeypatch)
+    _ours(monkeypatch)
     blind = tmp_path / "make_patch.sh"
     blind.write_text(
         "#!/usr/bin/env bash\n"
