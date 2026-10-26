@@ -1,6 +1,6 @@
 """문턱의 오경보율·검출율을 재는 자 (D-0460).
 
-**실측은 그의 기기에서만 된다** — 한 판이 어휘 셋을 생성하고 쌍 400에서 11분이다
+**실측은 그의 기기에서만 된다** — 한 판이 어휘 둘을 생성한다 (D-0463이 `base`를 뗐다)
 (D-0015와는 다른 까닭이다: 비밀이 아니라 비용이다). 여기서 보는 것은 **세는 법**과
 **막는 자리**다.
 
@@ -176,7 +176,10 @@ def test_비용을_먼저_찍는다() -> None:
     )
 
     assert "덮는 곡" in both
-    assert "11분" in both, "견줄 기준이 없으면 사람이 비용을 못 읽는다"
+    # **「11분」은 어느 기기 어느 판의 실측이었다** (D-0470 · GR-0.7). 견줄
+    # 기준은 **무엇을 더 도는가**라는 구조로 적고, 초는 요약이 잰다.
+    assert "선 일곱" in both, "무엇을 안 도는지가 비용 줄의 요점이다"
+    assert "11분" not in both, "실측을 글자로 다시 박았다"
     assert "대조 2개" in both
     assert "대조 1개" in one, "`--only`가 비용에 안 비치면 사람이 두 배로 읽는다"
 
@@ -255,7 +258,7 @@ def test_잘린_로그에서_요약을_되살린다(tmp_path: Any) -> None:
         encoding="utf-8",
     )
 
-    revived = TOOL.summarize(log)
+    revived = TOOL.summarize(log)["음성"]
 
     assert len(revived.gains) == 3, "요약 줄을 판으로 셌다"
     assert revived.passed == 1
@@ -269,7 +272,7 @@ def test_판_줄이_모자라면_요약을_거부한다(tmp_path: Any) -> None:
     log = tmp_path / "빈.log"
     log.write_text("코퍼스 1000곡 · 쌍 800 · 판 120\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="판 줄이 둘 미만"):
+    with pytest.raises(ValueError, match=r"판 줄이 없다|판 줄이 둘 미만"):
         TOOL.summarize(log)
 
 
@@ -288,7 +291,7 @@ def test_찍은_줄을_되읽으면_같은_수가_나온다(
     live = TOOL.sweep("음성", sigma=0.0, args=args)
     log = tmp_path / "찍힌.log"
     log.write_text(capsys.readouterr().out, encoding="utf-8")
-    revived = TOOL.summarize(log)
+    revived = TOOL.summarize(log)["음성"]
 
     # **비트까지 같을 수는 없다** — 찍는 순간 여섯째 자리에서 반올림된다. 걸 것은
     # *«얼마나 틀리나»*이고, 그것이 **판정 눈금보다 훨씬 작아야** 되살린 요약을 쓴다.
@@ -384,7 +387,7 @@ def test_겹쳐_적힌_판을_한_번만_센다(tmp_path: Any, capsys: pytest.Ca
     """
     body = _ROW.format(0, 0.001) + _ROW.format(1, 0.003) + _ROW.format(1, 0.003)
 
-    revived = TOOL.summarize(_log(tmp_path, body))
+    revived = TOOL.summarize(_log(tmp_path, body))["음성"]
 
     assert len(revived.gains) == 2, "같은 판을 두 번 셌다"
     assert "겹쳐 적힌 판 1줄" in capsys.readouterr().err, "조용히 버리면 안 보인다 (D-0191)"
@@ -484,6 +487,10 @@ def test_기대는_양성마다_기록이_있다() -> None:
 
     목록은 *«이 조건에서 양성이 기록에 섰다»*는 선언이고, 선언만 하고 기록이 없으면
     `--only negative`가 **없는 것에 기대고 판정을 찍는다.**
+
+    **제목만 보고 있었다** (D-0470). 번호가 실재하기만 하면 통과했으므로 첫 줄이
+    **D-0461을 가리키는 것을 아무도 못 잡았다** — 6/6은 D-0460의 수이고 D-0461은
+    그 수를 고친 판이라 양성 측정이 없다. 이제 **그 절 안에서 통과 수를 찾는다.**
     """
     import re
 
@@ -491,7 +498,16 @@ def test_기대는_양성마다_기록이_있다() -> None:
     for label, _ in TOOL.POSITIVES_ON_RECORD:
         found = re.match(r"(D-\d{4})의 양성", label)
         assert found, f"기댈 양성에 기록 번호가 없다: {label}"
-        assert f"## {found.group(1)}." in body, f"{found.group(1)} 기록이 없다: {label}"
+        head = f"## {found.group(1)}."
+        assert head in body, f"{found.group(1)} 기록이 없다: {label}"
+
+        start = body.index(head)
+        after = body.find("\n## D-0", start + 1)
+        section = body[start : after if after > 0 else len(body)]
+        # **그 절이 양성을 실제로 적었나.** 「n/n 통과」꼴 한 줄이면 된다 — 통과
+        # 수까지 맞는지는 안 본다. 여기서 보는 것은 **기댈 것이 그 절에 있는가**다.
+        assert re.search(r"\b(\d+)\s*/\s*\1\b", section), f"{found.group(1)}에 양성 수가 없다"
+        assert "양성" in section, f"{found.group(1)}에 양성이라는 말이 없다: {label}"
 
 
 def test_양성_로그에_음성_판정을_안_찍는다(
@@ -512,3 +528,36 @@ def test_양성_로그에_음성_판정을_안_찍는다(
     printed = capsys.readouterr().out
     assert "양성 로그다" in printed
     assert "0이 아니다" not in printed, "양성을 음성의 읽는 법으로 읽었다"
+
+
+def test_음성과_양성이_섞인_로그를_따로_센다(tmp_path: Any) -> None:
+    """**기본 `--only both`가 한 로그에 둘을 찍는다** (D-0470).
+
+    첫 판은 **판 번호만** 키로 묶어서, 음성 판 0과 양성 판 0이 충돌해 터졌다.
+    값이 우연히 같았으면 **한쪽을 조용히 버렸다** — 그쪽이 더 나쁘다 (D-0230).
+    """
+    body = (
+        "  음성 판   0 · 이득 +0.001000 ±0.002000 · t +0.50 · 실패\n"
+        "  음성 판   1 · 이득 +0.002000 ±0.002000 · t +1.00 · 실패\n"
+        "  양성 판   0 · 이득 +0.030000 ±0.000500 · t +60.00 · 통과\n"
+        "  양성 판   1 · 이득 +0.031000 ±0.000500 · t +62.00 · 통과\n"
+    )
+
+    revived = TOOL.summarize(_log(tmp_path, body))
+
+    assert set(revived) == {"음성", "양성"}, "대조를 안 갈랐다"
+    assert revived["음성"].passed == 0
+    assert revived["양성"].passed == 2
+    # **이름이 마지막 줄 것으로 덮이던 자리다** (D-0470).
+    assert revived["음성"].name.startswith("음성")
+    assert revived["양성"].name.startswith("양성")
+
+
+def test_보고오차가_0이면_정직성도_nan이다() -> None:
+    """**`mean_t`·`ceiling`과 같은 관례로 묶는다** (D-0470).
+
+    0.0을 내면 *«완벽히 정직하다»*로 읽혀 **봐주는 쪽으로 열린다.**
+    """
+    one = _sweep((0.001, 0.002, 0.003), errors=0.0)
+
+    assert math.isnan(one.honesty)

@@ -150,10 +150,30 @@ def test_쌍_수가_검정력으로_정해졌다() -> None:
 
     기준은 D-0327이 문턱을 고를 때 쓴 «양성을 놓치지 않는다»다 — 효과를 보고 올린
     것이 아니라 **서 있던 기준을 다른 손잡이에 댄 것이다** (D-0058).
-    """
-    from hathor.application.evaluate_harmony_output import DEFAULT_PAIR_COUNT
 
-    assert DEFAULT_PAIR_COUNT == 400
+    **이름은 그대로 두고 몸을 고쳤다** (D-0470). 옛 몸은 `== 400` 하나라 이름이
+    주장하는 「검정력으로 정해졌다」를 **한 글자도 안 봤다** — 리터럴을 두 군데
+    적은 것이고 둘이 같은 것은 산수다. 이름을 「값 못질」로 바꿀까 했으나
+    **D-0453이 이 이름을 강제자로 적고 있다** — 이름을 바꾸면 그 기록이 없는
+    함수를 가리킨다 (추가 전용 · D-0043).
+
+    그래서 재는 것을 바꿨다: **그 수가 D-0453의 기록에 서 있는가**와
+    **실제로 기본값에 꽂혀 있는가**다 (D-0126).
+    """
+    from hathor.application.evaluate_harmony_output import DEFAULT_PAIR_COUNT, OutputCondition
+
+    assert OutputCondition().pair_count == DEFAULT_PAIR_COUNT, "기본 조건이 다른 수를 든다"
+
+    body = (Path(__file__).resolve().parents[3] / "docs" / "DECISIONS.md").read_text(
+        encoding="utf-8"
+    )
+    head = "## D-0453."
+    section = body[body.index(head) :]
+    after = section.find("\n## D-0", 1)
+    section = section[: after if after > 0 else len(section)]
+    assert f"쌍 {DEFAULT_PAIR_COUNT}" in section, (
+        f"쌍 {DEFAULT_PAIR_COUNT}을 정한 기록이 D-0453에 없다 — 값을 바꿨으면 기록을 같이 쓴다"
+    )
 
 
 # ------------------------------------------------- 대비·적용 범위 (D-0454)

@@ -81,7 +81,11 @@ def test_비용을_먼저_찍는다() -> None:
 
     assert "덮는 곡" in text
     assert "진행" in text
-    assert "3.5배" in text, "`run()`을 왜 안 쓰는지가 비용 줄의 요점이다"
+    # **시험이 박힌 실측을 지키고 있었다** (D-0470). 「3.5배」는 한 판의 수였고
+    # 쌍·시드·선 수가 바뀌면 움직이는데 글자는 안 움직였다. 비용 줄의 요점은
+    # **`run()`을 왜 안 쓰는가**이지 그 배수가 아니다.
+    assert "`paired` 하나만" in text, "`run()`을 왜 안 쓰는지가 비용 줄의 요점이다"
+    assert "3.5배" not in text, "실측을 글자로 다시 박았다 (GR-0.7)"
 
 
 def test_마른_실행은_안_돈다(
@@ -138,3 +142,24 @@ def test_밀지_않은_대조가_배수를_1로_만든다() -> None:
 
     assert mass_factor(TOOL.FLAT_MASS) == pytest.approx(1.0)
     assert mass_factor(TOOL.REAL_DIATONIC_MASS) > 2.0
+
+
+def test_판_0에서_코퍼스와_쌍이_다른_흐름이다() -> None:
+    """**numpy가 끝의 0을 버린다** (D-0470).
+
+    `default_rng([seed, 0])`은 `default_rng(seed)`와 **같은 흐름**이다. 코퍼스를
+    `seed`로 짓고 쌍을 `[seed, trial]`로 뽑고 있었으므로 **판 0에서 둘이 한
+    난수열을 나눠 썼다** — 어느 코퍼스가 지어졌나와 어느 쌍이 뽑혔나가 묶인다.
+
+    흐름마다 태그를 다는 것으로 끊었고, **태그가 0이면 같은 병이 돌아온다.**
+    """
+    import numpy as np
+
+    assert TOOL.STREAM_PAIRS != 0, "태그가 0이면 끝에서 접혀 흐름이 다시 겹친다"
+
+    corpus = np.random.default_rng(80000)
+    pairs = np.random.default_rng([80000, TOOL.STREAM_PAIRS, 0])
+
+    assert corpus.random() != pairs.random(), "판 0에서 두 흐름이 아직 같다"
+    # **옛 꼴이 실제로 겹쳤다는 것도 건다** — 안 그러면 이 시험이 무엇을 막는지 모른다.
+    assert np.random.default_rng(80000).random() == np.random.default_rng([80000, 0]).random()

@@ -285,10 +285,20 @@ def tracked_files(root: Path) -> list[str]:
 
 def main() -> int:
     """홀로 돌 때. `make check`는 `check_doc_style`을 거쳐 부른다."""
-    from check_doc_style import PAST
+    from check_doc_style import FLOOR_TRACKED, PAST
 
     text = (ROOT / PAST).read_text(encoding="utf-8")
     tracked = tracked_files(ROOT)
+    # **관문에만 바닥이 있었다** (D-0470). `tracked_files()`는 git이 죽어도 조용히
+    # 빈손이고, 그러면 아래 둘이 **한 글자도 안 보고 0건**이 된다. 같은 D-0230을
+    # `check()`는 막고 이 길은 안 막고 있었다 — 그리고 D-0438이 적어 둔 `재현`
+    # 명령이 **바로 이 길**이다 (D-0292).
+    if len(tracked) < FLOOR_TRACKED:
+        print(
+            f"추적 파일을 {len(tracked)}개 읽었다(바닥 {FLOOR_TRACKED}). **그물이 비었다**",
+            file=sys.stderr,
+        )
+        return 1
     dirty = profanity(ROOT, tracked)
     copied = speech_everywhere(ROOT, tracked)
     for name, number, quoted in copied:
@@ -307,7 +317,8 @@ def main() -> int:
         if problems:
             print(f"구어체 인용 {len(problems)}곳. 간접 서술로 옮긴다 (D-0438)", file=sys.stderr)
         return 1
-    print(f"구어체 인용 검사 통과 · 0건 · 욕설 0건 (추적 {len(tracked_files(ROOT))}개)")
+    # **두 번째로 git을 부르고 있었다** — 그 사이 수가 달라지면 화면이 거짓말한다.
+    print(f"구어체 인용 검사 통과 · 0건 · 욕설 0건 (추적 {len(tracked)}개)")
     return 0
 
 

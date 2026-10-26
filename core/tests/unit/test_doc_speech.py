@@ -136,7 +136,28 @@ def test_홀로_돌_때도_같은_답을_낸다(capsys: pytest.CaptureFixture[st
     **그 셈이 입구에 걸려 있는가**다 (D-0126).
     """
     assert SPEECH.main() == 0
-    assert "0건" in capsys.readouterr().out
+    spoke = capsys.readouterr().out
+    assert "0건" in spoke
+    # **「0건」만 보면 그물이 빈 것과 못 가른다** (D-0470). 몇 개를 보고 0건인지 찍는다.
+    assert f"{len(SPEECH.tracked_files(SPEECH.ROOT))}개" in spoke
+
+
+def test_홀로_돌_때도_빈_그물이면_운다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**`check()`에만 바닥이 있었다** (D-0470 · D-0230).
+
+    `tracked_files()`는 `git ls-files`를 `check=False`로 부르므로 git이 없거나
+    여기가 저장소가 아니면 **조용히 빈손**이다. 관문 쪽은 D-0445의 빚을 갚으며
+    `FLOOR_TRACKED`를 세웠는데 **`main()`은 안 세웠다** — 그 길로 돌면 욕설도
+    복사된 발화도 **한 글자도 안 보고 「통과 · 0건」**을 찍는다.
+
+    D-0438의 `재현` 칸이 적어 둔 것이 바로 그 길이다 (D-0292).
+    """
+    monkeypatch.setattr(SPEECH, "tracked_files", lambda *_: [])
+
+    assert SPEECH.main() == 1, "빈 그물로 통과했다"
+    assert "0건" not in capsys.readouterr().out
 
 
 def test_기록_번호를_같이_찍는다() -> None:

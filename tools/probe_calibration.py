@@ -18,7 +18,7 @@
 ### 왜 정본에 안 넣나
 
 **이 수는 코퍼스가 아니라 그때의 자를 말한다.** `measured.toml`은 1004곡이 무엇인지
-적는 곳이고, 여기 나오는 비는 *«쌍 100으로 재면 오차가 정직한가»*다 — 자를 바꾸면
+적는 곳이고, 여기 나오는 비는 *«쌍 400으로 재면 오차가 정직한가»*다 — 자를 바꾸면
 뜻이 사라지는 수다. 기록이 제자리다.
 
 시드 24판이라 **한 판의 24배**다 (D-0327이 오경보율에 쓴 그 수다 — 새로 안 골랐다).
@@ -101,7 +101,9 @@ def sweep(source: str, pairs: int, seeds: int) -> tuple[list[float], list[float]
 def report_on(name: str, gaps: list[float], errors: list[float], passed: int) -> dict[str, int]:
     spread = statistics.stdev(gaps)
     error = statistics.fmean(errors)
-    honest = spread / error if error > 0 else 0.0
+    # **못 쟀으면 `nan`이다** (D-0470). 0.0은 *«완벽히 정직하다»*로 읽혀
+    # 봐주는 쪽으로 열린다 — `probe_threshold`의 `mean_t`·`ceiling`과 같은 관례다.
+    honest = spread / error if error > 0 else float("nan")
     print(
         f"{name}: 대비 흔들림 {spread:.4f} · 보고된 오차 {error:.4f}"
         f" · 비 {honest:.2f} · 통과 {passed}/{len(gaps)}"
@@ -114,12 +116,34 @@ def report_on(name: str, gaps: list[float], errors: list[float], passed: int) ->
     }
 
 
+def shrink(thin: dict[str, int], thick: dict[str, int], wide: int) -> tuple[float, float]:
+    """`(실제로 줄어든 배수, 줄어들어야 하는 배수)` (D-0470).
+
+    `WIDE`의 docstring이 **«넉 배면 오차가 반이 되어야 한다»**라고 적고 있었는데
+    **아무 데서도 그 비를 안 냈다.** 시험도 `WIDE == 4`만 걸어 그 성질이 아니라
+    **상수 자신**을 재고 있었다 — 리터럴을 두 번 적은 것이고, 둘이 같은 것은
+    산수다 (D-0470 · GR-0.5).
+
+    쌍이 독립이면 평균의 오차가 `1/sqrt(n)`이므로 **`sqrt(wide)`배** 줄어야 한다.
+    덜 줄면 쌍이 겹쳐 새 정보를 안 가져온 것이다.
+    """
+    if thick["error"] <= 0:
+        return (float("nan"), wide**0.5)
+    return (thin["error"] / thick["error"], wide**0.5)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="보고된 오차가 제 변동을 담는가 (D-0451)")
     parser.add_argument("--seeds", type=int, default=SEEDS, help="시드 판 수")
     parser.add_argument("--source", default=SOURCE, help="사전 출처")
     parser.add_argument("--wide", type=int, default=WIDE, help="쌍을 몇 배로 늘려 볼까")
     args = parser.parse_args()
+
+    if args.seeds < 2:
+        # **`statistics.stdev`가 잡히지 않은 예외로 죽는다** (D-0470). 판이 하나면
+        # 흔들림을 못 재는 것이고, 그것은 오류가 아니라 **거절할 입력**이다 (GR-0.5).
+        print("시드 판이 둘 이상이어야 흔들림을 잰다 (GR-0.5)", file=sys.stderr)
+        return 1
 
     narrow = DEFAULT_PAIR_COUNT
     wide = DEFAULT_PAIR_COUNT * args.wide
@@ -135,6 +159,13 @@ def main() -> int:
     print(
         "\n**비가 1이면 오차가 정직하다.** 1보다 크면 보고된 오차가 흔들림을 덜 적은 것이고,"
         "\n그만큼 `t`도 부풀어 있다 — 그 `t`로 내린 판정을 그대로 못 읽는다 (D-0450)."
+    )
+    # **적어만 두고 안 내던 수다** (D-0470). `WIDE`가 *«넉 배면 반»*이라 적었는데
+    # 그 비가 화면 어디에도 없었다 — 읽는 사람이 두 줄을 눈으로 나눠야 했다.
+    got, want = shrink(thin, thick, args.wide)
+    print(
+        f"쌍을 {args.wide}배로 늘리자 오차가 **{got:.2f}배** 줄었다 "
+        f"(독립이면 {want:.2f}배). 덜 줄면 쌍이 겹쳐 새 정보를 안 가져온 것이다."
     )
     print(
         f"\n기록에 적을 줄 — 쌍 {narrow}: 흔들림/오차 {thin['honesty'] / 1000:.2f}"

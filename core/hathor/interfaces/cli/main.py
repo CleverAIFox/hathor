@@ -547,7 +547,7 @@ def _run_generate_midi(args: argparse.Namespace) -> int:
                 "퓨전이 달라진다 (D-0011)",
                 file=sys.stderr,
             )
-            print(f"  무엇이 있는지 본다 : hathor scan --out {args.scan_out}", file=sys.stderr)
+            print(f"  무엇이 있나 : hathor ingest scan --out {args.scan_out}", file=sys.stderr)
             return 1
     else:
         # 참조가 없으면 시드로 고른다. 무작위가 아니라 시드 함수여야 재현된다.

@@ -162,6 +162,10 @@ class OutputCondition:
     **`pair_count`가 곡 수의 절반을 넘으면 거부한다** — 그 위로는 곡을 다시 집어야
     하고 그러면 이것이 아니다. **쌍 수와 적용 범위를 맞바꾸는 손잡이**다.
 
+    **거부는 `__post_init__`이 아니라 쌍을 뽑을 때 난다** (D-0470). 조건 객체는
+    **곡 수를 모르므로** 여기서는 못 센다 — 참조곡 목록이 들어오는
+    `pair_indices`에서 `sample_matching_pairs`가 운다.
+
     **기본값 `False`가 옛 자를 그대로 둔다** (D-0374). M5 · M6 · M9가 전부 거절
     표본에서 났고 그 수들은 안 움직인다.
     """
@@ -512,6 +516,10 @@ class EvaluateHarmonyOutput:
 
     def pair_indices(self, count: int) -> tuple[tuple[int, int], ...]:
         """쌍 추첨을 밖에서도 볼 수 있게 낸다. **두 출처가 같은 쌍을 써야 한다.**"""
+        # **`[seed, 0]`은 `seed` 하나와 같은 흐름이다** (D-0470). numpy의
+        # `SeedSequence`가 끝의 0을 버린다. **안 고친다** — 고치면 쌍이 바뀌고
+        # M5·M9가 움직인다 (D-0374: 기본값이 옛 자를 그대로 둔다). 여기 적는 것은
+        # **다음 사람이 이 꼴을 새 흐름에 베끼지 않게** 하기 위해서다.
         return self._sample_pairs(count, np.random.default_rng([self._condition.seed, 0]))
 
     def paired_distances(self, references: Sequence[ReferencePrior]) -> tuple[float, ...]:

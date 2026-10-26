@@ -112,3 +112,42 @@ def test_지금_등재표에_그_명령들이_있다() -> None:
     assert "eval harmony-order" in known
     assert "eval order" not in known
     assert "generate" in known
+
+
+SOURCE = ("core/hathor", "tools")
+"""**화면에 찍는 안내도 안내다** (D-0470).
+
+`hathor scan`이 `main.py`에서 **없는 명령**을 안내하고 있었다. 문서만 보는 그물이라
+소스는 한 번도 안 봤다 — 「검사가 보는 범위 안에서만 성립」이 이 자리다.
+"""
+
+
+def test_화면에_찍는_명령이_실재한다() -> None:
+    """**틀린 안내가 안내 없는 것보다 나쁘다** (D-0292).
+
+    문서는 고치는 사람이 보지만 **화면 안내는 막힌 사람이 본다.** 거기 없는 명령이
+    적혀 있으면 그 사람은 자기가 뭘 잘못했는지 찾기 시작한다.
+    """
+    problems = []
+    for tree in SOURCE:
+        for path in sorted((ROOT / tree).rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            for why in dead_commands(path.read_text(encoding="utf-8")):
+                problems.append(f"{path.relative_to(ROOT)}: {why}")
+
+    assert not problems, "소스가 없는 명령을 안내한다:\n" + "\n".join(problems)
+
+
+def test_소스_그물도_비지_않았다() -> None:
+    """**세는 그물이 비면 「전부 맞다」가 거짓으로 참이 된다** (D-0230)."""
+    from tests.conftest import INVOKE
+
+    seen = sum(
+        len(INVOKE.findall(path.read_text(encoding="utf-8")))
+        for tree in SOURCE
+        for path in (ROOT / tree).rglob("*.py")
+        if "__pycache__" not in path.parts
+    )
+
+    assert seen >= 5, f"소스에서 CLI 부름을 {seen}개밖에 못 봤다 — 정규식이 죽었나"

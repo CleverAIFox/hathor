@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 import pytest
 
@@ -109,9 +111,27 @@ def test_질량이_목표에_선다(target: float) -> None:
     assert abs(TOOL.diatonic_mass_of(corpus) - target) < 0.01
 
 
-def test_기본_질량이_실물이다() -> None:
-    """**합성을 실물에 맞춘다** — 맞춘 뒤 무엇이 나오는지는 모른다 (D-0058)."""
+def test_기본_질량을_값으로_못질한다() -> None:
+    """**합성을 실물에 맞춘다** — 맞춘 뒤 무엇이 나오는지는 모른다 (D-0058).
+
+    **이름이 재지 않는 것을 주장하고 있었다** (D-0470). 「기본 질량이 실물이다」는
+    이 단언으로 안 나온다 — 실물을 잰 자리는 D-0334이고 **그 수는 아직 정본
+    블록에 없다.** 리터럴을 두 번 적어 둔 것이므로 **값 못질**로 이름을 바꿨다:
+    바꾸려면 기록을 같이 쓰게 만드는 턱이다.
+
+    재어지는 것은 **그 상수가 실제로 기본값으로 꽂혀 있는가**다 (D-0126).
+
+    남은 빚: 이 수를 `measured.toml` 블록으로 올리고 `make measure`가 쓰게 한다.
+    """
     assert TOOL.REAL_DIATONIC_MASS == 0.7237
+
+    default = inspect.signature(TOOL.build).parameters["diatonic_mass"].default
+    assert default == TOOL.REAL_DIATONIC_MASS, "상수가 `build`의 기본값에 안 꽂혀 있다"
+
+    # **꽂혀 있는 그 길로 지으면 그 질량이 선다** — 인자를 받는 척만 하던 자리가
+    # 바로 옆에 있었다 (D-0461의 `follow_sigma`).
+    corpus = TOOL.build(600, seed=11, sigma=0.0)
+    assert abs(TOOL.diatonic_mass_of(corpus) - TOOL.REAL_DIATONIC_MASS) < 0.01
 
 
 def test_이웃_비례가_느슨함을_받는다() -> None:

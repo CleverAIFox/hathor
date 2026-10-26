@@ -96,7 +96,7 @@ TRIALS = 6
 
 POSITIVES_ON_RECORD: tuple[tuple[str, dict[str, object]], ...] = (
     (
-        "D-0461의 양성 (실물 질량 · 쌍 400 · 거절 표본 · 1000곡)",
+        "D-0460의 양성 (실물 질량 · 쌍 400 · 거절 표본 · 1000곡)",
         {"mass": REAL_DIATONIC_MASS, "pairs": 400, "songs": SONGS, "matched": False},
     ),
     (
@@ -121,6 +121,11 @@ POSITIVES_ON_RECORD: tuple[tuple[str, dict[str, object]], ...] = (
 
 **여기 줄이 있다는 것은 그 조건에서 양성이 **기록에 섰다**는 뜻이다.** 안 돌린
 조건을 적으면 그것이 D-0325다.
+
+**첫 줄이 D-0461을 가리키고 있었다** (D-0470). 6/6 · 판별 `t` +5.5~+7.4는
+**D-0460의 수**이고 D-0461은 그 수를 고친 판이다 — 그 기록에는 양성 측정이 없다.
+`test_기대는_양성마다_기록이_있다`가 **번호의 제목만** 봤으므로 틀린 번호가
+조용히 통과했다. D-0465가 그 오기를 그대로 베꼈다.
 """
 
 
@@ -170,7 +175,9 @@ class Sweep:
     def honesty(self) -> float:
         """판 사이 흔들림 ÷ 보고된 판별 오차. 1보다 크면 보고된 오차가 작다."""
         reported = statistics.fmean(self.errors)
-        return self.spread / reported if reported > 0 else 0.0
+        # **못 쟀으면 `nan`이다** (D-0470). 0.0을 내면 *«완벽히 정직하다»*로 읽혀
+        # 봐주는 쪽으로 열린다 — `mean_t`·`ceiling`과 같은 관례로 묶는다.
+        return self.spread / reported if reported > 0 else float("nan")
 
     @property
     def ceiling(self) -> float:
@@ -331,67 +338,74 @@ TRIAL_LINE = re.compile(
 """
 
 
-def summarize(path: Path) -> Sweep:
-    """**잘린 · 이어 붙인 판의 로그에서 요약을 되살린다** (D-0464 · D-0466).
+def summarize(path: Path) -> dict[str, Sweep]:
+    """**잘린 · 이어 붙인 로그에서 요약을 되살린다** (D-0464 · D-0466 · D-0470).
 
     판 120개짜리가 통 시간 제한에 **104개에서 잘렸다.** 요약은 끝에만 찍히므로
     남은 것이 판 줄뿐이었고, 그것을 손으로 합치면 GR-0.7이다.
+
+    ### 대조마다 따로 센다
+
+    첫 판은 **판 번호만** 키로 묶었다. 기본 `--only both`는 음성 판 0과 양성 판 0을
+    한 로그에 찍으므로 **둘이 충돌해 터졌고**, 값이 우연히 같으면 한쪽을 조용히
+    버렸다. `name`도 마지막 줄 것으로 덮였다 (D-0470).
 
     ### 같은 판을 두 번 세지 않는다
 
     토막으로 이어 돌리다 **두 프로세스가 같은 로그에 겹쳐 썼다.** 판 줄 55개에
     번호는 41개였고, 세어 보기 전에는 55판으로 읽혔다 — 표본이 부풀고 **오차가
-    가짜로 줄어든다.** 번호로 묶어 **한 번만 센다.**
-
-    **값이 엇갈리면 운다.** 같은 번호가 다른 수를 들고 있으면 둘 중 하나는 다른
-    조건에서 난 것이고, 그것을 고르는 일은 도구가 할 일이 아니다 (D-0230).
+    가짜로 줄어든다.** 같은 번호가 **다른 수**를 들고 있으면 운다 (D-0230).
 
     ### 구멍이 있으면 운다
 
     번호가 0부터 이어지지 않으면 **토막 하나가 통째로 날아간 것**이다. 조용히
     이어 붙이면 사전 등록한 판 수보다 적게 재고도 그렇게 안 보인다 (GR-0.5).
 
-    질량과 초는 로그에 판별로 없으므로 **`nan`과 0으로 둔다** — 0이나 추정값을
-    넣으면 그 칸이 잰 수처럼 보인다.
+    질량과 초는 로그에 판별로 없으므로 **`nan`과 0으로 둔다.**
     """
-    rows: dict[int, tuple[float, float, bool]] = {}
+    rows: dict[str, dict[int, tuple[float, float, bool]]] = {}
     repeats = 0
-    name = "요약"
     for line in path.read_text(encoding="utf-8").splitlines():
         found = TRIAL_LINE.match(line)
         if found is None:
             continue
-        name = found.group(1)
-        index = int(found.group(2))
+        name, index = found.group(1), int(found.group(2))
         row = (float(found.group(3)), float(found.group(4)), found.group(5) == "통과")
-        if index in rows:
-            if rows[index] != row:
+        seen = rows.setdefault(name, {})
+        if index in seen:
+            if seen[index] != row:
                 raise ValueError(
-                    f"판 {index}가 서로 다른 수로 두 번 있다: {rows[index]} 대 {row}. "
+                    f"{name} 판 {index}가 서로 다른 수로 두 번 있다: {seen[index]} 대 {row}. "
                     "다른 조건에서 난 줄이 섞였다 — 고르는 것은 도구가 할 일이 아니다"
                 )
             repeats += 1
             continue
-        rows[index] = row
-    if len(rows) < 2:
-        raise ValueError(f"판 줄이 둘 미만이다: {path} ({len(rows)}개)")
-    missing = sorted(set(range(max(rows) + 1)) - set(rows))
-    if missing:
-        raise ValueError(
-            f"판 번호에 구멍이 있다: {missing[:10]}{' …' if len(missing) > 10 else ''}. "
-            "토막 하나가 날아갔다 — 메우고 다시 부른다"
-        )
-    ordered = [rows[index] for index in sorted(rows)]
+        seen[index] = row
+    if not rows:
+        raise ValueError(f"판 줄이 없다: {path}")
     if repeats:
         print(f"겹쳐 적힌 판 {repeats}줄을 한 번만 셌다 (D-0466)", file=sys.stderr)
-    return Sweep(
-        name=f"{name}(로그 {len(ordered)}판)",
-        gains=tuple(gain for gain, _, _ in ordered),
-        errors=tuple(error for _, error, _ in ordered),
-        passed=sum(1 for _, _, beat in ordered if beat),
-        mass=float("nan"),
-        seconds=0.0,
-    )
+
+    revived: dict[str, Sweep] = {}
+    for name, seen in rows.items():
+        if len(seen) < 2:
+            raise ValueError(f"{name}의 판 줄이 둘 미만이다: {path} ({len(seen)}개)")
+        missing = sorted(set(range(max(seen) + 1)) - set(seen))
+        if missing:
+            raise ValueError(
+                f"{name}의 판 번호에 구멍이 있다: {missing[:10]}"
+                f"{' …' if len(missing) > 10 else ''}. 토막 하나가 날아갔다 — 메우고 다시 부른다"
+            )
+        ordered = [seen[index] for index in sorted(seen)]
+        revived[name] = Sweep(
+            name=f"{name}(로그 {len(ordered)}판)",
+            gains=tuple(gain for gain, _, _ in ordered),
+            errors=tuple(error for _, error, _ in ordered),
+            passed=sum(1 for _, _, beat in ordered if beat),
+            mass=float("nan"),
+            seconds=0.0,
+        )
+    return revived
 
 
 def cost(args: argparse.Namespace) -> str:
@@ -409,9 +423,12 @@ def cost(args: argparse.Namespace) -> str:
     return (
         f"코퍼스 {args.songs}곡 · 쌍 {args.pairs}(덮는 곡 {covered}) · 판 {args.trials} · "
         f"대조 {sides}개 · 어휘 2개{modes}\n"
-        f"**생성 {runs}벌 · 곡 {covered * runs:,}개분.** 참고: 실물 1004곡 · 쌍 400의 "
-        f"`eval harmony-output --compare-vocabulary` 한 판이 그의 기기에서 11분이다 — "
-        f"**이 탐침은 그 선 일곱과 `base`를 안 돈다** (D-0463). 판당 초는 아래 요약이 찍는다"
+        f"**생성 {runs}벌 · 곡 {covered * runs:,}개분.** "
+        # **실측 하나를 글자로 박아 두고 있었다** (D-0470). 「11분」은 어느 기기
+        # 어느 판의 수였고 **여기 찍히는 숫자와 아무 관계가 없다** — 낡아도
+        # 아무 일이 안 일어난다 (GR-0.7). 구조만 적고 **초는 아래 요약이 잰다.**
+        f"`eval harmony-output --compare-vocabulary`는 선 일곱과 `base`를 다 돌고 "
+        f"**이 탐침은 `paired` 하나만 돈다** (D-0463). 판당 초는 아래 요약이 찍는다"
     )
 
 
@@ -470,8 +487,6 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.summarize is not None:
-        revived = summarize(args.summarize)
-        report(revived)
         body = args.summarize.read_text(encoding="utf-8")
         if HELD_MARK not in body and FREE_MARK not in body:
             print(
@@ -481,30 +496,30 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        if HELD_MARK in body:
-            # **고정 코퍼스 로그에 판정을 찍지 않는다** (D-0466 · D-0292). 본 실행이
-            # 막는 것을 되살리는 쪽이 뚫으면 막이 없는 것과 같다.
-            print(
-                f"\n**판정 안 함 — `--hold-corpus` 로그다.** 이 판이 내는 것은 "
-                f"**정직성 {revived.honesty:.3f}** 하나다. 평균·`t`·통과율은 "
-                "**이 코퍼스 하나의 성질**이라 쌍 수 판정에 안 쓴다."
-            )
-            return 0
-        if revived.name.startswith("양성"):
-            # **양성 로그에 `verdict()`를 돌리지 않는다** (D-0466 · D-0292).
-            # 그 함수는 *«음성이 0인가»*를 읽는 자라 양성에 대면 **잘 선 양성을
-            # 「대조가 0이 아니다」로 읽는다** — 정반대 뜻이다.
-            print(
-                f"\n**양성 로그다.** 통과 {revived.passed}/{len(revived.gains)} — "
-                "묻는 것은 *«문턱이 진짜를 놓치지 않나»*이고, 여기에 음성의 읽는 법을 "
-                "대면 잘 선 양성이 결함으로 읽힌다 (D-0259)."
-            )
-            return 0
-        print(f"\n판정: {verdict(revived)}")
+        held = HELD_MARK in body
+        for name, revived in summarize(args.summarize).items():
+            report(revived)
+            if held:
+                # **고정 코퍼스 로그에 판정을 찍지 않는다** (D-0466 · D-0292).
+                print(
+                    f"\n**판정 안 함 — `--hold-corpus` 로그다.** 이 판이 내는 것은 "
+                    f"**정직성 {revived.honesty:.3f}** 하나다. 평균·`t`·통과율은 "
+                    "**이 코퍼스 하나의 성질**이라 쌍 수 판정에 안 쓴다."
+                )
+            elif name.startswith("양성"):
+                # **양성에 음성의 읽는 법을 대면 정반대로 읽힌다** (D-0466 · D-0292).
+                print(
+                    f"\n**양성 로그다.** 통과 {revived.passed}/{len(revived.gains)} — "
+                    "묻는 것은 *«문턱이 진짜를 놓치지 않나»*이고, 여기에 음성의 읽는 법을 "
+                    "대면 잘 선 양성이 결함으로 읽힌다 (D-0259)."
+                )
+            else:
+                print(f"\n판정: {verdict(revived)}")
+            print()
         print(
-            "\n**로그에서 되살린 요약이다.** 질량과 초는 판별로 안 찍히므로 "
-            "`nan`·0이다 (GR-0.5). 판 수가 사전 등록한 수보다 적으면 **어디서 "
-            "잘렸는지**를 기록에 적는다 — 벽시계가 자른 것과 수를 보고 자른 것은 다르다."
+            "**로그에서 되살린 요약이다.** 질량과 초는 판별로 안 찍히므로 `nan`·0이다 "
+            "(GR-0.5). 판 수가 사전 등록한 수보다 적으면 **어디서 잘렸는지**를 기록에 "
+            "적는다 — 벽시계가 자른 것과 수를 보고 자른 것은 다르다."
         )
         return 0
 

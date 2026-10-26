@@ -161,8 +161,19 @@ def test_내역을_훑기와_안_섞는다(tmp_path: Path, monkeypatch: pytest.M
 
 
 def test_밖과_로컬의_합이_총합이다():
-    """축 셋이 같은 정본을 본다 (D-0304). 하나만 고쳐지는 날을 막는다."""
+    """축 셋이 같은 정본을 본다 (D-0304). 하나만 고쳐지는 날을 막는다.
+
+    **첫 판은 아무것도 안 걸었다** (D-0470). `local_points()`의 몸이
+    `egress_points() - outward_points()`이므로 **합이 총합인 것은 산수다** —
+    측정이 아니다. 두 정규식을 다 비워 셋이 전부 0이 돼도 초록이었다.
+
+    축이 세는 길은 **파일을 긁는 정규식**이고 정본은 **파이썬이 읽은 값**이다.
+    거는 것은 그 둘이 같은가여야 한다 (GR-0.5: 안 센 것을 통과로 세지 않는다).
+    """
     counts = tool_module("doc_counts")
 
-    assert counts.outward_points() + counts.local_points() == counts.egress_points()
+    assert counts.egress_points() == len(CHECKER.ALLOWED)
     assert counts.outward_points() == len(CHECKER.OUTWARD)
+    assert counts.local_points() == len(set(CHECKER.ALLOWED) - CHECKER.OUTWARD)
+    assert set(CHECKER.ALLOWED) >= CHECKER.OUTWARD, "밖 목록에 허용 밖 경로가 있다"
+    assert counts.local_points() > 0, "로컬이 0이면 빼서 내는 축이 빈 그물이다 (D-0230)"

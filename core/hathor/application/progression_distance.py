@@ -87,7 +87,13 @@ def bigram_matrix(
 
 
 def total_variation(left: Histogram | Grid, right: Histogram | Grid) -> float:
-    """전변동 거리. 0~1이며 **`TV * 마디 수`가 옮겨야 하는 마디 수다.**"""
+    """전변동 거리. 0~1이다.
+
+    **`TV * 마디 수`가 옮겨야 하는 마디 수인 것은 도수 히스토그램일 때다** (D-0470).
+    전이 행렬(`bigram_matrix`)에 대면 단위가 **전이 수**이고 8마디의 전이는 일곱이라
+    `마디 수 - 1`을 곱해야 한다. 같은 함수가 두 꼴을 다 받으므로 **부르는 쪽이
+    무엇을 넣었는지 알아야 한다.**
+    """
     return 0.5 * float(np.abs(left - right).sum())
 
 

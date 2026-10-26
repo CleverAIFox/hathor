@@ -94,6 +94,41 @@ def test_표에_없으면_운다(monkeypatch: pytest.MonkeyPatch) -> None:
         TOOL.artist_of("G-DRAGON-무제.mp3")
 
 
+def test_빈_아티스트를_한_사람으로_안_묶는다(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**빈 태그가 가장 큰 아티스트가 된다** (D-0470).
+
+    TPE1이 비어 있는 곡은 드물지 않고, 빈 글자끼리는 `casefold()` 뒤에도 같다 —
+    **서로 아무 관계 없는 곡들이 한 사람으로 뭉쳐** 제외 마스크가 통째로 넓어진다.
+    D-0374가 `split("-")`로 뭉치던 꼴을 고친 그 자리에 **다른 길로 같은 병**이
+    남아 있었다. `artist` 키 자체가 없으면 **메시지 없는 `KeyError`**였다.
+
+    빼는 쪽이 맞다 — 모르는 것을 «같다»로 세면 **후보를 과하게 덜어내** 점수가
+    틀린 쪽으로 내려가고, 그것이 임베딩 탓으로 읽힌다. **몇 곡을 뺐는지 찍는다**
+    (D-0191: 안 보이면 없는 것).
+    """
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "scan-2026-10-20.jsonl").write_text(
+        "\n".join(
+            json.dumps(one, ensure_ascii=False)
+            for one in (
+                {"source_key": "a.mp3", "tags": {"artist": "Anne-Marie"}},
+                {"source_key": "b.mp3", "tags": {"artist": "   "}},
+                {"source_key": "c.mp3", "tags": {"artist": ""}},
+                {"source_key": "d.mp3", "tags": {}},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    found = cast("dict[str, str]", TOOL.load_artists(tmp_path))
+
+    assert set(found) == {"a.mp3"}, "빈 태그가 표에 들어왔다"
+    assert "3곡" in capsys.readouterr().err
+
+
 def test_산출물이_없으면_빈_표다(tmp_path: Path) -> None:
     """`scan-*.jsonl`이 없을 때. **빈 표를 내고 멈추는 것은 `main`이 한다.**"""
     assert TOOL.load_artists(tmp_path) == {}

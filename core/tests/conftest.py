@@ -312,26 +312,57 @@ def cli_paths() -> dict[str, argparse.ArgumentParser]:
     return found
 
 
+INVOKE = re.compile(
+    r"\bhathor(?:\.cli)?[ \t]+(\w[\w-]*)(?:[ \t]+(?!-)(\w[\w-]*))?((?:[ \t]+--[\w-]+)*)"
+)
+r"""**부름을 글 어디에서나 찾는다** — `CLI_CALL`이 못 보던 꼴이다 (D-0470).
+
+`CLI_CALL`은 글 **맨 앞**에서 한 번만 맞춰 본다. 그래서 이 저장소의 주된 표기인
+`cd core && uv run python -m hathor.cli ingest onsets`는 앞 두 낱말(`cd core`)에서
+매치가 끝나고 **산문으로 걸러졌다.** `hathor scan`처럼 맨 `hathor` 접두가 붙은 꼴도
+경로가 `hathor scan`이 되어 등재 목록에 없으니 조용히 넘어갔다.
+
+**접두가 있으면 산문일 수 없다.** 그래서 이쪽은 **봐주지 않는다** — 뒤 한두 낱말이
+등재 경로로 풀리지 않으면 운다.
+
+**사이는 공백·탭만이다.** `\s+`로 뒀더니 `import hathor` 다음 줄의 `installed =`를
+줄바꿈을 넘어 이어 «없는 명령»이라 울었다 — 거짓 경보이고, 그런 검사는 꺼진다 (GR-0.8).
+"""
+
+
 def dead_commands(raw: object) -> list[str]:
     """이 칸이 적은 CLI 호출 중 **실재하지 않는 것**. 문자열이든 목록이든 받는다."""
     entries = raw if isinstance(raw, list) else [raw]
     known = cli_paths()
     problems: list[str] = []
-    for one in entries:
-        text = str(one or "")
-        found = CLI_CALL.search(text)
-        if not found:
-            continue
-        group, command, flags = found.group(1), found.group(2), found.group(3) or ""
+
+    def judge(group: str, command: str | None, flags: str, *, strict: bool) -> None:
         path = " ".join(part for part in (group, command) if part)
         parser = known.get(path)
+        if parser is None and command:
+            # `hathor ingest scan`처럼 **세 낱말**이면 뒤 둘이 경로다.
+            parser = known.get(command)
+            if parser is not None:
+                path = command
         if parser is None:
             # **결정 번호·산문은 명령이 아니다.** `reads`에는 `D-0181` 같은 것도 든다.
-            if group in cli_paths():
+            # 다만 `hathor` 접두가 붙었으면 산문일 수 없으므로 봐주지 않는다.
+            if strict or group in known:
                 problems.append(f"`{path}`라는 명령이 없다")
-            continue
+            return
         handles = {option for action in parser._actions for option in action.option_strings}
         missing = sorted(set(re.findall(r"--[\w-]+", flags)) - handles)
         if missing:
             problems.append(f"`{path}`가 {missing}를 안 받는다")
+
+    for one in entries:
+        text = str(one or "")
+        calls = list(INVOKE.finditer(text))
+        if calls:
+            for found in calls:
+                judge(found.group(1), found.group(2), found.group(3) or "", strict=True)
+            continue
+        loose = CLI_CALL.search(text)
+        if loose:
+            judge(loose.group(1), loose.group(2), loose.group(3) or "", strict=False)
     return problems

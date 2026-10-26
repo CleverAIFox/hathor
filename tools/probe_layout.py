@@ -66,6 +66,13 @@ PAIRS = 4000
 SEEDS = 600
 """곡마다 뽑는 진행 수. 생성 비용이 **쌍이 덮은 곡 곱하기 이 수 곱하기 어휘 둘**이다."""
 
+STREAM_PAIRS = 0x9A1D
+"""쌍 추첨 흐름의 태그 (D-0470).
+
+**아무 수나 되는 자리가 아니다** — 0이면 안 된다. numpy의 `SeedSequence`가 끝의
+0을 버리므로 `[seed, 0, trial]`은 `trial`이 0일 때 `[seed]`로 접힌다.
+"""
+
 FLAT_MASS = 0.5
 """밀지 않은 대조의 질량. 배수가 `m/(1-m)`이므로 **여기서 1이다.**
 
@@ -140,8 +147,13 @@ def sweep(mass: float, args: argparse.Namespace) -> Run:
     for trial in range(args.trials):
         corpus = build(args.songs, seed=args.corpus_seed + trial, sigma=0.0, diatonic_mass=mass)
         realised.append(diatonic_mass_of(corpus))
+        # **흐름마다 태그를 단다** (D-0470). `default_rng([seed, 0])`은 numpy가 끝의
+        # 0을 버려 `default_rng(seed)`와 **같은 흐름**이고, 코퍼스를 그 시드로 짓고
+        # 있었으므로 **판 0에서 코퍼스와 쌍이 한 난수열을 나눠 썼다.**
         pairs = sample_index_pairs(
-            args.songs, args.pairs, generator=np.random.default_rng([args.corpus_seed, trial])
+            args.songs,
+            args.pairs,
+            generator=np.random.default_rng([args.corpus_seed, STREAM_PAIRS, trial]),
         )
         found = gap_of(
             distances(corpus, "mixture", pairs, trial * SEEDS),
@@ -170,7 +182,9 @@ def cost(args: argparse.Namespace) -> str:
         f"코퍼스 {args.songs}곡 · 쌍 {args.pairs}(덮는 곡 최대 {covered}) · 판 {args.trials} · "
         f"질량 2개 · 어휘 2개\n"
         f"**생성 {sets}벌 · 진행 {covered * sets * SEEDS:,}개.** "
-        f"`run()`은 선 일곱을 다 돌아 **여기 쓰는 것의 3.5배**다 (D-0462)"
+        # **「3.5배」는 한 판의 실측이었고 글자로 박혀 있었다** (D-0470 · GR-0.7).
+        # 배수는 선 수·쌍 수·시드 수에 따라 움직이는데 이 줄은 안 움직였다.
+        f"`run()`은 선 일곱과 `base`를 다 돌고 **여기는 `paired` 하나만 돈다** (D-0462)"
     )
 
 
@@ -206,10 +220,12 @@ def main() -> int:
     apart = pushed.mean - flat.mean
     spread = (pushed.error**2 + flat.error**2) ** 0.5
     print(f"두 질량 차이: {apart:+.5f} ±{spread:.5f} · t {apart / spread:+.2f}")
+    # **옛 판의 결론을 결과와 무관하게 찍고 있었다** (D-0470). 「안 바뀌었다」는
+    # 이번 판이 무엇을 냈든 그대로 나왔다 — 읽는 사람은 **지금 판의 판정**으로
+    # 읽는다 (D-0292: 틀린 안내가 안내 없는 것보다 나쁘다).
     print(
         f"\n**인공물은 이득을 부풀리는 방향이다.** 실물 질량의 상한이 "
-        f"{pushed.ceiling:+.5f}이고, 이 수를 M9의 이득에서 빼도 판정이 바뀌는지를 본다 "
-        f"(D-0462에서는 안 바뀌었다)."
+        f"{pushed.ceiling:+.5f}이고, 이 수를 M9의 이득에서 빼도 판정이 바뀌는지를 본다."
     )
     return 0
 

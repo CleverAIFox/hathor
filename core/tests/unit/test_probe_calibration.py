@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import statistics
+from pathlib import Path
 
 import pytest
 
@@ -53,14 +54,46 @@ def test_뒤집힘은_적은_쪽을_센다() -> None:
     assert TOOL.report_on("심은 것", gaps, errors, 12)["flips"] == 12
 
 
-def test_시드_수를_새로_안_골랐다() -> None:
-    """**D-0327이 오경보율에 쓴 수다** (D-0058). 잘 나오는 값을 찾아 돌린 것이 아니다."""
+def test_시드_수를_값으로_못질한다() -> None:
+    """**D-0327이 오경보율에 쓴 수다** (D-0058). 잘 나오는 값을 찾아 돌린 것이 아니다.
+
+    **이름을 바꿨다** (D-0470). 「새로 안 골랐다」는 이 단언이 재는 성질이 아니다 —
+    리터럴을 두 번 적었을 뿐이고, 고르고 나서 여기 수도 같이 고치면 **아무 일도
+    안 일어난다.** 이것은 **값 못질**이다: 바꾸려면 결정 기록을 같이 쓰게 만드는
+    턱이지, 안 골랐다는 증거가 아니다.
+
+    그 수가 실제로 몇 판을 돌게 하는지는 아래에서 **기본값 경로로** 건다.
+    """
     assert TOOL.SEEDS == 24
 
+    # **상수가 배선에 꽂혀 있는가**는 재어진다 (D-0126). 안 꽂혀 있으면 이 못은
+    # 아무 데도 안 박힌 채 문서 노릇만 한다.
+    source = Path(str(TOOL.__file__)).read_text(encoding="utf-8")
+    assert '"--seeds", type=int, default=SEEDS' in source, "상수가 기본값에 안 꽂혀 있다"
 
-def test_넉_배로_늘려_본다() -> None:
-    """쌍이 넉 배면 **오차가 반**이어야 한다. 안 그러면 오차 식이 틀린 것이다."""
-    assert TOOL.WIDE == 4
+
+def test_넉_배로_늘리면_오차가_반이다() -> None:
+    """쌍이 넉 배면 **오차가 반**이어야 한다. 안 그러면 쌍이 겹친 것이다.
+
+    **그 성질을 아무도 안 쟀다** (D-0470). 시험은 `WIDE == 4`만 걸었고 도구는
+    두 오차를 따로 찍기만 했다 — **적어 둔 주장과 도는 코드 사이가 비어 있었다**
+    (D-0126: 안 걸면 안 돈다).
+    """
+    assert TOOL.WIDE == 4, "값 못질 — 바꾸려면 기록을 같이 쓴다"
+
+    # 보고된 오차가 `1/sqrt(n)`을 정확히 따른 꼴. **도구가 그 비를 내는가**를 본다.
+    got, want = TOOL.shrink({"error": 40}, {"error": 20}, 4)
+    assert want == pytest.approx(2.0)
+    assert got == pytest.approx(2.0)
+
+    # **덜 줄면 덜 줄었다고 나와야 한다** — 봐주는 쪽으로 접히면 안 본 것과 같다.
+    half, _ = TOOL.shrink({"error": 40}, {"error": 32}, 4)
+    assert half < want
+
+    # **못 쟀으면 nan이다** (GR-0.5 · N6과 같은 관례).
+    import math
+
+    assert math.isnan(TOOL.shrink({"error": 40}, {"error": 0}, 4)[0])
 
 
 def test_산출물이_없으면_멈춘다(

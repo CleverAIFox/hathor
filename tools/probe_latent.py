@@ -71,16 +71,34 @@ def load_artists(out: Path) -> dict[str, str]:
 
     정본은 인제스트가 적은 태그다. `probe_artist`가 이미 그 줄을 읽으므로 **그 둘을
     다시 안 만든다** (D-0424).
+
+    **빈 태그는 뺀다** (D-0470). 빈 글자끼리는 `casefold()` 뒤에도 같으므로 TPE1이
+    없는 곡이 전부 **한 사람으로 뭉친다** — D-0374가 `split("-")`에서 고친 그 병이
+    다른 길로 남아 있었다. 모르는 것을 «같다»로 세면 제외 마스크가 넓어져 **후보를
+    과하게 덜어내고** 점수가 틀린 쪽으로 내려간다. `artist` 키가 아예 없으면
+    **메시지 없는 `KeyError`**였다. 뺀 수는 찍는다 (D-0191).
     """
     from probe_artist import latest_jsonl, load_records
 
     latest = latest_jsonl(out)
     if latest is None:
         return {}
-    return {
-        str(record["source_key"]): str(record["tags"]["artist"]).strip().casefold()  # type: ignore[index]
-        for record in load_records(latest)
-    }
+    table: dict[str, str] = {}
+    blank = 0
+    for record in load_records(latest):
+        tags = record.get("tags")
+        raw = tags.get("artist", "") if isinstance(tags, dict) else ""
+        name = str(raw).strip().casefold()
+        if not name:
+            blank += 1
+            continue
+        table[str(record["source_key"])] = name
+    if blank:
+        print(
+            f"  아티스트 태그가 빈 {blank}곡을 표에서 뺐다 — 뭉치면 한 사람이 된다 (D-0470)",
+            file=sys.stderr,
+        )
+    return table
 
 
 def artist_of(source_key: str) -> str:
