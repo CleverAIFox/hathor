@@ -186,6 +186,97 @@ D-0199는 **WSL에서 31개를 돌려 갚았다.**
 
 ## 4. 읽을 후보
 
+### 훑은 날 2026-10-26
+- 2026-10-23 · 조건부 생성 · http://arxiv.org/abs/2610.32749v1
+  Efficient Streaming Audio-Visual Target Speaker Extraction for Real-World Acoustic Scenes —
+  Streaming audio-visual target speaker extraction (AVTSE) is essential for latency-sensitive
+  applications
+- 2026-10-23 · 조건부 생성 · http://arxiv.org/abs/2610.32310v1
+  Supervised Source Separation of Electric Vehicle Interior Noise Using a Hybrid Transformer
+  Architecture — The interior sound of an electric vehicle is a superposition of several
+  distinct noise contributions - wind noise, tire noise, powertrain (electric drive unit and
+  inverter) noise, and auxiliary-drive noise - whose relati
+- 2026-10-23 · 상징 · http://arxiv.org/abs/2610.32211v1
+  Melody Guidance for Audio Diffusion Models Without Retraining — Controlling melody in audio
+  generation normally requires training a conditional generative model on audio paired with
+  pitch curves or MIDI notes
+- 2026-10-23 · 표현 · http://arxiv.org/abs/2610.32161v1
+  MG-REPA: Multi-Granularity Representation Alignment for Generative Target Speaker Extraction —
+  Generative target speaker extraction (TSE) models achieve high-quality extraction, but suffer
+  from considerably slow training convergence
+- 2026-10-23 · 상징 · http://arxiv.org/abs/2610.32007v1
+  MI-MIDI 2: From Observation to Control with Sparse Autoencoders in Text-to-MIDI Generation —
+  Sparse autoencoders (SAEs) can expose features of a generative model without predefined
+  labels, but in language models the evidence used to interpret these features has proven an
+  unreliable guide to which of them steer t
+- 2026-10-22 · 조건부 생성 · http://arxiv.org/abs/2610.31796v1
+  DRAMA-Eval: A Benchmark for Context-Aware, Multi-Turn, Multi-Speaker Speech Generation —
+  Recent advances in speech generation are shifting toward context-aware, multi-turn, and multi-
+  speaker synthesis
+- 2026-10-22 · 조건부 생성 · 평가 · 상징 · http://arxiv.org/abs/2610.31510v1
+  Piano2Pop: Expanding Piano Demos into Pop Productions Without Aligned Supervision — We
+  introduce Piano2Pop, a music-expansion task that transforms piano MIDI into instrumental pop
+  productions
+- 2026-10-22 · 표현 · http://arxiv.org/abs/2610.31292v1
+  Spark-Audio 1.0 Technical Report — This paper introduces Spark-Audio 1.0, a speech foundation
+  model trained on domestically produced computing infrastructure
+- 2026-10-22 · 조건부 생성 · http://arxiv.org/abs/2610.31083v1
+  MQAScore: Fine-Grained Text-Music Alignment Evaluation via Large Audio Language Model — Text-
+  to-music alignment is commonly evaluated by the global similarity between text and audio
+  embeddings, which collapses all described attributes into a single score and obscures which
+  ones are missing
+- 2026-10-21 · 취향 · http://arxiv.org/abs/2610.30470v1
+  HeyGen Voice: Scene-Aware Voice Cloning for Talking Videos — Most voice-cloning systems are
+  built for audio alone: they copy the reference recording's delivery and acoustics, so a voice
+  cloned on a phone sounds like a phone recording whether the speaker is pictured in a studio,
+  on
+- 2026-10-21 · 상징 · http://arxiv.org/abs/2610.29222v1
+  Phase-Based Onset Enhancement for Piano Transcription in Ensemble Settings — Piano
+  transcription models have achieved very high performance in recent state-of-the-art systems,
+  but their performance tends to degrade in ensemble settings where the piano is played
+  alongside other instruments
+- 2026-10-21 · 표현 · http://arxiv.org/abs/2610.29164v1
+  XingChen-UniFE: A Unified Generative Speech Front-End via Complementary Acoustic-Semantic
+  Modeling — This paper presents XingChen-UniFE, a unified large audio language model (LALM) for
+  general speech restoration (GSR) and target speaker extraction (TSE)
+- 2026-10-21 · 취향 · 평가 · http://arxiv.org/abs/2610.29093v1
+  Agentic Music Post-Production — We introduce MixAgent, an agentic pipeline for music post-
+  production that follows the workflow of audio engineers to build interpretable and editable
+  mixing plans guided by a reference song
+- 2026-10-21 · 상징 · http://arxiv.org/abs/2610.29026v1
+  Resonance and Depth: Composing Timbral Identity and Spatial Form in an Artist-in-the-Loop Co-
+  Creative Multi-Agent Percussive Performance — This research-creation artistic report presents
+  Resonance and Depth, a 9-minute immersive electroacoustic/acousmatic performance that treats
+  timbre and space as primary compositional materials
+- 2026-10-20 · 조건부 생성 · http://arxiv.org/abs/2610.28711v1
+  Qwen-Audio-3.1-ASR Technical Report — We present Qwen-Audio-3.1-ASR, a family of audio-
+  language models that builds upon its predecesor Qwen-Audio-3.0-ASR with improved speech
+  recognition and expanded capabilities in speaker-diarized transcription and general
+- 2026-10-20 · 표현 · http://arxiv.org/abs/2610.28043v1
+  Sound Matching with a Differentiable Karplus-Strong Algorithm — We present a self-supervised,
+  event-based sound matching model using a differentiable extended Karplus-Strong algorithm
+- 2026-10-20 · 표현 · http://arxiv.org/abs/2610.27491v1
+  MiCLA: Mixture-to-Constituent Latent Alignment for Polyphonic Audio Representation Learning —
+  Real-world audio typically contains concurrent sound events, yet standard self-supervised
+  methods treat each clip as an isolated training unit without explicitly modeling mixture--
+  constituent relationships
+- 2026-10-19 · 조건부 생성 · 표현 · 상징 · http://arxiv.org/abs/2610.26684v1
+  MuLaCover: Flexible Cover Song Generation via Symbolic Tonal Control — A cover song re-renders
+  an existing piece, most commonly by preserving its tonal content -- melody and chord
+  progression -- while reshaping other musical attributes
+- 2026-10-19 · 조건부 생성 · http://arxiv.org/abs/2610.26173v1
+  Conditional information Retrieval for Longitudinal Survey Harmonisation — Identifying
+  conceptually equivalent questions across different surveys is a challenging information
+  retrieval task where surface-level textual similarity is insufficient
+- 2026-10-19 · 표현 · http://arxiv.org/abs/2610.26112v1
+  Applicability and Generalization of Audio Fingerprinting Methods to Speech — Audio
+  fingerprinting methods identify audio based on its content, even when the content has been
+  possibly corrupted
+- 2026-10-18 · 표현 · http://arxiv.org/abs/2610.25342v1
+  CASE: Complementary Articulation-Aware Speech Encoder to Enhance Speech-Driven 3D Facial
+  Animation — General-purpose self-supervised speech encoders provide strong acoustic
+  representations, but their pretraining objectives are not explicitly aligned with the visible
+  articulatory dynamics required by speech-driven 3D fac
 ### 훑은 날 2026-10-19
 - 2026-10-16 · 표현 · http://arxiv.org/abs/2610.23745v1
   VocalGrad: Evaluating Acoustic Perception in Audio Language Models — Recent large audio
