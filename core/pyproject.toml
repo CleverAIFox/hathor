@@ -10,43 +10,43 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "mutagen>=1.48.1",
     # 도메인 포트가 파형·임베딩 타입에 쓴다 (D-0021). 선택적일 수 없다.
-    "numpy>=2.5.3",
+    "numpy>=2.5.4",
 ]
 
 [project.optional-dependencies]
 music = [
   "mutagen>=1.47",
-  "numpy>=2.5.3",
+  "numpy>=2.5.4",
 ]
 # 리전(GPU)에서만 설치한다. 광인사는 코드 작성용이며 2GB를 받을 이유가 없다.
 # 구현체가 메서드 안에서 임포트하므로 없어도 모듈 임포트와 게이트가 돈다.
 gpu = [
-  "torch>=2.14.0",
+  "torch>=2.15.0",
   "demucs>=4.0",
-  "transformers>=5.17.0",
+  "transformers>=5.22.0",
   "scipy>=1.18.1",
   # **MusicFM이 요구한다** (D-0414). 저자 코드의 `modules/features.py`가 `MelSTFT`에서
   # 들인다 — 실물 첫 실행이 `ModuleNotFoundError: torchaudio`로 떨어졌다.
   # **우리 코드는 안 부른다**, 그래서 들여온 코드의 의존성이 여기 서는 것이 맞다.
-  "torchaudio>=2.11.0",
+  "torchaudio>=2.11.1",
   # 음고 추적 (D-0203). `numba`·`scikit-learn`이 딸려 오므로 가볍지 않지만,
   # CQ 격자 argmax는 **음고 추적이 아니라 우세 격자 찾기**이며 옥타브 오류를
   # 거르지 못한다. 실측으로 곡당 8초라 감당된다.
   "librosa>=1.0",
 ]
 api = [
-  "fastapi>=0.115",
+  "fastapi>=0.162.0",
   "uvicorn[standard]>=0.54.0",
-  "sqlalchemy>=2.1.1",
+  "sqlalchemy>=2.1.6",
   "psycopg[binary]>=3.3.6",
-  "pydantic-settings>=2.6",
+  "pydantic-settings>=2.16.2",
 ]
 
 [dependency-groups]
 dev = [
-  "ruff>=0.16.9",
-  "mypy>=2.3.1",
-  "pytest>=8.3",
+  "ruff>=0.17.3",
+  "mypy>=2.4.1",
+  "pytest>=9.2.0",
   "pytest-cov>=6.0",
   # 시험을 코어 수만큼 갈라 돈다 (D-0238). 직렬 181초가 2코어에서 100초다.
   "pytest-xdist>=3.6",
@@ -70,7 +70,7 @@ docs = [
 # 없이 돈다. 서버는 Compose `ml` 프로파일이다. 클라이언트와 서버 이미지(`docker/mlflow`)의
 # 주 버전을 맞춘다. 2.x는 `packaging`을 24로 끌어내려 3으로 간다.
 mlops = [
-  "mlflow-skinny>=3.0,<4",
+  "mlflow-skinny>=3.17.2,<4",
   "prefect>=3.8.7,<4",
 ]
 
