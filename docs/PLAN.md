@@ -187,6 +187,118 @@ D-0199는 **WSL에서 31개를 돌려 갚았다.**
 
 ## 4. 읽을 후보
 
+### 훑은 날 2026-11-02
+- 2026-10-30 · 표현 · http://arxiv.org/abs/2610.41870v1
+  Self-Supervised Object-Centric Representation for Multi-Task Audio Analysis — This paper
+  studies the capability of an object-centric audio representation to support multiple
+  downstream tasks within a unified framework
+- 2026-10-30 · 조건부 생성 · http://arxiv.org/abs/2610.41852v1
+  MFlowAudio: Efficient Text-to-Audio Synthesis via Mamba-based Stateful Flow Matching — Recent
+  advancements in audio generation have been largely driven by Transformer-based diffusion
+  models
+- 2026-10-30 · 표현 · 상징 · http://arxiv.org/abs/2610.41512v1
+  Parameter-Efficient Fine-Tuning of Transformer Encoders for Audio-Image-Symbolic Music
+  Retrieval — Score-based multimodal music retrieval requires representations that are both
+  discriminative within each modality and compatible across audio recordings, sheet music
+  images, and symbolic scores
+- 2026-10-30 · 조건부 생성 · http://arxiv.org/abs/2610.41390v1
+  Hierarchical Dual-Graph Retrieval for Long-form Audio Reasoning — Large audio language models
+  (LALMs) struggle with long-form audio reasoning, as processing entire recordings often limits
+  to capture query-relevant content distributed across distant segments while incurring
+  substantial
+- 2026-10-29 · 취향 · http://arxiv.org/abs/2610.40970v1
+  Nedimo: An Evidence-Grounded Multilingual Pipeline for AI-Generated Sleep Stories — Generative
+  audio systems can produce large libraries of personalized bedtime content, but ordinary media
+  objectives (retention, completion, and novelty) are poorly aligned with the goal of supporting
+  a transition toward
+- 2026-10-29 · 취향 · http://arxiv.org/abs/2610.40303v1
+  Symmetric Structure and Motivic Transformation in Melodies, Phrases, and Themes —
+  Transposition, inversion, and retrograde are fundamental operations in music theory, from
+  Schoenberg's twelve-tone technique to Forte's set classes and Lewin's transformational theory,
+  yet their use in melodies has rarel
+- 2026-10-29 · 상징 · http://arxiv.org/abs/2610.39255v1
+  A learning-based method of automatic music transcription — Automatic Music Transcription (AMT)
+  seeks to convert acoustic music recordings into symbolic musical notation, a process that
+  remains remarkably difficult for polyphonic piano due to concurrent polyphony, harmonic partia
+- 2026-10-28 · 조건부 생성 · http://arxiv.org/abs/2610.38624v1
+  SelectSep: Target-Selective Video Queries for Audio Source Separation — Video-queried sound
+  separation (VQSS) aims to isolate a target sound from an audio mixture using its corresponding
+  video as a query
+- 2026-10-28 · 조건부 생성 · 평가 · 상징 · http://arxiv.org/abs/2610.38619v1
+  MiDiff: MIDI-Conditioned Diffusion Models for Drum Audio Enhancement — Bridging the semantic
+  gap between perfect symbolic musical structure and severely degraded acoustic signals offers a
+  powerful paradigm for high-fidelity audio restoration
+- 2026-10-28 · 표현 · http://arxiv.org/abs/2610.38570v1
+  Do Audio LLMs HEAR Pain? Tracing Acoustic Evidence from Speech to Language Reasoning — Large
+  audio language models (LALMs) can process speech directly, but it remains unclear how well
+  they use the non-lexical acoustic information that speech carries
+- 2026-10-28 · 취향 · 조건부 생성 · http://arxiv.org/abs/2610.38252v1
+  A Tutorial on Generative Models for Music Audio — Music audio generation spans instrumental
+  clips, full songs with vocals, edits of existing recordings, and systems that play alongside a
+  musician in real time
+- 2026-10-27 · 평가 · http://arxiv.org/abs/2610.37959v1
+  ODAQ-Collection: Expanding the Open Dataset of Audio Quality with a Focus on Spatial
+  Distortions — The Open Dataset of Audio Quality (ODAQ) is an expanding resource that addresses
+  the scarcity of openly available data in audio quality assessment research
+- 2026-10-27 · 조건부 생성 · http://arxiv.org/abs/2610.37024v1
+  StreamSE: Neural Audio Codec-based Streaming Speech Enhancement for On-device Inference —
+  Recent generative speech enhancement (SE) models achieve high perceptual quality, but their
+  non-causal processing and expensive computation make them difficult to use for streaming, on-
+  device inference
+- 2026-10-27 · 조건부 생성 · 상징 · http://arxiv.org/abs/2610.36786v1
+  Expressive Guitar Synthesis via Controllable Latent Flow Matching — Realistic guitar synthesis
+  requires both audio fidelity and interpretable control over how notes are performed
+- 2026-10-27 · 상징 · http://arxiv.org/abs/2610.36715v1
+  SMEBENCH: Benchmarking Neural Music Editing with Synthetized MIDI Edits — Neural music editing
+  requires a system to perform a requested change while preserving the musical content that
+  should remain unchanged
+- 2026-10-27 · 표현 · http://arxiv.org/abs/2610.36568v1
+  TAC2: Timestamped Audio Captioning as composable functions — Real-world audio applications
+  require precise, queryable representations grounded in physical time
+- 2026-10-26 · 표현 · http://arxiv.org/abs/2610.35747v2
+  Correspondence Is Not Transfer: A Pairing-Controlled Study of Clinical Audio-Metadata
+  Alignment — Clinical audio models are often trained by aligning recordings with participant
+  metadata or text derived from it
+- 2026-10-26 · 표현 · http://arxiv.org/abs/2610.35125v1
+  When Fusion Order Matters: Insights on Progressive Multimodal Representation Learning for
+  Cross-modal Retrieval — Multimodal video retrieval combines visual, acoustic, and speech
+  information, yet how their fusion order should depend on the data and the retrieval query
+  remains unclear
+- 2026-10-26 · 상징 · http://arxiv.org/abs/2610.34694v1
+  Gangqinpu: A Multi-Genre, Multi-Task Piano Dataset with Aligned Audio, MIDI, and Musical
+  Scores — Aligned audio, performance MIDI, and musical scores provide valuable supervision for
+  music analysis and performance modeling, yet datasets that jointly align all three modalities
+  remain scarce and limited in scale and ge
+- 2026-10-26 · 조건부 생성 · http://arxiv.org/abs/2610.34688v1
+  From Speech Tokens to Stolen Voices: Attacker-Chosen-Text Speaker Impersonation via
+  Representation Inversion — Speech interaction systems have gradually evolved from traditional
+  cascaded systems that use text as intermediate information to end-to-end speech language
+  models that directly process speech representations
+- 2026-10-25 · 표현 · http://arxiv.org/abs/2610.34609v1
+  Audio-R1: Audio Reasoning through Reinforcement Learning on Self-Supervised Tasks — Reasoning
+  is increasingly important for large audio-language models (LALMs), yet remains relatively
+  underexplored compared with text-only and vision-language models
+- 2026-10-25 · 조건부 생성 · http://arxiv.org/abs/2610.34533v1
+  STFT Frontend Mismatch in Pretrained Audio Spectrogram Transformers: Analysis and Adaptation —
+  Pretrained audio spectrogram transformers are widely used as backbones of machine listening
+  systems for sound event classification
+- 2026-10-25 · 상징 · http://arxiv.org/abs/2610.34477v1
+  Finite-Sample Sensitivity of Kernel Metrics for Generative Evaluation — Kernel distances such
+  as the Kernel Inception Distance (KID) and the Kernel Audio Distance (KAD) compare generated
+  and reference samples in an embedding space, and model comparisons rest on their values
+- 2026-10-25 · 취향 · http://arxiv.org/abs/2610.34408v1
+  LeanTTS: Efficient Full-Stack Bilingual TTS for Zero-Shot Cloning and Voice Customization —
+  While recent advances in text-to-speech (TTS) synthesis have substantially improved speech
+  quality and modeling flexibility, the development of lightweight and computationally efficient
+  systems remains comparatively unde
+- 2026-10-25 · 취향 · 조건부 생성 · 표현 · 상징 · http://arxiv.org/abs/2610.34247v1
+  Does Notation Matter? MusicXML Tokenisation for Symbolic Music Generation and Understanding —
+  Symbolic music representations encode musical content at varying levels of completeness, from
+  performance-oriented formats such as MIDI to fully notated scores such as MusicXML
+- 2026-10-25 · 표현 · http://arxiv.org/abs/2610.34183v1
+  AudioFM: Towards General Purpose Audio Representation Learning — Learning audio
+  representations that effectively bridge holistic global soundscapes with fine-grained acoustic
+  moments is a long-standing goal in self-supervised learning
 ### 훑은 날 2026-10-26
 - 2026-10-23 · 조건부 생성 · http://arxiv.org/abs/2610.32749v1
   Efficient Streaming Audio-Visual Target Speaker Extraction for Real-World Acoustic Scenes —
