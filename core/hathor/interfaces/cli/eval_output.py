@@ -203,7 +203,15 @@ def run_eval_harmony_output(args: argparse.Namespace) -> int:
         verdict = "정보 있음" if report.is_output_conditioned else "정보 없음"
         sound = "건전" if report.is_harness_sound else "**고장**"
         order = "**있음**" if report.line("paired").carries_order else "없음"
-        print(f"하네스 {sound} · 어휘 판정: **{verdict}** · 순서 판정: {order}\n")
+        paired = report.line("paired")
+        read = paired.mean_distance / paired.standard_error if paired.standard_error > 0 else 0.0
+        # **이 자는 `t` 항이 없다** (D-0474). 승률 과반 + `paired <= random`이라 차이 0인 합성에서
+        # 절반쯤 통과한다 — 주 판정이 아니라 **사전 등록 원판정(D-0327 이전 자)**이다.
+        print(
+            f"하네스 {sound} · 사전 등록 원판정(D-0327 이전 자 · `t` 항 없음): **{verdict}**"
+            f" · 순서 판정: {order}\n"
+            f"  짝지은 선 t = {read:+.2f}  (읽는 값이다 — 이 자에는 문턱을 새로 안 박았다)\n"
+        )
 
     if baseline:
         comparison = SourceComparison(baseline=reports[baseline], target=result)

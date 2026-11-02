@@ -103,6 +103,7 @@ D-0086에서 `matched`를 **추가했더니 `within`과 `shuffled`의 값이 같
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -272,15 +273,30 @@ class RestrictionReport:
                 return item
         raise KeyError(f"그런 비교선이 없다: {name}")
 
-    def _gap(self, null: str) -> float:
-        return self.line("observed").mean_share - self.line(null).mean_share
-
-    def _win_rate(self, null: str) -> float:
+    def _paired(self, null: str) -> tuple[np.ndarray, np.ndarray] | None:
+        """쌍이 맞는 두 선. **못 재면 `None`이다** — 0으로 넘기지 않는다 (D-0474)."""
         observed = np.asarray(self.line("observed").shares)
         other = np.asarray(self.line(null).shares)
         if observed.size == 0 or observed.size != other.size:
-            return 0.0
-        return float(np.mean(observed < other))
+            return None
+        return observed, other
+
+    def _gap(self, null: str) -> float:
+        if self._paired(null) is None:
+            return math.nan
+        return self.line("observed").mean_share - self.line(null).mean_share
+
+    def _win_rate(self, null: str) -> float:
+        """**분모가 없으면 `nan`이다.**
+
+        `0.0`을 돌려주면 `1 - 승률`을 쓰는 자(`specificity_win_rate`)가 빈 입력에서
+        **100%**를 냈다 — 못 쟀는데 봐주는 쪽으로 떨어졌다 (D-0474). 판정은
+        `nan > 0.5`가 거짓이라 거절로 간다.
+        """
+        pair = self._paired(null)
+        if pair is None:
+            return math.nan
+        return float(np.mean(pair[0] < pair[1]))
 
     @property
     def gap(self) -> float:

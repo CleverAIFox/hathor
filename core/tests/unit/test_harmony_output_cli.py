@@ -65,7 +65,7 @@ def test_두_출처를_짝지어_비교한다(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "[other]" in out and "[mix]" in out
     assert "짝지은 비교 (mix → other)" in out
-    assert "하네스 건전" in out
+    assert "하네스 건전" in out and "원판정(D-0327 이전 자" in out and "짝지은 선 t" in out
     # **상한과 바닥이 리포트에 있어야 한다** (O-25 (3)). 없으면 어떤 값도 못 읽는다.
     assert "identical" in out and "onehot" in out and "극한" in out
 

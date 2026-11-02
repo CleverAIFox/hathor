@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import ast
+import math
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,8 @@ import pytest
 from hathor.application.evaluate_degree_restriction import (
     NULL_REPEATS,
     EvaluateDegreeRestriction,
+    RestrictionLine,
+    RestrictionReport,
     cell_share,
     chromatic_indices,
     off_scale_indices,
@@ -434,3 +437,31 @@ def test_사전_등록_규칙은_전부_화면에_온다() -> None:
     missing = [f"{where}:{name}" for where, name in _preregistered() if name not in screen]
 
     assert missing == [], f"화면에 안 오는 판정: {' · '.join(missing)}"
+
+
+def _empty_report(size: int = 0) -> RestrictionReport:
+    def line(name: str, count: int) -> RestrictionLine:
+        zeros = (0.0,) * count
+        return RestrictionLine(name, zeros, zeros, zeros, zeros)
+
+    names = ("observed", "shuffled", "matched", "within")
+    # `size`가 0이 아니면 관측선만 쌍이 있고 대조선은 비었다 — 길이가 안 맞는 경우다.
+    return RestrictionReport(
+        "empty", OutputCondition(), 0, tuple(line(n, size if n == "observed" else 0) for n in names)
+    )
+
+
+@pytest.mark.parametrize("size", [0, 3])
+def test_쌍이_없으면_승률은_nan이고_판정은_거절이다(size: int) -> None:
+    """**분모가 없을 때 봐주는 쪽으로 떨어졌다** (D-0474 · D-0461 둘째 항 · D-0470 N6).
+
+    `_win_rate`가 0.0을 돌려주면 `specificity_win_rate = 1 - 0.0`은 **빈 입력에서 100%**였다.
+    못 쟀으면 `nan`이고, 판정은 `nan > 0.5`가 거짓이라 **거절**로 간다.
+    """
+    report = _empty_report(size)
+
+    for rate in (report.win_rate, report.specificity_win_rate, report.mass_matched_win_rate):
+        assert math.isnan(rate), rate
+    assert math.isnan(report.specificity_gap)
+    assert not report.off_scale_exceeds_matched
+    assert not report.off_scale_is_shared
