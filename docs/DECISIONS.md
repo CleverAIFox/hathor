@@ -38873,3 +38873,76 @@ MASTER M5 행의 **「전달된다」는 이 규칙에 서 있지 않다** — �
     `core/tests/unit/test_evaluate_degree_restriction.py::test_쌍이_없으면_승률은_nan이고_판정은_거절이다`
 
 자료  합성
+
+---
+
+## D-0475. **pytest 9.2가 `--dist loadgroup`을 깼다 — 우리 강제자가 잡았다** — 9.2 미만으로 묶고, 풀 날을 시험이 안다
+
+> **갱신 — D-0290 · D-0293.** GPU 시험 무리를 한 워커로 묶는 `loadgroup`과, 그것이 **실제로
+> 묶는지** 재는 `test_무리로_묶으면_한_워커로_간다`를 세웠다. 이 기록은 그 시험이 상류 회귀를
+> 처음 잡은 날이다.
+
+- **배경**: Dependabot PR #17이 pytest를 9.2.0으로 올리려 했다. 그 PR의 CI에서 위 시험이 울었다.
+  **시험이 옳다.** 끄거나 고치지 않았다.
+
+### 하나. 무엇이 틀렸나
+
+pytest-xdist는 `loadgroup`에서 nodeid 뒤에 `@무리이름`을 붙여 같은 무리를 한 워커로 보낸다.
+pytest 9.2가 그 변형 nodeid를 안 받는다. 그래서 무리가 **흩어진다.** 상류 보고는
+«조용히 묶기를 멈춘다»라고 적었다 — **우리는 안 조용했다.**
+
+- 상류: https://github.com/pytest-dev/pytest/issues/15303 ·
+  https://github.com/pytest-dev/pytest-xdist/issues/1386
+- xdist 3.8.0이 최신이라 **받을 고침이 아직 없다.**
+
+### 둘. 재현 — 격리된 나무에서
+
+`uv run --isolated --with pytest==<판> --with pytest-xdist==3.8.0 --with pytest-cov`로, 같은 무리
+표식이 붙은 시험 셋과 채움 40개를 `-n 6 --dist loadgroup`으로 돌렸다.
+
+| pytest | 무리의 셋이 간 워커 |
+|---|---|
+| 9.1.1 | gw0 · gw0 · gw0 |
+| 9.2.0 | gw0 · gw1 · gw2 |
+
+- **표식을 시험 파일에 직접 적어도** 9.2에서 흩어진다. 저장소 훅의 문제가 아니다.
+- `pytest_itemcollected`와 `hookwrapper`로도 안 된다 — **훅 차례 문제가 아니라 `loadgroup`이
+  깨진 것이다.**
+- **이 수는 내 컨테이너에서 쟀다. 리전에서 잰 것이 아니다.**
+
+- **결과**: 상한 한 줄 · 보안 올림 둘(pillow · certifi) · 시험 하나. pytest는 9.1.1에 머문다.
+
+### 셋. 한 것
+
+1. `core/pyproject.toml`: `pytest>=8.3` → `pytest>=8.3,<9.2`. 주석에 이유와 상류 링크.
+2. `uv lock` · `uv sync --all-extras --all-groups`. 보안 건으로 `pillow` 12.3.0 → 13.0.0 ·
+   `certifi` 2026.7.22 → 2026.10.23. **pytest는 9.1.1에 머문다.**
+   uv 0.12.13이 락 파일을 다시 써서 diff가 크다(단일 환경이라 마커와 타 플랫폼 바퀴가 빠졌다) —
+   **올라간 패키지는 이 둘뿐이다.**
+3. `test_pytest_ceiling.py::test_pytest_상한을_풀_때가_되면_운다`: 설치된 pytest가 9.2 이상이면 같은
+   재현을 돌려, **무리가 한 워커로 묶이면 «상한을 풀 때가 됐다»로 운다.**
+
+### 넷. 막는 것 — 상한이 지키는 것
+
+리전 가용 VRAM은 4.8GB다(D-0218). MERT와 Demucs가 **동시에 적재되면** 못 담는다. `loadgroup`이
+조용히 흩어지면 GPU 시험이 경합에 다시 노출되고, **왜 가끔 터지는지 아무도 모르는** 상태로
+돌아간다.
+
+### 다섯. 남기는 빚 — 상한을 언제 푸는가
+
+- 3번 시험이 그 날을 알린다. **그런데 한계가 있다:** 상한이 걸려 있는 동안 설치된 pytest는
+  9.2 미만이라 시험은 `return`한다. 이 시험은 **누가 상한을 올려 보거나 9.2 이상이 깔린 환경에서
+  돌릴 때** 비로소 잰다. 상한 아래에서 스스로 «상류가 고쳐졌다»를 알아내지는 못한다 — 그러려면
+  네트워크로 9.2+를 받아 재야 하는데, 그것은 `make check`에 안 넣었다.
+- 리전에서는 재지 않았다.
+
+재현
+    cd core && uv run --isolated --no-project --with pytest==9.2.0 --with pytest-xdist==3.8.0 --with pytest-cov python <3.의 합성 나무를 -n 6 --dist loadgroup으로 돌리는 스크립트>
+    cd core && uv run python -m pytest tests/unit/test_gate_isolation.py tests/unit/test_hygiene.py -q
+
+강제자
+    `core/tests/unit/test_gate_isolation.py::test_무리로_묶으면_한_워커로_간다` (잡는 쪽)
+    `core/tests/unit/test_pytest_ceiling.py::test_pytest_상한을_풀_때가_되면_운다` (푸는 날을 아는 쪽)
+
+자료  해당 없음
+

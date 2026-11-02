@@ -46,7 +46,13 @@ api = [
 dev = [
   "ruff>=0.16.9",
   "mypy>=2.3.1",
-  "pytest>=8.3",
+  # 9.2 미만으로 묶는다 (D-0475). xdist의 `--dist loadgroup`은 nodeid에 무리 이름을 붙여
+  # 한 워커로 묶는데, pytest 9.2가 그 변형을 안 받는다 — GPU 시험 무리가 조용히 흩어진다.
+  # 상류: https://github.com/pytest-dev/pytest/issues/15303 ·
+  #       https://github.com/pytest-dev/pytest-xdist/issues/1386
+  # xdist 3.8.0이 최신이라 받을 고침이 아직 없다. 풀 때가 되면 test_pytest_ceiling.py의
+  # `test_pytest_상한을_풀_때가_되면_운다`가 알린다.
+  "pytest>=8.3,<9.2",
   "pytest-cov>=6.0",
   # 시험을 코어 수만큼 갈라 돈다 (D-0238). 직렬 181초가 2코어에서 100초다.
   "pytest-xdist>=3.6",
