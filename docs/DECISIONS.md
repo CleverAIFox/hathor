@@ -38946,3 +38946,54 @@ pytest 9.2가 그 변형 nodeid를 안 받는다. 그래서 무리가 **흩어�
 
 자료  해당 없음
 
+
+---
+
+## D-0476. **남은 경보 26건을 잠금에서 치웠다** — 위험해서가 아니라 가려서다
+
+- **배경**: Pillow 13.0.0이 68건 중 42건을 닫고 **26건이 남았다.** filelock ·
+  GitPython · pyasn1 · msgpack이고 전부 transitive다 — torch · huggingface-hub ·
+  cachecontrol · mlflow-skinny · librosa · pyasn1-modules가 끌고 온다.
+
+### 하나. 노출은 제품 경로에 안 닿는다
+
+- **GitPython**의 RCE 둘(`Remote.pull()` refspec · submodule `.git` 검증)은 **남의
+  저장소를 당겨야** 터진다. mlflow-skinny가 실행의 커밋을 적으려고 쓰고, 읽는 것은
+  이 저장소다.
+- **pyasn1** DoS 넷은 믿을 수 없는 DER·BER을 파싱해야 한다. 여기는 남의 인증서를
+  안 읽는다.
+- **msgpack** 누수는 cachecontrol(제 요청 캐시)과 librosa(제 오디오)다.
+- **filelock** 여섯 중 셋은 Windows 전용이고 이 기기는 WSL이다. 나머지(위조 PID ·
+  재사용 inode)는 **같은 기기에 다른 로컬 사용자**가 있어야 한다.
+
+### 둘. 그런데도 올린 까닭
+
+**경보 26건이 상시로 서 있으면 다음에 진짜가 하나 떠도 안 보인다** (GR-0.8 ·
+D-0126). 빨간 채로 두는 보안 탭은 꺼 둔 검사다. 위험을 줄이려고 올린 것이 아니라
+**다음 경보가 보이게 하려고** 올린 것이다 — 이 둘을 섞어 적으면 다음 사람이 이
+기록을 읽고 위험이 컸다고 믿는다.
+
+### 셋. filelock은 주 판을 넘었다
+
+3.32.2 → **4.2.7**. torch가 `filelock`에 판 조건을 안 걸어서 갔다. 주 판 올림은
+조용히 깨지는 자리이므로 **안 깨졌다는 근거를 적는다**: 관문 전부와 계약 7개가
+그대로 섰고 시험 전수가 초록이다. GitPython 3.1.62 → 3.2.1 · pyasn1 0.6.4 → 0.6.5 ·
+msgpack 1.2.1 → 1.2.4는 조건 안의 올림이다.
+
+- **결과**: `core/uv.lock`만 바뀐다. 제품 코드 0줄.
+- **남기는 것**:
+  - **경보가 실제로 닫히는지는 안 봤다.** 깃허브가 다시 훑어야 하고 그것은 미는
+    쪽이 아니라 받는 쪽의 시계다 (GR-0.5).
+  - **관문이 없다.** 취약 판 목록은 저장소 밖에 있고, 안에서 세려면 망 접점을
+    하나 더 열어야 한다 (D-0134). **밖에 있는 자(Dependabot)에 기대고 있다는 것을
+    적어 두는 것이 지금 할 수 있는 전부다** — 그 자가 꺼지면 아무도 안 운다.
+  - 이 넷이 또 뜨면 그때는 **왜 이 꼬리가 이렇게 긴가**를 본다 — mlflow·prefect가
+    끌고 오는 것이고, 그 둘이 로컬 전용이라는 점과 견줘 값을 다시 매긴다.
+
+재현
+    cd core && uv lock --upgrade-package filelock --upgrade-package gitpython --upgrade-package pyasn1 --upgrade-package msgpack
+    cd core && uv sync --all-extras --all-groups
+
+강제자 없음 — 사유: 취약 판을 세는 자가 저장소 밖(Dependabot)에 있다. 안에 두면 망 접점이 는다 (D-0134).
+
+자료  해당 없음
