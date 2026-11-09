@@ -188,6 +188,76 @@ D-0199는 **WSL에서 31개를 돌려 갚았다.**
 
 ## 4. 읽을 후보
 
+### 훑은 날 2026-11-09
+- 2026-11-06 · 표현 · http://arxiv.org/abs/2611.09275v1
+  AudioSphere: Towards Self-Supervised Spatial Audio Representation Models — Recent audio
+  embedding models learn representations that transfer across clip- and frame-level tasks, yet
+  they operate almost exclusively on single-channel signals and are blind to spatial structure
+- 2026-11-06 · 상징 · http://arxiv.org/abs/2611.09140v1
+  SPDMX: Large-Scale Open Stem Audio From Symbolic Music — Large public datasets have driven
+  recent progress in machine learning, from text and vision to speech and general audio
+- 2026-11-06 · 조건부 생성 · http://arxiv.org/abs/2611.08966v1
+  Concordance-Optimal Continuous Music Emotion Estimation: Variance Decomposition, Dual-Branch
+  Temporal Fusion, and Conformal Prediction Intervals — Continuous music emotion recognition
+  (MER) estimates how Arousal and Valence evolve within a song, yet the field's standard metric,
+  pooled frame-level correlation, is dominated by between-song differences and cannot dist
+- 2026-11-05 · 조건부 생성 · http://arxiv.org/abs/2611.08695v1
+  FoleyForge: Free-form, Controllable, Rectified-flow Editing of Sound Effects — We present
+  FoleyForge, a generative model for instruction-based editing of sound effects
+- 2026-11-05 · 조건부 생성 · 표현 · http://arxiv.org/abs/2611.07562v1
+  FUSEMOS: Perceptual Evaluation of Text-to-Music Generation with Dual-Encoder Fusion and
+  Ranking-Aware Composite Loss — Perceptual evaluation of generated music is essential for
+  developing text-to-music (TTM) generation systems
+- 2026-11-05 · 조건부 생성 · http://arxiv.org/abs/2611.07384v1
+  FFMT: Frequency-Factorized Multi-Rate Tokenization for Music-to-Dance Generation — Dance
+  motion combines slowly varying body configurations with rapid local movements
+- 2026-11-04 · 표현 · http://arxiv.org/abs/2611.06725v1
+  Drowning in Noise: On Signal Saliency in Self-Supervised Learning for Ocean Acoustics — Self-
+  supervised learning (SSL) for audio typically benefits from larger pre-training corpora, but
+  this relationship assumes that training data carries meaningful learning signal
+- 2026-11-04 · 조건부 생성 · http://arxiv.org/abs/2611.06297v1
+  Speaker-Consistent Grounding for Confusion-Resilient LLM-Based Target Speech Extraction —
+  Deterministic target-speaker extraction (TSE) tends to preserve observed linguistic content
+  but may extract the interfering speaker
+- 2026-11-04 · 조건부 생성 · http://arxiv.org/abs/2611.06262v1
+  SonoDyno: A Sonic Dynamometer for Engine Speed and Load Estimation from Audio — Controllable
+  engine sound synthesis, Active Sound Design and engine order analysis all build on the
+  relationship between the sound of an engine and its momentary operating state: its speed and
+  its load
+- 2026-11-04 · 표현 · http://arxiv.org/abs/2611.06171v1
+  GraphSeal: Graph-Augmented Speech Deepfake Detection via Temporal-Spectral Artifact
+  Propagation — Current speech deepfake detectors treat each utterance as a flat sequence of
+  frames, limiting their ability to capture long-range spectral inconsistencies that span non-
+  adjacent regions of an audio signal
+- 2026-11-04 · 조건부 생성 · http://arxiv.org/abs/2611.06074v1
+  Which One Is Sounding? Binaural Sounding Instance Disambiguation for Audio-Visual Segmentation
+  — Existing audio-visual segmentation methods mainly predict sound-related regions or category
+  masks and often fail to identify the sounding instance when multiple same-class candidates
+  coexist
+- 2026-11-03 · 표현 · http://arxiv.org/abs/2611.05678v1
+  CLRM: Cross-Layer Relation Modeling for Audio Deepfake Detection — Audio deepfake detection
+  (ADD) aims to distinguish bonafide speech from synthetic or manipulated speech
+- 2026-11-03 · 취향 · http://arxiv.org/abs/2611.04400v1
+  Averaging Collusion Breaks Traceability in Personalized Neural Audio Watermarking —
+  Personalized neural audio watermarking systems embed user-specific payloads into audio to
+  trace the user associated with a leaked or misused copy
+- 2026-11-02 · 조건부 생성 · http://arxiv.org/abs/2611.03769v1
+  Metadata-Conditioned Audio Transformers for Adaptive Respiratory Sound Classification —
+  Respiratory sound classification from auscultation recordings is confounded by heterogeneous
+  acquisition conditions, including recording device, auscultation site, and patient
+  characteristics, that introduce systematic v
+- 2026-11-02 · 상징 · http://arxiv.org/abs/2611.02408v1
+  Deployment-constrained key estimation with a DSP-guided transformer reranker — Local music
+  applications estimate key during library import and benefit from an analyzer that is small,
+  fast, and runs in-process
+- 2026-11-02 · 조건부 생성 · http://arxiv.org/abs/2611.02330v1
+  Spatial Transfusion: From Structured Spatial Scene Understanding to Generation and Editing —
+  Spatial audio conveys not only what sounds are present, but where they originate and how they
+  interact with the environment
+- 2026-11-01 · 상징 · http://arxiv.org/abs/2611.01843v1
+  MEX: The Musical Expectation Benchmark Suite — We propose the Musical Expectation (MEX)
+  benchmark suite for perceptually validating computational models of musical expectation, i.e.,
+  models that estimate music information dynamics (MID) measures of perceived musical
 ### 훑은 날 2026-10-26
 - 2026-10-23 · 조건부 생성 · http://arxiv.org/abs/2610.32749v1
   Efficient Streaming Audio-Visual Target Speaker Extraction for Real-World Acoustic Scenes —
