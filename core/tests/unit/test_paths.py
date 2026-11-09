@@ -534,3 +534,30 @@ def test_우리_훅이_탐침에_답한다():
 
     assert module.SENTINEL in done.stdout, "저장소 훅이 탐침에 답을 안 한다"
     assert done.returncode == 0
+
+
+def test_떨어진_드라이브는_후보가_아니다(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """**죽은 마운트 지점이 `setup`을 터뜨렸다** (D-0478).
+
+    외장을 뽑으면 `/mnt/f` 디렉터리는 남고 장치만 사라진다. `Path.is_dir()`는
+    ENOENT·ENOTDIR 같은 몇 가지만 삼키고 **ENODEV(19)는 올려보낸다.** 안쪽 `walk`는
+    `os.scandir`와 `entry.is_dir()`를 감쌌는데 **바깥 고리만 안 감쌌다.**
+
+    떨어진 드라이브는 **후보가 아닌 것**이지 터질 일이 아니다.
+    """
+    import errno
+
+    from hathor.shared.config.paths import find_library_candidates
+
+    (tmp_path / "f").mkdir()
+    (tmp_path / "g").mkdir()
+    real = Path.is_dir
+
+    def dead(self: Path, *args: object, **kwargs: object) -> bool:
+        if self.name == "f":
+            raise OSError(errno.ENODEV, "No such device")
+        return bool(real(self))
+
+    monkeypatch.setattr(Path, "is_dir", dead)
+
+    assert find_library_candidates(mount_root=tmp_path) == []

@@ -285,7 +285,17 @@ def find_library_candidates(
         return []
     for drive in sorted(mounts.iterdir()):
         # C는 시스템 드라이브라 건너뛴다. wsl·wslg는 마운트 지점이다.
-        if not drive.is_dir() or drive.name in {"c", "wsl", "wslg"}:
+        # **이름으로 거르는 것을 먼저 한다** — 그 쪽은 `stat`이 필요 없다.
+        if drive.name in {"c", "wsl", "wslg"}:
+            continue
+        try:
+            reachable = drive.is_dir()
+        except OSError:
+            # **떨어진 드라이브는 후보가 아니다** (D-0478). 외장을 뽑으면 디렉터리는
+            # 남고 장치만 사라져 `is_dir()`이 ENODEV를 올려보낸다 — 안쪽 `walk`는
+            # 두 군데를 감쌌는데 여기만 안 감싸서 `setup`이 역추적을 뿜고 죽었다.
+            continue
+        if not reachable:
             continue
         walk(drive, max_depth)
     return sorted(found.items(), key=lambda item: -item[1])
