@@ -346,7 +346,9 @@ def test_뽑은_패치가_산출물을_안_담는다(tmp_path: Path) -> None:
     **실물 `HEAD`를 뽑으므로 합본 커밋에서는 못 돈다** (D-0433). 깃허브가 만든 합본도,
     그 아래 봇 커밋도 제목이 `D-XXXX.`가 아니다 — **뽑을 커밋이 아예 없다.**
     """
-    if not cast("bool", CHECKER.has_parent()) or cast("bool", CHECKER.merged_head()):
+    # **잎을 집지 않는다** (D-0480). 봇 PR을 스쿼시로 합치면 부모가 하나라
+    # `merged_head()`가 못 잡는다 — 「우리가 안 쓴 커밋」은 `ours()`에 모여 있다.
+    if not cast("bool", CHECKER.has_parent()) or not cast("bool", CHECKER.ours()):
         return
 
     out = tmp_path / "뽑은.patch"
@@ -521,3 +523,44 @@ def test_봇_이름이_워크플로와_같다() -> None:
     flow = (CHECKER.ROOT / ".github" / "workflows" / "papers.yml").read_text(encoding="utf-8")
 
     assert f'git config user.name  "{CHECKER.BOT}"' in flow
+
+
+def test_실물_가드는_ours_하나다() -> None:
+    """**잎을 집으면 셋째가 올 때 또 깨진다** (D-0436 · D-0480).
+
+    `ours()`는 «우리가 안 쓴 커밋»의 경우를 **한 이름에 모아 두려고** 생겼다.
+    그 docstring이 *«셋째가 올 때마다 조건을 또 덧붙이지 않도록»*이라 적어 놨는데
+    **적어 두는 것으로는 안 멈췄다** — 세 번 연속 누군가 `merged_head()`나
+    `bot_head()`를 직접 `if`에 걸었고, 그때마다 새 경우가 생기면 그 자리만
+    안 고쳐졌다.
+
+    `check_patch.main`은 뺀다 — 요약 줄이 **어느 쪽이었는지**를 적어야 해서
+    둘을 갈라 봐야 한다 (GR-0.5).
+    """
+    import ast
+    from collections.abc import Iterator
+
+    allowed = {"ours", "main"}
+    leaves = {"merged_head", "bot_head"}
+
+    def called(node: ast.AST) -> Iterator[str]:
+        for call in ast.walk(node):
+            if isinstance(call, ast.Call):
+                f = call.func
+                yield f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+
+    targets = (
+        Path(str(CHECKER.__file__)),
+        Path(str(CHECKER.ROOT)) / "core" / "tests" / "unit" / "test_patch_gate.py",
+    )
+    bad: list[str] = []
+    for path in targets:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for fn in ast.walk(tree):
+            if not isinstance(fn, ast.FunctionDef) or fn.name in allowed:
+                continue
+            for node in ast.walk(fn):
+                if isinstance(node, ast.If) and (hit := leaves & set(called(node.test))):
+                    bad.append(f"{path.name}:{node.lineno} {fn.name} → {sorted(hit)[0]}()")
+
+    assert not bad, "실물 가드는 ours()를 쓴다: " + " · ".join(bad)
