@@ -188,6 +188,89 @@ D-0199는 **WSL에서 31개를 돌려 갚았다.**
 
 ## 4. 읽을 후보
 
+### 훑은 날 2026-11-16
+- 2026-11-13 · 표현 · http://arxiv.org/abs/2611.17895v1
+  Anomalous Sound Detection Using Separation Features and Paired-Mixture Representation Learning
+  — Acoustic condition monitoring often relies on normal recordings with limited operating-
+  condition information
+- 2026-11-13 · 취향 · http://arxiv.org/abs/2611.17644v1
+  CoTTAGE: An Explainable Judge for Text-to-Audio Generation — Rapid progress in text-to-audio
+  (TTA) generation demands reliable and explainable automatic evaluation
+- 2026-11-12 · 조건부 생성 · 표현 · http://arxiv.org/abs/2611.16718v1
+  MusicRWKV: A Multimodal RWKV Framework for Music Representation Learning — Recent music
+  foundation models have achieved remarkable progress in music representation learning, yet most
+  existing approaches rely on Transformer architectures whose quadratic attention complexity
+  introduces substantia
+- 2026-11-12 · 조건부 생성 · http://arxiv.org/abs/2611.16371v1
+  Structured Speaker Conditioning for Diarization-Guided Target-Speaker ASR — We propose
+  structured speaker conditioning (SSC) for diarization-guided target-speaker recognition
+- 2026-11-11 · 조건부 생성 · http://arxiv.org/abs/2611.15362v1
+  JEV-VAD: Efficient Semantic Endpointing via Task-First Conditioning and Decoder-Prefix Pruning
+  — Semantic endpointing must distinguish a completed turn from a temporary pause, yet its
+  binary output does not require the full generation pathway of an audio-language model
+- 2026-11-11 · 조건부 생성 · http://arxiv.org/abs/2611.14971v1
+  Can Music Generation Models Tap Along? Evaluating Generative Approaches to Beat Tracking —
+  Existing studies have shown that music generative models can generate synchronized tracks that
+  play alongside an input song
+- 2026-11-11 · 조건부 생성 · http://arxiv.org/abs/2611.14908v1
+  Hy ASR 3.0 Technical Report — We present Hy ASR 3.0, a large language model (LLM)-based
+  automatic speech recognition (ASR) system that delivers strong recognition accuracy, supports
+  flexible contextual conditioning, and maintains robust recognition p
+- 2026-11-10 · 표현 · http://arxiv.org/abs/2611.14801v1
+  Distributionally Robust BEST-RQ For Speech Representation Learning — BEST-RQ, based on random
+  projection and quantization, has been a well-established self-supervised learning approach to
+  learn speech representations from large-scale unlabeled audio due to its high performance and
+  efficie
+- 2026-11-10 · 상징 · http://arxiv.org/abs/2611.14443v1
+  Assessing Alignment in Automatic Piano Transcription Datasets: A Benchmark for Scoring Methods
+  — Automatic Music Transcription (AMT) relies on paired audio--MIDI datasets, implicitly
+  assuming near-perfect temporal alignment
+- 2026-11-10 · 조건부 생성 · http://arxiv.org/abs/2611.13845v1
+  Alania-2: Turkish text-to-speech with instant and fine-tuned voice cloning — We present
+  Alania-2, a Turkish text-to-speech (TTS) system with two built-in voices, voice design from
+  text descriptions, and two kinds of voice cloning
+- 2026-11-10 · 조건부 생성 · http://arxiv.org/abs/2611.13834v1
+  MusicFlux: Flexible Conditioning for Text-Guided Music Generation and Editing — Music editing
+  transforms existing recordings while preserving their original attributes
+- 2026-11-10 · 평가 · http://arxiv.org/abs/2611.13811v1
+  Antalia-2 Mini: A 7.6-million-parameter Turkish text-to-speech model trained entirely on
+  synthetic speech — Antalia-2 Mini is a single-voice Turkish text-to-speech model with
+  7,620,931 parameters
+- 2026-11-10 · 표현 · http://arxiv.org/abs/2611.13689v1
+  Walrus Technical Report — We present Walrus, a unified 8B speech-and-audio foundation model
+  handling speech recognition (including code-switching and multi-talker speech), speech-to-text
+  and speech-to-speech translation, text-to-speech, emotion r
+- 2026-11-10 · 조건부 생성 · http://arxiv.org/abs/2611.13614v1
+  Emilia2: A Large-Scale Dataset for Controllable Long-Form Speech Generation — Generating long-
+  form speech requires models to keep content, speaker identity, turn-taking, and expressive
+  style consistent over time
+- 2026-11-09 · 조건부 생성 · http://arxiv.org/abs/2611.12603v1
+  Direct Conditioning of Audio Diffusion Transformers on fMRI Reveals Cortical Contributions to
+  Sound Reconstruction — Reconstructing audio from brain activity remains challenging
+- 2026-11-09 · 표현 · http://arxiv.org/abs/2611.12527v1
+  WaveGen: Truly End-to-End Waveform Generation via Internal Spectral Trajectory Learning — This
+  work proposes WaveGen, a fully end-to-end diffusion-based text-to-waveform framework based on
+  Spectral Forcing, which jointly learns an internal spectral trajectory and the target waveform
+  trajectory within a single
+- 2026-11-09 · 조건부 생성 · http://arxiv.org/abs/2611.12493v1
+  Textraction: Unified Text-Guided Speaker Extraction and Enhancement for Single- and Multi-
+  Channel Audio — We present Textraction, a text-guided speaker extraction framework that
+  enables the selective extraction of desired speakers or noise sources from an audio mixture
+  using only natural-language descriptions
+- 2026-11-09 · 취향 · http://arxiv.org/abs/2611.12406v1
+  REAL: Reward Modeling through Evidence-Linked Analysis of Lifelikeness in Generated Speech —
+  As modern text-to-speech systems become increasingly intelligible and natural, evaluation is
+  shifting from detecting gross synthesis failures to identifying subtle departures from
+  lifelike human delivery
+- 2026-11-09 · 조건부 생성 · http://arxiv.org/abs/2611.12061v1
+  BARS: Beat-Adaptive Rap Synthesis via Flow Matching — We present BARS (Beat-Adaptive Rap
+  Synthesis), a non-autoregressive rapping voice generation model based on Flow Matching,
+  conditioned on a beat track (instrumental backing), lyrics, and a short reference voice for
+  zero-
+- 2026-11-08 · 표현 · http://arxiv.org/abs/2611.11491v1
+  CallCleaner: Lightweight Bioacoustic Denoising from an Audio Foundation Model — Many studies
+  of animal vocalizations require clean recordings, but animals are usually recorded in the
+  field, with background noise from weather, vehicles, and other animals
 ### 훑은 날 2026-11-09
 - 2026-11-06 · 표현 · http://arxiv.org/abs/2611.09275v1
   AudioSphere: Towards Self-Supervised Spatial Audio Representation Models — Recent audio
