@@ -188,6 +188,34 @@ D-0199는 **WSL에서 31개를 돌려 갚았다.**
 
 ## 4. 읽을 후보
 
+### 훑은 날 2026-11-23
+- 2026-11-20 · 표현 · http://arxiv.org/abs/2611.27784v1
+  Neural Defend ARCAS 290M: A Robust Foundation Model for AI-Generated Audio Detection — Voice
+  cloning now needs only seconds of audio, and detectors tuned to one dataset often fail when
+  the generator, channel, or language changes
+- 2026-11-19 · 조건부 생성 · http://arxiv.org/abs/2611.26796v1
+  Efficient Conversational Multi-Talker ASR with Predicted Speaker-Agnostic Activity Streams —
+  Multi-talker automatic speech recognition (ASR) can be performed by conditioning a single-
+  speaker recognizer on frame-level speaker activity
+- 2026-11-18 · 상징 · http://arxiv.org/abs/2611.24453v1
+  Harmonic Circuit: Chord Progression Lies in a Sparse Principal Information Flow in Symbolic
+  Music Models — Mechanistic Interpretability (MI) seeks to decode neural network computations
+  into human-understandable logic
+- 2026-11-18 · 조건부 생성 · http://arxiv.org/abs/2611.24086v1
+  Constructing Dynamic Conversations with Neural Back-channel Generation and Voice-line
+  Scheduling — We present a novel approach to the problem of combining two voice-line channels
+  of dyadic conversational audio into a unified conversation with controllable back-channeling
+  and turn-taking dynamics
+- 2026-11-16 · 조건부 생성 · 평가 · http://arxiv.org/abs/2611.21809v1
+  Evaluating the Evaluation of Music Generation Models with Generative Psychometrics —
+  Subjective user studies are one of the major methods for evaluating music generation models
+- 2026-11-16 · 취향 · http://arxiv.org/abs/2611.21032v2
+  EE-Motion: An EEG-based Web Architecture for Live Affective Music Recommendation — Music
+  listening is intrinsically tied to emotion, which drifts continuously within a single session
+- 2026-11-16 · 표현 · http://arxiv.org/abs/2611.20954v1
+  Layer-wise Linear Probing of an Encoder-free Audio-capable Language Model — Encoder-free
+  audio-capable multimodal language models pro- vide a unique setting for studying how speech
+  representations emerge inside a language-model decoder
 ### 훑은 날 2026-11-16
 - 2026-11-13 · 표현 · http://arxiv.org/abs/2611.17895v1
   Anomalous Sound Detection Using Separation Features and Paired-Mixture Representation Learning
