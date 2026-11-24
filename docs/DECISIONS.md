@@ -39150,3 +39150,23 @@ main의 `HEAD`가 봇 스쿼시에서 D-0478로 바뀌자 `ours()`가 참이 되
     `core/tests/unit/test_patch_gate.py::test_실물_가드는_ours_하나다`
 
 자료  해당 없음
+
+---
+
+## D-0481. **main()의 merged_head 배선에 시험을 붙였다 — 안 운 배선 1곳을 0으로**
+
+- **배경**: `make mutate WIRING=1`이 `check_patch:merged_head`를 안 운 배선으로 잡아 천장 0을 넘겼다 (D-0353).
+  `test_합본_커밋이면_뽑기를_건너뛴다`가 `merged_head()`를 **직접** 불러서
+  `main()`의 `elif merged_head():`를 끊어도 초록이었다. 요약 줄이 거짓 통과를 적는데도 시험이 몰랐다.
+- **조치**: `test_합본_커밋이면_화면이_합본이라_적는다`를 붙였다. `main()`을 거쳐 요약 줄에
+  «합본 커밋»이 찍히고 «실측»이 안 찍히는지 본다. `WIRING_CEILING`은 0 그대로다.
+- **결과**: 시험 하나. 제품 코드 0줄. `ONLY=check_patch`로 재니 `merged_head() 끊음 → 울었다 (2건)`, 안 운 배선 0곳.
+- **남기는 것**: 천장은 전수로만 판정한다. 전수는 CI가 잰다.
+
+재현
+    make mutate WIRING=1 ONLY=check_patch
+
+강제자
+    `core/tests/unit/test_patch_gate.py::test_합본_커밋이면_화면이_합본이라_적는다`
+
+자료  해당 없음

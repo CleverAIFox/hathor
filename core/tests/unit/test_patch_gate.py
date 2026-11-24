@@ -510,6 +510,30 @@ def test_봇이_쓴_커밋이면_뽑기를_건너뛴다(
     assert CHECKER.BOT in said, "누가 쓴 커밋이라 건너뛰는지 안 적는다"
 
 
+def test_합본_커밋이면_화면이_합본이라_적는다(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**`main()`의 `merged_head()` 배선을 본다** (D-0353).
+
+    `test_합본_커밋이면_뽑기를_건너뛴다`는 `merged_head()`를 **직접** 부른다. 그래서
+    `main()`에서 `elif merged_head():`를 끊어도 아무 시험도 안 울었다 — 요약 줄이
+    *«뽑기 실측 1판»*으로 **거짓 통과를 적는데도** 초록이었다 (GR-0.5). 여기는
+    `main()`을 거쳐 화면을 본다.
+    """
+    for name in ("check_heads", "check_floor", "check_after_table"):
+        monkeypatch.setattr(CHECKER, name, lambda: [])
+    monkeypatch.setattr(CHECKER, "has_parent", lambda: True)
+    monkeypatch.setattr(CHECKER, "merged_head", lambda: True)
+    monkeypatch.setattr(CHECKER, "bot_head", lambda: False)
+    monkeypatch.setattr(sys, "argv", ["check_patch.py", "--check"])
+
+    assert CHECKER.main() == 0
+    said = capsys.readouterr().out
+
+    assert "합본 커밋" in said, "합본인데 요약 줄이 합본이라 안 적는다"
+    assert "실측" not in said, "건너뛴 뽑기를 실측으로 적었다"
+
+
 def test_우리가_쓴_커밋이면_안_건너뛴다(monkeypatch: pytest.MonkeyPatch) -> None:
     """**그물이 늘 비면 관문이 아니다** (D-0230). 둘 다 아니면 실제로 뽑는다."""
     monkeypatch.setattr(CHECKER, "merged_head", lambda: False)
